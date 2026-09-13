@@ -99,15 +99,20 @@ Generation and variation tools, `speech_to_text`, `media_upload`,
 `seed_understand`, and all Seedance, Seed 3D, and MediaKit provider-submission
 tools declare `execution.taskSupport="required"`. Invoke them with MCP task
 metadata, poll the returned task at the advertised two-second interval until
-terminal, then read the result from the `tasks/get` response. Foreground calls
-fail before the
-provider is contacted.
+terminal, then read the result from the `tasks/get` response. Foreground direct
+calls to those target tools fail before the provider is contacted.
+
+Clients may instead discover the same targets with `ark_job_capabilities`,
+submit them through `ark_job_submit`, and poll `ark_job_get`. In this reference,
+**background result** means the terminal `tasks/get` response on the native
+path or the original tool result under terminal `ark_job_get.result` on the
+compatibility path.
 
 Seedance, Seed 3D, and MediaKit get tools declare
 `execution.taskSupport="optional"` because a processing-status check is short,
 but a successful response with `persist_output=true` may download a large
 artifact. Use foreground execution with persistence disabled for quick polling,
-then task-augmented execution to retrieve and persist completed output. List,
+then background execution to retrieve and persist completed output. List,
 presign, artifact-read, and cancel/delete tools remain foreground operations.
 
 Clients without task-extension support use the ordinary compatibility tools:
@@ -137,7 +142,7 @@ scope in JWT mode.
 
 The verified contract returns an accepted asynchronous task and deliberately fixes the
 provider profile to `common` / `professional` / `4k` / `high` / 24 fps. Retrieve
-the provider task ID from the terminal `tasks/get` result, then poll it with
+the provider task ID from the background result, then poll it with
 `vod_get_enhancement_task`. The POST is non-idempotent
 and is never retried automatically because a timeout may occur after the provider
 began processing.
@@ -201,8 +206,8 @@ requires the `vod:read` scope in JWT mode.
 
 | Field | Type | Required | Default |
 |---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the terminal `tasks/get` result of `vod_enhance_video` |
-| `persist_output` | boolean | No | `true` (requires task-augmented execution; use `false` for foreground status) |
+| `task_id` | string | Yes | Provider task ID from the background result of `vod_enhance_video` |
+| `persist_output` | boolean | No | `true` (requires background execution; use `false` for foreground status) |
 
 ### Output
 
@@ -295,8 +300,8 @@ Registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured; requires the
 
 | Field | Type | Required | Default |
 |---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the terminal `tasks/get` result of `vod_transcode_video` |
-| `persist_output` | boolean | No | `true` (requires task-augmented execution; use `false` for foreground status) |
+| `task_id` | string | Yes | Provider task ID from the background result of `vod_transcode_video` |
+| `persist_output` | boolean | No | `true` (requires background execution; use `false` for foreground status) |
 
 ### Output
 
@@ -365,12 +370,12 @@ and a 5-second initial polling heuristic.
 ## vod_get_subtitle_addition_task
 
 Poll `GET /tasks/{task_id}` with `vod:read`, using the provider task ID from the
-terminal `tasks/get` result of `vod_add_subtitles`. The adapter requires
+background result of `vod_add_subtitles`. The adapter requires
 `task_type="add-subtitle-to-video"`, validates the echoed provider task ID, and
 maps provider state to `processing`, `succeeded`, or `failed`. On success it returns
 the expiring `source_url`, duration/resolution when available, and optionally a
 durable MP4 `video` artifact. `persist_output` defaults to true and requires
-task-augmented execution; use `persist_output=false` for a foreground status
+background execution; use `persist_output=false` for a foreground status
 check. Persistence is single-flight and failure is reported separately from
 provider success.
 
@@ -389,7 +394,7 @@ are omitted unless explicitly supplied. The output includes the task ID and a
 ## vod_get_subtitle_removal_task
 
 Poll `GET /tasks/{task_id}` with `vod:read`, using the provider task ID from the
-terminal `tasks/get` result of `vod_remove_subtitles`. The adapter requires
+background result of `vod_remove_subtitles`. The adapter requires
 `task_type="erase-video-subtitle-pro"`; lifecycle normalization, task ownership,
 source-URL preservation, and best-effort single-flight MP4 persistence match
 `vod_get_subtitle_addition_task`.
@@ -411,9 +416,9 @@ Input takes a public HTTPS source URL and separation options:
 | `output_format` | string | No | `aac` (default), `mp3`, `wav`, `m4a`, `flac` |
 
 Returns `VodSeparateAudioOutput` with `provider` `byteplus-vod-mediakit`,
-`status` `accepted`, the provider `request_id` and `provider_log_id`, and an MCP
-task ID. Poll `tasks/get` until terminal, then pass the provider task ID from
-its result to `vod_get_audio_separation`. The mutation is never retried
+`status` `accepted`, the provider `request_id` and `provider_log_id`. Run it in
+the background, then pass the provider task ID from its result to
+`vod_get_audio_separation`. The mutation is never retried
 automatically because completion is ambiguous after a timeout.
 
 ### Example
@@ -443,8 +448,8 @@ configured and requires the `vod:read` scope in JWT mode.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the terminal `tasks/get` result of `vod_separate_audio` |
-| `persist_output` | boolean | No | Copy completed tracks into durable artifact storage on first successful poll (default `true`; requires task-augmented execution) |
+| `task_id` | string | Yes | Provider task ID from the background result of `vod_separate_audio` |
+| `persist_output` | boolean | No | Copy completed tracks into durable artifact storage on first successful poll (default `true`; requires background execution) |
 
 Returns `VodAudioSeparationTaskOutput` with a normalized `status` of
 `processing`, `succeeded`, or `failed`. On success, `voice`, `background`,
@@ -538,7 +543,7 @@ Result of a single variation within a parallel generation.
 | `index` | integer | 0-based variation index |
 | `seed` | integer \| null | Seed used (image only) |
 | `artifact` | ArtifactRef \| null | Generated artifact (null if failed) |
-| `task_id` | string \| null | Provider task ID for Seedance polling, obtained from the enclosing task's terminal `tasks/get` result |
+| `task_id` | string \| null | Provider task ID for Seedance polling, obtained from the enclosing background result |
 | `error` | object \| null | Error details if failed |
 | `request_id` | string \| null | Provider request ID |
 | `provider_log_id` | string \| null | Provider log ID (Seed Audio) |
@@ -977,8 +982,8 @@ Retrieve the status and output of a Seedance task.
 
 | Field | Type | Required | Default |
 |---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the terminal `tasks/get` result of a Seedance create tool |
-| `persist_output` | boolean | No | `true` (requires task-augmented execution; use `false` for foreground status) |
+| `task_id` | string | Yes | Provider task ID from the background result of a Seedance create tool |
+| `persist_output` | boolean | No | `true` (requires background execution; use `false` for foreground status) |
 
 ### Output
 
@@ -1449,9 +1454,8 @@ Create an asynchronous Seedance 2.5 video generation task. Supports up to
 ## 16. seedance_2_5_create_task_variations
 
 Create N independent Seedance 2.5 video generation tasks in parallel. Each
-variation creates a separate provider task. Poll the MCP task through
-`tasks/get` until terminal, then pass each provider task ID from its result to
-`seedance_get_task`.
+variation creates a separate provider task. Retrieve the background result,
+then pass each provider task ID to `seedance_get_task`.
 Partial failures are captured per variation.
 
 ### Input
@@ -1521,9 +1525,9 @@ Always registered; requires `artifacts:read` in JWT mode.
 
 ## 18. speech_to_text
 
-Transcribe audio to text via Seed Speech ASR as a required MCP background task.
-The tool submits audio over HTTP and polls internally until complete; retrieve
-the full `TranscriptionResult` from the terminal `tasks/get` response. There is no separate
+Transcribe audio to text via Seed Speech ASR as a required background job. The
+tool submits audio over HTTP and polls internally until complete; retrieve the
+full `TranscriptionResult` from the background result. There is no separate
 provider task tool or object-storage upload requirement.
 
 ### Input

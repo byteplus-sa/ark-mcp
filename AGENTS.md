@@ -16,12 +16,14 @@ surface:
   disabled by default.
 - **Seed 2.1 Understanding** — multimodal video/image understanding and
   reasoning through ModelArk Chat Completions; supports deep-thinking mode.
-- **Speech-to-Text** — synchronous audio transcription through Seed Speech ASR.
+- **Speech-to-Text** — background audio transcription through Seed Speech ASR.
 - **VOD AI MediaKit** — asynchronous video enhancement, video transcoding,
   subtitle burn-in and precision subtitle/text erasure, and voice/background
   audio separation through the BytePlus VOD AI MediaKit.
 - **Object storage upload** — presigned URL generation for URL-only media
   workflows (TOS or S3 backend).
+- **Background compatibility** — ordinary `ark_job_*` tools route clients
+  without MCP task augmentation through the same FastMCP worker.
 - **Durable artifacts** — MCP resources for generated media whose provider URLs
   expire (2h for audio, 24h for image/video/3D).
 - **Transports** — local `stdio` first, with protected Streamable HTTP as a

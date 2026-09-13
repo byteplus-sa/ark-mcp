@@ -25,17 +25,21 @@ at startup by `OBJECT_STORAGE_BACKEND`.
 
 ```mermaid
 flowchart LR
-    Client["MCP Client"] -->|"media_upload + task metadata"| Task["MCP task"]
-    Task -->|"background execution"| Tool["media_upload tool"]
+    Client["MCP Client"] --> Route{"Task augmentation?"}
+    Route -->|"Supported"| Task["MCP task"]
+    Route -->|"Unsupported"| Job["Ark job"]
+    Task --> Worker["Docket worker"]
+    Job --> Worker
+    Worker --> Tool["media_upload tool"]
     Tool --> Factory["make_object_storage_gateway()"]
     Factory -->|"backend=s3"| S3GW["S3Gateway (boto3)"]
     Factory -->|"backend=tos"| TOSGW["TosGateway (tos SDK)"]
     S3GW --> S3["Private S3 bucket"]
     TOSGW --> TOS["Private TOS bucket"]
     S3GW -.->|"presigned URL"| BytePlus["BytePlus APIs"]
-    Tool -->|"typed result"| Task
-    Task -->|"tasks/get: URL"| Client
-    Client -->|"passes URL to task-augmented Seedance etc."| BytePlus
+    Tool -->|"typed result"| Worker
+    Worker -->|"tasks/get or ark_job_get"| Client
+    Client -->|"passes URL to background Seedance etc."| BytePlus
 ```
 
 The `S3Gateway` (`providers/s3/client.py`) wraps a synchronous `boto3`
@@ -49,13 +53,20 @@ helpers work uniformly across both backends.
 ```mermaid
 sequenceDiagram
     participant C as MCP Client
-    participant T as media_upload
+    participant B as Background API
+    participant T as media_upload handler
     participant F as make_object_storage_gateway()
     participant G as S3Gateway
     participant S3 as S3 bucket
 
-    C->>T: media_upload(..., task metadata)
-    T-->>C: MCP task ID
+    alt Native MCP task support
+        C->>B: media_upload(..., task metadata)
+        B-->>C: MCP task ID
+    else Ordinary MCP tools
+        C->>B: ark_job_submit(media_upload, arguments)
+        B-->>C: Ark job ID
+    end
+    B->>T: execute original handler
     T->>T: Validate MIME + size (before upload)
     T->>F: get configured backend
     F-->>T: S3Gateway instance
@@ -68,9 +79,14 @@ sequenceDiagram
     G->>G: asyncio.to_thread(boto3 generate_presigned_url)
     G-->>T: presigned HTTPS GET URL
     T->>G: close()
-    T-->>C: task status completed
-    C->>T: tasks/get
-    T-->>C: terminal result { url, expires_at, object_key, bytes }
+    T-->>B: typed result
+    alt Native MCP task support
+        C->>B: tasks/get
+        B-->>C: terminal result { url, expires_at, object_key, bytes }
+    else Ordinary MCP tools
+        C->>B: ark_job_get
+        B-->>C: result.structured_content { url, expires_at, object_key, bytes }
+    end
 ```
 
 ### Object key generation
@@ -121,19 +137,31 @@ single call.
 ```mermaid
 sequenceDiagram
     participant C as MCP Client
-    participant U as media_upload
+    participant B as Background API
+    participant U as media_upload handler
     participant P as media_presign
     participant G as Gateway
     participant S3 as Bucket
 
-    C->>U: media_upload(data, media_type, mime_type, task metadata)
-    U-->>C: MCP task ID
+    alt Native MCP task support
+        C->>B: media_upload(..., task metadata)
+        B-->>C: MCP task ID
+    else Ordinary MCP tools
+        C->>B: ark_job_submit(media_upload, arguments)
+        B-->>C: Ark job ID
+    end
+    B->>U: execute original handler
     U->>S3: put_object (key=references/video/uuid)
     U->>G: presign_get(key)
     G-->>U: presigned URL (T=0, valid 30min)
-    U-->>C: task status completed
-    C->>U: tasks/get
-    U-->>C: terminal result { url, object_key, ... }
+    U-->>B: typed result
+    alt Native MCP task support
+        C->>B: tasks/get
+        B-->>C: terminal result { url, object_key, ... }
+    else Ordinary MCP tools
+        C->>B: ark_job_get
+        B-->>C: result.structured_content { url, object_key, ... }
+    end
 
     Note over C,S3: ...later, URL expires or is about to...
 

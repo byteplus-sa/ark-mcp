@@ -11,6 +11,10 @@ retrieval, poll in foreground with `persist_output=false`, then use optional
 task augmentation or the `ark_job_*` path with `persist_output=true` when
 downloading a completed output.
 
+In the workflows below, **background result** means the terminal `tasks/get`
+response on the native path or the original tool result under terminal
+`ark_job_get.result` on the compatibility path.
+
 ## 1. Text-to-Image Generation
 
 Generate a single image from a text prompt.
@@ -178,8 +182,8 @@ Create an async video generation task.
 }
 ```
 
-The create call returns an MCP task ID. Poll `tasks/get` until terminal, read
-the provider task ID from its result, then pass that provider ID to
+The background submission returns a local MCP task or Ark job ID. Read the
+provider task ID from its terminal result, then pass that provider ID to
 `seedance_get_task`.
 
 ## 10. Polling for Video Completion
@@ -253,8 +257,8 @@ Create multiple video tasks with different prompts.
 }
 ```
 
-The variations call returns an MCP task ID. Poll `tasks/get` until terminal,
-read the per-variation provider task IDs from its result, then pass each
+The background submission returns a local MCP task or Ark job ID. Read the
+per-variation provider task IDs from its terminal result, then pass each
 provider ID to `seedance_get_task`.
 
 ## 13. List Recent Video Tasks
@@ -301,8 +305,7 @@ Delete (terminal):
 
 Generate a reference image, then use it as input for video generation.
 
-1. Generate an image as an MCP background task, then poll `tasks/get` until
-   terminal and read its result:
+1. Generate an image in the background, then read its background result:
 
 ```
 seedream_generate_image({
@@ -313,9 +316,8 @@ seedream_generate_image({
 })
 ```
 
-2. Use the generated image (as base64) to create a video task with MCP task
-   metadata. Poll the returned MCP task with `tasks/get` until terminal and
-   read its provider task ID from the result:
+2. Use the generated image (as base64) to create a video task in the
+   background. Read its provider task ID from the background result:
 
 ```
 seedance_create_task({
@@ -334,7 +336,7 @@ seedance_create_task({
 3. Poll for video completion in the foreground:
 
 ```
-seedance_get_task({"task_id": "<provider task ID from terminal tasks/get>", "persist_output": false})
+seedance_get_task({"task_id": "<provider task ID from background result>", "persist_output": false})
 ```
 
 ## 16. Batch Storyboard with Seedream

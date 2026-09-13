@@ -6,7 +6,7 @@ background job: **native provider batch** (one API call, many outputs) and
 concurrency). A task-capable client receives an MCP task ID and polls
 `tasks/get`; an ordinary-tool client receives an Ark job ID from
 `ark_job_submit` and polls `ark_job_get`. Either terminal response contains the
-same typed output.
+same typed output, referred to below as the **background result**.
 
 ## Native provider batch
 
@@ -23,8 +23,7 @@ API and is only supported by **Lite** and **4.x** model families.
    `sequential_image_generation: "auto"` with
    `sequential_image_generation_options: {"max_images": N}`.
 4. The provider returns all N images in a single response. Each image is
-   persisted as a separate `ArtifactRef` and returned in the terminal
-   `tasks/get` response.
+   persisted as a separate `ArtifactRef` and returned in the background result.
 
 This is a **single `POST /images/generations` call** — one request, one
 response, multiple outputs. It is the most efficient path and should be
@@ -72,7 +71,7 @@ The shared helper [`run_variation_batch`] in `tools/_parallel.py`:
 
 Seedance variations are fundamentally different from Seedream/Seed Audio
 because each variation creates a **separate provider task**. The client first
-retrieves the variation summary through the required MCP task, then polls each
+retrieves the variation summary from the background result, then polls each
 provider task ID via `seedance_get_task` to retrieve results. The actual video
 generation runs asynchronously on the provider side.
 

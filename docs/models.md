@@ -78,11 +78,12 @@ Only `supported_resolutions` differs:
 Speech-to-text uses the Seed Speech ASR HTTP API. It reuses
 `BYTEPLUS_SEED_SPEECH_API_KEY` — the same key that powers Seed Audio. Audio
 is submitted via HTTP and polled until transcription is complete; the full
-`TranscriptionResult` is returned in the terminal `tasks/get` response after
-the client submits a required MCP background task and polls its MCP task ID.
+`TranscriptionResult` is returned in the background result after the client
+uses native MCP task augmentation or the ordinary `ark_job_*` compatibility
+path.
 
 ASR does not expose a separate provider task tool: its HTTP submit-and-poll
-lifecycle is contained within the MCP background task.
+lifecycle is contained within the Ark background job.
 
 Supported audio formats: `wav`, `mp3`, `ogg`, `raw`, `flac`.
 

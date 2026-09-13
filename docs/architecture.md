@@ -22,8 +22,9 @@ Server as shipped today. For the original design rationale, see
 - **Observable and budget-aware** — structured logs, Prometheus metrics, and a
   per-principal daily budget ledger.
 - **Timeout-safe long operations** — generation, transcription, upload, and
-  provider-submission calls use required MCP task augmentation; completed-media
-  retrieval supports optional background persistence.
+  provider-submission calls use native MCP task augmentation or ordinary
+  `ark_job_*` compatibility tools; completed-media retrieval supports optional
+  background persistence.
 
 ## Layered structure
 

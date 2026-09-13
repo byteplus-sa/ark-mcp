@@ -95,17 +95,19 @@ If you experience timeouts:
 
 A client-side MCP timeout is distinct from a server failure. Seedream Pro and
 Seedance provider submissions can take 60–150 s (longer under cold start or
-provider queue), but the server requires MCP task augmentation for those
-operations so the original foreground request does not stay open.
+provider queue), so the server requires background execution for those
+operations rather than keeping the original foreground request open.
 
-- Invoke `seedance_create_task`, `seedream_generate_image`, and
-  `seed_audio_generate` with MCP task metadata. Retain the returned MCP task
-  ID, poll `tasks/get` at the advertised interval until terminal; that response
-  contains the typed result.
-- For long video work, the result of the MCP task contains the provider task
-  ID. Poll `seedance_get_task` in the foreground with `persist_output=false`;
-  use its optional task augmentation with `persist_output=true` when the
-  completed output needs persistence.
+- On a task-capable client, invoke `seedance_create_task`,
+  `seedream_generate_image`, and `seed_audio_generate` with MCP task metadata.
+  Retain the returned MCP task ID and poll `tasks/get` at the advertised
+  interval until terminal.
+- On an ordinary-only client, use the `ark_job_*` workflow below. Its terminal
+  result contains the same typed tool output.
+- For long video work, the background result contains the provider task ID.
+  Poll `seedance_get_task` in the foreground with `persist_output=false`;
+  run it in the background with `persist_output=true` when the completed output
+  needs persistence.
 - If a client disconnects after task acceptance, reconcile with the returned
   MCP task ID or provider task ID rather than resubmitting (see
   `ambiguous_completion`).

@@ -94,8 +94,9 @@ claim. Tool scopes are enforced by FastMCP:
 The `speech_to_text` tool is registered when `BYTEPLUS_SEED_SPEECH_API_KEY` is
 set — the same key that enables Seed Audio (TTS). It submits audio via HTTP,
 polls until transcription is complete, and returns the complete
-`TranscriptionResult` through a required MCP background task. Audio input
-accepts URL, Base64, or local file path (stdio only).
+`TranscriptionResult` through a required background job, using native MCP task
+augmentation or the ordinary `ark_job_*` compatibility path. Audio input accepts
+URL, Base64, or a local file path (stdio only).
 
 | Variable | Default | Purpose |
 |---|---|---|

@@ -38,10 +38,10 @@ Key features:
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
 - **Timeout-safe long operations** — generation, transcription, large upload,
-  and provider task-submission tools require MCP task-augmented execution;
-  completed-output retrieval tools optionally support it when persistence may
-  require a large download; clients without task augmentation use the
-  `ark_job_*` compatibility tools backed by the same worker
+  and provider task-submission tools run in the background through native MCP
+  task augmentation or the ordinary `ark_job_*` compatibility tools;
+  completed-output retrieval also supports background execution when
+  persistence may require a large download
 - **Model capability registry** — logical model families map to
   operator-configured model IDs; validates resolutions, formats, and
   batch support per model
@@ -79,11 +79,12 @@ accepts as reference input:
 > [!NOTE]
 > **Video references must be pre-hosted.** `seedance_create_task` accepts
 > video references as a **public HTTPS URL only** — there is no inline Base64
-> option. Call `media_upload` with MCP task metadata to upload Base64 or a
-> local file path (stdio only) to object storage (TOS or S3), then retrieve its
-> presigned HTTPS GET URL through the terminal `tasks/get` result before passing
-> it to the
-> task-augmented `seedance_create_task`. Alternatively, host the video on
+> option. Run `media_upload` in the background, using MCP task metadata or
+> `ark_job_submit`, to upload Base64 or a local file path (stdio only) to object
+> storage (TOS or S3). Retrieve its presigned HTTPS GET URL from the terminal
+> `tasks/get` response or `ark_job_get.result`, then run
+> `seedance_create_task` through the same supported background path.
+> Alternatively, host the video on
 > your own accessible HTTPS endpoint. The URL must resolve to
 > a public IP (private/loopback/link-local addresses are rejected by the SSRF
 > policy). `media_upload` requires TOS or S3 credentials; see [Configuration](docs/configuration.md).
