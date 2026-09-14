@@ -175,6 +175,55 @@ class TestSeedreamGenerateImageTool:
                 SeedreamGenerateInput(prompt="test", images=images), fake_ctx
             )
 
+    async def test_prompt_optimization_defaults_to_fast_for_pro(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_generate(
+            self: SeedreamService, request: Any
+        ) -> tuple[SeedreamProviderResponse, str | None]:
+            captured.append(request)
+            response = SeedreamProviderResponse.model_validate(
+                {"created": 1721400000, "data": [{"b64_json": "aV9hbWFnZQ=="}]}
+            )
+            return response, "req-test-456"
+
+        monkeypatch.setattr(SeedreamService, "generate", mock_generate)
+
+        await seedream_generate_image(SeedreamGenerateInput(prompt="test", persist=False), fake_ctx)
+
+        assert captured[0].optimize_prompt_options == {"mode": "fast"}
+
+    async def test_prompt_optimization_explicit_standard_overrides_default(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_generate(
+            self: SeedreamService, request: Any
+        ) -> tuple[SeedreamProviderResponse, str | None]:
+            captured.append(request)
+            response = SeedreamProviderResponse.model_validate(
+                {"created": 1721400000, "data": [{"b64_json": "aV9hbWFnZQ=="}]}
+            )
+            return response, "req-test-456"
+
+        monkeypatch.setattr(SeedreamService, "generate", mock_generate)
+
+        await seedream_generate_image(
+            SeedreamGenerateInput(prompt="test", prompt_optimization="standard", persist=False),
+            fake_ctx,
+        )
+
+        assert captured[0].optimize_prompt_options == {"mode": "standard"}
+
     async def test_provider_error_propagates(
         self,
         test_env: None,

@@ -41,6 +41,37 @@ def _patch_seedream_service(monkeypatch: pytest.MonkeyPatch, response_data: dict
 
 
 class TestSeedreamEditImageTool:
+    async def test_prompt_optimization_defaults_to_fast(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_generate(
+            self: SeedreamService, request: Any
+        ) -> tuple[SeedreamProviderResponse, str | None]:
+            captured.append(request)
+            response = SeedreamProviderResponse.model_validate(
+                {"created": 1721400000, "data": [{"b64_json": "aV9hbWFnZQ=="}]}
+            )
+            return response, "req-edit-123"
+
+        monkeypatch.setattr(SeedreamService, "generate", mock_generate)
+
+        await seedream_edit_image(
+            SeedreamEditInput(
+                prompt="Replace the object with a crown.",
+                images=[_ref_image()],
+                point=EditCoordinate(x=520, y=460),
+                persist=False,
+            ),
+            fake_ctx,
+        )
+
+        assert captured[0].optimize_prompt_options == {"mode": "fast"}
+
     async def test_point_edit_with_url_persistence(
         self,
         test_env: None,

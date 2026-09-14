@@ -43,6 +43,14 @@ The binding enums (`config/env.py`):
 | `supported_sizes` | `None` (any) | `None` | `None` |
 | `supports_watermark` | `True` | `True` | `True` |
 | `supports_prompt_optimization` | `True` | `True` | `True` |
+| `default_prompt_optimization_mode` | `"fast"` | `None` | `None` |
+
+> `default_prompt_optimization_mode` applies Seedream's fast prompt
+> optimization (`optimize_prompt_options.mode=fast`) by default on 5.0 Pro,
+> per the BytePlus image-to-image latency recommendation. Callers can always
+> pass `prompt_optimization: "standard"` to restore full CoT prompt
+> optimization; families without a default send no mode and the provider
+> applies its own.
 
 > There is **no aspect-ratio field** on image capabilities. Only
 > `supported_sizes` (defaulting to `None` = unrestricted).

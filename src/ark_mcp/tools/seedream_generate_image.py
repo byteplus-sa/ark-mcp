@@ -78,7 +78,11 @@ class SeedreamGenerateInput(BaseModel):
     )
     prompt_optimization: Literal["standard", "fast"] | None = Field(
         None,
-        description="Prompt optimization mode: standard (higher quality) or fast (lower latency).",
+        description=(
+            "Prompt optimization mode: standard (higher quality) or fast (lower latency). "
+            "Defaults to fast for Seedream 5.0 Pro when omitted; other models use the "
+            "provider default. Pass standard to prioritize complex instruction understanding."
+        ),
     )
     persist: bool = Field(
         True, description="Whether to persist generated images as durable MCP resources."
@@ -162,7 +166,7 @@ async def seedream_generate_image(
         output_format=input.output_format,
         response_format=input.response_format,
         watermark=input.watermark,
-        prompt_optimization=input.prompt_optimization,
+        prompt_optimization=caps.resolve_prompt_optimization(input.prompt_optimization),
     )
 
     await ctx.report_progress(progress=50, total=100)
