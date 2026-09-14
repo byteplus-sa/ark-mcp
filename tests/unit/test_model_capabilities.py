@@ -94,6 +94,65 @@ class TestCapabilityRegistry:
         assert len(models) >= 1
 
 
+class TestPromptOptimizationDefaults:
+    """Tests for Seedream prompt optimization default resolution."""
+
+    def test_pro_family_defaults_to_fast(self) -> None:
+        """The SEEDREAM pro binding carries the fast default per BytePlus guidance."""
+        import os
+
+        from ark_mcp.config.env import refresh_settings
+        from ark_mcp.config.model_capabilities import refresh_capability_registry
+
+        old_default = os.environ.get("SEEDREAM_DEFAULT_MODEL", "")
+        try:
+            os.environ["SEEDREAM_DEFAULT_MODEL"] = "dola-seedream-5-0-pro-260628"
+            os.environ["SEEDREAM_MODEL_FAMILY"] = "pro"
+            os.environ.pop("SEEDREAM_MODEL_BINDINGS", None)
+            refresh_settings()
+            registry = refresh_capability_registry()
+
+            caps = registry.get_image_capabilities("dola-seedream-5-0-pro-260628")
+            assert caps.family is ModelFamily.SEEDREAM_PRO
+            assert caps.default_prompt_optimization_mode == "fast"
+            assert caps.resolve_prompt_optimization(None) == "fast"
+            assert caps.resolve_prompt_optimization("standard") == "standard"
+            assert caps.resolve_prompt_optimization("fast") == "fast"
+        finally:
+            os.environ["SEEDREAM_DEFAULT_MODEL"] = old_default
+            refresh_settings()
+            refresh_capability_registry()
+
+    def test_family_without_default_uses_provider_mode(self) -> None:
+        """Families without a default send no optimize_prompt_options unless requested."""
+        caps = ImageCapabilities(
+            family=ModelFamily.SEEDREAM_LITE,
+            model_id="test-lite-model",
+            max_references=14,
+            supports_batch=True,
+            supports_streaming=True,
+            supported_output_formats=("png", "jpeg"),
+        )
+        assert caps.default_prompt_optimization_mode is None
+        assert caps.resolve_prompt_optimization(None) is None
+        assert caps.resolve_prompt_optimization("standard") == "standard"
+
+    def test_resolver_disabled_capability_returns_none(self) -> None:
+        """When prompt optimization is unsupported, no mode is ever sent."""
+        caps = ImageCapabilities(
+            family=ModelFamily.SEEDREAM_PRO,
+            model_id="test-pro-model",
+            max_references=10,
+            supports_batch=False,
+            supports_streaming=False,
+            supported_output_formats=("png", "jpeg"),
+            supports_prompt_optimization=False,
+            default_prompt_optimization_mode="fast",
+        )
+        assert caps.resolve_prompt_optimization(None) is None
+        assert caps.resolve_prompt_optimization("standard") is None
+
+
 class TestSeedance25Capabilities:
     """Tests for Seedance 2.5 model capabilities."""
 

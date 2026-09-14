@@ -44,6 +44,38 @@ def _patch_seedream_by_seed(
 class TestSeedreamVariationsTool:
     """Integration tests for seedream_generate_image_variations."""
 
+    async def test_prompt_optimization_defaults_to_fast(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_generate(
+            self: SeedreamService, request: Any
+        ) -> tuple[SeedreamProviderResponse, str | None]:
+            captured.append(request)
+            response = SeedreamProviderResponse.model_validate(
+                {"created": 1721400000, "data": [{"b64_json": "aV9hbWFnZQ=="}]}
+            )
+            return response, f"req-{request.seed}"
+
+        monkeypatch.setattr(SeedreamService, "generate", mock_generate)
+
+        async def mock_close(self: SeedreamService) -> None:
+            pass
+
+        monkeypatch.setattr(SeedreamService, "close", mock_close)
+
+        await seedream_generate_image_variations(
+            SeedreamVariationsInput(prompt="a red circle", variations=2, base_seed=42),
+            fake_ctx,
+        )
+
+        assert len(captured) == 2
+        assert all(req.optimize_prompt_options == {"mode": "fast"} for req in captured)
+
     async def test_three_variations_all_succeed(
         self,
         test_env: None,
