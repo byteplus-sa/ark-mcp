@@ -47,6 +47,7 @@ surface.
 | 38 | `ark_job_submit` | Compatibility | Background submission through ordinary tool | Dynamic target scope |
 | 39 | `ark_job_get` | Compatibility | Read-only ordinary tool | Owner only |
 | 40 | `ark_job_cancel` | Compatibility | Destructive ordinary tool | Owner only |
+| 41 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local / JWT |
 
 ## Tool Annotations
 
@@ -69,6 +70,7 @@ surface.
 | `seedance_2_5_create_task` | false | false | false | true |
 | `seedance_2_5_create_task_variations` | false | false | false | true |
 | `seed_media_get_artifact` | true | false | true | false |
+| `seed_media_export_artifact` | false | false | true | false |
 | `speech_to_text` | true | false | true | false |
 | `vod_enhance_video` | false | false | false | true |
 | `vod_get_enhancement_task` | true | false | true | false |
@@ -1523,7 +1525,53 @@ Always registered; requires `artifacts:read` in JWT mode.
 
 ---
 
-## 18. speech_to_text
+## 18. seed_media_export_artifact
+
+Locate or copy a persisted media artifact on the local filesystem. Returns the
+absolute on-disk path instead of streaming Base64 through the MCP context.
+Stdio transport only — the client and server must share a filesystem. Always
+registered; requires `artifacts:read` in JWT mode.
+
+### Input
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `artifact_id` | string | Yes | Artifact ID returned by a previous generation call |
+| `destination_path` | string | No | Absolute path where the server writes an atomic copy; omit to return the canonical store path |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `artifact_id` | string | Artifact identifier |
+| `path` | string | Absolute on-disk path of the exported media file |
+| `media_type` | `"image"` \| `"audio"` \| `"video"` \| `"three_d"` | Logical media type |
+| `mime_type` | string | MIME type of the stored content |
+| `bytes` | integer | Size in bytes |
+| `sha256` | string \| null | SHA-256 hex digest |
+| `copied` | boolean | `true` when copied to `destination_path`; `false` when `path` is the canonical store location |
+
+### Example
+
+```json
+// Input
+{ "artifact_id": "71e9c2a8-..." }
+
+// Output
+{
+  "artifact_id": "71e9c2a8-...",
+  "path": "/abs/.artifacts/71/71e9c2a8-....mp4",
+  "media_type": "video",
+  "mime_type": "video/mp4",
+  "bytes": 1748096,
+  "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+  "copied": false
+}
+```
+
+---
+
+## 19. speech_to_text
 
 Transcribe audio to text via Seed Speech ASR as a required background job. The
 tool submits audio over HTTP and polls internally until complete; retrieve the

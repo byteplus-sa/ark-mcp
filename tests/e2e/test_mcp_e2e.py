@@ -155,6 +155,7 @@ class TestToolDiscovery:
                 "ark_job_submit",
                 "seed_audio_generate",
                 "seed_audio_generate_variations",
+                "seed_media_export_artifact",
                 "seed_media_get_artifact",
                 "seedream_edit_image",
                 "seedream_generate_image",

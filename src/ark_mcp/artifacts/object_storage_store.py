@@ -19,6 +19,7 @@ from ark_mcp.artifacts.filesystem_store import (
     _translate_download_error,
 )
 from ark_mcp.artifacts.store import (
+    ArtifactLocation,
     ArtifactMetadata,
     ArtifactPersistenceError,
     StoredArtifact,
@@ -274,6 +275,21 @@ class ObjectStorageArtifactStore:
             media_type=metadata.ref.media_type,
         ).inc()
         return artifact
+
+    async def locate(self, artifact_id: str, auth: AuthContext | None = None) -> ArtifactLocation:
+        """Return artifact metadata with no local path (object storage backend)."""
+        self._validate_artifact_id(artifact_id)
+        try:
+            meta_bytes = await self._download_object(self._meta_key(artifact_id), 1_048_576)
+            metadata = ArtifactMetadata.model_validate_json(meta_bytes.decode("utf-8"))
+        except (SafeDownloadError, ValueError) as exc:
+            raise FileNotFoundError(f"Artifact '{artifact_id}' not found.") from exc
+
+        owner = auth or AuthContext()
+        if metadata.principal_id != owner.principal_id or metadata.tenant_id != owner.tenant_id:
+            raise PermissionError("Artifact is not owned by the current principal.")
+
+        return ArtifactLocation(path=None, ref=metadata.ref)
 
     async def delete_expired(self, now: datetime) -> int:
         if not self._sweep_logged:

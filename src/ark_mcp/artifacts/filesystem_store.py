@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from ark_mcp.artifacts.store import (
+    ArtifactLocation,
     ArtifactMetadata,
     ArtifactPersistenceError,
     ArtifactPersistenceErrorCode,
@@ -384,6 +385,20 @@ class FilesystemArtifactStore(ArtifactStore):
             media_type=metadata.ref.media_type,
         ).inc()
         return artifact
+
+    async def locate(self, artifact_id: str, auth: AuthContext | None = None) -> ArtifactLocation:
+        """Resolve the on-disk path and metadata of a stored artifact."""
+        self._validate_artifact_id(artifact_id)
+        path = self._find_artifact(artifact_id)
+        if not path.exists():
+            raise FileNotFoundError(f"Artifact '{artifact_id}' not found.")
+
+        metadata = self._load_metadata(self._metadata_path(artifact_id))
+        owner = auth or AuthContext()
+        if metadata.principal_id != owner.principal_id or metadata.tenant_id != owner.tenant_id:
+            raise PermissionError("Artifact is not owned by the current principal.")
+
+        return ArtifactLocation(path=path.resolve(), ref=metadata.ref)
 
     @staticmethod
     def _load_metadata(meta_path: Path) -> ArtifactMetadata:
