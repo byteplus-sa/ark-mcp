@@ -63,6 +63,8 @@ Invoke this skill when the user wants to:
 - separate voice from background audio (or voice + music + sfx) for a public
   HTTPS audio or video URL using the VOD AI MediaKit tool pair;
 - fetch a previously persisted artifact by ID;
+- locate or copy a previously persisted artifact to a local path without
+  streaming Base64 through the context window;
 - upload local or Base64 media to object storage (TOS or S3) to obtain a
   presigned HTTPS URL;
 - verify which products are configured on the running server.
@@ -76,6 +78,7 @@ gracefully degrades to whatever is configured.
 ### Always registered
 
 - `seed_media_get_artifact`
+- `seed_media_export_artifact`
 - `ark_job_capabilities`
 - `ark_job_submit`
 - `ark_job_get`
@@ -288,6 +291,23 @@ resource URI. Read-only, idempotent, ownership-checked. Requires
 
 Returns `SeedMediaGetArtifactOutput` with `artifact_id`, `media_type`,
 `mime_type`, `sha256`, `bytes`, optional `expires_at`, and Base64 `data`.
+
+#### `seed_media_export_artifact`
+
+Locate or copy a persisted artifact on the local filesystem. Returns the
+absolute on-disk path instead of streaming Base64 through the context window.
+Stdio transport only — the client and server must share a filesystem. Requires
+`artifacts:read` scope in JWT mode.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `artifact_id` | `str` | Yes | Artifact UUID from a previous generation call |
+| `destination_path` | `str` | No | Absolute path where the server writes an atomic copy; omit to return the canonical store path |
+
+Returns `SeedMediaExportArtifactOutput` with `artifact_id`, `path`,
+`media_type`, `mime_type`, `bytes`, `sha256`, and `copied`. `copied=false`
+means `path` is the canonical store location (filesystem backend); `copied=true`
+means the artifact was copied to `destination_path`.
 
 ---
 

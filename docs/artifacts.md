@@ -77,6 +77,7 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 | `put_base64` | `(data, media_type, mime_type, source_expires_at=None, auth=None)` | `ArtifactRef` |
 | `copy_from_trusted_url` | `(url, media_type, mime_type, source_expires_at=None, auth=None)` | downloads from a trusted provider URL, stores it → `ArtifactRef` |
 | `get` | `(artifact_id, auth=None)` | `StoredArtifact` |
+| `locate` | `(artifact_id, auth=None)` | `ArtifactLocation` — `path` is `None` for object-storage backends |
 | `delete_expired` | `(now)` | deletes expired artifacts; returns count |
 | `close` | `()` | release backend resources |
 

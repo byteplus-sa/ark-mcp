@@ -1,7 +1,8 @@
 # Tools Reference
 
 The server exposes a conditional set of typed tools. `seed_media_get_artifact`
-is always available, provider tools are registered only when their credentials
+and `seed_media_export_artifact` are always available, provider tools are
+registered only when their credentials
 are configured, and `media_upload`, `media_presign`, and `media_presign_batch`
 are registered when object storage credentials (TOS or S3) are present. Each
 tool accepts a Pydantic input model and returns a Pydantic output model as
@@ -155,6 +156,29 @@ Retrieve persisted media inline by artifact ID.
 
 Returns `SeedMediaGetArtifactOutput` with `artifact_id`, `media_type`,
 `mime_type`, `sha256`, `bytes`, and Base64 `data`.
+
+## seed_media_export_artifact
+
+Locate or copy a persisted artifact on the local filesystem. Returns the
+absolute on-disk path instead of streaming Base64 through the MCP context.
+Stdio transport only — the client and server must share a filesystem.
+
+**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
+`idempotentHint=True`, `openWorldHint=False`
+
+### Input
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `artifact_id` | string | Yes | Artifact ID returned by a previous generation call |
+| `destination_path` | string | No | Absolute path where the server writes an atomic copy; omit to return the canonical store path |
+
+### Output
+
+Returns `SeedMediaExportArtifactOutput` with `artifact_id`, `path`,
+`media_type`, `mime_type`, `bytes`, `sha256`, and `copied`. `copied` is `false`
+when `path` is the canonical store location (filesystem backend) and `true`
+when the artifact was copied to `destination_path`.
 
 ## vod_enhance_video
 

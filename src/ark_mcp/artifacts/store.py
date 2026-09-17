@@ -10,7 +10,9 @@ usable after provider URL expiry.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
@@ -73,6 +75,17 @@ class StoredArtifact(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+@dataclass(frozen=True, slots=True)
+class ArtifactLocation:
+    """On-disk location of a stored artifact plus its reference.
+
+    ``path`` is ``None`` for object-storage backends, where no local file exists.
+    """
+
+    path: Path | None
+    ref: ArtifactRef
+
+
 class ArtifactMetadata(BaseModel):
     """Versioned ownership metadata stored beside an artifact."""
 
@@ -110,6 +123,13 @@ class ArtifactStore(Protocol):
 
     async def get(self, artifact_id: str, auth: AuthContext | None = None) -> StoredArtifact:
         """Retrieve a stored artifact by ID."""
+        ...
+
+    async def locate(self, artifact_id: str, auth: AuthContext | None = None) -> ArtifactLocation:
+        """Resolve the on-disk path and metadata of a stored artifact.
+
+        Returns ``path=None`` for object-storage backends where no local file exists.
+        """
         ...
 
     async def delete_expired(self, now: datetime) -> int:

@@ -114,6 +114,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
         ark_job_get,
         ark_job_submit,
     )
+    from ark_mcp.tools.seed_media_export_artifact import (
+        TOOL_ANNOTATIONS as export_artifact_annotations,
+    )
+    from ark_mcp.tools.seed_media_export_artifact import (
+        SeedMediaExportArtifactOutput,
+        seed_media_export_artifact,
+    )
     from ark_mcp.tools.seed_media_get_artifact import (
         TOOL_ANNOTATIONS as get_artifact_annotations,
     )
@@ -152,6 +159,12 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
         output_schema=SeedMediaGetArtifactOutput.model_json_schema(),
         auth=component_auth(settings, "artifacts:read"),
     )(seed_media_get_artifact)
+    server.tool(
+        name="seed_media_export_artifact",
+        annotations={**export_artifact_annotations},
+        output_schema=SeedMediaExportArtifactOutput.model_json_schema(),
+        auth=component_auth(settings, "artifacts:read"),
+    )(seed_media_export_artifact)
 
     if settings.has_seed_audio:
         from ark_mcp.tools.seed_audio_generate import (
