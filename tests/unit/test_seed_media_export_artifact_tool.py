@@ -8,6 +8,7 @@ transport gate.
 from __future__ import annotations
 
 import base64
+import hashlib
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +16,8 @@ from types import SimpleNamespace
 import pytest
 
 from ark_mcp.artifacts.filesystem_store import FilesystemArtifactStore
+from ark_mcp.artifacts.store import ArtifactLocation, StoredArtifact
+from ark_mcp.domain.artifacts import ArtifactRef
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.tools.seed_media_export_artifact import (
     SeedMediaExportArtifactInput,
@@ -160,3 +163,111 @@ class TestSeedMediaExportArtifact:
                 SeedMediaExportArtifactInput(artifact_id=ref.id),
                 ctx,
             )
+
+    async def test_directory_destination_raises_value_error(
+        self,
+        store: FilesystemArtifactStore,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ref = await store.put_base64(
+            data=base64.b64encode(b"owned by alice").decode(),
+            media_type="image",
+            mime_type="image/png",
+            auth=AuthContext(principal_id="alice", tenant_id="tenant-a"),
+        )
+        ctx = _ctx_for(store, "alice", "tenant-a", monkeypatch)
+
+        with pytest.raises(ValueError):
+            await seed_media_export_artifact(
+                SeedMediaExportArtifactInput(
+                    artifact_id=ref.id,
+                    destination_path=str(tmp_path),
+                ),
+                ctx,
+            )
+
+
+class _FakeObjectStorageStore:
+    def __init__(self, ref: ArtifactRef, data: bytes) -> None:
+        self._ref = ref
+        self._data = data
+
+    async def locate(self, artifact_id: str, auth: AuthContext | None = None) -> ArtifactLocation:
+        return ArtifactLocation(path=None, ref=self._ref)
+
+    async def get(self, artifact_id: str, auth: AuthContext | None = None) -> StoredArtifact:
+        return StoredArtifact(
+            data=self._data,
+            media_type=self._ref.media_type,
+            mime_type=self._ref.mime_type,
+            artifact_id=artifact_id,
+        )
+
+
+def _object_storage_ref(raw: bytes) -> ArtifactRef:
+    artifact_id = str(uuid.uuid4())
+    return ArtifactRef(
+        id=artifact_id,
+        uri=f"seed-media://artifacts/{artifact_id}",
+        media_type="video",
+        mime_type="video/mp4",
+        bytes=len(raw),
+        sha256=hashlib.sha256(raw).hexdigest(),
+        created_at="2026-09-17T00:00:00+00:00",
+    )
+
+
+def _ctx_for_object_storage(
+    store: _FakeObjectStorageStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> FakeContext:
+    monkeypatch.setattr(
+        "ark_mcp.tools.seed_media_export_artifact.get_runtime",
+        lambda _ctx: SimpleNamespace(
+            artifact_store=store,
+            settings=SimpleNamespace(mcp_transport="stdio"),
+        ),
+    )
+    monkeypatch.setattr(
+        "ark_mcp.tools.seed_media_export_artifact.get_principal",
+        lambda _ctx: AuthContext(principal_id="alice", tenant_id="tenant-a"),
+    )
+    return FakeContext()
+
+
+class TestSeedMediaExportArtifactObjectStorage:
+    async def test_locate_without_destination_raises_value_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        raw = b"object-storage media bytes"
+        ref = _object_storage_ref(raw)
+        store = _FakeObjectStorageStore(ref, raw)
+        ctx = _ctx_for_object_storage(store, monkeypatch)
+
+        with pytest.raises(ValueError):
+            await seed_media_export_artifact(
+                SeedMediaExportArtifactInput(artifact_id=ref.id),
+                ctx,
+            )
+
+    async def test_copy_to_destination_writes_bytes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        raw = b"object-storage media bytes"
+        ref = _object_storage_ref(raw)
+        store = _FakeObjectStorageStore(ref, raw)
+        destination = tmp_path / "out" / "copy.mp4"
+        ctx = _ctx_for_object_storage(store, monkeypatch)
+
+        result = await seed_media_export_artifact(
+            SeedMediaExportArtifactInput(
+                artifact_id=ref.id,
+                destination_path=str(destination),
+            ),
+            ctx,
+        )
+
+        assert result.copied is True
+        assert result.path == str(destination.resolve())
+        assert destination.read_bytes() == raw

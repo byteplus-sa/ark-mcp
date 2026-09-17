@@ -47,7 +47,7 @@ surface.
 | 38 | `ark_job_submit` | Compatibility | Background submission through ordinary tool | Dynamic target scope |
 | 39 | `ark_job_get` | Compatibility | Read-only ordinary tool | Owner only |
 | 40 | `ark_job_cancel` | Compatibility | Destructive ordinary tool | Owner only |
-| 41 | `seed_media_export_artifact` | Artifacts | Read-only (stdio only) | Local |
+| 41 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local / JWT |
 
 ## Tool Annotations
 

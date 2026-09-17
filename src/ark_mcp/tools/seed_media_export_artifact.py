@@ -113,6 +113,8 @@ async def seed_media_export_artifact(
 
     if input.destination_path is not None:
         destination = Path(input.destination_path).expanduser().resolve()
+        if destination.is_dir():
+            raise ValueError("destination_path must name a file, not a directory.")
         if location.path is not None:
             _atomic_copy_file(location.path, destination)
         else:

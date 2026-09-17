@@ -21,7 +21,7 @@ products plus artifact access and an optional media upload helper:
 | **VOD AI MediaKit Transcode** | `vod_transcode_video`, `vod_get_transcode_task` | Submit and poll async video transcoding (codec, container, resolution, bitrate, frame rate) |
 | **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_get_subtitle_addition_task`, `vod_remove_subtitles`, `vod_get_subtitle_removal_task` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
 | **VOD Audio Separation** | `vod_separate_audio`, `vod_get_audio_separation` | Submit and poll voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
-| **Artifacts** | `seed_media_get_artifact` | Retrieve persisted media inline by artifact ID |
+| **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact` | Retrieve persisted media inline by artifact ID, or locate/copy it to a local path without Base64 round-trips |
 | **Object storage** (optional) | `media_upload`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media to TOS or S3; foreground URL renewal without re-uploading |
 | **Background-job compatibility** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools that submit and manage the same background work for clients without task-augmented execution |
 
@@ -197,7 +197,8 @@ SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-0-260128
 ```
 
 If a credential is absent, the server skips registering that product's
-tools. `seed_media_get_artifact` is always available, provider tools appear only
+tools. `seed_media_get_artifact` and `seed_media_export_artifact` are always
+available, provider tools appear only
 when their credentials are configured, `media_upload` and `media_presign` appear
 only when object storage credentials (TOS or S3) are configured, and
 `speech_to_text` appears only when `BYTEPLUS_SEED_SPEECH_API_KEY` is set.
