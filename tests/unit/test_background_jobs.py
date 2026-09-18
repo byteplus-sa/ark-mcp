@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from inspect import signature
 
+import pytest
 from fastmcp_tasks.creation import create_task
 from fastmcp_tasks.handlers import tasks_cancel, tasks_get
 
@@ -11,6 +12,7 @@ from ark_mcp.background_jobs import (
     required_background_tool_names,
 )
 from ark_mcp.domain.background_jobs import BackgroundJobSnapshot
+from ark_mcp.tools import background_jobs as background_jobs_module
 from ark_mcp.tools.background_jobs import _unavailable_message
 
 
@@ -49,3 +51,14 @@ def test_local_unavailable_message_names_process_locality() -> None:
 
 def test_remote_unavailable_message_stays_principal_scoped() -> None:
     assert _unavailable_message(False) == ("Background job is not available to this principal.")
+
+
+def test_local_owner_detection_falls_back_when_identity_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def raise_permission_error(_ctx: object) -> None:
+        raise PermissionError("missing identity")
+
+    monkeypatch.setattr(background_jobs_module, "get_principal", raise_permission_error)
+
+    assert background_jobs_module._is_local_owner(object()) is False

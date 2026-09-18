@@ -59,7 +59,9 @@ Caveats:
 
 - The default in-memory Docket backend is process-local: restarting the shared
   server discards active and retained jobs. Set `FASTMCP_DOCKET_URL=redis://...`
-  and run a worker for restart durability (single replica only).
+  to retain task state across restarts of the same single-replica deployment;
+  the server's embedded worker picks retained tasks back up. A separate worker
+  process is only needed for extra task parallelism.
 - Keep `RATE_LIMIT_RPM=0` (the default): every loopback client shares one
   client-IP bucket, so enabling it applies an aggregate cap.
 - Set an absolute `ARTIFACT_DIR` so the state database does not depend on the
