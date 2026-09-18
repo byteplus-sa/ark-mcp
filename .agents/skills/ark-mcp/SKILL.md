@@ -218,6 +218,13 @@ replay paid work. Retain the local MCP task or Ark job ID plus any provider ID,
 and reconcile ambiguous provider outcomes before submitting again. The smoke
 scripts save provider IDs before polling.
 
+Local `stdio` clients start one server process each, so `ark_job_*` jobs are
+process-local: a job submitted through one client is not visible to another
+client's server process. To share jobs across local clients, run one loopback
+HTTP server (`make shared-http`) and connect every client to it; all loopback
+clients are the same `local` principal and share the queue. The default
+in-memory backend still discards jobs when the shared server restarts.
+
 JWT-authenticated Redis tasks require `FASTMCP_TASKS_ENCRYPTION_KEY`; keep the
 runtime database, queue and encryption key together. Redis does not remove the
 single-replica limitation. Snapshot encryption protects stored auth context;

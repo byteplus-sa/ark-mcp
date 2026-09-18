@@ -24,6 +24,49 @@ Loopback development can use local auth:
 MCP_TRANSPORT=http MCP_HOST=127.0.0.1 uv run python -m ark_mcp
 ```
 
+### Shared loopback server for multiple local clients
+
+`stdio` starts one server process per client, and background job state lives in
+that process. To let several local MCP clients — for example multiple opencode
+agents — submit and poll the same `ark_job_*` jobs, run **one** shared loopback
+server in local auth mode and point every client at it:
+
+```bash
+make shared-http
+# equivalent
+MCP_AUTH_MODE=local MCP_TRANSPORT=http MCP_HOST=127.0.0.1 MCP_PORT=3000 uv run python -m ark_mcp
+```
+
+All loopback clients resolve to the same `local`/`local` principal, share the
+single in-process Docket queue, and share the `runtime.sqlite3` ownership store,
+so any client can poll a job submitted by any other client. An opencode remote
+client entry looks like:
+
+```json
+{
+  "mcp": {
+    "ark-mcp": {
+      "type": "remote",
+      "url": "http://127.0.0.1:3000/mcp",
+      "oauth": false,
+      "timeout": 600000
+    }
+  }
+}
+```
+
+Caveats:
+
+- The default in-memory Docket backend is process-local: restarting the shared
+  server discards active and retained jobs. Set `FASTMCP_DOCKET_URL=redis://...`
+  to retain task state across restarts of the same single-replica deployment;
+  the server's embedded worker picks retained tasks back up. A separate worker
+  process is only needed for extra task parallelism.
+- Keep `RATE_LIMIT_RPM=0` (the default): every loopback client shares one
+  client-IP bucket, so enabling it applies an aggregate cap.
+- Set an absolute `ARTIFACT_DIR` so the state database does not depend on the
+  server's working directory.
+
 Network deployment must use JWT verification:
 
 ```bash

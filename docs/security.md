@@ -61,9 +61,17 @@ verified token:
 - A missing token → `PermissionError("An authenticated access token is required.")`.
 
 There is **no anonymous remote principal** — JWT mode fails closed. The only
-way to get an `is_local` principal (`principal_id == "local"`) is `LOCAL`
-mode, which returns `PrincipalContext()` untouched (`local`/`local`, empty
-scopes, `transport="stdio"`).
+way to get an `is_local` principal (`principal_id == "local"` with
+`transport == "stdio"`) is `LOCAL` mode, which returns `PrincipalContext()`
+untouched (`local`/`local`, empty scopes, `transport="stdio"`). This holds for
+loopback HTTP too, and is intentional: it is what lets all clients of one shared
+loopback server see each other's background jobs.
+
+The trust implication is explicit: with `MCP_AUTH_MODE=local` over loopback,
+**any local process or user that can reach the port acts as the `local`
+principal** — including billable tool calls and artifact or job reads. This
+matches the `stdio` trust model, but the port is reachable by every local
+account, so bind loopback only and do not expose it through a proxy.
 
 ### `PrincipalContext` / `AuthContext`
 
@@ -76,8 +84,8 @@ A frozen Pydantic model (`security/auth_context.py`):
 | `scopes` | `frozenset[str]` | `frozenset()` |
 | `transport` | `Literal["stdio", "http"]` | `"stdio"` |
 
-`is_local` returns `principal_id == "local"`. `AuthContext` is a
-compatibility alias for `PrincipalContext`.
+`is_local` returns `principal_id == "local" and transport == "stdio"`.
+`AuthContext` is a compatibility alias for `PrincipalContext`.
 
 ## Scope taxonomy
 

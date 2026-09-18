@@ -57,6 +57,26 @@ class BackgroundJobIdInput(BaseModel):
     )
 
 
+def _is_local_owner(ctx: Context) -> bool:
+    """Return whether the caller is the trusted local principal."""
+    try:
+        return get_principal(ctx).is_local
+    except PermissionError:
+        return False
+
+
+def _unavailable_message(is_local: bool) -> str:
+    """Explain an unavailable job without leaking remote principal identities."""
+    if is_local:
+        return (
+            "Background job is not available in this server instance. The job ID is "
+            "unknown, expired, or was created by a different ark-mcp process. Local "
+            "background jobs are process-local; submit and poll through the same "
+            "server, or run one shared HTTP server for all local clients."
+        )
+    return "Background job is not available to this principal."
+
+
 async def ark_job_capabilities(ctx: Context) -> BackgroundJobCapabilities:
     """List task-enabled tools available through the ordinary-tool compatibility path.
 
@@ -158,12 +178,12 @@ async def ark_job_get(
     try:
         await require_mcp_task_owner(ctx, input.job_id)
     except PermissionError as exc:
-        raise ToolError("Background job is not available to this principal.") from exc
+        raise ToolError(_unavailable_message(_is_local_owner(ctx))) from exc
     try:
         snapshot = await background_job_bridge.get(ctx.fastmcp, input.job_id)
     except MCPError as exc:
         if exc.code == -32602:
-            raise ToolError("Background job is not available to this principal.") from exc
+            raise ToolError(_unavailable_message(_is_local_owner(ctx))) from exc
         raise
     log_info(
         "background_job_polled",
@@ -186,12 +206,12 @@ async def ark_job_cancel(
     try:
         await require_mcp_task_owner(ctx, input.job_id)
     except PermissionError as exc:
-        raise ToolError("Background job is not available to this principal.") from exc
+        raise ToolError(_unavailable_message(_is_local_owner(ctx))) from exc
     try:
         await background_job_bridge.cancel(ctx.fastmcp, input.job_id)
     except MCPError as exc:
         if exc.code == -32602:
-            raise ToolError("Background job is not available to this principal.") from exc
+            raise ToolError(_unavailable_message(_is_local_owner(ctx))) from exc
         raise
     log_info(
         "background_job_cancelled",

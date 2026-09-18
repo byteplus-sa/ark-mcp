@@ -137,7 +137,10 @@ ID contained inside the original result.
 
 Returns `status="cancelled"` after cooperative local cancellation. It does not
 guarantee that provider-side work already accepted upstream was cancelled.
-Unknown and cross-principal IDs use the same unavailable response boundary.
+Unknown and cross-principal IDs use the same unavailable response boundary. In
+local auth mode jobs are process-local: a job created by a different `ark-mcp`
+process is also unavailable, so submit and poll through the same server (or run
+one shared HTTP server for all local clients).
 
 ## seed_media_get_artifact
 

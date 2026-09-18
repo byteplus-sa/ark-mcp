@@ -234,6 +234,11 @@ server restart discards active and retained task state.
 `tasks/get`, `tasks/update`, and `tasks/cancel` request checks that owner.
 Missing identity or ownership fails closed in JWT mode.
 
+One shared server process gives all of its clients one queue: in local auth
+mode every loopback client is the same `local`/`local` principal, so a job
+submitted by one client is visible to the others. This remains single-instance
+state; see [transports.md](transports.md).
+
 Before a required-task handler starts, it atomically records an execution claim
 in the same database. If that MCP task is delivered again, the handler returns
 an error without repeating provider work. This favors avoiding duplicate charges
