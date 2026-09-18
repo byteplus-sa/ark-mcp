@@ -135,3 +135,19 @@ failure, and a simulated interrupted provider operation across a reopened runtim
 database. Live Redis failover and named desktop-client task support require
 validation in the target environment; the supported protocol test uses FastMCP
 4.0.3 over a real stdio subprocess with a mocked provider.
+
+## Single shared loopback server (local multi-client)
+
+When several local MCP clients must share background jobs, run one loopback
+server in local auth mode instead of one `stdio` process per client:
+
+```bash
+make shared-http
+```
+
+Every loopback client is the same `local`/`local` principal and shares the
+in-process Docket queue and `runtime.sqlite3`, so any client can poll a job
+submitted by another. This does not change the single-replica contract: the
+in-memory queue is lost on restart, budgets/ownership/execution claims remain
+SQLite-backed, and Redis retention stays single-replica. See
+[transports.md](transports.md) for the client configuration and caveats.

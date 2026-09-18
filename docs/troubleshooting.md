@@ -129,6 +129,24 @@ or VOD submission, the provider task ID appears inside the completed original
 result and must be retained separately. A missing target usually means its
 provider credential, feature flag, or JWT scope is unavailable.
 
+### Background job is not available
+
+`Background job is not available in this server instance` (local auth) or
+`Background job is not available to this principal` (JWT auth) means the server
+answering the request cannot resolve the job ID. In local auth mode the caller is
+always the `local` principal, so the cause is process locality, not permissions:
+
+- The job was submitted by a **different** `ark-mcp` process. Each `stdio`
+  client starts its own process; run one shared loopback HTTP server
+  (`make shared-http`) and point all clients at it.
+- The server restarted: the default in-memory Docket backend discards active and
+  retained jobs. Redis retention is the durability path.
+- The job ID is wrong, or its retained result expired.
+
+In JWT mode the same message also covers a genuine cross-principal or
+cross-tenant job ID. The server deliberately does not distinguish missing,
+expired, and not-owned IDs, so do not use the error to probe for job existence.
+
 ## Artifacts Not Persisting
 
 Check:

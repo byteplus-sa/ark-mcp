@@ -11,6 +11,7 @@ from ark_mcp.background_jobs import (
     required_background_tool_names,
 )
 from ark_mcp.domain.background_jobs import BackgroundJobSnapshot
+from ark_mcp.tools.background_jobs import _unavailable_message
 
 
 def test_background_tool_registry_modes_partition_all_targets() -> None:
@@ -37,3 +38,14 @@ def test_background_job_snapshot_describes_configured_ttl() -> None:
     assert ttl_schema["description"] == (
         "Configured result retention duration in milliseconds, or null when unlimited."
     )
+
+
+def test_local_unavailable_message_names_process_locality() -> None:
+    message = _unavailable_message(True)
+
+    assert "server instance" in message
+    assert "process-local" in message
+
+
+def test_remote_unavailable_message_stays_principal_scoped() -> None:
+    assert _unavailable_message(False) == ("Background job is not available to this principal.")

@@ -286,6 +286,28 @@ top-level `mcp` key with `type: "local"` and `command` as an array:
 }
 ```
 
+**Shared server (multiple agents).** `stdio` starts one server process per
+client, so background jobs (`ark_job_*`) are process-local and cannot be polled
+across agents. To share them, run one loopback HTTP server in local auth mode
+(`make shared-http`) and connect every client over HTTP instead:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "ark-seed": {
+      "type": "remote",
+      "url": "http://127.0.0.1:3000/mcp",
+      "oauth": false,
+      "timeout": 600000
+    }
+  }
+}
+```
+
+See [docs/transports.md](docs/transports.md) for the caveats (restart loses
+in-memory jobs; Redis retention is single-replica).
+
 ### TRAE IDE
 
 TRAE uses the standard `mcpServers` JSON shape, added either via
