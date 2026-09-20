@@ -3,10 +3,11 @@
 The Ark Seed MCP server exposes a conditional multimodal tool surface.
 Here are common scenarios and how to achieve them.
 
-The JSON blocks below show tool input payloads. Invoke generation, variation,
-transcription, upload, understanding, and provider-submission tools with MCP
-task augmentation, or wrap the same payload in `ark_job_submit` when the client
-supports only ordinary MCP calls. For Seedance, Seed 3D, and MediaKit
+The JSON blocks below show tool input payloads. Wrap the payload for
+generation, variation, transcription, upload, understanding, and
+provider-submission tools in `ark_job_submit`, or invoke those tools with MCP
+task augmentation on a client that negotiates it. For Seedance, Seed 3D, and
+MediaKit
 retrieval, poll in foreground with `persist_output=false`, then use the
 `ark_job_*` path (or optional task augmentation) with `persist_output=true`
 when downloading a completed output.
@@ -200,7 +201,7 @@ Check the status of a video generation task.
 ```
 
 Use `persist_output=false` for foreground status polling. To persist the
-completed output, run the retrieval through an MCP task with
+completed output, run the retrieval as a background job with
 `persist_output=true` (or omit the field) after the provider task reaches a
 terminal state; subsequent polls return the cached artifact without
 re-downloading.

@@ -111,10 +111,11 @@ concurrency, error, and usage accounting paths.
 
 Because most clients cannot negotiate task augmentation, the default path
 submits the same registered handlers through the ordinary `ark_job_submit` tool
-and polls `ark_job_get`. The adapter is intentionally thin: it resolves an allowlisted task-enabled tool,
-enforces the target's scope and ownership, and delegates creation, status, and
-cancellation to the pinned FastMCP task backend. It does not introduce a second
-queue or execute provider work inside the foreground request.
+and polls `ark_job_get`. The adapter is intentionally thin: it resolves an
+allowlisted task-enabled tool, enforces the target's scope and ownership, and
+delegates creation, status, and cancellation to the pinned FastMCP task
+backend. It does not introduce a second queue or execute provider work inside
+the foreground request.
 
 Seedance, Seed 3D, and MediaKit get calls use optional task support: foreground
 execution remains available for short processing-status checks, while task
@@ -127,20 +128,20 @@ sequenceDiagram
     participant S as FastMCP server
     participant W as Docket worker
     participant A as BytePlus API or object storage
-    alt Client supports task augmentation
-        C->>S: original tools/call + task metadata
-        S-->>C: MCP task ID (working)
-    else Ordinary-tool client
+    alt Ordinary-tool client (default)
         C->>S: ark_job_submit(target, arguments)
         S-->>C: Ark job ID (working)
+    else Client supports task augmentation
+        C->>S: original tools/call + task metadata
+        S-->>C: MCP task ID (working)
     end
     S->>W: enqueue long-running tool
     W->>A: generation, transcription, upload, submission, or persistence
     loop recommended every 2 seconds until terminal
-        alt Native task path
-            C->>S: tasks/get
-        else Compatibility path
+        alt Ordinary-tool path
             C->>S: ark_job_get(job ID)
+        else Native task path
+            C->>S: tasks/get
         end
         S-->>C: working status or terminal result
     end

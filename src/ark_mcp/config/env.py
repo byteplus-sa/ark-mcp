@@ -10,6 +10,7 @@ If a credential is absent, the server must not register that product's tool set.
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -25,6 +26,19 @@ from pydantic import (
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def resolve_env_file() -> str:
+    """Return the env file to load, honoring an explicit absolute override.
+
+    ``env_file`` is resolved by pydantic-settings relative to the process
+    working directory. An MCP client that spawns this server from another
+    directory therefore finds no ``.env``, and the server starts with no
+    provider credentials and no provider tools. ``ARK_MCP_ENV_FILE`` lets a
+    client point at the file explicitly instead of relying on the cwd.
+    """
+    override = os.environ.get("ARK_MCP_ENV_FILE", "").strip()
+    return override or ".env"
 
 
 def _warn_if_http_body_limit_blocks_media_upload(body_bytes: int) -> None:
@@ -115,7 +129,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=resolve_env_file(),
         env_file_encoding="utf-8",
         env_ignore_empty=True,
         extra="ignore",

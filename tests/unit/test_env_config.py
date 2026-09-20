@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from ark_mcp.config.env import Settings, get_settings, validate
+from ark_mcp.config.env import Settings, get_settings, resolve_env_file, validate
 
 
 @pytest.fixture
@@ -324,3 +326,38 @@ class TestStateAndArtifactBackend:
         )
         assert settings.artifact_backend == "object_storage"
         assert settings.has_object_storage is True
+
+
+class TestEnvFileResolution:
+    """``env_file`` is cwd-relative, so an absolute override must be honored."""
+
+    def test_defaults_to_dot_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("ARK_MCP_ENV_FILE", raising=False)
+        assert resolve_env_file() == ".env"
+
+    def test_absolute_override_is_used(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARK_MCP_ENV_FILE", "/srv/ark/secrets.env")
+        assert resolve_env_file() == "/srv/ark/secrets.env"
+
+    def test_blank_override_falls_back_to_dot_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ARK_MCP_ENV_FILE", "   ")
+        assert resolve_env_file() == ".env"
+
+    def test_override_loads_settings_from_that_file(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        env_file = tmp_path / "custom.env"
+        env_file.write_text(
+            "BYTEPLUS_MODELARK_API_KEY=sk-from-custom-file\n"  # pragma: allowlist secret
+        )
+        for name in (
+            "BYTEPLUS_MODELARK_API_KEY",
+            "BYTEPLUS_SEED_SPEECH_API_KEY",
+            "BYTEPLUS_VOD_MEDIAKIT_API_KEY",
+        ):
+            monkeypatch.delenv(name, raising=False)
+
+        settings = Settings(_env_file=str(env_file))
+
+        assert settings.modelark_api_key == "sk-from-custom-file"  # pragma: allowlist secret
+        assert settings.has_modelark is True

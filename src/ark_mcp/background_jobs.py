@@ -133,8 +133,9 @@ class BackgroundJobBridge:
             error = BackgroundJobError(
                 code=-32602,
                 message=(
-                    "This job requires additional input, which the compatibility API does not "
-                    "support. Cancel the job or use a native task-capable MCP client."
+                    "This job requires additional input, which the ark_job_* API does not "
+                    "support. Cancel the job, or run the tool with MCP task augmentation on a "
+                    "client that supports it."
                 ),
                 data=None,
             )
