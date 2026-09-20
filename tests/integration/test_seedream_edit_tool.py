@@ -41,7 +41,7 @@ def _patch_seedream_service(monkeypatch: pytest.MonkeyPatch, response_data: dict
 
 
 class TestSeedreamEditImageTool:
-    async def test_prompt_optimization_defaults_to_fast(
+    async def test_prompt_optimization_defaults_to_standard(
         self,
         test_env: None,
         fake_ctx: FakeContext,
@@ -70,7 +70,7 @@ class TestSeedreamEditImageTool:
             fake_ctx,
         )
 
-        assert captured[0].optimize_prompt_options == {"mode": "fast"}
+        assert captured[0].optimize_prompt_options == {"mode": "standard"}
 
     async def test_point_edit_with_url_persistence(
         self,
