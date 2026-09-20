@@ -3,14 +3,16 @@
 Configuration is loaded from environment variables or `.env` by Pydantic
 Settings. Copy `.env.example` to `.env`. Empty values are ignored.
 
-`.env` is resolved **relative to the server's working directory**. An MCP
-client that spawns the server from another directory finds no `.env`, and the
-server then starts with no provider credentials and registers only the
-always-on job and artifact tools. Set `ARK_MCP_ENV_FILE` to an absolute path,
-or launch the server with its working directory at the repository root (for
-example `uv --directory /path/to/ark-mcp run python -m ark_mcp`). The server
-logs a `no_provider_credentials_configured` warning at startup when this
-happens.
+`.env` is resolved **relative to the server's working directory**. Most MCP
+clients set that correctly from their server configuration, so this is rarely
+the problem. When a client cannot, it finds no `.env`, and the server starts
+with no provider credentials and registers only the always-on job and artifact
+tools — set `ARK_MCP_ENV_FILE` to an absolute path for that case, or launch the
+server with its working directory at the repository root (for example
+`uv --directory /path/to/ark-mcp run python -m ark_mcp`). The server logs a
+`no_provider_credentials_configured` warning at startup when it happens; if a
+client is missing tools and that warning is absent, look at
+[troubleshooting](troubleshooting.md) instead.
 
 | Variable | Default | Purpose |
 |---|---|---|

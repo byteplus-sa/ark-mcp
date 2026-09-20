@@ -34,22 +34,56 @@ tools — it does not register a broken tool.
 
 ## `ark_job_capabilities` Returns No Targets
 
-An empty `targets` list means no provider tools are registered. If every target
-is missing — not just one product's — the server almost certainly never read
-your env file, because `.env` is resolved relative to the server's **working
-directory**, not the repository root.
+An empty `targets` list, or a client reporting only the six always-on job and
+artifact tools, means no provider tools are registered in **the server process
+that client is talking to**. Work through these in order; the first two are by
+far the most common and neither is a server fault.
 
-Check the startup log for `no_provider_credentials_configured`; it reports the
-env file the server looked for and the working directory it used. Then either:
+**1. The client is holding a stale connection.** Credentials and tool
+registration are resolved once at startup, so a running server never picks up a
+later env-file edit. Restarting the application is not always enough: an
+existing session can keep its established stdio connection while new processes
+spawn beside it. Reconnect that server, or open a fresh session, and check the
+tool count again.
 
-1. Set `ARK_MCP_ENV_FILE` to an absolute path in the MCP client config, or
-2. Launch the server with its working directory at the repository root, e.g.
-   `uv --directory /path/to/ark-mcp run python -m ark_mcp`.
+**2. You are looking at another application's processes.** Every MCP client
+that is configured for this server runs its own copy. A `ps` listing therefore
+shows processes belonging to other editors, and one of those being hours old
+proves nothing about your client. Attribute each process to its owner before
+concluding anything:
 
-A server that resolved its credentials but is missing one product's tools is a
-different problem: that product's key is absent or the process started before
-the key was added. Credentials are read once at startup, so a running server
-does not pick up a later `.env` edit — restart or reconnect it.
+```bash
+ps -eo pid,ppid,lstart,command | grep ark_mcp | grep -v grep
+```
+
+Then walk each `ppid` up with `ps -o comm= -p <ppid>` until you reach the
+application. Confirm the process you are reasoning about belongs to the client
+you are using.
+
+**3. The process started before the credential was added.** Same single-read
+rule as above: check the process start time against the env file's mtime
+(`stat -f "%Sm" .env`). If the process is older, restart it.
+
+**4. The server never found the env file.** `.env` is resolved relative to the
+server's **working directory**, not the repository root, so a client that
+spawns the server elsewhere finds nothing. This is the least likely cause,
+because most clients set the working directory correctly — verify before acting
+on it rather than assuming it:
+
+```bash
+lsof -a -p <pid> -d cwd
+```
+
+The server also logs `no_provider_credentials_configured` at startup in exactly
+this case, reporting the env file it looked for and the working directory it
+used. **If that warning is absent from the log, this is not your problem.** If
+it is present, either set `ARK_MCP_ENV_FILE` to an absolute path in the MCP
+client config, or launch the server with its working directory at the
+repository root, e.g. `uv --directory /path/to/ark-mcp run python -m ark_mcp`.
+
+A server that resolved its credentials but is missing only one product's tools
+is a different problem: that product's key is absent, or the process predates
+it. Cases 1 and 3 apply.
 
 ## Model Not Found / Not Activated
 
