@@ -81,8 +81,8 @@ async def ark_job_capabilities(ctx: Context) -> BackgroundJobCapabilities:
     """List the Ark tools that can be run as a background job.
 
     These are the targets accepted by ``ark_job_submit``, the default way to run
-    long-running work on clients that cannot negotiate MCP task augmentation.
-    The result includes only tools registered by the current server configuration
+    long-running work; it needs no MCP task augmentation and works on any MCP
+    client. The result includes only tools registered by the server configuration
     and authorized for the caller. Use each target's input schema to build the
     arguments object passed to ``ark_job_submit``.
     """

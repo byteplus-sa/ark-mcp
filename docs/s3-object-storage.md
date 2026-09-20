@@ -26,10 +26,10 @@ at startup by `OBJECT_STORAGE_BACKEND`.
 ```mermaid
 flowchart LR
     Client["MCP Client"] --> Route{"Task augmentation?"}
-    Route -->|"Supported"| Task["MCP task"]
-    Route -->|"Unsupported"| Job["Ark job"]
-    Task --> Worker["Docket worker"]
-    Job --> Worker
+    Route -->|"Not negotiated (default)"| Job["Ark job"]
+    Route -->|"Negotiated"| Task["MCP task"]
+    Job --> Worker["Docket worker"]
+    Task --> Worker
     Worker --> Tool["media_upload tool"]
     Tool --> Factory["make_object_storage_gateway()"]
     Factory -->|"backend=s3"| S3GW["S3Gateway (boto3)"]
@@ -59,12 +59,12 @@ sequenceDiagram
     participant G as S3Gateway
     participant S3 as S3 bucket
 
-    alt Native MCP task support
-        C->>B: media_upload(..., task metadata)
-        B-->>C: MCP task ID
-    else Ordinary MCP tools
+    alt Ordinary MCP tools (default)
         C->>B: ark_job_submit(media_upload, arguments)
         B-->>C: Ark job ID
+    else Native MCP task support
+        C->>B: media_upload(..., task metadata)
+        B-->>C: MCP task ID
     end
     B->>T: execute original handler
     T->>T: Validate MIME + size (before upload)
@@ -80,12 +80,12 @@ sequenceDiagram
     G-->>T: presigned HTTPS GET URL
     T->>G: close()
     T-->>B: typed result
-    alt Native MCP task support
-        C->>B: tasks/get
-        B-->>C: terminal result { url, expires_at, object_key, bytes }
-    else Ordinary MCP tools
+    alt Ordinary MCP tools (default)
         C->>B: ark_job_get
         B-->>C: result.structured_content { url, expires_at, object_key, bytes }
+    else Native MCP task support
+        C->>B: tasks/get
+        B-->>C: terminal result { url, expires_at, object_key, bytes }
     end
 ```
 
@@ -143,24 +143,24 @@ sequenceDiagram
     participant G as Gateway
     participant S3 as Bucket
 
-    alt Native MCP task support
-        C->>B: media_upload(..., task metadata)
-        B-->>C: MCP task ID
-    else Ordinary MCP tools
+    alt Ordinary MCP tools (default)
         C->>B: ark_job_submit(media_upload, arguments)
         B-->>C: Ark job ID
+    else Native MCP task support
+        C->>B: media_upload(..., task metadata)
+        B-->>C: MCP task ID
     end
     B->>U: execute original handler
     U->>S3: put_object (key=references/video/uuid)
     U->>G: presign_get(key)
     G-->>U: presigned URL (T=0, valid 30min)
     U-->>B: typed result
-    alt Native MCP task support
-        C->>B: tasks/get
-        B-->>C: terminal result { url, object_key, ... }
-    else Ordinary MCP tools
+    alt Ordinary MCP tools (default)
         C->>B: ark_job_get
         B-->>C: result.structured_content { url, object_key, ... }
+    else Native MCP task support
+        C->>B: tasks/get
+        B-->>C: terminal result { url, object_key, ... }
     end
 
     Note over C,S3: ...later, URL expires or is about to...

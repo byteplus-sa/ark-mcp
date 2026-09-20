@@ -37,9 +37,14 @@ from ark_mcp.background_jobs import (  # noqa: E402
     background_tool_spec,
     required_background_tool_names,
 )
-from ark_mcp.config.env import Settings, get_settings  # noqa: E402
+from ark_mcp.config.env import (  # noqa: E402
+    Settings,
+    get_settings,
+    resolve_env_file,
+)
 from ark_mcp.observability.logger import info as log_info  # noqa: E402
 from ark_mcp.observability.logger import set_level  # noqa: E402
+from ark_mcp.observability.logger import warning as log_warning  # noqa: E402
 from ark_mcp.observability.metrics import (  # noqa: E402
     MetricsMiddleware,
     instrument_tool_execution,
@@ -908,6 +913,27 @@ def create_server(
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     register_tools(server, resolved_settings)
+    if not any(
+        (
+            resolved_settings.has_modelark,
+            resolved_settings.has_seed_audio,
+            resolved_settings.has_seed3d,
+            resolved_settings.has_stt,
+            resolved_settings.has_vod_mediakit,
+        )
+    ):
+        log_warning(
+            "no_provider_credentials_configured",
+            detail=(
+                "No provider credentials resolved, so only the always-on job and "
+                "artifact tools are registered and ark_job_capabilities returns no "
+                "targets. The env file is read relative to the server's working "
+                "directory; set ARK_MCP_ENV_FILE to an absolute path, or launch the "
+                "server with its working directory at the repository root."
+            ),
+            env_file=resolve_env_file(),
+            cwd=str(Path.cwd()),
+        )
     log_info(
         "server_ready",
         transport=resolved_settings.mcp_transport,

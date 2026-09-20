@@ -32,6 +32,25 @@ find the credential in the environment. Check:
 When a credential is absent, the server skips registering that product's
 tools — it does not register a broken tool.
 
+## `ark_job_capabilities` Returns No Targets
+
+An empty `targets` list means no provider tools are registered. If every target
+is missing — not just one product's — the server almost certainly never read
+your env file, because `.env` is resolved relative to the server's **working
+directory**, not the repository root.
+
+Check the startup log for `no_provider_credentials_configured`; it reports the
+env file the server looked for and the working directory it used. Then either:
+
+1. Set `ARK_MCP_ENV_FILE` to an absolute path in the MCP client config, or
+2. Launch the server with its working directory at the repository root, e.g.
+   `uv --directory /path/to/ark-mcp run python -m ark_mcp`.
+
+A server that resolved its credentials but is missing one product's tools is a
+different problem: that product's key is absent or the process started before
+the key was added. Credentials are read once at startup, so a running server
+does not pick up a later `.env` edit — restart or reconnect it.
+
 ## Model Not Found / Not Activated
 
 If the provider returns `403 FORBIDDEN` with "model not activated":
