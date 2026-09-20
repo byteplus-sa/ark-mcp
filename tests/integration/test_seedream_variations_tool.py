@@ -44,7 +44,7 @@ def _patch_seedream_by_seed(
 class TestSeedreamVariationsTool:
     """Integration tests for seedream_generate_image_variations."""
 
-    async def test_prompt_optimization_defaults_to_fast(
+    async def test_prompt_optimization_defaults_to_standard(
         self,
         test_env: None,
         fake_ctx: FakeContext,
@@ -74,7 +74,7 @@ class TestSeedreamVariationsTool:
         )
 
         assert len(captured) == 2
-        assert all(req.optimize_prompt_options == {"mode": "fast"} for req in captured)
+        assert all(req.optimize_prompt_options == {"mode": "standard"} for req in captured)
 
     async def test_three_variations_all_succeed(
         self,

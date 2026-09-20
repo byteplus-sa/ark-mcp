@@ -111,8 +111,8 @@ class SeedreamEditInput(BaseModel):
         None,
         description=(
             "Prompt optimization mode: standard (higher quality) or fast (lower latency). "
-            "Defaults to fast for Seedream 5.0 Pro when omitted; other models use the "
-            "provider default. Pass standard to prioritize maximum editing fidelity."
+            "Defaults to standard on Seedream 5.0, the mode its API accepts; other "
+            "models use the provider default. Pass fast to prioritize lower latency."
         ),
     )
     persist: bool = Field(

@@ -510,7 +510,7 @@ Generate or edit an image through ModelArk Seedream.
 | `output_format` | "png" \| "jpeg" | No | Output format |
 | `response_format` | "url" \| "b64_json" | No | Response format |
 | `watermark` | boolean | No | AIGC watermark |
-| `prompt_optimization` | "standard" \| "fast" | No | Prompt optimization mode; defaults to fast on 5.0 Pro |
+| `prompt_optimization` | "standard" \| "fast" | No | Prompt optimization mode; defaults to standard on 5.0 |
 | `persist` | boolean | No | Whether to persist output (default: true) |
 
 ### Output
@@ -538,7 +538,7 @@ Edit an image through ModelArk Seedream with point or bounding-box targeting.
 | `output_format` | "png" \| "jpeg" | No | Output format |
 | `response_format` | "url" \| "b64_json" | No | Response format |
 | `watermark` | boolean | No | AIGC watermark |
-| `prompt_optimization` | "standard" \| "fast" | No | Prompt optimization mode; defaults to fast on 5.0 Pro |
+| `prompt_optimization` | "standard" \| "fast" | No | Prompt optimization mode; defaults to standard on 5.0 |
 | `persist` | boolean | No | Whether to persist output (default: true) |
 
 \* Provide either `point` or `bbox`.
@@ -732,7 +732,7 @@ Generate N independent image variations in parallel with distinct seeds.
 | `output_format` | "png" \| "jpeg" | No | — | Output format |
 | `response_format` | "url" \| "b64_json" | No | — | Response format |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | "standard" \| "fast" | No | fast on 5.0 Pro | Optimization mode |
+| `prompt_optimization` | "standard" \| "fast" | No | standard on 5.0 | Optimization mode |
 | `persist` | boolean | No | true | Persist to artifact store |
 
 \* Either `prompt` or `variation_prompts` must be provided.

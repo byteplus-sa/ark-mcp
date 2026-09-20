@@ -60,9 +60,9 @@ class ImageCapabilities:
         """Return the effective prompt optimization mode for a request.
 
         An explicit caller value always wins. When omitted, the family
-        default applies (``fast`` on Seedream 5.0 Pro per the BytePlus
-        latency recommendation); families without a default send nothing
-        and the provider applies its own mode.
+        default applies (``standard`` on Seedream 5.0, which is the mode
+        its API accepts); families without a default send nothing and the
+        provider applies its own mode.
         """
         if not self.supports_prompt_optimization:
             return None
@@ -134,7 +134,7 @@ def _seedream_capabilities() -> dict[str, ImageCapabilities]:
                 supports_batch=False,
                 supports_streaming=False,
                 supported_output_formats=("png", "jpeg"),
-                default_prompt_optimization_mode="fast",
+                default_prompt_optimization_mode="standard",
             )
         elif binding.family is SeedreamFamily.LITE:
             caps = ImageCapabilities(

@@ -175,7 +175,7 @@ class TestSeedreamGenerateImageTool:
                 SeedreamGenerateInput(prompt="test", images=images), fake_ctx
             )
 
-    async def test_prompt_optimization_defaults_to_fast_for_pro(
+    async def test_prompt_optimization_defaults_to_standard_for_pro(
         self,
         test_env: None,
         fake_ctx: FakeContext,
@@ -196,7 +196,7 @@ class TestSeedreamGenerateImageTool:
 
         await seedream_generate_image(SeedreamGenerateInput(prompt="test", persist=False), fake_ctx)
 
-        assert captured[0].optimize_prompt_options == {"mode": "fast"}
+        assert captured[0].optimize_prompt_options == {"mode": "standard"}
 
     async def test_prompt_optimization_explicit_standard_overrides_default(
         self,

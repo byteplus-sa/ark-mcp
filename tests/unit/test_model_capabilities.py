@@ -114,8 +114,8 @@ class TestPromptOptimizationDefaults:
 
             caps = registry.get_image_capabilities("dola-seedream-5-0-pro-260628")
             assert caps.family is ModelFamily.SEEDREAM_PRO
-            assert caps.default_prompt_optimization_mode == "fast"
-            assert caps.resolve_prompt_optimization(None) == "fast"
+            assert caps.default_prompt_optimization_mode == "standard"
+            assert caps.resolve_prompt_optimization(None) == "standard"
             assert caps.resolve_prompt_optimization("standard") == "standard"
             assert caps.resolve_prompt_optimization("fast") == "fast"
         finally:

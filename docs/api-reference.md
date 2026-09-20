@@ -705,7 +705,7 @@ Generate or edit an image through ModelArk Seedream.
 | `output_format` | `"png"` \| `"jpeg"` | No | — | Model-dependent |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | — |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `fast` on 5.0 Pro | — |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 | — |
 | `persist` | boolean | No | `true` | — |
 
 ### Output
@@ -769,7 +769,7 @@ Generate N independent image variations in parallel with distinct seeds.
 | `output_format` | `"png"` \| `"jpeg"` | No | — | — |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | — |
 | `watermark` | boolean | No | — | — |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `fast` on 5.0 Pro | — |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 | — |
 | `persist` | boolean | No | `true` | — |
 
 \* Either `prompt` or `variation_prompts` must be provided.
@@ -1304,7 +1304,7 @@ one reference image and one coordinate (point or bbox) are required.
 | `output_format` | `"png"` \| `"jpeg"` | No | — | Not supported by 4.x models |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | — |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `fast` on 5.0 Pro | — |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 | — |
 | `persist` | boolean | No | `true` | Persist as durable MCP resources |
 
 \* Provide at least one of `point` or `bbox`.
