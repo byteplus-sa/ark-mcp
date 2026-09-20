@@ -98,12 +98,12 @@ Seedance provider submissions can take 60–150 s (longer under cold start or
 provider queue), so the server requires background execution for those
 operations rather than keeping the original foreground request open.
 
-- On a task-capable client, invoke `seedance_create_task`,
-  `seedream_generate_image`, and `seed_audio_generate` with MCP task metadata.
-  Retain the returned MCP task ID and poll `tasks/get` at the advertised
-  interval until terminal.
-- On an ordinary-only client, use the `ark_job_*` workflow below. Its terminal
-  result contains the same typed tool output.
+- Submit `seedance_create_task`, `seedream_generate_image`, and
+  `seed_audio_generate` through the `ark_job_*` workflow below. Its terminal
+  result contains the typed tool output.
+- On a task-capable client, you may instead invoke those tools with MCP task
+  metadata, retain the returned MCP task ID, and poll `tasks/get` at the
+  advertised interval until terminal.
 - For long video work, the background result contains the provider task ID.
   Poll `seedance_get_task` in the foreground with `persist_output=false`;
   run it in the background with `persist_output=true` when the completed output

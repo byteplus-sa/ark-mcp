@@ -736,9 +736,12 @@ def create_server(
             "BytePlus VOD AI MediaKit enhancement, video transcoding, subtitle burn-in, "
             "subtitle or text removal, and voice and background audio separation are "
             "available when the MediaKit API key is "
-            "configured. Generated media is persisted as durable MCP resources. Long-running "
-            "tools use native MCP tasks when the client supports them; otherwise use "
-            "ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel."
+            "configured. Generated media is persisted as durable MCP resources. Run "
+            "long-running tools through ark_job_capabilities, ark_job_submit, ark_job_get, "
+            "and ark_job_cancel; these ordinary tools are the default path because most "
+            "clients do not yet support MCP tasks. A client that does negotiate the "
+            "io.modelcontextprotocol/tasks extension may instead call those tools with task "
+            "augmentation and poll tasks/get."
         ),
         auth=auth_provider or build_auth_provider(resolved_settings),
         lifespan=build_lifespan(resolved_settings, runtime_factory, runtime_state),

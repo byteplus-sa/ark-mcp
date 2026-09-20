@@ -20,22 +20,27 @@ Use `python -m ark_mcp` in client configurations so transport security
 settings are applied consistently. The server module also injects `truststore`
 before provider clients are created.
 
-## Background Task Compatibility
+## Background Execution
 
 **Long-running work stays asynchronous for every client.** The server exposes
 two entry paths to the same FastMCP Docket worker:
 
-| Client capability | Entry path | Result retrieval |
+| Entry path | Client requirement | Result retrieval |
 |---|---|---|
-| MCP `2026-07-28` task extension | Call the original tool with task augmentation | `tasks/get` |
-| Ordinary MCP tools only | `ark_job_submit` with the original tool name and arguments | `ark_job_get` |
+| `ark_job_submit` with the original tool name and arguments (**default**) | Ordinary MCP tools only | `ark_job_get` |
+| Call the original tool with task augmentation | MCP `2026-07-28` task extension | `tasks/get` |
 
-Task-capable clients should keep using the native path. A foreground call made
-directly to a required-task tool is still rejected before provider submission.
-Codex, Cursor, Claude Desktop, VS Code, or another client that reports that task
-augmentation is unsupported should use the ordinary `ark_job_*` tools instead.
-Those calls need no task-specific transport feature and preserve the original
-tool result inside `result.structured_content` when the job completes.
+**Use the ordinary `ark_job_*` tools by default.** MCP tasks remain
+experimental and most clients — including the current Codex, Cursor, Claude
+Desktop, and VS Code transports — cannot negotiate task augmentation. The
+ordinary path needs no task-specific transport feature, runs the selected tool
+in the same background worker, and preserves the original tool result inside
+`result.structured_content` when the job completes.
+
+A client that does negotiate the task extension may call the original tools
+with task metadata instead; that path is fully supported and unchanged. A
+foreground call made directly to a required-task tool is still rejected before
+provider submission.
 
 The repository tests both paths with the locked FastMCP **4.0.x** runtime. The
 ordinary path is covered in-process, over a real subprocess stdio transport, and
@@ -43,9 +48,9 @@ over authenticated Streamable HTTP without advertising the task extension.
 These tests use mocked providers and do not make billable generation calls.
 Exact desktop/IDE releases and their automatic tool-selection behavior can
 change, so the connection snippets below are templates; the standard
-`ark_job_*` protocol surface is the portable compatibility contract.
+`ark_job_*` protocol surface is the portable contract.
 
-### Ordinary-tool workflow
+### Ordinary-tool workflow (default)
 
 1. Call `ark_job_capabilities` to discover targets enabled by server
    configuration and visible to the current principal.
@@ -98,7 +103,12 @@ async def run_without_task_extension(server):
             await asyncio.sleep(state["poll_after_ms"] / 1000)
 ```
 
-The native path follows the official [FastMCP task documentation](https://gofastmcp.com/servers/tasks).
+### Native task workflow
+
+A client that negotiates the task extension can call the same tools with task
+augmentation instead; that path follows the official
+[FastMCP task documentation](https://gofastmcp.com/servers/tasks). The example
+under [Python Task Workflow](#python-task-workflow) uses it.
 
 ## Python Task Workflow
 

@@ -22,8 +22,10 @@ surface:
   audio separation through the BytePlus VOD AI MediaKit.
 - **Object storage upload** — presigned URL generation for URL-only media
   workflows (TOS or S3 backend).
-- **Background compatibility** — ordinary `ark_job_*` tools route clients
-  without MCP task augmentation through the same FastMCP worker.
+- **Background jobs** — ordinary `ark_job_*` tools are the default route for
+  long-running work through the FastMCP worker, since most clients cannot
+  negotiate MCP task augmentation; native tasks remain supported for clients
+  that can.
 - **Durable artifacts** — MCP resources for generated media whose provider URLs
   expire (2h for audio, 24h for image/video/3D).
 - **Transports** — local `stdio` first, with protected Streamable HTTP as a

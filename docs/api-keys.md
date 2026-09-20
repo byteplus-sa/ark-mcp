@@ -93,8 +93,8 @@ Speech-to-text (ASR) **reuses `BYTEPLUS_SEED_SPEECH_API_KEY`** — the same key
 that powers Seed Audio. When the key is set, the `speech_to_text` tool is
 registered automatically; it submits audio via HTTP, polls until
 transcription is complete, and returns the full `TranscriptionResult` through
-a required background job, using native MCP task augmentation or the ordinary
-`ark_job_*` compatibility path.
+a required background job, submitted through the ordinary `ark_job_*` tools or
+native MCP task augmentation on a task-capable client.
 
 The ASR-specific settings below only control the host and polling behavior,
 not the credential.

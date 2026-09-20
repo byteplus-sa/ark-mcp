@@ -87,13 +87,13 @@ syntactically valid without making any billable provider calls.
 
 ## Using with MCP Clients
 
-Long operations must run as background tasks. A client supporting MCP
-`2026-07-28` task augmentation can call the original tools and poll
-`tasks/get`. A client without that extension can call the ordinary
-`ark_job_submit` and `ark_job_get` tools, which use the same worker. The locked
+Long operations must run in the background. By default, call the ordinary
+`ark_job_submit` and `ark_job_get` tools, which work on any MCP client. A client
+supporting MCP `2026-07-28` task augmentation can instead call the original
+tools and poll `tasks/get`; both paths use the same worker. The locked
 FastMCP 4.0.x runtime is tested across both paths; desktop and Inspector
 configurations below are connection templates because client behavior varies by
-release. See [Background Task Compatibility](integration-guide.md#background-task-compatibility)
+release. See [Background Execution](integration-guide.md#background-execution)
 before submitting generation.
 
 ### Claude Desktop

@@ -328,7 +328,7 @@ client/subject namespace remains an additional check, not the application's
 source of tenant isolation. A token for a different tenant cannot retrieve a
 cached media URL even when its OAuth client and subject are identical.
 
-The ordinary `ark_job_*` compatibility tools reuse this boundary. Submission
+The ordinary `ark_job_*` tools reuse this boundary. Submission
 resolves only an immutable allowlist of task-enabled tools, requires the target
 tool's exact JWT scope before queueing, and claims the server-generated job ID
 for the current tenant and principal. Capability discovery returns only
