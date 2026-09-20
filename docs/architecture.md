@@ -22,9 +22,9 @@ Server as shipped today. For the original design rationale, see
 - **Observable and budget-aware** — structured logs, Prometheus metrics, and a
   per-principal daily budget ledger.
 - **Timeout-safe long operations** — generation, transcription, upload, and
-  provider-submission calls use native MCP task augmentation or ordinary
-  `ark_job_*` compatibility tools; completed-media retrieval supports optional
-  background persistence.
+  provider-submission calls run through the ordinary `ark_job_*` tools by
+  default, or native MCP task augmentation where a client supports it;
+  completed-media retrieval supports optional background persistence.
 
 ## Layered structure
 
@@ -109,9 +109,9 @@ interval. FastMCP's Docket worker runs the existing tool handler after returning
 the MCP task ID, while the handler retains the normal provider timeout, budget,
 concurrency, error, and usage accounting paths.
 
-Clients without task augmentation submit the same registered handlers through
-the ordinary `ark_job_submit` tool and poll `ark_job_get`. The compatibility
-adapter is intentionally thin: it resolves an allowlisted task-enabled tool,
+Because most clients cannot negotiate task augmentation, the default path
+submits the same registered handlers through the ordinary `ark_job_submit` tool
+and polls `ark_job_get`. The adapter is intentionally thin: it resolves an allowlisted task-enabled tool,
 enforces the target's scope and ownership, and delegates creation, status, and
 cancellation to the pinned FastMCP task backend. It does not introduce a second
 queue or execute provider work inside the foreground request.

@@ -23,7 +23,7 @@ products plus artifact access and an optional media upload helper:
 | **VOD Audio Separation** | `vod_separate_audio`, `vod_get_audio_separation` | Submit and poll voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
 | **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact` | Retrieve persisted media inline by artifact ID, or locate/copy it to a local path without Base64 round-trips |
 | **Object storage** (optional) | `media_upload`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media to TOS or S3; foreground URL renewal without re-uploading |
-| **Background-job compatibility** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools that submit and manage the same background work for clients without task-augmented execution |
+| **Background jobs** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools and the default way to submit and manage long-running work; no task-augmented execution required |
 
 Key features:
 
@@ -38,10 +38,10 @@ Key features:
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
 - **Timeout-safe long operations** — generation, transcription, large upload,
-  and provider task-submission tools run in the background through native MCP
-  task augmentation or the ordinary `ark_job_*` compatibility tools;
-  completed-output retrieval also supports background execution when
-  persistence may require a large download
+  and provider task-submission tools run in the background through the ordinary
+  `ark_job_*` tools by default, or native MCP task augmentation on clients that
+  support it; completed-output retrieval also supports background execution
+  when persistence may require a large download
 - **Model capability registry** — logical model families map to
   operator-configured model IDs; validates resolutions, formats, and
   batch support per model
@@ -79,10 +79,10 @@ accepts as reference input:
 > [!NOTE]
 > **Video references must be pre-hosted.** `seedance_create_task` accepts
 > video references as a **public HTTPS URL only** — there is no inline Base64
-> option. Run `media_upload` in the background, using MCP task metadata or
-> `ark_job_submit`, to upload Base64 or a local file path (stdio only) to object
-> storage (TOS or S3). Retrieve its presigned HTTPS GET URL from the terminal
-> `tasks/get` response or `ark_job_get.result`, then run
+> option. Run `media_upload` in the background through `ark_job_submit` (or MCP
+> task metadata on a task-capable client) to upload Base64 or a local file path
+> (stdio only) to object storage (TOS or S3). Retrieve its presigned HTTPS GET
+> URL from the terminal `ark_job_get.result` (or `tasks/get` response), then run
 > `seedance_create_task` through the same supported background path.
 > Alternatively, host the video on
 > your own accessible HTTPS endpoint. The URL must resolve to
@@ -213,20 +213,21 @@ variable reference.
 
 ## Using with MCP Clients
 
-Long operations always run in the background. Clients with MCP task support can
-call the original tools as task-augmented requests and retrieve output through
-`tasks/get`. Clients without task support—including Codex or Cursor versions
-that reject `execution.taskSupport="required"`—can use ordinary calls to
-`ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, and `ark_job_cancel`.
-Both paths enqueue the same FastMCP Docket worker and preserve the same typed
-tool result, ownership, scope, concurrency, and replay safeguards.
+Long operations always run in the background. By default, submit them with
+ordinary calls to `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, and
+`ark_job_cancel` — MCP task support is still rare, and clients such as current
+Codex or Cursor versions reject `execution.taskSupport="required"` outright. A
+client with MCP task support can instead call the original tools as
+task-augmented requests and retrieve output through `tasks/get`. Both paths
+enqueue the same FastMCP Docket worker and preserve the same typed tool result,
+ownership, scope, concurrency, and replay safeguards.
 
-The native and ordinary-tool paths are tested in-process, over subprocess
-stdio, and over authenticated Streamable HTTP with the locked FastMCP 4.0.x
-runtime. The ordinary path uses standard MCP tool calls and does not require a
-client-specific task transport. The named desktop/IDE snippets below remain
-connection templates because exact client releases and tool-selection behavior
-can change. See the [client compatibility workflows](docs/integration-guide.md#background-task-compatibility).
+Both paths are tested in-process, over subprocess stdio, and over authenticated
+Streamable HTTP with the locked FastMCP 4.0.x runtime. The ordinary path uses
+standard MCP tool calls and does not require a client-specific task transport.
+The named desktop/IDE snippets below remain connection templates because exact
+client releases and tool-selection behavior can change. See the
+[background execution workflows](docs/integration-guide.md#background-execution).
 
 The server runs as a `stdio` process. Configure it in your MCP client:
 

@@ -99,16 +99,16 @@ surface.
 
 Generation and variation tools, `speech_to_text`, `media_upload`,
 `seed_understand`, and all Seedance, Seed 3D, and MediaKit provider-submission
-tools declare `execution.taskSupport="required"`. Invoke them with MCP task
-metadata, poll the returned task at the advertised two-second interval until
-terminal, then read the result from the `tasks/get` response. Foreground direct
-calls to those target tools fail before the provider is contacted.
+tools declare `execution.taskSupport="required"`. By default, discover them
+with `ark_job_capabilities`, submit them through `ark_job_submit`, and poll
+`ark_job_get` at the advertised two-second interval until terminal. A
+task-capable client may instead invoke them with MCP task metadata and read the
+result from the `tasks/get` response. Foreground direct calls to those target
+tools fail before the provider is contacted.
 
-Clients may instead discover the same targets with `ark_job_capabilities`,
-submit them through `ark_job_submit`, and poll `ark_job_get`. In this reference,
-**background result** means the terminal `tasks/get` response on the native
-path or the original tool result under terminal `ark_job_get.result` on the
-compatibility path.
+In this reference, **background result** means the original tool result under
+terminal `ark_job_get.result`, or the terminal `tasks/get` response on the
+native path.
 
 Seedance, Seed 3D, and MediaKit get tools declare
 `execution.taskSupport="optional"` because a processing-status check is short,
@@ -117,7 +117,7 @@ artifact. Use foreground execution with persistence disabled for quick polling,
 then background execution to retrieve and persist completed output. List,
 presign, artifact-read, and cancel/delete tools remain foreground operations.
 
-Clients without task-extension support use the ordinary compatibility tools:
+The ordinary background-job tools, usable on any MCP client:
 
 1. `ark_job_capabilities()` returns the configured, scope-filtered targets and
    each target's original input schema.
@@ -128,7 +128,7 @@ Clients without task-extension support use the ordinary compatibility tools:
    completion, `result` preserves the original MCP tool result.
 4. `ark_job_cancel({"job_id": id})` cooperatively cancels the local job.
 
-The compatibility path uses the same worker, target schema validation, JWT
+The ordinary path uses the same worker, target schema validation, JWT
 target scope, tenant/principal ownership, replay claim, budget, concurrency,
 metrics, and provider adapter as native task augmentation. Ark job IDs and
 provider task IDs are separate identifiers.

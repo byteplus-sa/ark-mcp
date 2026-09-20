@@ -3,10 +3,10 @@
 The server supports two mechanisms for producing multiple outputs from one
 background job: **native provider batch** (one API call, many outputs) and
 **client-side parallel variation** (many independent API calls with bounded
-concurrency). A task-capable client receives an MCP task ID and polls
-`tasks/get`; an ordinary-tool client receives an Ark job ID from
-`ark_job_submit` and polls `ark_job_get`. Either terminal response contains the
-same typed output, referred to below as the **background result**.
+concurrency). By default a client submits through `ark_job_submit`, receives
+an Ark job ID, and polls `ark_job_get`; a task-capable client may instead
+receive an MCP task ID and poll `tasks/get`. Either terminal response contains
+the same typed output, referred to below as the **background result**.
 
 ## Native provider batch
 

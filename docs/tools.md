@@ -36,11 +36,12 @@ contract is enforced for all tools:
 
 ### Long-running tool execution
 
-Long-running tools can use either native MCP task augmentation or the ordinary
-`ark_job_*` compatibility tools described below. In this reference,
-**background result** means the terminal `tasks/get` response on the native
-path or the original tool result under terminal `ark_job_get.result` on the
-compatibility path.
+Long-running tools run through the ordinary `ark_job_*` tools described below
+by default, because most clients cannot negotiate MCP task augmentation; a
+client that can negotiate it may call the tools with native task metadata
+instead. In this reference, **background result** means the original tool
+result under terminal `ark_job_get.result`, or the terminal `tasks/get`
+response on the native path.
 
 The following tools require background execution. Their direct contracts
 advertise `execution.taskSupport="required"` with a two-second recommended poll
@@ -66,13 +67,14 @@ interval:
 - `vod_add_subtitles`
 - `vod_remove_subtitles`
 
-A client calls these tools with task metadata, receives an MCP task ID without
-holding the original tool call open, and polls `tasks/get` until it reaches a
-terminal status. That terminal response contains the final tool output. A
-foreground direct call to a required target is rejected before any provider
-request is made. For Seedance, Seed 3D, and MediaKit create/submit
-tools, the MCP task covers the provider submission; its result contains the
-provider task ID used by the corresponding get tool.
+A client submits these through `ark_job_submit`, receives an Ark job ID without
+holding a tool call open, and polls `ark_job_get` until it reaches a terminal
+status. A task-capable client can instead call the tool with task metadata and
+poll `tasks/get`. Either way the terminal response contains the final tool
+output, and a foreground direct call to a required target is rejected before
+any provider request is made. For Seedance, Seed 3D, and MediaKit
+create/submit tools, the background job covers the provider submission; its
+result contains the provider task ID used by the corresponding get tool.
 
 The following retrieval tools advertise `execution.taskSupport="optional"`:
 
@@ -90,10 +92,11 @@ Use background execution when `persist_output=true` and a completed media file
 may need to be downloaded and copied into durable storage. Artifact reads,
 presigning, list operations, and cancel/delete operations remain foreground.
 
-## Background-job compatibility tools
+## Background-job tools
 
 `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, and `ark_job_cancel`
-are ordinary MCP tools for clients that cannot send task-augmented tool calls.
+are ordinary MCP tools and the default way to run long operations, since
+task-augmented tool calls are not yet widely supported by clients.
 They do not make long operations synchronous: `ark_job_submit` validates the
 selected target, durably enqueues it on the same Docket worker used by native
 MCP tasks, and returns an Ark job ID. All four tools are always registered;
@@ -805,9 +808,10 @@ family auto-resolves to `pro` so no explicit `SEED_UNDERSTANDING_MODEL_FAMILY`
 is required. Other custom model IDs can be registered via
 `SEED_UNDERSTANDING_MODEL_BINDINGS`.
 
-**Execution:** Required background job. The direct contract declares
-`execution.taskSupport="required"`; an ordinary-only client uses
-`ark_job_submit`. Both return a local job ID before ModelArk finishes and use
+**Execution:** Required background job. Submit through `ark_job_submit`, or
+call the tool with native task metadata on a task-capable client; its direct
+contract declares `execution.taskSupport="required"`. Both return a local job
+ID before ModelArk finishes and use
 the server-recommended two-second polling interval. Foreground direct calls are
 rejected immediately. Choose a task TTL that covers the expected analysis
 duration.

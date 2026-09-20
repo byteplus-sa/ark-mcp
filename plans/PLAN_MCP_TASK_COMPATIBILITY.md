@@ -3,7 +3,7 @@ title: MCP Background Job Compatibility
 type: plan
 status: implemented
 created: 2026-09-13
-updated: 2026-09-13
+updated: 2026-09-20
 tags:
   - mcp
   - fastmcp
@@ -25,6 +25,17 @@ related:
 ---
 
 # MCP Background Job Compatibility
+
+> [!NOTE]
+> **Amended 2026-09-20.** This plan shipped as written, but its goal 7
+> ("select the compatibility path only when the host cannot drive native
+> tasks") no longer reflects shipped guidance. Because MCP task augmentation
+> is still unsupported by most agent clients, the ordinary `ark_job_*` tools
+> are now documented as the **default** background path and native tasks as
+> the alternative for clients that negotiate the extension. No runtime
+> behavior changed: both paths, their task modes, and the
+> `path="native" | "compatibility"` metric label are unchanged. See
+> `docs/integration-guide.md#background-execution`.
 
 ## Outcome
 
