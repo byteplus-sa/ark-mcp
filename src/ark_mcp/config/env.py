@@ -191,6 +191,16 @@ class Settings(BaseSettings):
 
     # --- Model bindings ------------------------------------------------------
 
+    seedream_prompt_optimization_mode: Literal["standard", "fast"] = Field(
+        default="standard",
+        validation_alias="SEEDREAM_PROMPT_OPTIMIZATION_MODE",
+        description=(
+            "Prompt optimization mode Seedream 5.0 Pro uses when a caller omits "
+            "prompt_optimization: 'standard' for prompt-following quality, 'fast' for "
+            "lower latency. Both are accepted by the provider. An explicit per-call "
+            "value always wins, and other Seedream families send no mode regardless."
+        ),
+    )
     seedream_default_model: str = Field(
         default="dola-seedream-5-0-pro-260628",
         validation_alias="SEEDREAM_DEFAULT_MODEL",

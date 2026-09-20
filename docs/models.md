@@ -43,15 +43,22 @@ The binding enums (`config/env.py`):
 | `supported_sizes` | `None` (any) | `None` | `None` |
 | `supports_watermark` | `True` | `True` | `True` |
 | `supports_prompt_optimization` | `True` | `True` | `True` |
-| `default_prompt_optimization_mode` | `"standard"` | `None` | `None` |
+| `default_prompt_optimization_mode` | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`"standard"`) | `None` | `None` |
 
-> `default_prompt_optimization_mode` sends
-> `optimize_prompt_options.mode=standard` by default on 5.0 Pro. The default was
-> changed from `fast` on a field report that the 5.0 Pro API rejects `fast`;
-> that report has not been reproduced against the live API, so treat it as
-> unconfirmed. `fast` remains a valid value the server passes through unchanged
-> when a caller asks for it; families without a default send no mode and the
-> provider applies its own.
+> `default_prompt_optimization_mode` controls what 5.0 Pro sends as
+> `optimize_prompt_options.mode` when a caller omits `prompt_optimization`. It
+> is operator-configurable through `SEEDREAM_PROMPT_OPTIMIZATION_MODE` and
+> defaults to `standard` for prompt-following quality; set `fast` to favor
+> latency.
+>
+> **Both modes are accepted by the 5.0 Pro API** — verified against the live
+> endpoint, where `fast` and `standard` each returned HTTP 200 with an image.
+> An earlier field report that `fast` is rejected did not reproduce. The choice
+> is a quality-versus-latency tradeoff, not a compatibility constraint.
+>
+> An explicit per-call `prompt_optimization` always wins over the configured
+> default; families without a default send no mode and the provider applies its
+> own.
 
 > There is **no aspect-ratio field** on image capabilities. Only
 > `supported_sizes` (defaulting to `None` = unrestricted).
