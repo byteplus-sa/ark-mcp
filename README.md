@@ -215,9 +215,9 @@ variable reference.
 
 Long operations always run in the background. By default, submit them with
 ordinary calls to `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, and
-`ark_job_cancel` — MCP task support is still rare, and clients such as current
-Codex or Cursor versions reject `execution.taskSupport="required"` outright. A
-client with MCP task support can instead call the original tools as
+`ark_job_cancel` — MCP task support is still rare, and any client that reports
+task augmentation as unsupported rejects `execution.taskSupport="required"`
+outright. A client with MCP task support can instead call the original tools as
 task-augmented requests and retrieve output through `tasks/get`. Both paths
 enqueue the same FastMCP Docket worker and preserve the same typed tool result,
 ownership, scope, concurrency, and replay safeguards.

@@ -198,7 +198,7 @@ class TestSeedreamGenerateImageTool:
 
         assert captured[0].optimize_prompt_options == {"mode": "standard"}
 
-    async def test_prompt_optimization_explicit_standard_overrides_default(
+    async def test_prompt_optimization_explicit_fast_overrides_default(
         self,
         test_env: None,
         fake_ctx: FakeContext,
@@ -218,11 +218,11 @@ class TestSeedreamGenerateImageTool:
         monkeypatch.setattr(SeedreamService, "generate", mock_generate)
 
         await seedream_generate_image(
-            SeedreamGenerateInput(prompt="test", prompt_optimization="standard", persist=False),
+            SeedreamGenerateInput(prompt="test", prompt_optimization="fast", persist=False),
             fake_ctx,
         )
 
-        assert captured[0].optimize_prompt_options == {"mode": "standard"}
+        assert captured[0].optimize_prompt_options == {"mode": "fast"}
 
     async def test_provider_error_propagates(
         self,

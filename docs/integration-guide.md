@@ -27,12 +27,12 @@ two entry paths to the same FastMCP Docket worker:
 
 | Entry path | Client requirement | Result retrieval |
 |---|---|---|
-| `ark_job_submit` with the original tool name and arguments (**default**) | Ordinary MCP tools only | `ark_job_get` |
+| `ark_job_submit` with the original tool name and arguments (**default**) | Any MCP client (no task extension needed) | `ark_job_get` |
 | Call the original tool with task augmentation | MCP `2026-07-28` task extension | `tasks/get` |
 
 **Use the ordinary `ark_job_*` tools by default.** MCP tasks remain
-experimental and most clients — including the current Codex, Cursor, Claude
-Desktop, and VS Code transports — cannot negotiate task augmentation. The
+experimental and most clients cannot negotiate task augmentation; verify
+against the client release in front of you rather than assuming support. The
 ordinary path needs no task-specific transport feature, runs the selected tool
 in the same background worker, and preserves the original tool result inside
 `result.structured_content` when the job completes.

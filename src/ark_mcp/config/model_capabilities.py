@@ -60,9 +60,9 @@ class ImageCapabilities:
         """Return the effective prompt optimization mode for a request.
 
         An explicit caller value always wins. When omitted, the family
-        default applies (``standard`` on Seedream 5.0, which is the mode
-        its API accepts); families without a default send nothing and the
-        provider applies its own mode.
+        default applies (``standard`` on Seedream 5.0 Pro); families
+        without a default send nothing and the provider applies its own
+        mode.
         """
         if not self.supports_prompt_optimization:
             return None

@@ -46,10 +46,12 @@ The binding enums (`config/env.py`):
 | `default_prompt_optimization_mode` | `"standard"` | `None` | `None` |
 
 > `default_prompt_optimization_mode` sends
-> `optimize_prompt_options.mode=standard` by default on 5.0, which is the mode
-> its API accepts; `fast` is rejected. Callers can still pass
-> `prompt_optimization: "fast"` explicitly on models that support it; families
-> without a default send no mode and the provider applies its own.
+> `optimize_prompt_options.mode=standard` by default on 5.0 Pro. The default was
+> changed from `fast` on a field report that the 5.0 Pro API rejects `fast`;
+> that report has not been reproduced against the live API, so treat it as
+> unconfirmed. `fast` remains a valid value the server passes through unchanged
+> when a caller asks for it; families without a default send no mode and the
+> provider applies its own.
 
 > There is **no aspect-ratio field** on image capabilities. Only
 > `supported_sizes` (defaulting to `None` = unrestricted).

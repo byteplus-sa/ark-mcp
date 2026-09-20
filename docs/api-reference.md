@@ -43,10 +43,10 @@ surface.
 | 34 | `hitem3d_get_task` | Hitem3d (optional) | Optional background retrieval | ModelArk |
 | 35 | `hitem3d_list_tasks` | Hitem3d (optional) | Read-only | ModelArk |
 | 36 | `hitem3d_cancel_or_delete_task` | Hitem3d (optional) | Destructive | ModelArk |
-| 37 | `ark_job_capabilities` | Compatibility | Read-only ordinary tool | Local / JWT |
-| 38 | `ark_job_submit` | Compatibility | Background submission through ordinary tool | Dynamic target scope |
-| 39 | `ark_job_get` | Compatibility | Read-only ordinary tool | Owner only |
-| 40 | `ark_job_cancel` | Compatibility | Destructive ordinary tool | Owner only |
+| 37 | `ark_job_capabilities` | Background jobs | Read-only ordinary tool | Local / JWT |
+| 38 | `ark_job_submit` | Background jobs | Default background submission path | Dynamic target scope |
+| 39 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
+| 40 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
 | 41 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local / JWT |
 
 ## Tool Annotations
@@ -705,7 +705,7 @@ Generate or edit an image through ModelArk Seedream.
 | `output_format` | `"png"` \| `"jpeg"` | No | — | Model-dependent |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | — |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 | — |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 Pro | — |
 | `persist` | boolean | No | `true` | — |
 
 ### Output
@@ -769,7 +769,7 @@ Generate N independent image variations in parallel with distinct seeds.
 | `output_format` | `"png"` \| `"jpeg"` | No | — | — |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | — |
 | `watermark` | boolean | No | — | — |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 | — |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 Pro | — |
 | `persist` | boolean | No | `true` | — |
 
 \* Either `prompt` or `variation_prompts` must be provided.
@@ -1304,7 +1304,7 @@ one reference image and one coordinate (point or bbox) are required.
 | `output_format` | `"png"` \| `"jpeg"` | No | — | Not supported by 4.x models |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | — |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 | — |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.0 Pro | — |
 | `persist` | boolean | No | `true` | Persist as durable MCP resources |
 
 \* Provide at least one of `point` or `bbox`.

@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, transcribe speech to text, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients including Codex and Cursor cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
+description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, transcribe speech to text, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -147,9 +147,8 @@ before the provider finishes:
 
 - **Ordinary `ark_job_*` tools — the default path.** Use these unless you have
   positively confirmed native task support for the current client. Most agent
-  clients, including the current Codex and Cursor transports, cannot negotiate
-  MCP task augmentation, and a client that discovers tools does not by itself
-  prove native task execution support.
+  clients cannot negotiate MCP task augmentation, and a client that discovers
+  tools does not by itself prove native task execution support.
 - **Native MCP task augmentation — for clients that negotiate it.** Requires
   MCP `2026-07-28` and the `io.modelcontextprotocol/tasks` extension. FastMCP
   4.0.x is tested.
@@ -678,7 +677,7 @@ prompt optimization. For interactive editing with spatial coordinates, use
 | `output_format` | `"png"` \| `"jpeg"` | No | Default: `png` |
 | `response_format` | `"url"` \| `"b64_json"` | No | Default: `url` |
 | `watermark` | `bool` | No | Provider watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | Prompt enhancement; defaults to standard on 5.0, the mode its API accepts |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | Prompt enhancement; defaults to standard on 5.0 Pro, pass fast for lower latency |
 | `persist` | `bool` | Yes (default `true`) | Persist to artifact store |
 
 Returns `SeedreamGenerateOutput` with `artifacts: list[ArtifactRef]` and

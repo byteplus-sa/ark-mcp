@@ -1,4 +1,4 @@
-"""Ordinary MCP tools for clients without task-extension support."""
+"""Ordinary MCP tools: the default route for long-running Ark work."""
 
 from __future__ import annotations
 
@@ -78,8 +78,10 @@ def _unavailable_message(is_local: bool) -> str:
 
 
 async def ark_job_capabilities(ctx: Context) -> BackgroundJobCapabilities:
-    """List task-enabled tools available through the ordinary-tool compatibility path.
+    """List the Ark tools that can be run as a background job.
 
+    These are the targets accepted by ``ark_job_submit``, the default way to run
+    long-running work on clients that cannot negotiate MCP task augmentation.
     The result includes only tools registered by the current server configuration
     and authorized for the caller. Use each target's input schema to build the
     arguments object passed to ``ark_job_submit``.
@@ -109,9 +111,10 @@ async def ark_job_submit(
     input: BackgroundJobSubmitInput,
     ctx: Context,
 ) -> BackgroundJobAccepted:
-    """Start a task-enabled Ark tool without requiring MCP task augmentation.
+    """Run a long-running Ark tool as a background job.
 
-    This call validates and durably enqueues the original target tool, then
+    This is the default submission path; it needs no MCP task augmentation and
+    works on any MCP client. It validates and durably enqueues the target tool, then
     returns a job ID immediately. Poll ``ark_job_get`` for the original typed
     tool result. Do not automatically retry a timeout or disconnect because
     submission may already have succeeded.
