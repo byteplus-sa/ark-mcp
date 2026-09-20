@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from ark_mcp.config.model_capabilities import (
     ImageCapabilities,
@@ -97,31 +98,55 @@ class TestCapabilityRegistry:
 class TestPromptOptimizationDefaults:
     """Tests for Seedream prompt optimization default resolution."""
 
-    def test_pro_family_defaults_to_fast(self) -> None:
-        """The SEEDREAM pro binding carries the fast default per BytePlus guidance."""
-        import os
+    @staticmethod
+    def _pro_caps(monkeypatch: pytest.MonkeyPatch, configured_mode: str) -> ImageCapabilities:
+        """Build the PRO capability under an explicitly pinned operator mode.
 
+        The mode is always set here rather than inherited, because
+        ``refresh_settings`` reads the ``.env`` in the working directory and a
+        developer who configures ``fast`` locally would otherwise fail a suite
+        that passes in CI.
+        """
         from ark_mcp.config.env import refresh_settings
         from ark_mcp.config.model_capabilities import refresh_capability_registry
 
-        old_default = os.environ.get("SEEDREAM_DEFAULT_MODEL", "")
-        try:
-            os.environ["SEEDREAM_DEFAULT_MODEL"] = "dola-seedream-5-0-pro-260628"
-            os.environ["SEEDREAM_MODEL_FAMILY"] = "pro"
-            os.environ.pop("SEEDREAM_MODEL_BINDINGS", None)
-            refresh_settings()
-            registry = refresh_capability_registry()
+        monkeypatch.setenv("SEEDREAM_DEFAULT_MODEL", "dola-seedream-5-0-pro-260628")
+        monkeypatch.setenv("SEEDREAM_MODEL_FAMILY", "pro")
+        monkeypatch.setenv("SEEDREAM_PROMPT_OPTIMIZATION_MODE", configured_mode)
+        monkeypatch.delenv("SEEDREAM_MODEL_BINDINGS", raising=False)
+        refresh_settings()
+        registry = refresh_capability_registry()
+        return registry.get_image_capabilities("dola-seedream-5-0-pro-260628")
 
-            caps = registry.get_image_capabilities("dola-seedream-5-0-pro-260628")
-            assert caps.family is ModelFamily.SEEDREAM_PRO
-            assert caps.default_prompt_optimization_mode == "standard"
-            assert caps.resolve_prompt_optimization(None) == "standard"
-            assert caps.resolve_prompt_optimization("standard") == "standard"
-            assert caps.resolve_prompt_optimization("fast") == "fast"
-        finally:
-            os.environ["SEEDREAM_DEFAULT_MODEL"] = old_default
+    def test_pro_family_uses_configured_standard_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The shipped default sends standard when the caller omits the field."""
+        caps = self._pro_caps(monkeypatch, "standard")
+
+        assert caps.family is ModelFamily.SEEDREAM_PRO
+        assert caps.default_prompt_optimization_mode == "standard"
+        assert caps.resolve_prompt_optimization(None) == "standard"
+        assert caps.resolve_prompt_optimization("standard") == "standard"
+        assert caps.resolve_prompt_optimization("fast") == "fast"
+
+    def test_pro_family_honors_configured_fast_default(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SEEDREAM_PROMPT_OPTIMIZATION_MODE=fast changes only the omitted-value case."""
+        caps = self._pro_caps(monkeypatch, "fast")
+
+        assert caps.default_prompt_optimization_mode == "fast"
+        assert caps.resolve_prompt_optimization(None) == "fast"
+        assert caps.resolve_prompt_optimization("standard") == "standard"
+
+    def test_invalid_configured_mode_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An unsupported operator value fails closed at settings validation."""
+        from ark_mcp.config.env import refresh_settings
+
+        monkeypatch.setenv("SEEDREAM_PROMPT_OPTIMIZATION_MODE", "turbo")
+        with pytest.raises(ValidationError):
             refresh_settings()
-            refresh_capability_registry()
 
     def test_family_without_default_uses_provider_mode(self) -> None:
         """Families without a default send no optimize_prompt_options unless requested."""

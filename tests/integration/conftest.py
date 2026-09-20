@@ -28,6 +28,10 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_BASE_URL", "https://mediakit.test.example.com/api/v1")
     monkeypatch.setenv("SEED_SPEECH_ASR_BASE_URL", "https://voice.test.example.com")
     monkeypatch.setenv("SEEDREAM_DEFAULT_MODEL", "dola-seedream-5-0-pro-260628")
+    # Pinned, not inherited: settings read the working directory's .env, so a
+    # developer who configures "fast" locally must not fail a suite that
+    # asserts the shipped default.
+    monkeypatch.setenv("SEEDREAM_PROMPT_OPTIMIZATION_MODE", "standard")
     monkeypatch.setenv("SEEDANCE_DEFAULT_MODEL", "dreamina-seedance-2-0-260128")
     monkeypatch.setenv("SEED_UNDERSTANDING_DEFAULT_MODEL", "dola-seed-2-1-turbo-260628")
     monkeypatch.setenv("ARTIFACT_DIR", str(tmp_path / ".artifacts"))
