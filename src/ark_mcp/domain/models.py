@@ -7,7 +7,7 @@ models live alongside their tool handlers in ``tools/``.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -223,21 +223,75 @@ class UnderstandingUsage(BaseModel):
 
     prompt_tokens: int = Field(..., description="Number of input (prompt) tokens consumed.")
     completion_tokens: int = Field(
-        ..., description="Number of output (completion) tokens consumed."
+        ..., description="Number of output (completion) tokens consumed, including reasoning."
     )
     total_tokens: int = Field(..., description="Total tokens consumed (prompt + completion).")
+    reasoning_tokens: int | None = Field(
+        None,
+        description=(
+            "Completion tokens spent on internal deep thinking, when the provider reports it. "
+            "The reasoning text itself is never returned."
+        ),
+    )
+
+
+class SchemaViolation(BaseModel):
+    """Why a JSON answer did not parse or did not satisfy the requested JSON Schema."""
+
+    path: str = Field(
+        ...,
+        description=(
+            "JSON Pointer-style location of the first violation (e.g. '/beats/2/start'), "
+            "or '' when the answer is not valid JSON at all."
+        ),
+    )
+    message: str = Field(..., description="Human-readable validation or parse error.")
+    finish_reason: str = Field(
+        ...,
+        description=(
+            "Finish reason of the completion. 'length' means the answer was cut off by "
+            "max_tokens; raise max_tokens rather than retrying."
+        ),
+    )
 
 
 class UnderstandingChoice(BaseModel):
-    """A single completion choice returned by the Seed 2.1 model."""
+    """A single completion choice returned by the Seed 2.1 model.
+
+    Only the final answer is returned. The model always thinks, but its
+    reasoning trace is discarded and never included in tool output.
+    """
 
     role: Literal["assistant"] = Field(
         "assistant", description="Message role (always 'assistant')."
     )
-    content: str = Field(..., description="The model's text answer.")
-    reasoning_content: str | None = Field(
+    content: str = Field(
+        ...,
+        description=(
+            "The model's final answer. Truncated to the first 2,000 characters when "
+            "return_content='summary', and empty when return_content='none'."
+        ),
+    )
+    content_chars: int = Field(
+        ..., description="Length of the full answer in characters, before any truncation."
+    )
+    content_truncated: bool = Field(
+        False, description="True when content is shorter than the full answer."
+    )
+    parsed: dict[str, Any] | list[Any] | None = Field(
         None,
-        description="Chain-of-thought reasoning text. Present only when thinking was enabled.",
+        description=(
+            "The answer parsed as JSON, set when a json_object or json_schema response_format "
+            "was requested and the answer parsed (and, for json_schema, validated). "
+            "Returned even when return_content is 'summary' or 'none'."
+        ),
+    )
+    schema_violation: SchemaViolation | None = Field(
+        None,
+        description=(
+            "Set when a JSON response_format was requested but the answer did not parse or "
+            "did not satisfy the schema. The raw answer is still returned in content."
+        ),
     )
     finish_reason: str = Field(
         ...,

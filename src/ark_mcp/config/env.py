@@ -501,15 +501,6 @@ class Settings(BaseSettings):
             "Defaults to BYTEPLUS_REQUEST_TIMEOUT_MS."
         ),
     )
-    understanding_inline_max_chars: int = Field(
-        default=20000,
-        ge=1000,
-        validation_alias="UNDERSTANDING_INLINE_MAX_CHARS",
-        description=(
-            "seed_understand answers longer than this are truncated inline; the full "
-            "answer stays available through save_to."
-        ),
-    )
     media_upload_batch_max_bytes: int = Field(
         default=500 * 1024 * 1024,
         ge=1,

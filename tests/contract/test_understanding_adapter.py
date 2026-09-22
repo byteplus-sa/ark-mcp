@@ -116,12 +116,35 @@ class TestUnderstandingRequestBuilding:
         assert request.thinking is not None
         assert request.thinking.type == "enabled"
 
-    def test_thinking_disabled_by_default(self) -> None:
+    def test_thinking_enabled_by_default(self) -> None:
         request = SeedUnderstandingService.build_request(
             model=TEST_MODEL,
             prompt="Hello",
         )
+        assert request.thinking is not None
+        assert request.thinking.type == "enabled"
+
+    def test_thinking_false_sends_no_thinking_fields(self) -> None:
+        """Only used for bindings without thinking support."""
+        request = SeedUnderstandingService.build_request(
+            model=TEST_MODEL,
+            prompt="Hello",
+            thinking=False,
+            reasoning_effort="medium",
+        )
         assert request.thinking is None
+        assert request.reasoning_effort is None
+
+    def test_response_format_passthrough(self) -> None:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": "beats", "schema": {"type": "object"}, "strict": True},
+        }
+        request = SeedUnderstandingService.build_request(
+            model=TEST_MODEL, prompt="Hello", response_format=response_format
+        )
+        body = request.model_dump(exclude_none=True)
+        assert body["response_format"] == response_format
 
     def test_reasoning_effort_only_with_thinking(self) -> None:
         request = SeedUnderstandingService.build_request(

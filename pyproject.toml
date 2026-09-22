@@ -13,6 +13,7 @@ dependencies = [
     "cachetools>=7.1.4,<8",
     "fastmcp[tasks]>=4.0.3,<4.1",
     "httpx>=0.28.1,<1.0",
+    "jsonschema>=4.26.0",
     "prometheus-client>=0.25.0,<1.0",
     "pydantic>=2.13.4,<3.0",
     "pydantic-settings>=2.14.2,<3.0",
@@ -38,6 +39,7 @@ dev = [
     "pytest-socket>=0.8.0",
     "respx>=0.23.1",
     "ruff>=0.15.22",
+    "types-jsonschema>=4.26.0.20260518",
 ]
 
 [tool.uv]

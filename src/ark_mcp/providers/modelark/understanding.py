@@ -79,17 +79,22 @@ class SeedUnderstandingService:
         image_parts: list[dict[str, Any]] | None = None,
         video_parts: list[dict[str, Any]] | None = None,
         system: str | None = None,
-        thinking: bool = False,
+        thinking: bool = True,
         reasoning_effort: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         top_p: float | None = None,
         repetition_penalty: float | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> ChatCompletionProviderRequest:
         """Build a provider request from domain-level parameters.
 
         - Translates image/video URL/Base64 inputs into Chat API content parts.
         - Forces ``stream: false`` for MVP.
+        - ``thinking=True`` (the default) always sends ``thinking.type='enabled'``
+          and ``reasoning_effort``; ``thinking=False`` sends neither (used only for
+          models whose capabilities report no thinking support).
+        - ``response_format`` is passed through verbatim (json_object/json_schema).
         - Video Base64 is rejected (the chat endpoint does not support it).
         """
         content_parts: list[ChatContentPart] = []
@@ -147,6 +152,7 @@ class SeedUnderstandingService:
             repetition_penalty=repetition_penalty,
             reasoning_effort=reasoning_effort if thinking else None,
             thinking=thinking_config,
+            response_format=response_format,
             stream=False,
         )
 
