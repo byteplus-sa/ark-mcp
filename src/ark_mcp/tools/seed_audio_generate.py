@@ -28,6 +28,14 @@ from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._local_export import (
+    local_export,
+    output_path_field,
+    overwrite_field,
+)
+from ark_mcp.tools._local_export import (
+    needs_persist as _needs_persist,
+)
 from ark_mcp.tools._persistence import persist_base64
 from ark_mcp.tools._task_execution import context_log
 
@@ -101,6 +109,8 @@ class SeedAudioGenerateInput(BaseModel):
     persist: bool = Field(
         True, description="Whether to persist the generated audio as a durable MCP resource."
     )
+    output_path: str | None = output_path_field("the generated audio")
+    overwrite: bool = overwrite_field()
 
     @model_validator(mode="after")
     def validate_no_media_mixing(self) -> SeedAudioGenerateInput:
@@ -170,6 +180,7 @@ def _parse_duration_hint(text_prompt: str, *, default: float = 15.0) -> float:
 # ---------------------------------------------------------------------------
 
 
+@local_export("artifact", precondition=_needs_persist)
 async def seed_audio_generate(
     input: SeedAudioGenerateInput, ctx: Context
 ) -> SeedAudioGenerateOutput | ToolResult:

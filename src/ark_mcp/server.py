@@ -242,6 +242,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             MediaUploadOutput,
             media_upload,
         )
+        from ark_mcp.tools.media_upload_batch import (
+            TOOL_ANNOTATIONS as upload_batch_annotations,
+        )
+        from ark_mcp.tools.media_upload_batch import (
+            MediaUploadBatchOutput,
+            media_upload_batch,
+        )
 
         server.tool(
             name="media_upload",
@@ -250,6 +257,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             task=_task_config("media_upload"),
             auth=_tool_auth(settings, "media_upload", "media:upload"),
         )(_task_handler("media_upload", media_upload))
+        server.tool(
+            name="media_upload_batch",
+            annotations={**upload_batch_annotations},
+            output_schema=MediaUploadBatchOutput.model_json_schema(),
+            task=_task_config("media_upload_batch"),
+            auth=_tool_auth(settings, "media_upload_batch", "media:upload"),
+        )(_task_handler("media_upload_batch", media_upload_batch))
         server.tool(
             name="media_presign",
             annotations={**presign_annotations},
@@ -471,6 +485,8 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
     )
     from ark_mcp.tools.seedance_get_task import TOOL_ANNOTATIONS as get_annotations
     from ark_mcp.tools.seedance_get_task import SeedanceTaskOutput, seedance_get_task
+    from ark_mcp.tools.seedance_get_tasks import TOOL_ANNOTATIONS as get_many_annotations
+    from ark_mcp.tools.seedance_get_tasks import SeedanceGetTasksOutput, seedance_get_tasks
     from ark_mcp.tools.seedance_list_tasks import TOOL_ANNOTATIONS as list_annotations
     from ark_mcp.tools.seedance_list_tasks import SeedanceTaskPage, seedance_list_tasks
     from ark_mcp.tools.seedream_edit_image import (
@@ -551,6 +567,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             SeedanceTaskOutput,
             "seedance:read",
             seedance_get_task,
+        ),
+        (
+            "seedance_get_tasks",
+            get_many_annotations,
+            SeedanceGetTasksOutput,
+            "seedance:read",
+            seedance_get_tasks,
         ),
         (
             "seedance_list_tasks",

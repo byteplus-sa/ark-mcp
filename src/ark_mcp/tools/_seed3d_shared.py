@@ -30,6 +30,7 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._local_export import output_path_field, overwrite_field
 from ark_mcp.tools._persistence import persist_from_url
 from ark_mcp.tools._task_execution import context_log, persistence_requires_task
 
@@ -66,6 +67,8 @@ class Seed3DGetTaskInput(BaseModel):
             "The default true requires task-augmented execution; use false for a foreground status check."
         ),
     )
+    output_path: str | None = output_path_field("the 3D file")
+    overwrite: bool = overwrite_field()
 
 
 class Seed3DTaskOutput(BaseModel):

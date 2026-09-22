@@ -41,6 +41,7 @@ class BackgroundToolSpec:
 BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
     {
         "media_upload": BackgroundToolSpec("required", "media:upload"),
+        "media_upload_batch": BackgroundToolSpec("required", "media:upload"),
         "seed_audio_generate": BackgroundToolSpec("required", "seed:audio:generate"),
         "seed_audio_generate_variations": BackgroundToolSpec("required", "seed:audio:generate"),
         "speech_to_text": BackgroundToolSpec("required", "seed:asr:transcribe"),
@@ -60,6 +61,7 @@ BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
         "vod_add_subtitles": BackgroundToolSpec("required", "vod:subtitle:add"),
         "vod_remove_subtitles": BackgroundToolSpec("required", "vod:subtitle:remove"),
         "seedance_get_task": BackgroundToolSpec("optional", "seedance:read"),
+        "seedance_get_tasks": BackgroundToolSpec("optional", "seedance:read"),
         "seed_media_persist_url": BackgroundToolSpec("optional", "media:upload"),
         "hyper3d_get_task": BackgroundToolSpec("optional", "hyper3d:read"),
         "hitem3d_get_task": BackgroundToolSpec("optional", "hitem3d:read"),

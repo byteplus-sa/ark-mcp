@@ -3,22 +3,22 @@
 Returns the absolute on-disk path of a persisted artifact so MCP clients can
 copy the file directly instead of streaming its Base64 bytes through the
 context window. Stdio transport only: the client and server must share a
-filesystem for the returned path to be meaningful.
+filesystem for the returned path to be meaningful. Copies go through the
+shared output-root policy (``security/output_paths.py``): the destination
+must be absolute and inside an allowed output root, and an existing file is
+only replaced when ``overwrite`` is set (identical content always succeeds).
 """
 
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
-from pathlib import Path
-
 from fastmcp import Context
 from pydantic import BaseModel, Field
 
+from ark_mcp.artifacts.export import write_artifact
 from ark_mcp.domain.artifacts import MediaType
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.runtime import get_principal, get_runtime
+from ark_mcp.security.output_paths import validate_output_target
 from ark_mcp.tools._task_execution import context_log
 
 
@@ -33,9 +33,17 @@ class SeedMediaExportArtifactInput(BaseModel):
     destination_path: str | None = Field(
         None,
         description=(
-            "Optional absolute path where the server writes an atomic copy of the artifact. "
+            "Optional absolute file path where the server writes an atomic copy of the artifact. "
+            "Must be inside an allowed output root (the client's MCP roots, or OUTPUT_ROOTS). "
             "When omitted, the tool returns the canonical on-disk path of a filesystem-backed "
             "artifact instead."
+        ),
+    )
+    overwrite: bool = Field(
+        False,
+        description=(
+            "Allow replacing an existing destination file with different content. An existing "
+            "file with identical content is always accepted."
         ),
     )
 
@@ -54,36 +62,10 @@ class SeedMediaExportArtifactOutput(BaseModel):
     copied: bool = Field(
         ...,
         description=(
-            "True when the artifact was copied to destination_path; False when path is the "
-            "canonical store location."
+            "True when the artifact was copied to destination_path (or an identical copy was "
+            "already there); False when path is the canonical store location."
         ),
     )
-
-
-def _atomic_write_bytes(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=path.parent, prefix=".tmp_")
-    try:
-        with os.fdopen(fd, "wb") as file_obj:
-            file_obj.write(data)
-        os.replace(tmp_path, path)
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
-
-
-def _atomic_copy_file(src: Path, dst: Path) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=dst.parent, prefix=".tmp_")
-    os.close(fd)
-    try:
-        shutil.copyfile(src, tmp_path)
-        os.replace(tmp_path, dst)
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-        raise
 
 
 async def seed_media_export_artifact(
@@ -93,10 +75,10 @@ async def seed_media_export_artifact(
 
     Returns the absolute on-disk path of a persisted artifact instead of
     streaming its Base64 bytes through the MCP context. With ``destination_path``
-    the server writes an atomic copy of the artifact to that path; otherwise it
-    returns the canonical store path for a filesystem-backed artifact store.
-    Only available over stdio transport, where the client and server share a
-    filesystem.
+    the server writes an atomic copy of the artifact to that path, which must be
+    absolute and inside an allowed output root; otherwise it returns the
+    canonical store path for a filesystem-backed artifact store. Only available
+    over stdio transport, where the client and server share a filesystem.
     """
     await context_log(ctx, "info", f"Exporting artifact {input.artifact_id}")
 
@@ -108,19 +90,28 @@ async def seed_media_export_artifact(
             "the client and server must share a filesystem."
         )
 
+    target = await validate_output_target(
+        input.destination_path,
+        ctx=ctx,
+        settings=runtime.settings,
+        kind="file",
+        field="destination_path",
+    )
     location = await runtime.artifact_store.locate(input.artifact_id, auth=auth)
     ref = location.ref
 
-    if input.destination_path is not None:
-        destination = Path(input.destination_path).expanduser().resolve()
-        if destination.is_dir():
-            raise ValueError("destination_path must name a file, not a directory.")
-        if location.path is not None:
-            _atomic_copy_file(location.path, destination)
-        else:
-            stored = await runtime.artifact_store.get(input.artifact_id, auth=auth)
-            _atomic_write_bytes(destination, stored.data)
-        exported_path = str(destination)
+    if target is not None:
+        destination, roots = target
+        outcome = await write_artifact(
+            runtime.artifact_store,
+            ref,
+            destination,
+            roots=roots,
+            overwrite=input.overwrite,
+            auth=auth,
+        )
+        exported_path = str(outcome.path)
+        byte_count: int | None = outcome.bytes
         copied = True
     else:
         if location.path is None:
@@ -129,11 +120,8 @@ async def seed_media_export_artifact(
                 "provide destination_path to export a copy."
             )
         exported_path = str(location.path)
+        byte_count = ref.bytes if ref.bytes is not None else location.path.stat().st_size
         copied = False
-
-    byte_count = ref.bytes
-    if byte_count is None and location.path is not None:
-        byte_count = location.path.stat().st_size
 
     log_info(
         "artifact_exported",

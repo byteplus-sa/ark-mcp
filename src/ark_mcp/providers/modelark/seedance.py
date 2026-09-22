@@ -28,6 +28,7 @@ from ark_mcp.providers.modelark.schemas import (
     SeedanceTaskListResponse,
     SeedanceTaskResponse,
 )
+from ark_mcp.providers.modelark.seedance_queue import queue_info
 
 
 def _parse_success_body(response: httpx.Response, operation: str) -> dict[str, Any]:
@@ -302,6 +303,7 @@ class SeedanceService:
             status=SeedanceTaskStatus(task.status),
             created_at=str(task.created_at or ""),
             updated_at=str(task.updated_at or ""),
+            queue=queue_info(task),
         )
 
     @staticmethod

@@ -26,6 +26,14 @@ from ark_mcp.tools.seed_media_export_artifact import (
 )
 from tests.fixtures.fake_context import FakeContext
 
+_OUTPUT_ROOTS: list[str] = []
+
+
+@pytest.fixture(autouse=True)
+def _output_root(tmp_path: Path) -> None:
+    """Allow exports under this test's tmp_path (the OUTPUT_ROOTS policy)."""
+    _OUTPUT_ROOTS[:] = [str(tmp_path)]
+
 
 @pytest.fixture
 def store(tmp_path: Path) -> FilesystemArtifactStore:
@@ -44,7 +52,7 @@ def _ctx_for(
         "ark_mcp.tools.seed_media_export_artifact.get_runtime",
         lambda _ctx: SimpleNamespace(
             artifact_store=store,
-            settings=SimpleNamespace(mcp_transport=transport),
+            settings=SimpleNamespace(mcp_transport=transport, output_root_paths=_OUTPUT_ROOTS),
         ),
     )
     monkeypatch.setattr(
@@ -226,7 +234,7 @@ def _ctx_for_object_storage(
         "ark_mcp.tools.seed_media_export_artifact.get_runtime",
         lambda _ctx: SimpleNamespace(
             artifact_store=store,
-            settings=SimpleNamespace(mcp_transport="stdio"),
+            settings=SimpleNamespace(mcp_transport="stdio", output_root_paths=_OUTPUT_ROOTS),
         ),
     )
     monkeypatch.setattr(
@@ -271,3 +279,76 @@ class TestSeedMediaExportArtifactObjectStorage:
         assert result.copied is True
         assert result.path == str(destination.resolve())
         assert destination.read_bytes() == raw
+
+
+class TestExportOutputRootPolicy:
+    async def test_destination_outside_roots_rejected(
+        self,
+        store: FilesystemArtifactStore,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ref = await store.put_base64(
+            data=base64.b64encode(b"x").decode(),
+            media_type="image",
+            mime_type="image/png",
+            auth=AuthContext(principal_id="alice", tenant_id="tenant-a"),
+        )
+        _OUTPUT_ROOTS[:] = [str(tmp_path / "allowed")]
+        ctx = _ctx_for(store, "alice", "tenant-a", monkeypatch)
+        with pytest.raises(ValueError, match="inside an allowed output root"):
+            await seed_media_export_artifact(
+                SeedMediaExportArtifactInput(
+                    artifact_id=ref.id, destination_path=str(tmp_path / "elsewhere.png")
+                ),
+                ctx,
+            )
+
+    async def test_relative_destination_rejected(
+        self, store: FilesystemArtifactStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ref = await store.put_base64(
+            data=base64.b64encode(b"x").decode(),
+            media_type="image",
+            mime_type="image/png",
+            auth=AuthContext(principal_id="alice", tenant_id="tenant-a"),
+        )
+        ctx = _ctx_for(store, "alice", "tenant-a", monkeypatch)
+        with pytest.raises(ValueError, match="absolute"):
+            await seed_media_export_artifact(
+                SeedMediaExportArtifactInput(artifact_id=ref.id, destination_path="copy.png"),
+                ctx,
+            )
+
+    async def test_existing_different_file_needs_overwrite_but_same_is_ok(
+        self,
+        store: FilesystemArtifactStore,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ref = await store.put_base64(
+            data=base64.b64encode(b"new-bytes").decode(),
+            media_type="image",
+            mime_type="image/png",
+            auth=AuthContext(principal_id="alice", tenant_id="tenant-a"),
+        )
+        destination = tmp_path / "copy.png"
+        destination.write_bytes(b"old-bytes")
+        ctx = _ctx_for(store, "alice", "tenant-a", monkeypatch)
+        with pytest.raises(ValueError, match="overwrite"):
+            await seed_media_export_artifact(
+                SeedMediaExportArtifactInput(artifact_id=ref.id, destination_path=str(destination)),
+                ctx,
+            )
+        result = await seed_media_export_artifact(
+            SeedMediaExportArtifactInput(
+                artifact_id=ref.id, destination_path=str(destination), overwrite=True
+            ),
+            ctx,
+        )
+        assert destination.read_bytes() == b"new-bytes"
+        again = await seed_media_export_artifact(
+            SeedMediaExportArtifactInput(artifact_id=ref.id, destination_path=str(destination)),
+            ctx,
+        )
+        assert result.copied and again.copied

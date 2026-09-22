@@ -100,6 +100,48 @@ class SeedanceTaskUsage(BaseModel):
     prompt_tokens: int | None = Field(default=None, description="Prompt tokens consumed.")
 
 
+class SeedanceQueueInfo(BaseModel):
+    """Server-derived queue timing for a Seedance task.
+
+    ModelArk publishes no queue position or ETA. These values are computed by
+    this server from the task's timestamps and expiry setting; they are
+    estimates, not a provider SLA.
+    """
+
+    queued_seconds: int | None = Field(
+        None,
+        description=(
+            "Seconds spent queued: now minus created_at while queued, or updated_at minus "
+            "created_at once running (approximate). None for finished tasks."
+        ),
+    )
+    running_seconds: int | None = Field(
+        None,
+        description="Seconds since the last status update while running (approximate).",
+    )
+    service_tier: str | None = Field(
+        None, description="Service tier ('default' or 'flex'). Flex tasks usually queue longer."
+    )
+    expires_at: str | None = Field(
+        None,
+        description=(
+            "ISO-8601 time after which the provider fails a task that has not finished: "
+            "created_at + execution_expires_after. None for finished tasks."
+        ),
+    )
+    expires_at_estimated: bool = Field(
+        False,
+        description=(
+            "True when the provider did not report execution_expires_after and the documented "
+            "default (48 hours) was assumed."
+        ),
+    )
+    hint: str | None = Field(
+        None,
+        description="Human-readable queue summary for reporting to the user.",
+    )
+
+
 class SeedanceTaskSummary(BaseModel):
     """Summary of a Seedance task for list results."""
 
@@ -108,6 +150,10 @@ class SeedanceTaskSummary(BaseModel):
     status: SeedanceTaskStatus = Field(..., description="Current task status.")
     created_at: str = Field(..., description="ISO-8601 timestamp of task creation.")
     updated_at: str = Field(..., description="ISO-8601 timestamp of last status update.")
+    queue: SeedanceQueueInfo | None = Field(
+        None,
+        description="Server-derived queue timing (queued/running tasks only; None when finished).",
+    )
 
 
 class VariationError(BaseModel):

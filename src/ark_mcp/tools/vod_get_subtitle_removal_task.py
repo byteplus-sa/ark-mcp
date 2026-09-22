@@ -7,6 +7,14 @@ from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field
 
 from ark_mcp.providers.vod_mediakit.subtitles import VodMediaKitSubtitleRemovalService
+from ark_mcp.tools._local_export import (
+    local_export,
+    output_path_field,
+    overwrite_field,
+)
+from ark_mcp.tools._local_export import (
+    needs_persist_output as _needs_persist_output,
+)
 from ark_mcp.tools._task_execution import persistence_requires_task
 from ark_mcp.tools._vod_subtitle_shared import (
     VodSubtitleTaskOutput,
@@ -30,12 +38,15 @@ class VodGetSubtitleRemovalTaskInput(BaseModel):
             "The default true requires task-augmented execution; use false for a foreground status check."
         ),
     )
+    output_path: str | None = output_path_field("the cleaned video")
+    overwrite: bool = overwrite_field()
 
 
 class VodSubtitleRemovalTaskOutput(VodSubtitleTaskOutput):
     """Normalized status and output of a MediaKit precision-erasure task."""
 
 
+@local_export("video", precondition=_needs_persist_output)
 async def vod_get_subtitle_removal_task(
     input: VodGetSubtitleRemovalTaskInput, ctx: Context
 ) -> VodSubtitleRemovalTaskOutput | ToolResult:

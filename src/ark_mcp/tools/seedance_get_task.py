@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.models import (
+    SeedanceQueueInfo,
     SeedanceTaskError,
     SeedanceTaskSettings,
     SeedanceTaskStatus,
@@ -25,10 +26,19 @@ from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
+from ark_mcp.providers.modelark.seedance_queue import queue_info
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import RuntimeServices, get_principal, get_runtime
 from ark_mcp.security.auth_context import PrincipalContext
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._local_export import (
+    local_export,
+    output_path_field,
+    overwrite_field,
+)
+from ark_mcp.tools._local_export import (
+    needs_persist_output as _needs_persist_output,
+)
 from ark_mcp.tools._persistence import persist_from_url
 from ark_mcp.tools._task_execution import context_log, persistence_requires_task
 
@@ -51,6 +61,10 @@ class SeedanceGetTaskInput(BaseModel):
             "The default true requires task-augmented execution; use false for a foreground status check."
         ),
     )
+    output_path: str | None = output_path_field(
+        "the task video (a last frame is written beside it with a -last-frame suffix)"
+    )
+    overwrite: bool = overwrite_field()
 
 
 class SeedanceTaskOutput(BaseModel):
@@ -79,8 +93,17 @@ class SeedanceTaskOutput(BaseModel):
         default_factory=lambda: SeedanceTaskSettings(),
         description="Generation settings used for this task (resolution, ratio, duration, etc.).",
     )
+    queue: SeedanceQueueInfo | None = Field(
+        None,
+        description=(
+            "Server-derived queue timing for queued/running tasks (time queued, service tier, "
+            "provider expiry deadline). ModelArk publishes no queue position or ETA. "
+            "None once the task has finished."
+        ),
+    )
 
 
+@local_export("video", "last_frame", precondition=_needs_persist_output)
 async def seedance_get_task(
     input: SeedanceGetTaskInput, ctx: Context
 ) -> SeedanceTaskOutput | ToolResult:
@@ -111,14 +134,6 @@ async def seedance_get_task(
 
     await ctx.report_progress(progress=60, total=100)
 
-    # Normalize error detail.
-    error_dict = None
-    if task.error and (task.error.code or task.error.message):
-        error_dict = SeedanceTaskError(
-            code=task.error.code,
-            message=task.error.message,
-        )
-
     # Persist video and last-frame on success (only once per task).
     video_ref: ArtifactRef | None = None
     last_frame_ref: ArtifactRef | None = None
@@ -135,20 +150,30 @@ async def seedance_get_task(
         request_id=request_id,
     )
 
-    # Normalize settings from the generation config.
-    settings_dict = SeedanceTaskSettings.model_validate(task.content or {})
+    return build_task_output(task, video_ref, last_frame_ref)
 
+
+def build_task_output(
+    task: SeedanceTaskResponse,
+    video_ref: ArtifactRef | None,
+    last_frame_ref: ArtifactRef | None,
+) -> SeedanceTaskOutput:
+    """Normalize a provider task (plus any persisted artifacts) into tool output."""
+    error = None
+    if task.error and (task.error.code or task.error.message):
+        error = SeedanceTaskError(code=task.error.code, message=task.error.message)
     return SeedanceTaskOutput(
         task_id=task.id,
         model=task.model,
         status=task.status,  # type: ignore[arg-type]
         created_at=SeedanceService.get_created_at(task),
         updated_at=SeedanceService.get_updated_at(task),
-        error=error_dict,
+        error=error,
         video=video_ref,
         last_frame=last_frame_ref,
         usage=SeedanceService.extract_usage(task),
-        settings=settings_dict,
+        settings=SeedanceTaskSettings.model_validate(task.content or {}),
+        queue=queue_info(task),
     )
 
 

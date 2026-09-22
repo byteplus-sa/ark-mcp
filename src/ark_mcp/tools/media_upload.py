@@ -18,10 +18,10 @@ from fastmcp import Context
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, model_validator
 
-from ark_mcp.config.env import get_settings
+from ark_mcp.config.env import Settings, get_settings
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
-from ark_mcp.providers.object_storage import make_object_storage_gateway
+from ark_mcp.providers.object_storage import ObjectStorageGateway, make_object_storage_gateway
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.security.media_policy import (
@@ -121,30 +121,15 @@ def _max_bytes(limits: MediaLimits, media_type: str) -> int:
     }[media_type]
 
 
-async def media_upload(input: MediaUploadInput, ctx: Context) -> MediaUploadOutput | ToolResult:
-    """Upload media to object storage (TOS or S3) and return a presigned HTTPS GET URL.
+def prepare_upload(
+    input: MediaUploadInput, settings: Settings
+) -> tuple[Path | None, bytes | None, int]:
+    """Validate one upload's source and return ``(path, raw, size_bytes)``.
 
-    The returned URL can be passed directly to tools that accept media URLs,
-    such as ``seedance_create_task`` (video references).  Video references are
-    URL-only — this tool is the integrated upload path for them. Requires MCP
-    task-augmented execution because uploads can contain up to 200 MiB of video.
+    Exactly one of ``path`` (stdio file upload) or ``raw`` (decoded Base64)
+    is set. Raises ``ValueError`` for disallowed, missing, or oversized input.
     """
-    await context_log(ctx, "info", "Starting media upload")
-    await ctx.report_progress(progress=10, total=100)
-
-    settings = get_settings()
-    if not settings.has_object_storage:
-        raise ValueError(
-            "Object storage is not configured. Set TOS_* or S3_* credentials and "
-            "OBJECT_STORAGE_BACKEND (tos|s3)."
-        )
-
-    limits = get_media_limits()
-    max_bytes = _max_bytes(limits, input.media_type)
-
-    path: Path | None = None
-    raw: bytes | None = None
-
+    max_bytes = _max_bytes(get_media_limits(), input.media_type)
     if input.file_path is not None:
         if settings.mcp_transport != "stdio":
             raise ValueError(
@@ -159,70 +144,100 @@ async def media_upload(input: MediaUploadInput, ctx: Context) -> MediaUploadOutp
                 f"{input.media_type} file size ({file_size} bytes) exceeds "
                 f"limit ({max_bytes} bytes)."
             )
-        raw_size = file_size
-    else:
-        if input.data is None:
-            raise ValueError("data is required when file_path is not provided.")
-        raw = decode_base64_safely(input.data, max_bytes, label=input.media_type)
-        raw_size = len(raw)
+        return path, None, file_size
+    if input.data is None:
+        raise ValueError("data is required when file_path is not provided.")
+    raw = decode_base64_safely(input.data, max_bytes, label=input.media_type)
+    return None, raw, len(raw)
 
-    await ctx.report_progress(progress=30, total=100)
 
+async def upload_one(
+    ctx: Context,
+    settings: Settings,
+    gateway: ObjectStorageGateway,
+    input: MediaUploadInput,
+    path: Path | None,
+    raw: bytes | None,
+    raw_size: int,
+) -> MediaUploadOutput:
+    """Upload one prepared item and presign it. Raises ``ProviderError`` on failure."""
     prefix = input.key_prefix or "references"
     key = f"{prefix}/{input.media_type}/{uuid4()}"
-
-    gateway = make_object_storage_gateway(settings)
-    try:
-        async with billed_provider_slot(
-            ctx,
-            provider=settings.object_storage_backend,
-            product="upload",
-            estimated_cost_usd=0.0,
-        ):
-            if path is not None:
-                file_path_str = str(path)
-                await call_with_retry(
-                    lambda: gateway.upload_file(
-                        key=key, file_path=file_path_str, mime_type=input.mime_type
-                    )
+    async with billed_provider_slot(
+        ctx,
+        provider=settings.object_storage_backend,
+        product="upload",
+        estimated_cost_usd=0.0,
+    ):
+        if path is not None:
+            file_path_str = str(path)
+            await call_with_retry(
+                lambda: gateway.upload_file(
+                    key=key, file_path=file_path_str, mime_type=input.mime_type
                 )
-            else:
-                if raw is None:
-                    raise ValueError("data is required for Base64 upload.")
-                data_bytes = raw
-                await call_with_retry(
-                    lambda: gateway.upload_bytes(
-                        key=key, data=data_bytes, mime_type=input.mime_type
-                    )
-                )
-            if input.expires_in_seconds is not None:
-                url = await gateway.presign_get(key=key, expires=input.expires_in_seconds)
-            else:
-                url = await gateway.presign_get(key=key)
-            await get_runtime(ctx).object_key_ownership_store.record(key, get_principal(ctx))
-    except ProviderError as exc:
-        await context_log(ctx, "error", f"Media upload failed: {exc.message}")
-        return provider_error_result(exc)
-    finally:
-        await gateway.close()
+            )
+        else:
+            if raw is None:
+                raise ValueError("data is required for Base64 upload.")
+            data_bytes = raw
+            await call_with_retry(
+                lambda: gateway.upload_bytes(key=key, data=data_bytes, mime_type=input.mime_type)
+            )
+        if input.expires_in_seconds is not None:
+            url = await gateway.presign_get(key=key, expires=input.expires_in_seconds)
+        else:
+            url = await gateway.presign_get(key=key)
+        await get_runtime(ctx).object_key_ownership_store.record(key, get_principal(ctx))
 
     ttl = input.expires_in_seconds or settings.presign_ttl_seconds
     expires_at = (datetime.now(UTC) + timedelta(seconds=ttl)).isoformat()
-
-    await ctx.report_progress(progress=100, total=100)
     log_info(
         "media_upload_complete",
         object_key=key,
         media_type=input.media_type,
         bytes=raw_size,
     )
+    return MediaUploadOutput(url=url, expires_at=expires_at, object_key=key, bytes=raw_size)
 
-    return MediaUploadOutput(
-        url=url,
-        expires_at=expires_at,
-        object_key=key,
-        bytes=raw_size,
-    )
+
+def require_object_storage(settings: Settings) -> None:
+    """Raise when no object storage backend is configured."""
+    if not settings.has_object_storage:
+        raise ValueError(
+            "Object storage is not configured. Set TOS_* or S3_* credentials and "
+            "OBJECT_STORAGE_BACKEND (tos|s3)."
+        )
+
+
+async def media_upload(input: MediaUploadInput, ctx: Context) -> MediaUploadOutput | ToolResult:
+    """Upload media to object storage (TOS or S3) and return a presigned HTTPS GET URL.
+
+    The returned URL can be passed directly to tools that accept media URLs,
+    such as ``seedance_create_task`` (video references).  Video references are
+    URL-only — this tool is the integrated upload path for them. Requires MCP
+    task-augmented execution because uploads can contain up to 200 MiB of video.
+    For several files, use media_upload_batch.
+    """
+    await context_log(ctx, "info", "Starting media upload")
+    await ctx.report_progress(progress=10, total=100)
+
+    settings = get_settings()
+    require_object_storage(settings)
+    path, raw, raw_size = prepare_upload(input, settings)
+
+    await ctx.report_progress(progress=30, total=100)
+
+    gateway = make_object_storage_gateway(settings)
+    try:
+        result = await upload_one(ctx, settings, gateway, input, path, raw, raw_size)
+    except ProviderError as exc:
+        await context_log(ctx, "error", f"Media upload failed: {exc.message}")
+        return provider_error_result(exc)
+    finally:
+        await gateway.close()
+
+    await ctx.report_progress(progress=100, total=100)
+    return result
 
 
 TOOL_ANNOTATIONS = {

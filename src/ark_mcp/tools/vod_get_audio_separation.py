@@ -26,6 +26,14 @@ from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.auth_context import PrincipalContext
 from ark_mcp.security.media_policy import get_media_limits
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._local_export import (
+    local_export,
+    output_path_field,
+    overwrite_field,
+)
+from ark_mcp.tools._local_export import (
+    needs_persist_output as _needs_persist_output,
+)
 from ark_mcp.tools._task_execution import context_log, persistence_requires_task
 from ark_mcp.tools._vod_shared import VodArtifactPersistenceIssue
 
@@ -60,6 +68,8 @@ class VodGetAudioSeparationInput(BaseModel):
             "The default true requires task-augmented execution; use false for a foreground status check."
         ),
     )
+    output_path: str | None = output_path_field("the separated audio track")
+    overwrite: bool = overwrite_field()
 
 
 class VodAudioSeparationFailure(BaseModel):
@@ -244,6 +254,7 @@ async def _persist_track(
     return ref, None, "persisted"
 
 
+@local_export("artifact", precondition=_needs_persist_output)
 async def vod_get_audio_separation(
     input: VodGetAudioSeparationInput, ctx: Context
 ) -> VodAudioSeparationTaskOutput | ToolResult:

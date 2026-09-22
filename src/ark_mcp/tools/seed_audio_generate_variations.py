@@ -24,6 +24,14 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
+from ark_mcp.tools._local_export import (
+    local_export,
+    output_dir_field,
+    overwrite_field,
+)
+from ark_mcp.tools._local_export import (
+    needs_persist as _needs_persist,
+)
 from ark_mcp.tools._parallel import (
     VariationProgress,
     resolve_prompts,
@@ -68,6 +76,8 @@ class SeedAudioVariationsInput(BaseModel):
     persist: bool = Field(
         True, description="Whether to persist generated audio as durable MCP resources."
     )
+    output_dir: str | None = output_dir_field("each variation audio")
+    overwrite: bool = overwrite_field()
 
     @model_validator(mode="after")
     def validate_prompt_required(self) -> SeedAudioVariationsInput:
@@ -110,6 +120,7 @@ TOOL_ANNOTATIONS = {
 }
 
 
+@local_export("summary", precondition=_needs_persist)
 async def seed_audio_generate_variations(
     input: SeedAudioVariationsInput, ctx: Context
 ) -> SeedAudioVariationsOutput:
