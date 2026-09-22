@@ -98,7 +98,7 @@ class SeedanceService:
         try:
             response = await self._gateway.get(f"/contents/generations/tasks/{task_id}")
         except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("get_task") from None
+            raise ModelArkGateway.normalize_timeout("get_task", side_effect=False) from None
         except httpx.ConnectError as exc:
             raise ModelArkGateway.normalize_connection_error("get_task", exc) from exc
         except httpx.TransportError as exc:
@@ -151,7 +151,7 @@ class SeedanceService:
         try:
             response = await self._gateway.get("/contents/generations/tasks", params=params)
         except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("list_tasks") from None
+            raise ModelArkGateway.normalize_timeout("list_tasks", side_effect=False) from None
         except httpx.ConnectError as exc:
             raise ModelArkGateway.normalize_connection_error("list_tasks", exc) from exc
         except httpx.TransportError as exc:

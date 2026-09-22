@@ -22,11 +22,15 @@ from ark_mcp.domain.media import MediaSource
 from ark_mcp.domain.models import UnderstandingChoice, UnderstandingUsage
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.understanding import SeedUnderstandingService
-from ark_mcp.providers.retry import call_with_retry
+from ark_mcp.providers.retry import RetryPolicy, call_with_retry
 from ark_mcp.runtime import billed_provider_slot
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
+
+# Chat timeouts are safe to retry but are not auto-retried: a second full-length
+# thinking run would double latency and token cost. 429/5xx are still retried.
+_UNDERSTANDING_RETRY_POLICY = RetryPolicy(retry_timeouts=False)
 
 
 class UnderstandingImageInput(MediaSource):
@@ -206,7 +210,10 @@ async def seed_understand(
             product="understanding",
             estimated_cost_usd=estimated_cost,
         ):
-            response, request_id = await call_with_retry(lambda: service.generate(request))
+            response, request_id = await call_with_retry(
+                lambda: service.generate(request),
+                policy=_UNDERSTANDING_RETRY_POLICY,
+            )
     except ProviderError as exc:
         await context_log(ctx, "error", f"Understanding failed: {exc.message}")
         return provider_error_result(exc)

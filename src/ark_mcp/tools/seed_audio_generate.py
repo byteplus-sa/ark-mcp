@@ -28,6 +28,7 @@ from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._persistence import persist_base64
 from ark_mcp.tools._task_execution import context_log
 
 # ---------------------------------------------------------------------------
@@ -257,7 +258,9 @@ async def seed_audio_generate(
 
     if input.persist and response.audio:
         store = get_runtime(ctx).artifact_store
-        artifact = await store.put_base64(
+        artifact = await persist_base64(
+            store,
+            provider_url=response.url,
             data=response.audio,
             media_type=MediaType.AUDIO,
             mime_type="audio/wav",

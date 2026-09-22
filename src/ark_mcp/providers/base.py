@@ -117,21 +117,36 @@ class BaseHttpGateway(ABC):
         return True
 
     @classmethod
-    def normalize_timeout(cls, operation: str) -> ProviderError:
+    def normalize_timeout(cls, operation: str, *, side_effect: bool = True) -> ProviderError:
+        """Normalize an HTTP timeout.
+
+        ``side_effect=True`` (the default) is for mutations such as create,
+        generate, cancel, and delete: the provider may have acted, so the error
+        is ambiguous and must not be retried blindly. ``side_effect=False`` is
+        for read-only queries and completions that create no provider state:
+        the error is retryable and not ambiguous.
+        """
+        if side_effect:
+            message = (
+                f"Request timed out during '{operation}'. "
+                "The operation may have succeeded. "
+                "Do not retry blindly; reconcile using the task ID or request ID."
+            )
+        else:
+            message = (
+                f"Request timed out during '{operation}'. "
+                "No provider-side state was created, so it is safe to retry."
+            )
         return ProviderError(
             NormalizedProviderError(
                 provider=cls.PROVIDER,
                 operation=operation,
                 http_status=None,
                 code="TIMEOUT",
-                message=(
-                    f"Request timed out during '{operation}'. "
-                    "The operation may have succeeded. "
-                    "Do not retry blindly; reconcile using the task ID or request ID."
-                ),
+                message=message,
                 request_id=None,
-                retryable=False,
-                ambiguous_completion=True,
+                retryable=not side_effect,
+                ambiguous_completion=side_effect,
             )
         )
 

@@ -359,7 +359,9 @@ class TestUnderstandingErrorPropagation:
         assert exc_info.value.ambiguous_completion is False
 
     @respx.mock
-    async def test_timeout_raises_ambiguous(self, service: SeedUnderstandingService) -> None:
+    async def test_timeout_is_retryable_not_ambiguous(
+        self, service: SeedUnderstandingService
+    ) -> None:
         respx.post(f"{MODELARK_BASE}/chat/completions").mock(
             side_effect=httpx.TimeoutException("timed out")
         )
@@ -367,7 +369,9 @@ class TestUnderstandingErrorPropagation:
         with pytest.raises(ProviderError) as exc_info:
             await service.generate(request)
         assert exc_info.value.code == "TIMEOUT"
-        assert exc_info.value.ambiguous_completion is True
+        # A chat completion creates no provider state, so a timeout is safe to retry.
+        assert exc_info.value.ambiguous_completion is False
+        assert exc_info.value.retryable is True
 
     @respx.mock
     async def test_connection_error_raises(self, service: SeedUnderstandingService) -> None:

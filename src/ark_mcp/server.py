@@ -133,6 +133,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
         SeedMediaGetArtifactOutput,
         seed_media_get_artifact,
     )
+    from ark_mcp.tools.seed_media_persist_url import (
+        TOOL_ANNOTATIONS as persist_url_annotations,
+    )
+    from ark_mcp.tools.seed_media_persist_url import (
+        SeedMediaPersistUrlOutput,
+        seed_media_persist_url,
+    )
 
     server.tool(
         name="ark_job_capabilities",
@@ -170,6 +177,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
         output_schema=SeedMediaExportArtifactOutput.model_json_schema(),
         auth=component_auth(settings, "artifacts:read"),
     )(seed_media_export_artifact)
+    server.tool(
+        name="seed_media_persist_url",
+        annotations={**persist_url_annotations},
+        output_schema=SeedMediaPersistUrlOutput.model_json_schema(),
+        task=_task_config("seed_media_persist_url"),
+        auth=_tool_auth(settings, "seed_media_persist_url", "media:upload"),
+    )(_task_handler("seed_media_persist_url", seed_media_persist_url))
 
     if settings.has_seed_audio:
         from ark_mcp.tools.seed_audio_generate import (

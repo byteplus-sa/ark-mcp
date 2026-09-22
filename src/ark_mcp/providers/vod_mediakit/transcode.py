@@ -115,12 +115,14 @@ class VodMediaKitTranscodeService:
         except httpx.TimeoutException:
             raise VodMediaKitGateway.normalize_ambiguous_transport_error(
                 _OPERATION_GET,
+                side_effect=False,
                 code="TIMEOUT",
                 message="MediaKit transcode task poll timed out.",
             ) from None
         except httpx.TransportError:
             raise VodMediaKitGateway.normalize_ambiguous_transport_error(
                 _OPERATION_GET,
+                side_effect=False,
                 code="TRANSPORT_ERROR",
                 message="MediaKit transcode task poll failed to connect.",
             ) from None

@@ -7,8 +7,9 @@ SNI hostname, preventing DNS rebinding between validation and connection.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Literal
 from urllib.parse import urljoin, urlunsplit
 
@@ -20,6 +21,7 @@ from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.security.url_policy import AddressResolver, ValidatedUrl, validate_url
 
 HostPolicy = Callable[[str], bool]
+AsyncSleep = Callable[[float], Awaitable[None]]
 SafeDownloadErrorCode = Literal[
     "untrusted_host",
     "too_large",
@@ -63,9 +65,17 @@ class SafeDownloader:
         *,
         timeout: float = 120.0,
         connect_timeout: float = 30.0,
+        max_attempts: int = 3,
+        retry_base_delay_seconds: float = 1.0,
         resolver: AddressResolver | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        sleep: AsyncSleep = asyncio.sleep,
     ) -> None:
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be at least one")
+        self._max_attempts = max_attempts
+        self._retry_base_delay = retry_base_delay_seconds
+        self._sleep = sleep
         self._resolver = resolver
         self._client = httpx.AsyncClient(
             timeout=httpx.Timeout(timeout, connect=connect_timeout),
@@ -82,7 +92,45 @@ class SafeDownloader:
         max_bytes: int,
         max_redirects: int = 5,
     ) -> DownloadedMedia:
-        """Download a trusted URL while revalidating and pinning every hop."""
+        """Download a trusted URL, retrying retryable failures with backoff.
+
+        A GET on a provider output URL has no side effects, so timeouts,
+        network errors, and 408/429/5xx responses are retried up to
+        ``max_attempts`` times (1s, 2s, 4s, ... between attempts). Policy
+        failures (untrusted host, redirect rejection, oversize, expired
+        source) are never retried.
+        """
+        for attempt in range(1, self._max_attempts + 1):
+            try:
+                return await self._download_once(
+                    url,
+                    trusted_hosts=trusted_hosts,
+                    max_bytes=max_bytes,
+                    max_redirects=max_redirects,
+                )
+            except SafeDownloadError as exc:
+                if not exc.retryable or attempt >= self._max_attempts:
+                    raise
+                delay = self._retry_base_delay * (2 ** (attempt - 1))
+                log_warning(
+                    "download_retry",
+                    code=exc.code,
+                    attempt=attempt,
+                    max_attempts=self._max_attempts,
+                    delay_seconds=delay,
+                )
+                await self._sleep(delay)
+        raise AssertionError("download retry loop must return or raise")
+
+    async def _download_once(
+        self,
+        url: str,
+        *,
+        trusted_hosts: HostPolicy,
+        max_bytes: int,
+        max_redirects: int,
+    ) -> DownloadedMedia:
+        """Download a trusted URL once while revalidating and pinning every hop."""
         if max_bytes <= 0:
             raise ValueError("max_bytes must be positive")
         if max_redirects < 0:

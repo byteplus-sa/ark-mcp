@@ -30,6 +30,7 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._persistence import persist_from_url
 from ark_mcp.tools._task_execution import context_log, persistence_requires_task
 
 
@@ -317,24 +318,24 @@ async def seed3d_get_task_impl(
             source_expiry = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
 
             if task.file_url:
-                try:
-                    file_ref = await store.copy_from_trusted_url(
-                        url=task.file_url,
-                        media_type=MediaType.THREE_D,
-                        mime_type=_infer_3d_mime(task.file_url),
-                        source_expires_at=source_expiry,
-                        auth=owner,
+                file_ref = await persist_from_url(
+                    store,
+                    url=task.file_url,
+                    media_type=MediaType.THREE_D,
+                    mime_type=_infer_3d_mime(task.file_url),
+                    source_expires_at=source_expiry,
+                    auth=owner,
+                )
+                if file_ref.persistence_error is not None:
+                    await context_log(
+                        ctx,
+                        "warning",
+                        f"Failed to persist 3D file artifact: {file_ref.persistence_error.message}",
                     )
-                except Exception as exc:
-                    log_warning(
-                        "artifact_persist_failed",
-                        task_id=input.task_id,
-                        media_type="three_d",
-                        error=str(exc),
-                    )
-                    await context_log(ctx, "warning", f"Failed to persist 3D file artifact: {exc}")
 
-            if task.file_url is None or file_ref is not None:
+            if task.file_url is None or (
+                file_ref is not None and file_ref.persistence_error is None
+            ):
                 await runtime.task_artifact_cache.set(
                     "modelark",
                     input.task_id,

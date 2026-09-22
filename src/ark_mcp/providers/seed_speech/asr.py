@@ -200,7 +200,9 @@ class SeedSpeechAsrService:
         try:
             return await gateway.query(task_id=task_id, sequence=sequence)
         except httpx.TimeoutException:
-            raise SeedSpeechAsrHttpGateway.normalize_timeout("query_asr") from None
+            raise SeedSpeechAsrHttpGateway.normalize_timeout(
+                "query_asr", side_effect=False
+            ) from None
         except httpx.ConnectError as exc:
             raise SeedSpeechAsrHttpGateway.normalize_connection_error("query_asr", exc) from exc
         except httpx.TransportError as exc:

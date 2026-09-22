@@ -395,6 +395,43 @@ class Settings(BaseSettings):
     mcp_inline_media_max_bytes: int = Field(
         default=8388608, validation_alias="MCP_INLINE_MEDIA_MAX_BYTES"
     )
+    artifact_download_timeout_seconds: float = Field(
+        default=120.0,
+        gt=0,
+        validation_alias="ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS",
+        description=(
+            "Timeout in seconds for each attempt to download provider output into "
+            "artifact storage (both filesystem and object-storage backends)."
+        ),
+    )
+    artifact_download_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        validation_alias="ARTIFACT_DOWNLOAD_MAX_ATTEMPTS",
+        description=(
+            "Maximum attempts for a retryable provider output download "
+            "(timeouts, network errors, 408/429/5xx). Downloads are side-effect free."
+        ),
+    )
+    artifact_inline_fallback_max_bytes: int = Field(
+        default=8 * 1024 * 1024,
+        ge=0,
+        validation_alias="ARTIFACT_INLINE_FALLBACK_MAX_BYTES",
+        description=(
+            "When inline Base64 output (Seed Audio, Seedream b64_json) cannot be stored, "
+            "return it inline up to this decoded size instead of dropping it. 0 disables."
+        ),
+    )
+    output_roots: str = Field(
+        default="",
+        validation_alias="OUTPUT_ROOTS",
+        description=(
+            "Comma-separated absolute directories where stdio tools may write files "
+            "(output_path, output_dir, save_to, destination_path). The client's MCP roots "
+            "are used when available; when neither is set, path writing is disabled."
+        ),
+    )
     mcp_http_max_body_bytes: int = Field(
         default=300 * 1024 * 1024,
         ge=1,
@@ -452,6 +489,32 @@ class Settings(BaseSettings):
             "10-minute request timeout covers long synchronous generations "
             "(Seedream Pro can take 60-150s, longer under cold start or queue)."
         ),
+    )
+
+    seed_understanding_timeout_ms: int | None = Field(
+        default=None,
+        gt=0,
+        validation_alias="SEED_UNDERSTANDING_TIMEOUT_MS",
+        description=(
+            "Request timeout for seed_understand chat completions. Deep thinking is always "
+            "on, so long analyses may need more than BYTEPLUS_REQUEST_TIMEOUT_MS. "
+            "Defaults to BYTEPLUS_REQUEST_TIMEOUT_MS."
+        ),
+    )
+    understanding_inline_max_chars: int = Field(
+        default=20000,
+        ge=1000,
+        validation_alias="UNDERSTANDING_INLINE_MAX_CHARS",
+        description=(
+            "seed_understand answers longer than this are truncated inline; the full "
+            "answer stays available through save_to."
+        ),
+    )
+    media_upload_batch_max_bytes: int = Field(
+        default=500 * 1024 * 1024,
+        ge=1,
+        validation_alias="MEDIA_UPLOAD_BATCH_MAX_BYTES",
+        description="Maximum total decoded bytes accepted by one media_upload_batch call.",
     )
 
     # --- Runtime policy -----------------------------------------------------
@@ -542,6 +605,11 @@ class Settings(BaseSettings):
         if self.object_storage_backend == "s3":
             return self.s3_presign_ttl_seconds
         return self.tos_presign_ttl_seconds
+
+    @property
+    def output_root_paths(self) -> list[str]:
+        """Configured OUTPUT_ROOTS entries (unresolved, non-empty)."""
+        return [item.strip() for item in self.output_roots.split(",") if item.strip()]
 
     @property
     def has_stt(self) -> bool:

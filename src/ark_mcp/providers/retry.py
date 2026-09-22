@@ -20,6 +20,13 @@ class RetryPolicy:
     base_delay_seconds: float = 0.25
     max_delay_seconds: float = 4.0
     jitter_ratio: float = 0.2
+    retry_timeouts: bool = True
+    """When false, ``TIMEOUT`` errors are re-raised immediately even if retryable.
+
+    Used for long, billed calls (for example chat completions) where a second
+    full-length attempt would double latency and cost, while 429/5xx are still
+    retried.
+    """
 
     def __post_init__(self) -> None:
         if self.max_attempts < 1:
@@ -46,6 +53,7 @@ async def call_with_retry[T](
             can_retry = (
                 exc.retryable
                 and not exc.ambiguous_completion
+                and (resolved_policy.retry_timeouts or exc.code != "TIMEOUT")
                 and attempt < resolved_policy.max_attempts
             )
             if not can_retry:

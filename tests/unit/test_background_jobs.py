@@ -23,7 +23,7 @@ def test_background_tool_registry_modes_partition_all_targets() -> None:
     assert required
     assert optional
     assert len(required) == 19
-    assert len(optional) == 8
+    assert len(optional) == 9
     assert required.isdisjoint(optional)
     assert required | optional == BACKGROUND_TOOL_SPECS.keys()
 

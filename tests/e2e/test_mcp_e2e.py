@@ -157,6 +157,7 @@ class TestToolDiscovery:
                 "seed_audio_generate_variations",
                 "seed_media_export_artifact",
                 "seed_media_get_artifact",
+                "seed_media_persist_url",
                 "seedream_edit_image",
                 "seedream_generate_image",
                 "seedream_generate_image_variations",

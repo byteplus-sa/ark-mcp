@@ -1,8 +1,8 @@
 """``seedance_get_task`` tool — retrieve the status and output of a Seedance task.
 
 On first successful retrieval, copies 24-hour output URLs into
-``ArtifactStore``. Caches the mapping by provider task ID so repeated
-status checks do not download twice.
+``ArtifactStore``. Persistence is serialized per task and cached by provider
+task ID, so repeated or concurrent status checks do not download twice.
 """
 
 from __future__ import annotations
@@ -22,10 +22,14 @@ from ark_mcp.domain.models import (
     SeedanceTaskUsage,
 )
 from ark_mcp.observability.logger import info as log_info
+from ark_mcp.observability.logger import warning as log_warning
+from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.retry import call_with_retry
-from ark_mcp.runtime import get_principal, get_runtime
+from ark_mcp.runtime import RuntimeServices, get_principal, get_runtime
+from ark_mcp.security.auth_context import PrincipalContext
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._persistence import persist_from_url
 from ark_mcp.tools._task_execution import context_log, persistence_requires_task
 
 
@@ -118,70 +122,10 @@ async def seedance_get_task(
     # Persist video and last-frame on success (only once per task).
     video_ref: ArtifactRef | None = None
     last_frame_ref: ArtifactRef | None = None
-
     if task.status == "succeeded" and input.persist_output:
-        cache = await runtime.task_artifact_cache.get("modelark", input.task_id)
-        if cache:
-            video_ref = cache.get("video")
-            last_frame_ref = cache.get("last_frame")
-        else:
-            store = runtime.artifact_store
-            source_expiry = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
-
-            if task.video_url:
-                try:
-                    video_ref = await store.copy_from_trusted_url(
-                        url=task.video_url,
-                        media_type=MediaType.VIDEO,
-                        mime_type="video/mp4",
-                        source_expires_at=source_expiry,
-                        auth=owner,
-                    )
-                except Exception as exc:
-                    from ark_mcp.observability.logger import warning as log_warning
-
-                    log_warning(
-                        "artifact_persist_failed",
-                        task_id=input.task_id,
-                        media_type="video",
-                        error=str(exc),
-                    )
-                    await context_log(ctx, "warning", f"Failed to persist video artifact: {exc}")
-
-            if task.last_frame_url:
-                try:
-                    last_frame_ref = await store.copy_from_trusted_url(
-                        url=task.last_frame_url,
-                        media_type=MediaType.IMAGE,
-                        mime_type="image/jpeg",
-                        source_expires_at=source_expiry,
-                        auth=owner,
-                    )
-                except Exception as exc:
-                    from ark_mcp.observability.logger import warning as log_warning
-
-                    log_warning(
-                        "artifact_persist_failed",
-                        task_id=input.task_id,
-                        media_type="last_frame",
-                        error=str(exc),
-                    )
-                    await context_log(
-                        ctx, "warning", f"Failed to persist last-frame artifact: {exc}"
-                    )
-
-            video_ok = task.video_url is None or video_ref is not None
-            last_frame_ok = task.last_frame_url is None or last_frame_ref is not None
-
-            if video_ok and last_frame_ok:
-                await runtime.task_artifact_cache.set(
-                    "modelark",
-                    input.task_id,
-                    {
-                        "video": video_ref,
-                        "last_frame": last_frame_ref,
-                    },
-                )
+        video_ref, last_frame_ref = await persist_seedance_task_outputs(
+            runtime, owner, input.task_id, task
+        )
 
     await ctx.report_progress(progress=100, total=100)
     log_info(
@@ -206,6 +150,65 @@ async def seedance_get_task(
         usage=SeedanceService.extract_usage(task),
         settings=settings_dict,
     )
+
+
+def _is_durable(ref: ArtifactRef | None) -> bool:
+    return ref is not None and ref.persistence_error is None
+
+
+async def persist_seedance_task_outputs(
+    runtime: RuntimeServices,
+    owner: PrincipalContext,
+    task_id: str,
+    task: SeedanceTaskResponse,
+) -> tuple[ArtifactRef | None, ArtifactRef | None]:
+    """Persist a succeeded task's video and last frame exactly once.
+
+    Serialized per task so overlapping polls never download the same output
+    twice. Durable results are cached; if storage fails the temporary provider
+    URL is returned with ``persistence_error`` and nothing is cached, so a later
+    poll retries persistence.
+    """
+    async with runtime.task_artifact_locks.acquire("modelark", task_id) as singleflight:
+        if singleflight.artifacts is not None:
+            return singleflight.artifacts.get("video"), singleflight.artifacts.get("last_frame")
+        cache = await runtime.task_artifact_cache.get("modelark", task_id)
+        if cache:
+            singleflight.artifacts = dict(cache)
+            return cache.get("video"), cache.get("last_frame")
+
+        store = runtime.artifact_store
+        source_expiry = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
+        video_ref: ArtifactRef | None = None
+        last_frame_ref: ArtifactRef | None = None
+        if task.video_url:
+            video_ref = await persist_from_url(
+                store,
+                url=task.video_url,
+                media_type=MediaType.VIDEO,
+                mime_type="video/mp4",
+                source_expires_at=source_expiry,
+                auth=owner,
+            )
+        if task.last_frame_url:
+            last_frame_ref = await persist_from_url(
+                store,
+                url=task.last_frame_url,
+                media_type=MediaType.IMAGE,
+                mime_type="image/jpeg",
+                source_expires_at=source_expiry,
+                auth=owner,
+            )
+
+        video_ok = task.video_url is None or _is_durable(video_ref)
+        last_frame_ok = task.last_frame_url is None or _is_durable(last_frame_ref)
+        if video_ok and last_frame_ok:
+            artifacts = {"video": video_ref, "last_frame": last_frame_ref}
+            await runtime.task_artifact_cache.set("modelark", task_id, artifacts)
+            singleflight.artifacts = artifacts
+        else:
+            log_warning("artifact_persist_failed", task_id=task_id, provider="modelark")
+        return video_ref, last_frame_ref
 
 
 # Tool annotation constants — camelCase per MCP specification.

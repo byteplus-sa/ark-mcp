@@ -60,6 +60,7 @@ BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
         "vod_add_subtitles": BackgroundToolSpec("required", "vod:subtitle:add"),
         "vod_remove_subtitles": BackgroundToolSpec("required", "vod:subtitle:remove"),
         "seedance_get_task": BackgroundToolSpec("optional", "seedance:read"),
+        "seed_media_persist_url": BackgroundToolSpec("optional", "media:upload"),
         "hyper3d_get_task": BackgroundToolSpec("optional", "hyper3d:read"),
         "hitem3d_get_task": BackgroundToolSpec("optional", "hitem3d:read"),
         "vod_get_enhancement_task": BackgroundToolSpec("optional", "vod:read"),

@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal
 from fastmcp import Context
 from pydantic import BaseModel, Field, model_validator
 
+from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
@@ -25,7 +26,19 @@ from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
-from ark_mcp.tools._parallel import generate_seeds, resolve_prompts, run_variation_batch
+from ark_mcp.tools._parallel import (
+    VariationProgress,
+    generate_seeds,
+    resolve_prompts,
+    run_variation_batch,
+    variation_batch_deadline,
+)
+from ark_mcp.tools._persistence import (
+    persist_base64,
+    persist_from_url,
+    persistence_variation_error,
+    provider_url_ref,
+)
 from ark_mcp.tools._task_execution import context_log
 
 
@@ -163,11 +176,10 @@ async def seedream_generate_image_variations(
     images_data: list[dict[str, Any]] | None = (
         [src.model_dump() for src in input.images] if input.images else None
     )
-    timeout = settings.request_timeout_ms / 1000
 
     service = SeedreamService()
 
-    async def _generate_single(idx: int) -> VariationResult:
+    async def _generate_single(idx: int, progress: VariationProgress) -> VariationResult:
         try:
             request = SeedreamService.build_request(
                 model=caps.model_id,
@@ -187,39 +199,53 @@ async def seedream_generate_image_variations(
                 product="image",
                 estimated_cost_usd=estimate_cost(product="image", variations=1),
             ):
+                progress.phase = "generating"
                 response, request_id = await call_with_retry(lambda: service.generate(request))
 
             artifact: ArtifactRef | None = None
             source_expiry = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
 
-            if input.persist and response.data:
+            if response.data:
                 item = response.data[0]
                 mime = f"image/{item.output_format or input.output_format or 'jpeg'}"
-                if item.b64_json:
-                    artifact = await store.put_base64(
-                        data=item.b64_json,
-                        media_type=MediaType.IMAGE,
-                        mime_type=mime,
-                        source_expires_at=source_expiry,
-                        auth=owner,
+                if item.url:
+                    progress.partial = VariationResult(
+                        index=idx,
+                        seed=seeds[idx],
+                        artifact=provider_url_ref(
+                            url=item.url,
+                            media_type=MediaType.IMAGE,
+                            mime_type=mime,
+                            source_expires_at=source_expiry,
+                        ),
+                        request_id=request_id,
                     )
+                if input.persist:
+                    progress.phase = "persisting"
+                    if item.b64_json:
+                        artifact = await persist_base64(
+                            store,
+                            data=item.b64_json,
+                            media_type=MediaType.IMAGE,
+                            mime_type=mime,
+                            source_expires_at=source_expiry,
+                            auth=owner,
+                            provider_url=item.url,
+                        )
+                    elif item.url:
+                        artifact = await persist_from_url(
+                            store,
+                            url=item.url,
+                            media_type=MediaType.IMAGE,
+                            mime_type=mime,
+                            source_expires_at=source_expiry,
+                            auth=owner,
+                        )
                 elif item.url:
-                    artifact = await store.copy_from_trusted_url(
+                    artifact = provider_url_ref(
                         url=item.url,
                         media_type=MediaType.IMAGE,
                         mime_type=mime,
-                        source_expires_at=source_expiry,
-                        auth=owner,
-                    )
-            elif not input.persist and response.data:
-                item = response.data[0]
-                if item.url:
-                    artifact = ArtifactRef(
-                        id="provider-url",
-                        uri=item.url,
-                        media_type=MediaType.IMAGE,
-                        mime_type=f"image/{item.output_format or input.output_format or 'jpeg'}",
-                        created_at=datetime.now(UTC).isoformat(),
                         source_expires_at=source_expiry,
                     )
 
@@ -242,6 +268,12 @@ async def seedream_generate_image_variations(
                 ),
                 request_id=exc.request_id,
             )
+        except ArtifactPersistenceError as exc:
+            return VariationResult(
+                index=idx,
+                seed=seeds[idx],
+                error=persistence_variation_error(exc),
+            )
         except Exception as exc:
             return VariationResult(
                 index=idx,
@@ -252,8 +284,8 @@ async def seedream_generate_image_variations(
     try:
         summary = await run_variation_batch(
             count=input.variations,
-            timeout=timeout,
             factory=_generate_single,
+            batch_deadline=variation_batch_deadline(input.variations, settings),
             max_concurrent=DEFAULT_MAX_CONCURRENT,
         )
     finally:

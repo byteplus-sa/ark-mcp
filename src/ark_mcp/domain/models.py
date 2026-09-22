@@ -122,6 +122,14 @@ class VariationError(BaseModel):
     ambiguous_completion: bool = Field(
         False, description="Whether the provider may have partially completed despite the error."
     )
+    phase: Literal["queued", "generating", "persisting"] | None = Field(
+        None,
+        description=(
+            "Stage the variation was in when it failed: 'queued' (never started, safe to "
+            "retry), 'generating' (provider call in flight, may have completed), or "
+            "'persisting' (output generated, storing it failed). None when not applicable."
+        ),
+    )
 
 
 class SeedanceTaskError(BaseModel):
