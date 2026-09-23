@@ -72,7 +72,8 @@ class TestSeedUnderstandTool:
         assert len(result.choices) == 1
         assert result.choices[0].content == "4"
         assert result.choices[0].finish_reason == "stop"
-        assert result.choices[0].reasoning_content is None
+        assert "reasoning_content" not in result.choices[0].model_dump()
+        assert result.choices[0].content_chars == 1
         assert result.usage.prompt_tokens == 5
         assert result.usage.completion_tokens == 1
         assert result.usage.total_tokens == 6
@@ -157,7 +158,7 @@ class TestSeedUnderstandTool:
         assert "walking" in result.choices[0].content
         assert result.usage.total_tokens == 220
 
-    async def test_thinking_returns_reasoning_content(
+    async def test_reasoning_is_never_returned(
         self,
         test_env: None,
         fake_ctx: FakeContext,
@@ -183,13 +184,13 @@ class TestSeedUnderstandTool:
         )
 
         result = await seed_understand(
-            SeedUnderstandInput(prompt="What is the meaning of life?", thinking=True),
+            SeedUnderstandInput(prompt="What is the meaning of life?"),
             fake_ctx,
         )
 
         assert isinstance(result, SeedUnderstandOutput)
         assert result.choices[0].content == "The answer is 42."
-        assert result.choices[0].reasoning_content == "First, I consider the question..."
+        assert "First, I consider" not in result.model_dump_json()
 
     async def test_video_base64_rejected_at_input(
         self,
@@ -266,13 +267,13 @@ class TestSeedUnderstandTool:
         with pytest.raises(ValueError, match="at most 32"):
             await seed_understand(SeedUnderstandInput(prompt="test", images=images), fake_ctx)
 
-    async def test_reasoning_effort_without_thinking_silently_dropped(
+    async def test_thinking_false_is_ignored_and_effort_defaults_to_medium(
         self,
         test_env: None,
         fake_ctx: FakeContext,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """reasoning_effort is ignored when thinking=false (documented behavior)."""
+        """Deep thinking is always on: thinking=false is a deprecated no-op."""
         captured_request: list[Any] = []
 
         async def mock_generate(
@@ -297,9 +298,10 @@ class TestSeedUnderstandTool:
         monkeypatch.setattr(SeedUnderstandingService, "generate", mock_generate)
 
         result = await seed_understand(
-            SeedUnderstandInput(prompt="test", thinking=False, reasoning_effort="high"),
+            SeedUnderstandInput(prompt="test", thinking=False),
             fake_ctx,
         )
 
         assert isinstance(result, SeedUnderstandOutput)
-        assert captured_request[0].reasoning_effort is None
+        assert captured_request[0].thinking.type == "enabled"
+        assert captured_request[0].reasoning_effort == "medium"

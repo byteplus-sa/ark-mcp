@@ -106,6 +106,9 @@ class UnderstandingCapabilities:
     supports_thinking: bool = True
     max_media_parts: int = 32
     reasoning_efforts: tuple[str, ...] = ("low", "medium", "high")
+    # Confirmed 2026-09-22: every Seed 2.1 binding enforces json_schema while
+    # deep thinking is enabled, so schemas are always enforced provider-side.
+    response_formats: tuple[str, ...] = ("text", "json_object", "json_schema")
 
 
 @dataclass(frozen=True)

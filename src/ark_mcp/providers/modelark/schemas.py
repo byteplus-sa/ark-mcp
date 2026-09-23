@@ -7,7 +7,7 @@ separate Pydantic models so vendor field changes do not leak through.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -305,7 +305,7 @@ class ChatMessage(BaseModel):
 class ChatThinkingConfig(BaseModel):
     """Thinking/reasoning configuration for deep-thinking models."""
 
-    type: str = "enabled"
+    type: Literal["enabled", "disabled", "auto"] = "enabled"
 
 
 class ChatCompletionProviderRequest(BaseModel):
@@ -319,8 +319,15 @@ class ChatCompletionProviderRequest(BaseModel):
     repetition_penalty: float | None = None
     reasoning_effort: str | None = None
     thinking: ChatThinkingConfig | None = None
+    response_format: dict[str, Any] | None = None
     service_tier: str | None = None
     stream: bool = False
+
+
+class ChatCompletionTokensDetails(BaseModel):
+    """Breakdown of completion tokens, when the provider reports it."""
+
+    reasoning_tokens: int | None = None
 
 
 class ChatUsage(BaseModel):
@@ -329,6 +336,7 @@ class ChatUsage(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    completion_tokens_details: ChatCompletionTokensDetails | None = None
 
 
 class ChatChoiceMessage(BaseModel):

@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from ark_mcp.config.env import get_settings
 from ark_mcp.observability.logger import debug as log_debug
 from ark_mcp.providers.modelark.client import ModelArkGateway
 from ark_mcp.providers.modelark.schemas import (
@@ -28,7 +29,10 @@ class SeedUnderstandingService:
     """Service layer for Seed 2.1 multimodal understanding."""
 
     def __init__(self, gateway: ModelArkGateway | None = None) -> None:
-        self._gateway = gateway or ModelArkGateway()
+        if gateway is None:
+            timeout_ms = get_settings().seed_understanding_timeout_ms
+            gateway = ModelArkGateway(timeout=timeout_ms / 1000 if timeout_ms else None)
+        self._gateway = gateway
 
     async def generate(
         self,
@@ -45,7 +49,7 @@ class SeedUnderstandingService:
                 "/chat/completions", request.model_dump(exclude_none=True)
             )
         except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("chat_completion") from None
+            raise ModelArkGateway.normalize_timeout("chat_completion", side_effect=False) from None
         except httpx.ConnectError as exc:
             raise ModelArkGateway.normalize_connection_error("chat_completion", exc) from exc
         except httpx.TransportError as exc:
@@ -75,17 +79,22 @@ class SeedUnderstandingService:
         image_parts: list[dict[str, Any]] | None = None,
         video_parts: list[dict[str, Any]] | None = None,
         system: str | None = None,
-        thinking: bool = False,
+        thinking: bool = True,
         reasoning_effort: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         top_p: float | None = None,
         repetition_penalty: float | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> ChatCompletionProviderRequest:
         """Build a provider request from domain-level parameters.
 
         - Translates image/video URL/Base64 inputs into Chat API content parts.
         - Forces ``stream: false`` for MVP.
+        - ``thinking=True`` (the default) always sends ``thinking.type='enabled'``
+          and ``reasoning_effort``; ``thinking=False`` sends neither (used only for
+          models whose capabilities report no thinking support).
+        - ``response_format`` is passed through verbatim (json_object/json_schema).
         - Video Base64 is rejected (the chat endpoint does not support it).
         """
         content_parts: list[ChatContentPart] = []
@@ -143,6 +152,7 @@ class SeedUnderstandingService:
             repetition_penalty=repetition_penalty,
             reasoning_effort=reasoning_effort if thinking else None,
             thinking=thinking_config,
+            response_format=response_format,
             stream=False,
         )
 

@@ -38,6 +38,7 @@ def _provider_error(
     request_id: str | None,
     http_status: int | None,
     ambiguous_completion: bool = False,
+    retryable: bool = False,
 ) -> ProviderError:
     return ProviderError(
         NormalizedProviderError(
@@ -47,7 +48,7 @@ def _provider_error(
             code=code,
             message=message,
             request_id=request_id,
-            retryable=False,
+            retryable=retryable,
             ambiguous_completion=ambiguous_completion,
         )
     )
@@ -158,6 +159,7 @@ async def _get(
             message=f"MediaKit {label} task poll timed out.",
             request_id=None,
             http_status=None,
+            retryable=True,
         ) from None
     except httpx.TransportError:
         raise _provider_error(
@@ -166,6 +168,7 @@ async def _get(
             message=f"MediaKit {label} task poll failed to connect.",
             request_id=None,
             http_status=None,
+            retryable=True,
         ) from None
 
     header_request_id = VodMediaKitGateway.extract_request_id(response)

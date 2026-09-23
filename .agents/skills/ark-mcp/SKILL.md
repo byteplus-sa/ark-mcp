@@ -22,9 +22,10 @@ one server, including products served through ModelArk:
   and Hitem3d (image-to-3D only, 1–4 images, OBJ/GLB/STL/FBX/USDZ output).
   Gated by `BYTEPLUS_MODELARK_3D_ENABLED`; disabled by default.
 - **Seed 2.1 Understanding** — multimodal video/image understanding and
-  reasoning through ModelArk Chat Completions; supports deep-thinking mode.
-  Use for OCR, scene analysis, content review, and as a visual reasoning
-  sub-agent.
+  reasoning through ModelArk Chat Completions. Deep thinking is always on;
+  only the final answer is returned. Supports provider-enforced JSON Schemas
+  and saving the answer to a local file. Use for OCR, scene analysis, content
+  review, and as a visual reasoning sub-agent.
 - **Speech-to-Text** — background audio transcription via Seed Speech ASR;
   retrieve the completed transcript from the background result.
 - **VOD AI MediaKit** — asynchronous video enhancement using the exact
@@ -34,9 +35,10 @@ one server, including products served through ModelArk:
   tool pair, subtitle burn-in and precision subtitle/text erasure via two
   submit-then-poll pairs, and voice + background (or voice + music + sfx)
   audio separation via a submit-then-poll tool pair.
-- **Artifacts** — durable media access after provider URLs expire.
+- **Artifacts** — durable media access after provider URLs expire, local
+  file export, and recovery of outputs whose storage failed.
 - **Object storage upload** — presigned URL generation for URL-only media
-  workflows such as Seedance video references.
+  workflows such as Seedance video references (single or batched uploads).
 
 The server is built on FastMCP v4 and runs locally via `stdio` or as a
 deployable Streamable HTTP service. Generated media is persisted to a local
@@ -64,7 +66,10 @@ Invoke this skill when the user wants to:
   HTTPS audio or video URL using the VOD AI MediaKit tool pair;
 - fetch a previously persisted artifact by ID;
 - locate or copy a previously persisted artifact to a local path without
-  streaming Base64 through the context window;
+  streaming Base64 through the context window, or write generated output
+  straight to a local path with `output_path` / `output_dir`;
+- recover a generated output whose durable storage failed
+  (`persistence_error`) with `seed_media_persist_url`;
 - upload local or Base64 media to object storage (TOS or S3) to obtain a
   presigned HTTPS URL;
 - verify which products are configured on the running server.
@@ -79,6 +84,7 @@ gracefully degrades to whatever is configured.
 
 - `seed_media_get_artifact`
 - `seed_media_export_artifact`
+- `seed_media_persist_url`
 - `ark_job_capabilities`
 - `ark_job_submit`
 - `ark_job_get`
@@ -112,6 +118,7 @@ gracefully degrades to whatever is configured.
 - `seedance_create_task`
 - `seedance_create_task_variations`
 - `seedance_get_task`               # shared: retrieves both 2.0 and 2.5 tasks
+- `seedance_get_tasks`              # shared: checks 1-50 tasks in one call
 - `seedance_list_tasks`             # shared: lists both 2.0 and 2.5 tasks
 - `seedance_cancel_or_delete_task`  # shared: acts on both 2.0 and 2.5 tasks
 - `seedance_2_5_create_task`
@@ -136,6 +143,7 @@ explicitly enabled.
 ### Requires object storage credentials (TOS or S3)
 
 - `media_upload`
+- `media_upload_batch`
 - `media_presign`
 - `media_presign_batch`
 
@@ -159,6 +167,7 @@ polling interval, so a foreground direct call is rejected before the provider
 is contacted:
 
 - `media_upload`
+- `media_upload_batch`
 - `seed_audio_generate`
 - `seed_audio_generate_variations`
 - `speech_to_text`
@@ -199,7 +208,8 @@ For Seedance, Seed 3D, and MediaKit create/submit tools, the tool result
 contains the provider task ID to poll with the corresponding get tool, on
 either path.
 
-The Seedance, Seed 3D, and MediaKit get tools support optional background
+The Seedance (`seedance_get_task`, `seedance_get_tasks`), Seed 3D, and
+MediaKit get tools, and `seed_media_persist_url`, support optional background
 execution. Use foreground calls with `persist_output=false` for quick status
 polling; once a task succeeds, run the get tool in the background with
 `persist_output=true` so completed-media download and persistence cannot exhaust
@@ -318,12 +328,65 @@ Stdio transport only — the client and server must share a filesystem. Requires
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `artifact_id` | `str` | Yes | Artifact UUID from a previous generation call |
-| `destination_path` | `str` | No | Absolute path where the server writes an atomic copy; omit to return the canonical store path |
+| `destination_path` | `str` | No | Absolute file path inside an allowed output root where the server writes an atomic copy; omit to return the canonical store path |
+| `overwrite` | `bool` | No (default `false`) | Replace an existing destination file with different content |
+
+`destination_path` must be absolute and inside an allowed output root (the
+client's MCP roots, else `OUTPUT_ROOTS`); an existing file is never silently
+overwritten, and identical content counts as success.
 
 Returns `SeedMediaExportArtifactOutput` with `artifact_id`, `path`,
 `media_type`, `mime_type`, `bytes`, `sha256`, and `copied`. `copied=false`
 means `path` is the canonical store location (filesystem backend); `copied=true`
 means the artifact was copied to `destination_path`.
+
+#### `seed_media_persist_url`
+
+Persist a temporary provider output URL as a durable artifact. Use it when a
+result returned an artifact with `id="provider-url"` and a
+`persistence_error` — the output was generated and billed, but storing it
+failed. Call it before the provider URL expires (2h audio, 24h image/video/3D).
+Only trusted BytePlus provider hosts are accepted. Optional background
+execution; requires `media:upload` scope in JWT mode.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `url` | `str` | Yes | The artifact's `uri` (temporary provider URL) |
+| `media_type` | `"image"` \| `"audio"` \| `"video"` \| `"three_d"` | Yes | From the original artifact |
+| `mime_type` | `str` | Yes | From the original artifact |
+| `source_expires_at` | `str` | No | From the original artifact's `source_expires_at` |
+
+Returns `{artifact}` with the new durable `ArtifactRef`.
+
+#### Local output paths and persistence fallbacks
+
+On stdio, write output straight to disk instead of exporting afterwards:
+
+- `output_path` (file, or directory ending with `/`) + `overwrite` on
+  `seedream_generate_image`, `seedream_edit_image`, `seed_audio_generate`,
+  `seedance_get_task` (last frame written beside the video with a
+  `-last-frame` suffix), `hyper3d_get_task`, `hitem3d_get_task`, and the five
+  `vod_get_*` tools. Multi-image `seedream_generate_image` (`max_images > 1`)
+  needs a directory.
+- `output_dir` + `overwrite` on `seedream_generate_image_variations`,
+  `seed_audio_generate_variations`, and `seedance_get_tasks`.
+- `save_to` + `overwrite` on `seed_understand` (writes the answer).
+
+Paths must be absolute and inside the client's MCP roots, or `OUTPUT_ROOTS`
+when the client has none; with neither, path writing is disabled. They are
+validated before any provider call, and require `persist=true` /
+`persist_output=true`. Each written `ArtifactRef` reports `local_path`, or
+`export_error` if the local write failed (the call still succeeds and the
+durable artifact is kept).
+
+Billed outputs are never dropped. When durable storage fails after download
+retries, the `ArtifactRef` carries `persistence_error` (`code`, `message`,
+`retryable`, `artifact_limit_bytes`, `source_url_expires_at`) and is either
+`id="provider-url"` (`uri` is the temporary provider URL — recover it with
+`seed_media_persist_url`) or `id="inline-fallback"` (Base64 bytes in
+`fallback_data`, for Seed Audio / Seedream `b64_json`). Seedream storage
+failures used to be tool errors; they are now successes with
+`persistence_error`, so always check it.
 
 ---
 
@@ -883,10 +946,18 @@ store. Results are cached for 24 hours.
 |---|---|---|---|
 | `task_id` | `str` | Yes | Provider task ID from the create tool's background result |
 | `persist_output` | `bool` | Yes (default `true`) | Persist to artifact store; `true` requires background retrieval |
+| `output_path` | `str` | No | Local file (or dir ending `/`) for the video; last frame written beside it with a `-last-frame` suffix. stdio only, requires `persist_output=true` |
+| `overwrite` | `bool` | No (default `false`) | Replace a different existing file |
 
 Returns `SeedanceTaskOutput` with `task_id`, `model`, `created_at`,
 `updated_at`, `status`, optional `error`, optional `video: ArtifactRef`,
-optional `last_frame: ArtifactRef`, optional `usage`, `settings`.
+optional `last_frame: ArtifactRef`, optional `usage`, `settings`, and `queue`.
+
+`queue` (queued/running only; `null` once finished) is server-derived timing:
+`queued_seconds`, `running_seconds`, `service_tier`, `expires_at` (when the
+provider fails an unfinished task), `expires_at_estimated` (48h default
+assumed), and `hint`. ModelArk publishes **no queue position or ETA** — relay
+`queue.hint` instead of inventing one.
 
 **Foreground status polling:**
 
@@ -914,7 +985,27 @@ model, and service tier.
 | `model` | `str` | No | Filter by model |
 | `service_tier` | `"default"` \| `"flex"` | No | Filter by tier |
 
-Returns `SeedanceTaskPage` with paginated task summaries.
+Returns `SeedanceTaskPage` with paginated task summaries (each with the same
+`queue` timing).
+
+#### `seedance_get_tasks`
+
+Check 1–50 Seedance tasks (2.0 or 2.5) in one call — prefer it over a round of
+`seedance_get_task` calls after variations or multi-shot work. One provider
+list call per page of 20 IDs; individual re-fetch only where needed. Optional background
+execution (required when `persist_output=true`). Scope `seedance:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `task_ids` | `list[str]` | Yes | 1–50 task IDs; duplicates ignored |
+| `persist_output` | `bool` | No (default **`false`**) | Persist each succeeded task's video + last frame once |
+| `output_dir` | `str` | No | Local directory for finished files; stdio only, requires `persist_output=true` |
+| `overwrite` | `bool` | No (default `false`) | Replace different existing files |
+
+Returns `tasks` (same shape as `seedance_get_task`, request order), `errors`
+(`task_id`, `code`: `NOT_OWNED` / `NOT_FOUND` / provider code, `message`),
+`counts` per status, `all_terminal`, and `active_tasks`. Stop polling when
+`all_terminal` is `true`.
 
 #### `seedance_cancel_or_delete_task`
 
@@ -1208,8 +1299,11 @@ requested task TTL long enough for the expected video analysis duration.
 #### `seed_understand`
 
 Understand images and videos, or reason about a task, through the Seed 2.1
-multimodal model via ModelArk Chat Completions. Supports deep-thinking
-(chain-of-thought) reasoning when `thinking=true`. Use this for:
+multimodal model via ModelArk Chat Completions. Deep thinking is **always on**
+(depth set by `reasoning_effort`, default `medium`), and only the final answer
+is returned — the reasoning trace is discarded and never returned, logged, or
+saved. Do not pass `thinking` (deprecated no-op) and do not look for
+`reasoning_content` (removed). Use this for:
 
 - **Video understanding** — describe, summarize, or answer questions about video content
 - **Image understanding / OCR** — extract text, describe scenes, analyze visual content
@@ -1232,16 +1326,33 @@ visual or motion grammar.
 | `videos` | `list[UnderstandingVideoInput]` | No | Up to 32 videos (URL only, no Base64) |
 | `system` | `str` | No | Optional system instruction (max 32,000 chars) |
 | `model` | `str` | No | Override the configured Seed 2.1 model ID |
-| `thinking` | `bool` | No (default `false`) | Enable deep-thinking chain-of-thought reasoning |
-| `reasoning_effort` | `"low"` \| `"medium"` \| `"high"` | No | Only when `thinking=true` |
+| `reasoning_effort` | `"low"` \| `"medium"` \| `"high"` | No (default `"medium"`) | Depth of deep thinking; always sent |
+| `response_format` | `object` | No | `{type: "text" \| "json_object" \| "json_schema", json_schema?: {name, schema, description?, strict=true}}` — enforced by the provider during generation |
+| `json_retry` | `int` | No (default `0`) | 0–2 extra **billed** attempts when JSON fails to parse/validate; skipped when `finish_reason="length"` |
+| `save_to` | `str` | No | Absolute file path (stdio, inside an output root); answer written as pretty JSON or text; validated before billing |
+| `overwrite` | `bool` | No (default `false`) | Allow `save_to` to replace a different existing file |
+| `return_content` | `"full"` \| `"summary"` \| `"none"` | No (default `"full"`) | Inline the full answer, the first 2,000 chars, or nothing |
 | `temperature` | `float` | No | 0.0–2.0. Lower = more deterministic |
-| `max_tokens` | `int` | No | 1–32768 |
+| `max_tokens` | `int` | No | 1–32768, **including thinking tokens** |
 | `top_p` | `float` | No | 0.0–1.0 nucleus sampling |
 | `repetition_penalty` | `float` | No | 0.0–2.0 (Ark-only parameter) |
+| `thinking` | `bool` | No | Deprecated and ignored — do not pass it |
 
-Returns `SeedUnderstandOutput` with `model`, `completion_id`, `choices`
-(each with `content` and optional `reasoning_content`), `usage`
-(prompt_tokens, completion_tokens, total_tokens), and `request_id`.
+Returns `SeedUnderstandOutput` with `model`, `completion_id`, `choices`,
+`usage` (prompt/completion/total tokens plus `reasoning_tokens` when reported,
+summed over attempts), `attempts`, `saved_path`, `saved_bytes`, and
+`request_id`. Each choice has `content`, `content_chars`, `content_truncated`,
+`parsed` (JSON result, returned even with `summary`/`none`),
+`schema_violation` (`path`, `message`, `finish_reason`), and `finish_reason`.
+
+If `save_to` fails after billing, the call still succeeds with
+`saved_path=null` and the full answer inline. The tool is not read-only
+(`readOnlyHint=false`) because `save_to` writes files.
+
+Chat timeouts return `TIMEOUT` with `retryable=true`,
+`ambiguous_completion=false`, but the server does **not** retry them (a second
+full thinking run doubles cost); 429/5xx are retried. Raise
+`SEED_UNDERSTANDING_TIMEOUT_MS` for long analyses.
 
 **Example — image OCR / understanding:**
 
@@ -1254,7 +1365,7 @@ Returns `SeedUnderstandOutput` with `model`, `completion_id`, `choices`
 }
 ```
 
-**Example — video understanding with deep thinking:**
+**Example — deep video analysis:**
 
 ```json
 {
@@ -1262,11 +1373,50 @@ Returns `SeedUnderstandOutput` with `model`, `completion_id`, `choices`
   "videos": [
     { "kind": "url", "url": "https://cdn.example.com/demo.mp4" }
   ],
-  "thinking": true,
   "reasoning_effort": "high",
-  "max_tokens": 4096
+  "max_tokens": 8192
 }
 ```
+
+**Example — template review, schema-enforced and saved to disk (recommended
+for reviews):**
+
+```json
+{
+  "prompt": "Review this ad against the template. Return the beats with start/end seconds.",
+  "videos": [{ "kind": "url", "url": "https://cdn.example.com/ad.mp4" }],
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "ad_review",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "beats": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": { "type": "string" },
+                "start": { "type": "number" },
+                "end": { "type": "number" }
+              },
+              "required": ["label", "start", "end"]
+            }
+          }
+        },
+        "required": ["beats"]
+      }
+    }
+  },
+  "json_retry": 1,
+  "save_to": "/Users/me/project/reviews/ad-review.json",
+  "return_content": "none"
+}
+```
+
+Read `choices[0].parsed` (or the file at `saved_path`); check
+`schema_violation` before trusting the result.
 
 **Example — multimodal reasoning as a sub-agent:**
 
@@ -1281,9 +1431,9 @@ Returns `SeedUnderstandOutput` with `model`, `completion_id`, `choices`
 }
 ```
 
-**Deep-thinking mode:** When `thinking=true`, the model produces
-chain-of-thought reasoning visible in `choices[].reasoning_content`. Use
-`reasoning_effort` to control depth:
+**Thinking depth:** The model always thinks; the trace is never returned.
+Use `reasoning_effort` to control depth (and cost, visible in
+`usage.reasoning_tokens`):
 
 | Level | When to Use | Latency |
 |---|---|---|
@@ -1291,13 +1441,16 @@ chain-of-thought reasoning visible in `choices[].reasoning_content`. Use
 | `medium` | Balanced analysis, moderate comparisons | Moderate |
 | `high` | Deep analysis, complex reasoning, detailed reviews | Slowest |
 
-Keep `thinking=false` for simple extraction, description, or lookup tasks
-where speed matters more than reasoning depth.
+Use `reasoning_effort="low"` for simple extraction, description, or lookup
+tasks where speed matters more than reasoning depth.
 
 **Prompt engineering tips:**
 
-- **Specify output format** — ask for JSON, markdown tables, or numbered lists
-  to get structured results
+- **Enforce output format** — pass a template's JSON Schema verbatim in
+  `response_format` (`json_schema`) instead of asking for JSON in the prompt;
+  use prompt instructions for markdown tables or lists
+- **Keep large answers out of context** — `save_to` + `return_content="none"`
+  (or `"summary"`) for long reviews and reports
 - **Use system instructions** for role and constraints (e.g., "You are a
   senior data analyst. Be thorough and systematic.")
 - **Break complex tasks into steps** — make focused calls (extract, then
@@ -1312,7 +1465,9 @@ where speed matters more than reasoning depth.
 - The provider response is non-streaming, but background execution keeps the
   long-running call outside the foreground client deadline
 - No streaming — the full response is returned at once
-- No artifact persistence — understanding returns text, not media
+- No artifact persistence — understanding returns text, not media (use
+  `save_to` for a local file)
+- No reasoning trace — only the final answer is returned
 
 ---
 
@@ -1413,6 +1568,22 @@ Returns `MediaUploadOutput` with `url`, `expires_at`, `object_key`, `bytes`.
   "data": "UklGRiQAAABXQVZFZm10..."
 }
 ```
+
+#### `media_upload_batch`
+
+Upload 1–50 files in one call instead of N `media_upload` calls. Required
+background execution (use `ark_job_submit`); scope `media:upload`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `items` | `list` | Yes | 1–50 items: `media_type`, `mime_type` (optional for `file_path` items — inferred from the extension), `data` or `file_path`, optional `key_prefix` |
+| `expires_in_seconds` | `int` | No | 60–604800, applied to every item |
+| `max_concurrent` | `int` | No (default 4) | 1–8 |
+
+The total decoded size is checked against `MEDIA_UPLOAD_BATCH_MAX_BYTES`
+(default 500 MiB) before anything uploads. Returns per-item `items` (`index`,
+`file_path`, `url`, `object_key`, `expires_at`, `mime_type`, `bytes`, `error`,
+`retryable`), `succeeded`, `failed`, `total_bytes`. Items fail independently.
 
 #### `media_presign`
 
@@ -1577,15 +1748,19 @@ default model for that product is used.
    ID, request parameters, prompt hash, and intended output path to the shot
    manifest before provider polling.
 4. Poll `seedance_get_task` in foreground with `persist_output=false` until the
-   status is terminal.
-   Respect the `recommended_poll_after_ms` from the creation response.
+   status is terminal (for several tasks, `seedance_get_tasks` until
+   `all_terminal`). Respect the `recommended_poll_after_ms` from the creation
+   response, and report `queue.hint` while queued — there is no queue
+   position or ETA.
 5. On a local timeout, disconnect, or client restart, retrieve and continue
    polling the same task. Do not submit a replacement task because the provider
    may still be running and a resubmission can create duplicate cost.
 6. On success, run `seedance_get_task` in the background with
-   `persist_output=true`. Download the persisted video to the project asset path
-   and record artifact ID, byte size,
-   SHA-256, provider timestamps, and usage.
+   `persist_output=true` and `output_path` set to the project asset path (or
+   `seedance_get_tasks` with `output_dir`), and record artifact ID,
+   `local_path`, byte size, SHA-256, provider timestamps, and usage. If the
+   video has `persistence_error`, recover it with `seed_media_persist_url`
+   before the 24-hour URL expires.
 7. Optionally call `seedance_list_tasks` to browse recent tasks.
 8. Call `seedance_cancel_or_delete_task` only when cleanup is explicitly wanted.
 
@@ -1701,7 +1876,13 @@ Use variation tools when you want to give the user multiple options:
 
 Each variation is independent. Partial failures are captured — if 4 of 5
 succeed, the tool returns 4 results and 1 error. The `VariationSummary` reports
-`total`, `succeeded`, and `failed` counts.
+`total`, `succeeded`, and `failed` counts. There is no per-variation timeout
+(queue wait never counts); one batch deadline bounds the call. A deadline or
+storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry),
+`generating` (may have completed — do not retry blindly), or `persisting`
+(billed output not stored). Use `output_dir` on the image/audio variation
+tools to write results locally, and `seedance_get_tasks` to poll video
+variations.
 
 ### Deterministic Reproduction
 
@@ -1735,8 +1916,18 @@ description.
 The server retries only explicitly retryable, non-ambiguous errors:
 - Connection/transport errors are retried (up to 3 attempts with exponential
   backoff and jitter: 0.25s base, 4s max).
-- Timeouts are NOT retried (the operation may have succeeded server-side).
 - Provider errors with `retryable=true` are retried.
+- Timeouts depend on the call:
+
+| Call | Timeout error | Server retries? |
+|---|---|---|
+| Create / generate / cancel / delete / MediaKit submit | `retryable=false`, `ambiguous_completion=true` | No — may have succeeded; reconcile by task/request ID |
+| Task polls (Seedance, Seed 3D, ASR query, MediaKit get) | `retryable=true`, `ambiguous_completion=false` | Yes |
+| `seed_understand` chat completion | `retryable=true`, `ambiguous_completion=false` | No — safe to retry yourself, but each retry is billed |
+
+Any `TIMEOUT` commits the budget reservation (it may have been billed).
+Provider output downloads are retried separately (`ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`,
+default 3, 1s/2s/4s backoff); expired, untrusted, or oversized sources are not.
 
 Exception: MediaKit mutation submissions (`vod_enhance_video`,
 `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, and
@@ -1745,8 +1936,8 @@ are never automatically retried. Their POSTs are non-idempotent and a transport
 failure may have ambiguous completion. `vod_get_enhancement_task`,
 `vod_get_transcode_task`, both subtitle poll tools, and
 `vod_get_audio_separation` (read-only GET polls)
-ARE retried on provider-marked
-retryable errors such as HTTP 429.
+ARE retried on retryable errors: HTTP 429/5xx and poll timeouts or connection
+failures.
 
 For Seedance task polling, a local watcher timeout is not a generation failure.
 Resume `seedance_get_task` with the existing task ID. Only create a new task
@@ -1774,6 +1965,11 @@ Set to `0` (default) for record-only mode with no enforcement.
 | Tool not appearing | Missing API key | Set the corresponding `BYTEPLUS_*` env var |
 | Model not found | Unbound custom model ID | Add to `*_MODEL_BINDINGS` JSON |
 | URL expired | Provider URL TTL elapsed | Use `persist=true` and reference `ArtifactRef.uri` |
+| Artifact has `persistence_error` | Output billed but storage failed after retries | `id="provider-url"`: call `seed_media_persist_url` before `source_url_expires_at`; `id="inline-fallback"`: bytes are in `fallback_data` |
+| `output_path` / `save_to` rejected | No MCP roots and no `OUTPUT_ROOTS`, relative path, outside roots, HTTP transport, or `persist=false` | Use an absolute path inside a root on stdio; set `OUTPUT_ROOTS`; pass `overwrite=true` to replace a different file |
+| `seed_understand` result too large | Long answer inlined | `save_to` + `return_content="none"`/`"summary"`; read `parsed` for JSON |
+| No `reasoning_content` in `seed_understand` | Removed — the trace is never returned | Use the final `content`/`parsed`; `usage.reasoning_tokens` shows thinking cost |
+| Variation error `QUEUE_TIMEOUT` | Never started before the batch deadline | Safe to retry that variation |
 | Auth error (JWT mode) | Missing or invalid token | Check JWT configuration and scopes |
 | Budget rejected | Daily limit exceeded | Wait for UTC day rollover or increase budget |
 | `speech_to_text` timeout | ASR poll cap reached | Increase `SEED_SPEECH_ASR_POLL_MAX_SECONDS` or provide shorter audio |
@@ -1788,9 +1984,11 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 ## Best Practices
 
-1. **Always persist.** Set `persist=true` (the default) so generated media
-   survives provider URL expiry. Reference the returned `ArtifactRef.uri` for
-   durable access.
+1. **Always persist, and check `persistence_error`.** Set `persist=true` (the
+   default) so generated media survives provider URL expiry. Reference the
+   returned `ArtifactRef.uri` for durable access. If an artifact has
+   `persistence_error`, recover `provider-url` references with
+   `seed_media_persist_url` promptly, or save `fallback_data`.
 
 2. **Poll with backoff for Seedance.** Use the `recommended_poll_after_ms`
    from `seedance_create_task` (2.0) or `seedance_2_5_create_task` (2.5) output. Don't
@@ -1851,8 +2049,11 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 15. **Use `seed_understand` for multimodal reasoning.** It can analyze images
     (OCR, scene description), videos (content analysis, UI review), and
-    reason across multiple media inputs. Enable `thinking=true` for complex
-    analysis. Prefer a public HTTPS video URL the provider already accepts;
+    reason across multiple media inputs. It always thinks — tune depth with
+    `reasoning_effort` (`high` for complex analysis) and never pass
+    `thinking`. For reviews against a template, pass the template's JSON
+    Schema as `response_format` (`json_schema`), set `json_retry=1`, and use
+    `save_to` with `return_content="none"` to keep the answer out of context. Prefer a public HTTPS video URL the provider already accepts;
     download and `media_upload` only when the link is a page/platform URL or
     otherwise unusable. Video Base64 is not supported.
 
@@ -1908,6 +2109,20 @@ Set to `0` (default) for record-only mode with no enforcement.
     package and provenance, then normalize and review a working copy in Blender.
     Keep provider task status, import status, motion-master status, and user
     approval distinct.
+
+24. **Write outputs straight to the project on stdio.** Pass `output_path`
+    (generation and get tools), `output_dir` (variations,
+    `seedance_get_tasks`), or `save_to` (`seed_understand`) with an absolute
+    path inside the client's roots instead of a follow-up
+    `seed_media_export_artifact` call. Check `local_path` / `export_error`.
+
+25. **Batch instead of looping.** Use `media_upload_batch` for several
+    reference files (via `ark_job_submit`) and `seedance_get_tasks` to poll
+    several video tasks, stopping when `all_terminal` is `true`.
+
+26. **Report queue timing honestly.** ModelArk publishes no queue position or
+    ETA. Relay `queue.hint` (time queued, tier, provider expiry deadline)
+    rather than estimating a finish time.
 
 ---
 
@@ -1981,6 +2196,11 @@ Use bindings when a custom model ID is not one of the built-in defaults.
 - `STATE_PRUNE_MAX_AGE_DAYS`
 - `MCP_INLINE_MEDIA_MAX_BYTES`
 - `MCP_HTTP_MAX_BODY_BYTES`
+- `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` — per-attempt output download timeout (default 120)
+- `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` — output download attempts (default 3)
+- `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` — max inline fallback size when storage fails (default 8 MiB)
+- `OUTPUT_ROOTS` — comma-separated absolute directories for local path writes when the client advertises no MCP roots
+- `SEED_UNDERSTANDING_TIMEOUT_MS` — `seed_understand` request timeout (defaults to `BYTEPLUS_REQUEST_TIMEOUT_MS`)
 - `PROVIDER_MAX_CONCURRENCY`
 - `PRINCIPAL_MAX_CONCURRENCY`
 - `DAILY_BUDGET_USD`
@@ -2004,3 +2224,4 @@ Use bindings when a custom model ID is not one of the built-in defaults.
 - `S3_ENDPOINT`
 - `S3_PRESIGN_TTL_SECONDS`
 - `OBJECT_STORAGE_BACKEND`
+- `MEDIA_UPLOAD_BATCH_MAX_BYTES` — total size cap for one `media_upload_batch` call (default 500 MiB)

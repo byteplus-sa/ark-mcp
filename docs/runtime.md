@@ -230,12 +230,17 @@ server restarts** — a restart no longer loses cached task→artifact mappings.
 | `base_delay_seconds` | `0.25` |
 | `max_delay_seconds` | `4.0` |
 | `jitter_ratio` | `0.2` |
+| `retry_timeouts` | `True` |
 
 `call_with_retry(operation, *, policy=None, sleep=asyncio.sleep,
 random_value=random.random)`:
 
 - **Only `ProviderError` is retried**, and only when `exc.retryable` **and**
-  `not exc.ambiguous_completion` **and** `attempt < max_attempts`.
+  `not exc.ambiguous_completion` **and** `attempt < max_attempts` **and**
+  (`policy.retry_timeouts` or `exc.code != "TIMEOUT"`). `seed_understand`
+  uses `retry_timeouts=False`: a chat timeout is safe to retry but is not
+  retried automatically, because a second full-length thinking run doubles
+  latency and token cost; its 429/5xx responses are still retried.
   `ambiguous_completion=True` is deliberately non-retryable: the mutation
   may have already succeeded at the provider, so a blind retry could
   double-charge or duplicate. Reconcile via the task ID / request ID instead.
@@ -266,10 +271,15 @@ Outcome handling:
 |---|---|
 | Success | `commit` (charged) |
 | `ProviderError` with `ambiguous_completion` | `commit` (treats as billable — may have succeeded) |
-| `ProviderError` without ambiguous completion | `release` |
+| `ProviderError` with `code="TIMEOUT"` (any, including retryable read timeouts) | `commit` (a timed-out completion may still have consumed billable tokens) |
+| Other `ProviderError` | `release` |
+| Cancellation after the provider slot was acquired (call dispatched) | `commit` (outcome unknown) |
+| Cancellation while still waiting for a limiter slot | `release` |
 | Any other exception | `release` |
 
-In all error cases the exception is re-raised.
+In all error cases the exception is re-raised. The commit/release on
+cancellation is shielded, so a cancelled call never leaves a dangling
+reservation.
 
 ## Error taxonomy
 
@@ -288,12 +298,22 @@ In all error cases the exception is re-raised.
 
 | Method | `code` | `retryable` | `ambiguous_completion` |
 |---|---|---|---|
-| `normalize_timeout` | `TIMEOUT` | `False` | `True` |
+| `normalize_timeout(op)` (mutation, default `side_effect=True`) | `TIMEOUT` | `False` | `True` |
+| `normalize_timeout(op, side_effect=False)` (read-only) | `TIMEOUT` | `True` | `False` |
 | `normalize_connection_error` | `CONNECTION_ERROR` | `True` | `None` |
 | `normalize_transport_error` | `TRANSPORT_ERROR` | `True` | `None` |
 
-So timeouts are non-retryable and ambiguous (may have succeeded); connection
-and transport errors are retryable and non-ambiguous.
+Timeout classification depends on whether the call can create provider state:
+
+| Call | Examples | Timeout result | Auto-retried? |
+|---|---|---|---|
+| Mutation | Seedance/Seed 3D create, cancel, delete; Seedream/Seed Audio generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
+| Read-only poll | Seedance and Seed 3D `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
+| Chat completion | `seed_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
+
+MediaKit polls apply the same rule to their own transport normalizer:
+poll timeouts and connection failures are retryable and non-ambiguous, while
+submit failures stay ambiguous.
 
 ## Parallel variations (`tools/_parallel.py`)
 
@@ -307,11 +327,21 @@ Re-exports `DEFAULT_MAX_CONCURRENT = 5`.
   neither is provided.
 - **`gather_with_timeout(coros, timeout)`** — per-coroutine
   `asyncio.wait_for` + `asyncio.gather(..., return_exceptions=True)`; returns
-  exceptions and `asyncio.TimeoutError` **as elements**, never raises.
-- **`run_variation_batch(count, timeout, factory, *, max_concurrent=5)`** —
-  local `asyncio.Semaphore(max_concurrent)` around `factory(idx)`; maps each
-  outcome into a `VariationResult` (`TIMEOUT` / `GATHER_ERROR` codes for
-  failures the helper detects). A variation counts as succeeded iff it
+  exceptions and `asyncio.TimeoutError` **as elements**, never raises. Still
+  exported but no longer used by the variation tools.
+- **`variation_batch_deadline(count, settings, *, max_concurrent=5,
+  provider_attempts=3, persists=True)`** — `ceil(count / max_concurrent) ×
+  (request_timeout × provider_attempts + download_timeout ×
+  download_attempts)`; the download term is dropped when `persists=False`
+  (Seedance variations).
+- **`run_variation_batch(count, factory, *, batch_deadline,
+  max_concurrent=5)`** — local `asyncio.Semaphore(max_concurrent)` around
+  `factory(idx, progress)`. There is no per-variation timeout; slot waiting
+  never counts. At `batch_deadline`, unfinished variations are cancelled and
+  classified by `VariationProgress.phase`: `queued` → `QUEUE_TIMEOUT`
+  (retryable), `generating`/`persisting` → `TIMEOUT` (ambiguous), or the
+  factory's recorded `partial` result (an unpersisted provider-URL artifact)
+  when persisting. Unexpected exceptions map to `GATHER_ERROR`. A variation counts as succeeded iff it
   produced an `artifact` **or** a `task_id`. Returns `VariationSummary(total,
   succeeded, failed, variations)`. One variation failing never breaks the
   others; the batch always returns exactly `count` entries.

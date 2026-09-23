@@ -27,6 +27,15 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._local_export import (
+    local_export,
+    output_path_field,
+    overwrite_field,
+)
+from ark_mcp.tools._local_export import (
+    needs_persist as _needs_persist,
+)
+from ark_mcp.tools._persistence import persist_base64, persist_from_url
 from ark_mcp.tools._task_execution import context_log
 
 
@@ -119,6 +128,8 @@ class SeedreamEditInput(BaseModel):
     persist: bool = Field(
         True, description="Whether to persist generated images as durable MCP resources."
     )
+    output_path: str | None = output_path_field("the edited image(s)")
+    overwrite: bool = overwrite_field()
 
     @model_validator(mode="after")
     def validate_coordinate_provided(self) -> SeedreamEditInput:
@@ -169,6 +180,7 @@ def _build_edit_prompt(
     return f"{markup} {instruction}" if markup else instruction
 
 
+@local_export("artifacts", precondition=_needs_persist)
 async def seedream_edit_image(
     input: SeedreamEditInput, ctx: Context
 ) -> SeedreamEditOutput | ToolResult:
@@ -248,17 +260,22 @@ async def seedream_edit_image(
 
         for item in response.data:
             mime_type = f"image/{item.output_format or input.output_format or 'jpeg'}"
+            # Each item degrades on its own, so one storage failure never
+            # drops items that were already stored or the billed output itself.
             if item.b64_json:
-                ref = await store.put_base64(
+                ref = await persist_base64(
+                    store,
                     data=item.b64_json,
                     media_type=MediaType.IMAGE,
                     mime_type=mime_type,
                     source_expires_at=source_expiry,
                     auth=owner,
+                    provider_url=item.url,
                 )
                 artifacts.append(ref)
             elif item.url:
-                ref = await store.copy_from_trusted_url(
+                ref = await persist_from_url(
+                    store,
                     url=item.url,
                     media_type=MediaType.IMAGE,
                     mime_type=mime_type,

@@ -837,8 +837,9 @@ async def create_runtime_services(settings: Settings) -> RuntimeServices:
     artifact_dir = Path(settings.artifact_dir).expanduser().resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
     downloader = SafeDownloader(
-        timeout=settings.request_timeout_ms / 1000,
+        timeout=settings.artifact_download_timeout_seconds,
         connect_timeout=settings.connect_timeout_ms / 1000,
+        max_attempts=settings.artifact_download_max_attempts,
     )
     if settings.artifact_backend == "object_storage":
         artifact_store: ArtifactStore = ObjectStorageArtifactStore(
@@ -923,21 +924,38 @@ async def billed_provider_slot(
     product: str,
     estimated_cost_usd: float,
 ) -> AsyncIterator[None]:
-    """Reserve budget and acquire shared limits around one billable call."""
+    """Reserve budget and acquire shared limits around one billable call.
+
+    The reservation is committed when the call succeeds, when the provider
+    error is ambiguous, or when it is a ``TIMEOUT`` (a timed-out completion may
+    still have consumed billable tokens). It is released for other errors.
+    On cancellation it is committed if the provider call had already started
+    (the outcome is unknown) and released if the call was still waiting for a
+    limiter slot, so a cancelled call never leaves a dangling reservation.
+    """
     runtime = get_runtime(ctx)
     owner = get_principal(ctx)
     reservation = await runtime.budget_ledger.reserve(
         owner,
         CostEstimate(product=product, amount_usd=estimated_cost_usd),
     )
+    dispatched = False
     try:
         async with runtime.provider_limiters.acquire(provider, owner):
+            dispatched = True
             yield
     except ProviderError as exc:
-        if exc.ambiguous_completion:
+        if exc.ambiguous_completion or exc.code == "TIMEOUT":
             await runtime.budget_ledger.commit(reservation)
         else:
             await runtime.budget_ledger.release(reservation)
+        raise
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            if dispatched:
+                await asyncio.shield(runtime.budget_ledger.commit(reservation))
+            else:
+                await asyncio.shield(runtime.budget_ledger.release(reservation))
         raise
     except Exception:
         await runtime.budget_ledger.release(reservation)

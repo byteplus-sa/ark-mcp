@@ -7,7 +7,7 @@ models live alongside their tool handlers in ``tools/``.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -100,6 +100,48 @@ class SeedanceTaskUsage(BaseModel):
     prompt_tokens: int | None = Field(default=None, description="Prompt tokens consumed.")
 
 
+class SeedanceQueueInfo(BaseModel):
+    """Server-derived queue timing for a Seedance task.
+
+    ModelArk publishes no queue position or ETA. These values are computed by
+    this server from the task's timestamps and expiry setting; they are
+    estimates, not a provider SLA.
+    """
+
+    queued_seconds: int | None = Field(
+        None,
+        description=(
+            "Seconds spent queued: now minus created_at while queued, or updated_at minus "
+            "created_at once running (approximate). None for finished tasks."
+        ),
+    )
+    running_seconds: int | None = Field(
+        None,
+        description="Seconds since the last status update while running (approximate).",
+    )
+    service_tier: str | None = Field(
+        None, description="Service tier ('default' or 'flex'). Flex tasks usually queue longer."
+    )
+    expires_at: str | None = Field(
+        None,
+        description=(
+            "ISO-8601 time after which the provider fails a task that has not finished: "
+            "created_at + execution_expires_after. None for finished tasks."
+        ),
+    )
+    expires_at_estimated: bool = Field(
+        False,
+        description=(
+            "True when the provider did not report execution_expires_after and the documented "
+            "default (48 hours) was assumed."
+        ),
+    )
+    hint: str | None = Field(
+        None,
+        description="Human-readable queue summary for reporting to the user.",
+    )
+
+
 class SeedanceTaskSummary(BaseModel):
     """Summary of a Seedance task for list results."""
 
@@ -108,6 +150,10 @@ class SeedanceTaskSummary(BaseModel):
     status: SeedanceTaskStatus = Field(..., description="Current task status.")
     created_at: str = Field(..., description="ISO-8601 timestamp of task creation.")
     updated_at: str = Field(..., description="ISO-8601 timestamp of last status update.")
+    queue: SeedanceQueueInfo | None = Field(
+        None,
+        description="Server-derived queue timing (queued/running tasks only; None when finished).",
+    )
 
 
 class VariationError(BaseModel):
@@ -121,6 +167,14 @@ class VariationError(BaseModel):
     retryable: bool = Field(False, description="Whether the caller may retry this variation.")
     ambiguous_completion: bool = Field(
         False, description="Whether the provider may have partially completed despite the error."
+    )
+    phase: Literal["queued", "generating", "persisting"] | None = Field(
+        None,
+        description=(
+            "Stage the variation was in when it failed: 'queued' (never started, safe to "
+            "retry), 'generating' (provider call in flight, may have completed), or "
+            "'persisting' (output generated, storing it failed). None when not applicable."
+        ),
     )
 
 
@@ -215,21 +269,75 @@ class UnderstandingUsage(BaseModel):
 
     prompt_tokens: int = Field(..., description="Number of input (prompt) tokens consumed.")
     completion_tokens: int = Field(
-        ..., description="Number of output (completion) tokens consumed."
+        ..., description="Number of output (completion) tokens consumed, including reasoning."
     )
     total_tokens: int = Field(..., description="Total tokens consumed (prompt + completion).")
+    reasoning_tokens: int | None = Field(
+        None,
+        description=(
+            "Completion tokens spent on internal deep thinking, when the provider reports it. "
+            "The reasoning text itself is never returned."
+        ),
+    )
+
+
+class SchemaViolation(BaseModel):
+    """Why a JSON answer did not parse or did not satisfy the requested JSON Schema."""
+
+    path: str = Field(
+        ...,
+        description=(
+            "JSON Pointer-style location of the first violation (e.g. '/beats/2/start'), "
+            "or '' when the answer is not valid JSON at all."
+        ),
+    )
+    message: str = Field(..., description="Human-readable validation or parse error.")
+    finish_reason: str = Field(
+        ...,
+        description=(
+            "Finish reason of the completion. 'length' means the answer was cut off by "
+            "max_tokens; raise max_tokens rather than retrying."
+        ),
+    )
 
 
 class UnderstandingChoice(BaseModel):
-    """A single completion choice returned by the Seed 2.1 model."""
+    """A single completion choice returned by the Seed 2.1 model.
+
+    Only the final answer is returned. The model always thinks, but its
+    reasoning trace is discarded and never included in tool output.
+    """
 
     role: Literal["assistant"] = Field(
         "assistant", description="Message role (always 'assistant')."
     )
-    content: str = Field(..., description="The model's text answer.")
-    reasoning_content: str | None = Field(
+    content: str = Field(
+        ...,
+        description=(
+            "The model's final answer. Truncated to the first 2,000 characters when "
+            "return_content='summary', and empty when return_content='none'."
+        ),
+    )
+    content_chars: int = Field(
+        ..., description="Length of the full answer in characters, before any truncation."
+    )
+    content_truncated: bool = Field(
+        False, description="True when content is shorter than the full answer."
+    )
+    parsed: dict[str, Any] | list[Any] | None = Field(
         None,
-        description="Chain-of-thought reasoning text. Present only when thinking was enabled.",
+        description=(
+            "The answer parsed as JSON, set when a json_object or json_schema response_format "
+            "was requested and the answer parsed (and, for json_schema, validated). "
+            "Returned even when return_content is 'summary' or 'none'."
+        ),
+    )
+    schema_violation: SchemaViolation | None = Field(
+        None,
+        description=(
+            "Set when a JSON response_format was requested but the answer did not parse or "
+            "did not satisfy the schema. The raw answer is still returned in content."
+        ),
     )
     finish_reason: str = Field(
         ...,

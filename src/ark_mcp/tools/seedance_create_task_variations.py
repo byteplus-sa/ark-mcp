@@ -21,7 +21,12 @@ from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
-from ark_mcp.tools._parallel import resolve_prompts, run_variation_batch
+from ark_mcp.tools._parallel import (
+    VariationProgress,
+    resolve_prompts,
+    run_variation_batch,
+    variation_batch_deadline,
+)
 from ark_mcp.tools._task_execution import context_log
 from ark_mcp.tools.seedance_create_task import SeedanceCreateTaskInput
 
@@ -140,10 +145,9 @@ async def seedance_create_task_variations(
         [aud.model_dump() for aud in input.audios] if input.audios else None
     )
 
-    timeout = settings.request_timeout_ms / 1000
     service = SeedanceService()
 
-    async def _create_single(idx: int) -> VariationResult:
+    async def _create_single(idx: int, progress: VariationProgress) -> VariationResult:
         try:
             content = SeedanceService.build_content(
                 prompt=prompts[idx],
@@ -177,6 +181,7 @@ async def seedance_create_task_variations(
                     model_id=caps.model_id,
                 ),
             ):
+                progress.phase = "generating"
                 task_id, request_id = await call_with_retry(lambda: service.create_task(request))
             await get_runtime(ctx).ownership_store.record("modelark", task_id, get_principal(ctx))
 
@@ -202,8 +207,8 @@ async def seedance_create_task_variations(
     try:
         summary = await run_variation_batch(
             count=input.variations,
-            timeout=timeout,
             factory=_create_single,
+            batch_deadline=variation_batch_deadline(input.variations, settings, persists=False),
             max_concurrent=DEFAULT_MAX_CONCURRENT,
         )
     finally:

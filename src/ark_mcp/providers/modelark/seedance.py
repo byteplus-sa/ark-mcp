@@ -28,6 +28,7 @@ from ark_mcp.providers.modelark.schemas import (
     SeedanceTaskListResponse,
     SeedanceTaskResponse,
 )
+from ark_mcp.providers.modelark.seedance_queue import queue_info
 
 
 def _parse_success_body(response: httpx.Response, operation: str) -> dict[str, Any]:
@@ -98,7 +99,7 @@ class SeedanceService:
         try:
             response = await self._gateway.get(f"/contents/generations/tasks/{task_id}")
         except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("get_task") from None
+            raise ModelArkGateway.normalize_timeout("get_task", side_effect=False) from None
         except httpx.ConnectError as exc:
             raise ModelArkGateway.normalize_connection_error("get_task", exc) from exc
         except httpx.TransportError as exc:
@@ -151,7 +152,7 @@ class SeedanceService:
         try:
             response = await self._gateway.get("/contents/generations/tasks", params=params)
         except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("list_tasks") from None
+            raise ModelArkGateway.normalize_timeout("list_tasks", side_effect=False) from None
         except httpx.ConnectError as exc:
             raise ModelArkGateway.normalize_connection_error("list_tasks", exc) from exc
         except httpx.TransportError as exc:
@@ -302,6 +303,7 @@ class SeedanceService:
             status=SeedanceTaskStatus(task.status),
             created_at=str(task.created_at or ""),
             updated_at=str(task.updated_at or ""),
+            queue=queue_info(task),
         )
 
     @staticmethod

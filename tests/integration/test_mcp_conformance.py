@@ -115,6 +115,7 @@ class TestToolDiscovery:
             "seed_audio_generate_variations",
             "seed_media_export_artifact",
             "seed_media_get_artifact",
+            "seed_media_persist_url",
             "seedream_edit_image",
             "seedream_generate_image",
             "seedream_generate_image_variations",
@@ -123,11 +124,13 @@ class TestToolDiscovery:
             "seedance_2_5_create_task",
             "seedance_2_5_create_task_variations",
             "seedance_get_task",
+            "seedance_get_tasks",
             "seedance_list_tasks",
             "seedance_cancel_or_delete_task",
             "seed_understand",
             "speech_to_text",
             "media_upload",
+            "media_upload_batch",
             "media_presign",
             "media_presign_batch",
             "vod_enhance_video",
@@ -353,7 +356,7 @@ class TestToolAnnotations:
         tools = await server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "seedance_get_task")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.idempotent_hint is True
 
     async def test_seedance_list_readonly(self, configured_server: None) -> None:
@@ -394,7 +397,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_get_enhancement_task")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False
@@ -403,7 +406,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_get_transcode_task")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False
@@ -421,7 +424,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_get_audio_separation")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False
@@ -448,7 +451,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(item for item in tools if item.name == tool_name)
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False

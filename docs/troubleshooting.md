@@ -112,6 +112,42 @@ expire (until the artifact TTL, default 7 days).
 If you set `persist=False`, the tool returns the raw provider URL which
 will expire. Use the artifact resource instead.
 
+### Artifact has `persistence_error`
+
+An `ArtifactRef` with `persistence_error` means the output was generated and
+billed but could not be stored durably (after download retries). The call
+still succeeded; nothing was lost yet:
+
+- `id="provider-url"`: `uri` is the temporary provider URL, valid until
+  `persistence_error.source_url_expires_at`. Call `seed_media_persist_url`
+  with that `uri`, `media_type`, `mime_type`, and `source_expires_at` before
+  it expires. For Seedance and Seed 3D, polling the get tool again with
+  `persist_output=true` also retries persistence.
+- `id="inline-fallback"`: the bytes are in `fallback_data` (Base64). Save them
+  directly; they are not stored anywhere else.
+
+Check `persistence_error.code` and `retryable`: `output_too_large` and
+`untrusted_output_host` will not succeed on retry; `download_failed` and
+`storage_failed` usually will. For persistent download timeouts, raise
+`ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` or `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`.
+
+### `output_path` rejected or `export_error` set
+
+- `... is disabled: no output roots are configured`: the client does not
+  advertise MCP roots and `OUTPUT_ROOTS` is empty. Set `OUTPUT_ROOTS` to one
+  or more absolute directories.
+- `must be inside an allowed output root` / `must be an absolute path`: use an
+  absolute path under a client root or an `OUTPUT_ROOTS` entry.
+- `only supported in stdio transport mode`: local paths are stdio-only.
+- `requires persist=true` / `requires persist_output=true`: local copies are
+  written from the durable artifact.
+- `already exists with different content`: pass `overwrite=true`.
+
+Path errors are raised before the provider is called. A failed write after
+generation is reported in `ArtifactRef.export_error` instead; the durable
+artifact is unaffected and can be exported later with
+`seed_media_export_artifact`.
+
 ## Seedance Task States
 
 | Status | Meaning |
@@ -122,6 +158,17 @@ will expire. Use the artifact resource instead.
 | `failed` | Task failed, check `error` field |
 | `expired` | Task expired before completion |
 | `cancelled` | Task was cancelled via DELETE |
+
+### Why is there no queue position or ETA?
+
+ModelArk publishes no queue position or ETA for Seedance tasks. The `queue`
+field on `seedance_get_task`, `seedance_get_tasks`, and `seedance_list_tasks`
+is derived by the server from the task's own timestamps: time queued, time
+running, service tier (`flex` usually queues longer), and `expires_at`, the
+time the provider fails an unfinished task (`created_at` +
+`execution_expires_after`; `expires_at_estimated=true` means the 48-hour
+default was assumed). Relay `queue.hint` to the user, and use
+`seedance_get_tasks` to poll many tasks until `all_terminal` is `true`.
 
 ### Cannot Cancel or Delete
 
@@ -138,11 +185,38 @@ default request timeout is 10 minutes (`BYTEPLUS_REQUEST_TIMEOUT_MS=600000`).
 
 If you experience timeouts:
 
-1. Increase `BYTEPLUS_REQUEST_TIMEOUT_MS`
+1. Increase `BYTEPLUS_REQUEST_TIMEOUT_MS` (or `SEED_UNDERSTANDING_TIMEOUT_MS`
+   for `seed_understand` only)
 2. Check your network connectivity to the BytePlus region
-3. Note: a timeout does **not** mean the operation failed — it may have
-   succeeded upstream. The error is marked `ambiguous_completion=True`.
-   Do not retry blindly.
+3. Check `retryable` and `ambiguous_completion` on the `TIMEOUT` error. What a
+   timeout means depends on the call:
+
+| Call | `retryable` | `ambiguous_completion` | Server retries? | What to do |
+|---|---|---|---|---|
+| Create / generate / cancel / delete / MediaKit submit | `false` | `true` | No | It may have succeeded upstream. Do not retry blindly; reconcile by task ID, request ID, or `client_token` |
+| Task polls (Seedance, Seed 3D, ASR query, MediaKit get) | `true` | `false` | Yes | Safe to poll again |
+| `seed_understand` chat completion | `true` | `false` | No | Safe to retry, but a retry is a new billed completion; consider a longer `SEED_UNDERSTANDING_TIMEOUT_MS` or lower `reasoning_effort` |
+| Variation batch deadline | see `error.phase` | | No | `queued` (`QUEUE_TIMEOUT`) is safe to retry; `generating` is ambiguous |
+
+Budget reservations are committed for every `TIMEOUT`, since a timed-out
+call may still have been billed.
+
+## `seed_understand` Result Too Large or Missing Reasoning
+
+The reasoning trace is no longer returned: deep thinking is always on, but
+`choices[].reasoning_content` was removed and `thinking` is ignored. Only the
+final answer comes back; `usage.reasoning_tokens` reports thinking cost. If
+the answer itself is too large for the client context:
+
+- Set `save_to` to an absolute path (stdio, inside an output root) and
+  `return_content="none"` or `"summary"` (first 2,000 characters). The full
+  answer is written to disk; `saved_path` and `content_chars` tell you where
+  and how long.
+- With a JSON `response_format`, `choices[].parsed` is returned even when
+  `return_content` is `none`.
+- If the answer ends with `finish_reason="length"`, raise `max_tokens`
+  (it includes thinking tokens). `json_retry` does not retry truncated
+  answers.
 
 ## Client Timeouts vs Provider Latency
 
@@ -206,7 +280,11 @@ Check:
 
 1. `ARTIFACT_DIR` is writable
 2. Disk has sufficient space
-3. `ARTIFACT_BACKEND` is set to `filesystem` (the only MVP backend)
+3. `ARTIFACT_BACKEND` is `filesystem`, or `object_storage` with working
+   TOS/S3 credentials
+
+A storage failure no longer fails the tool call; look for
+`persistence_error` on the returned artifact (see above).
 
 Run `make check-env` to validate configuration.
 
@@ -221,8 +299,8 @@ origins to `MCP_ALLOWED_ORIGINS`.
 
 FastMCP hides tools whose required scopes are absent. Verify the Bearer token
 has the appropriate `seed:audio:generate`, `seedream:generate`,
-`seedance:create`, `seedance:read`, `seedance:delete`, or `artifacts:read`
-scope and contains both a principal (`sub`) and configured tenant claim.
+`seedance:create`, `seedance:read`, `seedance:delete`, `media:upload`, or
+`artifacts:read` scope and contains both a principal (`sub`) and configured tenant claim.
 
 ## Running Tests
 

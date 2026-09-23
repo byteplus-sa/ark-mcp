@@ -26,10 +26,12 @@ from ark_mcp.artifacts.store import (
 )
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
+from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import debug as log_debug
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.metrics import ARTIFACT_OPERATIONS
 from ark_mcp.providers.object_storage import make_object_storage_gateway
+from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import (
     decode_base64_safely,
@@ -84,8 +86,9 @@ class ObjectStorageArtifactStore:
         resolved = settings or get_settings()
         self._ttl_seconds = ttl_seconds or resolved.artifact_ttl_seconds
         self._downloader = downloader or SafeDownloader(
-            timeout=resolved.request_timeout_ms / 1000,
+            timeout=resolved.artifact_download_timeout_seconds,
             connect_timeout=resolved.connect_timeout_ms / 1000,
+            max_attempts=resolved.artifact_download_max_attempts,
         )
         self._gateway = make_object_storage_gateway(resolved)
         self._sweep_logged = False
@@ -189,7 +192,7 @@ class ObjectStorageArtifactStore:
         now = datetime.now(UTC)
 
         ext = _mime_to_ext(mime_type)
-        await self._gateway.upload_bytes(
+        await self._upload_with_retry(
             key=self._data_key(artifact_id, ext),
             data=raw,
             mime_type=mime_type,
@@ -211,7 +214,7 @@ class ObjectStorageArtifactStore:
             principal_id=owner.principal_id,
             tenant_id=owner.tenant_id,
         )
-        await self._gateway.upload_bytes(
+        await self._upload_with_retry(
             key=self._meta_key(artifact_id),
             data=metadata.model_dump_json().encode("utf-8"),
             mime_type="application/json",
@@ -231,6 +234,23 @@ class ObjectStorageArtifactStore:
             media_type=media_type,
         ).inc()
         return ref
+
+    async def _upload_with_retry(self, *, key: str, data: bytes, mime_type: str) -> None:
+        """Upload one object, retrying transient provider failures.
+
+        Object keys are fixed per artifact, so a repeated PUT is idempotent.
+        Final failures surface as ``ArtifactPersistenceError('storage_failed')``.
+        """
+        try:
+            await call_with_retry(
+                lambda: self._gateway.upload_bytes(key=key, data=data, mime_type=mime_type)
+            )
+        except ProviderError as exc:
+            raise ArtifactPersistenceError(
+                "storage_failed",
+                "Provider output could not be written to artifact storage.",
+                retryable=exc.retryable,
+            ) from exc
 
     async def _download_object(self, key: str, max_bytes: int) -> bytes:
         presigned = await self._gateway.presign_get(key=key)

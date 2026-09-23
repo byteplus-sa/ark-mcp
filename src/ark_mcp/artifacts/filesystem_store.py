@@ -146,7 +146,11 @@ class FilesystemArtifactStore(ArtifactStore):
         self._base_dir = Path(artifact_dir or settings.artifact_dir).expanduser().resolve()
         self._base_dir.mkdir(parents=True, exist_ok=True)
         self._ttl_seconds = ttl_seconds or settings.artifact_ttl_seconds
-        self._downloader = downloader or SafeDownloader()
+        self._downloader = downloader or SafeDownloader(
+            timeout=settings.artifact_download_timeout_seconds,
+            connect_timeout=settings.connect_timeout_ms / 1000,
+            max_attempts=settings.artifact_download_max_attempts,
+        )
 
     def _validate_artifact_id(self, artifact_id: str) -> None:
         try:

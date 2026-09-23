@@ -120,8 +120,14 @@ class VodMediaKitGateway(BaseHttpGateway):
         *,
         code: str,
         message: str,
+        side_effect: bool = True,
     ) -> ProviderError:
-        """Normalize a transport failure after mutation dispatch as ambiguous."""
+        """Normalize a transport failure.
+
+        With ``side_effect=True`` (mutation dispatch) the failure is ambiguous
+        and not retryable. Read-only polls pass ``side_effect=False``: nothing
+        was mutated, so the failure is retryable and not ambiguous.
+        """
         return ProviderError(
             NormalizedProviderError(
                 provider=cls.PROVIDER,
@@ -130,7 +136,7 @@ class VodMediaKitGateway(BaseHttpGateway):
                 code=code,
                 message=message,
                 request_id=None,
-                retryable=False,
-                ambiguous_completion=True,
+                retryable=not side_effect,
+                ambiguous_completion=side_effect,
             )
         )

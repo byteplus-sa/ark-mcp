@@ -98,7 +98,7 @@ tool → scope mapping is wired in `server.py::register_tools`:
 | `seed:audio:generate` | `seed_audio_generate`, `seed_audio_generate_variations` |
 | `seedream:generate` | `seedream_generate_image`, `seedream_generate_image_variations` |
 | `seedance:create` | `seedance_create_task`, `seedance_create_task_variations` |
-| `seedance:read` | `seedance_get_task`, `seedance_list_tasks` |
+| `seedance:read` | `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks` |
 | `seedance:delete` | `seedance_cancel_or_delete_task` |
 | `seed:asr:transcribe` | `speech_to_text` |
 | `vod:enhance` | `vod_enhance_video` |
@@ -107,9 +107,9 @@ tool → scope mapping is wired in `server.py::register_tools`:
 | `vod:subtitle:remove` | `vod_remove_subtitles` |
 | `vod:read` | All MediaKit task polling tools |
 | `vod:extract` | `vod_separate_audio` |
-| `media:upload` | `media_upload` |
+| `media:upload` | `media_upload`, `media_upload_batch`, `seed_media_persist_url` |
 | `media:presign` | `media_presign`, `media_presign_batch` |
-| `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}` |
+| `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}`, `seed_media_get_artifact`, `seed_media_export_artifact` |
 
 The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
 routes are **not** scope-protected at the FastMCP layer. Seed Audio and
@@ -120,9 +120,9 @@ is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
 `vod_get_subtitle_addition_task`, `vod_remove_subtitles`,
 `vod_get_subtitle_removal_task`, `vod_separate_audio`, and
 `vod_get_audio_separation` only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload`, `media_presign`,
-and `media_presign_batch` tools are registered only when object storage
-credentials are set (TOS:
+`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload`,
+`media_upload_batch`, `media_presign`, and `media_presign_batch` tools are
+registered only when object storage credentials are set (TOS:
 `TOS_ACCESS_KEY` / `TOS_SECRET_KEY` / `TOS_BUCKET`, or S3:
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` with
 `OBJECT_STORAGE_BACKEND=s3`).
@@ -202,8 +202,15 @@ bucket dict is protected by an `asyncio.Lock`.
 
 `SafeDownloader` downloads provider media (for `copy_from_trusted_url`) with
 two-layer SSRF defense. Constructor defaults: `timeout=120.0s`,
-`connect_timeout=30.0s`, `follow_redirects=False`, `trust_env=False`
-(ignores `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`).
+`connect_timeout=30.0s`, `max_attempts=3`, `follow_redirects=False`,
+`trust_env=False` (ignores `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`). The runtime
+builds it from `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS`,
+`BYTEPLUS_CONNECT_TIMEOUT_MS`, and `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`.
+
+Retryable failures (timeouts, network errors, 408/429/5xx) are retried with
+1s, 2s, 4s, ... backoff. Policy failures (untrusted host, redirect rejection,
+oversize, expired source) are never retried, so retries cannot widen what the
+downloader accepts.
 
 `download(url, *, trusted_hosts, max_bytes, max_redirects=5)`:
 
@@ -228,6 +235,13 @@ via suffix allowlist: `.bytepluses.com`, `.byteplus.com`, `.bytedance.com`,
 `.bytednsdoc.com`, `.volces.com`, `.byteplusvod.com`,
 `.tos-ap-southeast.bytepluses.com`.
 
+`seed_media_persist_url` accepts a caller-supplied URL, so it relies on the
+same controls: the URL goes through `copy_from_trusted_url` with this host
+allowlist, full SSRF validation and IP pinning, per-hop redirect
+re-validation, and the per-media-type size limits. Any host outside the
+allowlist is rejected; the tool cannot be used to fetch arbitrary URLs. It
+requires the `media:upload` scope in JWT mode.
+
 For VOD AI MediaKit, video processing and artifact persistence are separate
 outcomes. The tool always preserves a successful provider output URL for the
 authorized caller, then best-effort downloads it through this SSRF-safe path.
@@ -235,6 +249,35 @@ Outputs above the 200 MiB video limit or failing host/MIME/download/storage
 checks return `persistence="failed"` without changing provider success into a
 provider failure. Full source URLs and credentials are excluded from logs and
 safe error messages.
+
+## Local output paths
+
+Tools that write to a caller-chosen local path — `output_path`/`output_dir` on
+generation and get tools, `save_to` on `seed_understand`, and
+`destination_path` on `seed_media_export_artifact` — share one policy in
+`security/output_paths.py`:
+
+- **stdio only.** The client and server must share a filesystem; the fields
+  are rejected on HTTP transport.
+- **Allowed roots.** The client's MCP roots (`roots/list`, `file://` URIs
+  only, 2-second timeout) are used when available; otherwise `OUTPUT_ROOTS`
+  (comma-separated absolute directories). With neither, path writing is
+  disabled and every such field is rejected.
+- **Containment.** The path must be absolute and resolve inside a root. A file
+  target cannot be a directory or a root itself.
+- **Pre-flight.** Paths are validated before any billable provider call, so a
+  rejected path never produces paid output.
+- **TOCTOU-safe writes.** Missing parent directories are created one level at
+  a time with containment re-checked. The final directory is opened with
+  `O_NOFOLLOW`, its real location is re-checked against the roots, and the
+  file is published atomically through the directory descriptor. A symlink
+  swapped in after validation cannot redirect the write.
+- **No silent overwrite.** Publishing is exclusive unless `overwrite=true`; a
+  destination that already holds identical bytes (same SHA-256) is a success.
+
+Breaking change for `seed_media_export_artifact`: `destination_path` must now
+be absolute and inside an allowed root, and an existing file is no longer
+silently overwritten (pass `overwrite=true`).
 
 ## URL policy (`security/url_policy.py`)
 
