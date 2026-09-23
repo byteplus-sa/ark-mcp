@@ -226,6 +226,32 @@ class TestSeedAudioUnderstandValidation:
                 audios=[{"kind": "base64", "data": _WAV_B64, "mime_type": "audio/ogg"}],
             )
 
+    def test_base64_data_uri_rejected(self, test_env: None) -> None:
+        with pytest.raises(ValidationError, match="without a 'data:' URI prefix"):
+            SeedAudioUnderstandInput(
+                prompt="x",
+                audios=[
+                    {
+                        "kind": "base64",
+                        "data": f"data:audio/wav;base64,{_WAV_B64}",
+                        "mime_type": "audio/wav",
+                    }
+                ],
+            )
+
+    @pytest.mark.parametrize(
+        ("mime_type", "expected_format"),
+        [("audio/mpeg; codecs=mp3", "mp3"), (" AUDIO/WAV ", "wav")],
+    )
+    def test_base64_mime_type_is_normalized(
+        self, test_env: None, mime_type: str, expected_format: str
+    ) -> None:
+        payload = SeedAudioUnderstandInput(
+            prompt="x",
+            audios=[{"kind": "base64", "data": _WAV_B64, "mime_type": mime_type}],
+        )
+        assert payload.audios[0].provider_part()["format"] == expected_format
+
     def test_non_https_url_rejected(self, test_env: None) -> None:
         with pytest.raises(ValidationError):
             SeedAudioUnderstandInput(

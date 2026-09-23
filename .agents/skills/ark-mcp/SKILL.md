@@ -1794,9 +1794,13 @@ quota. Eleven model families, with these default model IDs:
 | **Seedance 2 Mini** | *(configured via `SEEDANCE_MODEL_BINDINGS`)* | 480p, 720p only |
 | **Seed 2.1 Turbo** | `dola-seed-2-1-turbo-260628` (default) | 256K context, images + videos, deep-thinking |
 | **Seed 2.1 Pro** | `dola-seed-evolving` (recognized built-in; opt-in via `SEED_UNDERSTANDING_DEFAULT_MODEL`) | 256K context, images + videos, deep-thinking |
-| **Seed 2.0 Lite (audio)** | `seed-2-0-lite-260428` (default for `seed_audio_understand`; set via `SEED_AUDIO_UNDERSTANDING_MODEL`) | Audio input (URL or Base64 wav/mp3/flac/aac/m4a), deep-thinking |
 | **Hyper3D** | `hyper3d-gen2-260112` | Text-to-3D + image-to-3D (5 imgs), GLB/OBJ/USDZ/FBX/STL, seeds, PBR materials |
 | **Hitem3d** | `hitem3d-2-0-251223` | Image-to-3D only (1–4 imgs), OBJ/GLB/STL/FBX/USDZ, resolution + face control |
+
+`seed_audio_understand` is outside this registry: it calls the plain model ID in
+`SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`, audio input
+via URL or Base64 wav/mp3/flac/aac/m4a, deep-thinking) with no family, bindings,
+or capability pre-validation.
 
 Custom model IDs must be explicitly bound via `SEEDREAM_MODEL_BINDINGS`,
 `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`, or

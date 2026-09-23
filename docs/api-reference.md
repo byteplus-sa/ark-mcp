@@ -48,10 +48,10 @@ surface.
 | 39 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
 | 40 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
 | 41 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local / JWT |
-| 42 | `seed_audio_understand` | Seed audio understanding (optional) | Required background task | ModelArk |
 | 42 | `seed_media_persist_url` | Artifacts | Optional background task | Local / JWT |
 | 43 | `media_upload_batch` | Object storage (optional) | Required background task | TOS / S3 |
 | 44 | `seedance_get_tasks` | Seedance | Optional background retrieval | ModelArk |
+| 45 | `seed_audio_understand` | Seed audio understanding (optional) | Required background task | ModelArk |
 
 ## Tool Annotations
 

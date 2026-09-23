@@ -50,6 +50,11 @@ _BASE64_AUDIO_FORMATS: dict[str, str] = {
 _MAX_AUDIOS = 8
 
 
+def _normalize_mime(mime_type: str | None) -> str:
+    """Lower-case a MIME type and drop parameters, matching ``validate_audio_mime``."""
+    return (mime_type or "").lower().split(";")[0].strip()
+
+
 class UnderstandingAudioInput(MediaSource):
     """Audio input for audio understanding, as an HTTPS URL or Base64 data."""
 
@@ -57,9 +62,14 @@ class UnderstandingAudioInput(MediaSource):
 
     @model_validator(mode="after")
     def require_base64_format(self) -> UnderstandingAudioInput:
-        if self.kind == MediaSourceKind.base64 and (
-            self.mime_type is None or self.mime_type.lower() not in _BASE64_AUDIO_FORMATS
-        ):
+        if self.kind != MediaSourceKind.base64:
+            return self
+        if (self.data or "").lstrip()[:5].lower() == "data:":
+            raise ValueError(
+                "Base64 audio must be raw Base64 without a 'data:' URI prefix; "
+                "set the format through mime_type instead."
+            )
+        if _normalize_mime(self.mime_type) not in _BASE64_AUDIO_FORMATS:
             raise ValueError(
                 "Base64 audio requires mime_type set to one of "
                 f"{sorted(_BASE64_AUDIO_FORMATS)} (wav, mp3, flac, aac, m4a). "
@@ -71,7 +81,7 @@ class UnderstandingAudioInput(MediaSource):
         """Return the adapter-level part, adding the provider ``format`` for Base64."""
         if self.kind == MediaSourceKind.url:
             return {"kind": "url", "url": self.url}
-        audio_format = _BASE64_AUDIO_FORMATS.get((self.mime_type or "").lower())
+        audio_format = _BASE64_AUDIO_FORMATS.get(_normalize_mime(self.mime_type))
         if audio_format is None:  # unreachable: require_base64_format rejects this
             raise ValueError("Base64 audio requires a supported mime_type.")
         return {"kind": "base64", "data": self.data, "format": audio_format}
@@ -110,9 +120,11 @@ async def seed_audio_understand(
     SEED_AUDIO_UNDERSTANDING_MODEL (default 'seed-2-0-lite-260428'). Deep
     thinking is always on (depth set by reasoning_effort) and its trace is never
     returned. Use response_format with 'json_schema' for reliably structured
-    output (parsed result in choices[].parsed), and save_to to write the answer
-    to a local file. For local audio files, upload them first with media_upload to
-    obtain an HTTPS URL, or pass small wav/mp3/flac/aac/m4a clips as Base64. For
+    output (parsed result in choices[].parsed); 'json_object' is not enforced by
+    the default audio model, so use 'json_schema' (optionally with json_retry)
+    when JSON is required. Use save_to to write the answer to a local file. For
+    local audio files, upload them first with media_upload to obtain an HTTPS
+    URL, or pass small wav/mp3/flac/aac/m4a clips as raw Base64. For
     plain long-form transcription with word timings, speech_to_text is the
     dedicated ASR tool. Requires task-augmented execution (or ark_job_submit).
     """
