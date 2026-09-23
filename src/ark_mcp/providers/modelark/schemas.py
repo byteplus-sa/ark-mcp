@@ -293,6 +293,7 @@ class ChatContentPart(BaseModel):
     text: str | None = None
     image_url: dict[str, str] | None = None
     video_url: dict[str, str] | None = None
+    input_audio: dict[str, str] | None = None
 
 
 class ChatMessage(BaseModel):

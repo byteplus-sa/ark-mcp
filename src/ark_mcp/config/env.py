@@ -240,6 +240,15 @@ class Settings(BaseSettings):
         default_factory=list,
         validation_alias="SEED_UNDERSTANDING_MODEL_BINDINGS",
     )
+    seed_audio_understanding_model: str = Field(
+        default="seed-2-0-lite-260428",
+        min_length=1,
+        validation_alias="SEED_AUDIO_UNDERSTANDING_MODEL",
+        description=(
+            "ModelArk model ID used by seed_audio_understand. Must accept Chat "
+            "Completions input_audio parts with deep thinking."
+        ),
+    )
 
     # --- 3D generation feature flag and model bindings ----------------------
 
@@ -496,8 +505,9 @@ class Settings(BaseSettings):
         gt=0,
         validation_alias="SEED_UNDERSTANDING_TIMEOUT_MS",
         description=(
-            "Request timeout for seed_understand chat completions. Deep thinking is always "
-            "on, so long analyses may need more than BYTEPLUS_REQUEST_TIMEOUT_MS. "
+            "Request timeout for seed_understand and seed_audio_understand chat completions. "
+            "Deep thinking is always on, so long analyses may need more than "
+            "BYTEPLUS_REQUEST_TIMEOUT_MS. "
             "Defaults to BYTEPLUS_REQUEST_TIMEOUT_MS."
         ),
     )

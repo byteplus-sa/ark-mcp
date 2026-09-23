@@ -46,6 +46,7 @@ BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
         "seed_audio_generate_variations": BackgroundToolSpec("required", "seed:audio:generate"),
         "speech_to_text": BackgroundToolSpec("required", "seed:asr:transcribe"),
         "seed_understand": BackgroundToolSpec("required", "understanding:read"),
+        "seed_audio_understand": BackgroundToolSpec("required", "understanding:read"),
         "seedream_generate_image": BackgroundToolSpec("required", "seedream:generate"),
         "seedream_edit_image": BackgroundToolSpec("required", "seedream:generate"),
         "seedream_generate_image_variations": BackgroundToolSpec("required", "seedream:generate"),

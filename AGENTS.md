@@ -16,6 +16,9 @@ surface:
   disabled by default.
 - **Seed 2.1 Understanding** — multimodal video/image understanding and
   reasoning through ModelArk Chat Completions; supports deep-thinking mode.
+- **Seed Audio Understanding** — audio understanding and reasoning
+  (transcription, translation, analysis, Q&A) through ModelArk Chat Completions
+  `input_audio`; model ID set by `SEED_AUDIO_UNDERSTANDING_MODEL`.
 - **Speech-to-Text** — background audio transcription through Seed Speech ASR.
 - **VOD AI MediaKit** — asynchronous video enhancement, video transcoding,
   subtitle burn-in and precision subtitle/text erasure, and voice/background
@@ -31,8 +34,9 @@ surface:
 - **Transports** — local `stdio` first, with protected Streamable HTTP as a
   deployable option (both natively supported by FastMCP).
 
-Seedance, Seedream, Seed 3D, and Seed 2.1 Understanding share the ModelArk
-data-plane host and Bearer authentication. Seed Audio and Speech-to-Text are
+Seedance, Seedream, Seed 3D, Seed 2.1 Understanding, and Seed Audio
+Understanding share the ModelArk data-plane host and Bearer authentication.
+Seed Audio and Speech-to-Text are
 hosted by Seed Speech and use `X-Api-Key`. VOD AI MediaKit uses a separate
 Bearer key. The server uses three provider gateways behind one normalized
 domain layer. See `plans/PLAN_ARK_SEED_MULTIMODAL_MCP.md` for the full

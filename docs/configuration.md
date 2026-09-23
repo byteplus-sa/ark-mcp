@@ -38,6 +38,7 @@ client is missing tools and that warning is absent, look at
 | `SEEDREAM_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEEDANCE_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
+| `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | Model/endpoint ID used by `seed_audio_understand`. Any ModelArk model that accepts Chat Completions `input_audio` parts with deep thinking works; change it when a newer audio-capable model ships |
 | `BYTEPLUS_MODELARK_3D_ENABLED` | `false` | Feature flag for 3D generation (Hyper3D + Hitem3d); reuses the ModelArk key, disabled by default |
 | `HYPER3D_DEFAULT_MODEL` | `hyper3d-gen2` | Default Hyper3D model/endpoint ID |
 | `HITEM3D_DEFAULT_MODEL` | `hitem3d-2-0` | Default Hitem3d model/endpoint ID |
@@ -257,7 +258,7 @@ disabled and those fields are rejected. Path writing is stdio-only. See
 |---|---|---|
 | `BYTEPLUS_CONNECT_TIMEOUT_MS` | `10000` | Provider connection timeout |
 | `BYTEPLUS_REQUEST_TIMEOUT_MS` | `600000` | Full provider request timeout |
-| `SEED_UNDERSTANDING_TIMEOUT_MS` | unset (uses `BYTEPLUS_REQUEST_TIMEOUT_MS`) | Request timeout for `seed_understand` chat completions. Deep thinking is always on, so long analyses may need more than the general request timeout |
+| `SEED_UNDERSTANDING_TIMEOUT_MS` | unset (uses `BYTEPLUS_REQUEST_TIMEOUT_MS`) | Request timeout for `seed_understand` and `seed_audio_understand` chat completions. Deep thinking is always on, so long analyses may need more than the general request timeout |
 | `FASTMCP_DOCKET_URL` | `memory://` | FastMCP background-task backend used by generation, transcription, upload, provider submission, understanding, and optional media-persistence calls; Redis can retain task state across restarts of the same single-replica deployment; it does not make SQLite state horizontally scalable |
 | `FASTMCP_TASKS_ENCRYPTION_KEY` | unset | Required for JWT-authenticated Redis task backends; use at least 32 random characters and keep the same key across restarts |
 | `FASTMCP_DOCKET_CONCURRENCY` | `10` | Maximum active background tasks per worker; provider/principal limits still apply |
