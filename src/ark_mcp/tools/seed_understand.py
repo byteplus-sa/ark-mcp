@@ -265,7 +265,12 @@ class SeedUnderstandOutput(BaseModel):
         ..., description="Token usage summed over all attempts (including json_retry attempts)."
     )
     attempts: int = Field(
-        1, description="Completions requested: 1 plus any json_retry attempts that were used."
+        1,
+        description=(
+            "Completions that produced an answer: 1 plus any json_retry attempts that were "
+            "used. A json_retry attempt that failed against the provider is not counted, and "
+            "the previous attempt's answer is returned."
+        ),
     )
     saved_path: str | None = Field(
         None, description="Absolute path the answer was written to when save_to was set."

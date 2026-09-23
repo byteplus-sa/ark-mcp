@@ -793,7 +793,8 @@ If the video or last frame cannot be stored, the reference comes back with
 ## seedance_get_tasks
 
 Check the status of several Seedance tasks in one call instead of a round of
-`seedance_get_task` calls. The server makes one provider list call filtered by
+`seedance_get_task` calls. The server makes one provider list call per page of
+20 task IDs (at most three), filtered by
 the requested task IDs and re-fetches individually only the tasks missing from
 the list or reported succeeded without an output URL. Persistence reuses the
 per-task single-flight cache, so overlapping polls never download the same

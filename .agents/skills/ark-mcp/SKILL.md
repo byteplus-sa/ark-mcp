@@ -992,7 +992,7 @@ Returns `SeedanceTaskPage` with paginated task summaries (each with the same
 
 Check 1–50 Seedance tasks (2.0 or 2.5) in one call — prefer it over a round of
 `seedance_get_task` calls after variations or multi-shot work. One provider
-list call; individual re-fetch only where needed. Optional background
+list call per page of 20 IDs; individual re-fetch only where needed. Optional background
 execution (required when `persist_output=true`). Scope `seedance:read`.
 
 | Parameter | Type | Required | Description |

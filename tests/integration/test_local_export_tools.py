@@ -169,3 +169,36 @@ async def test_variation_deadline_partial_is_marked_unpersisted(
     assert ref.id == "provider-url"
     assert ref.persistence_error is not None
     assert ref.persistence_error.retryable is True
+
+
+async def test_variation_cancelled_while_persisting_returns_unpersisted_partial(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drive the real tool: a persist that outlives the batch deadline must still
+    hand back the provider URL marked as unpersisted, so a client re-persists it."""
+    import asyncio
+
+    from ark_mcp.tools import seedream_generate_image_variations as variations_module
+
+    _patch(monkeypatch, [{"url": "https://tos-ap-southeast.bytepluses.com/slow.png"}])
+    monkeypatch.setattr(variations_module, "variation_batch_deadline", lambda *a, **k: 0.15)
+
+    async def never_finishes(*args: Any, **kwargs: Any) -> None:
+        await asyncio.sleep(30)
+
+    with patch(
+        "ark_mcp.artifacts.filesystem_store.FilesystemArtifactStore.copy_from_trusted_url",
+        new=never_finishes,
+    ):
+        result = await variations_module.seedream_generate_image_variations(
+            variations_module.SeedreamVariationsInput(prompt="slow", variations=1),
+            fake_ctx,
+        )
+
+    variation = result.summary.variations[0]
+    assert variation.artifact is not None
+    assert variation.artifact.id == "provider-url"
+    assert variation.artifact.uri == "https://tos-ap-southeast.bytepluses.com/slow.png"
+    assert variation.artifact.persistence_error is not None
+    assert variation.artifact.persistence_error.retryable is True
+    assert "https://" not in variation.artifact.persistence_error.message

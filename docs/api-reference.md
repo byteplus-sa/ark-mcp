@@ -1848,7 +1848,8 @@ oversized batch fails as a whole.
 
 ## 22. seedance_get_tasks
 
-Check 1-50 Seedance tasks in one call. Uses one provider list call filtered by
+Check 1-50 Seedance tasks in one call. Uses one provider list call per page of
+20 task IDs (at most three), filtered by
 task ID, and re-fetches individually only tasks missing from the list or
 succeeded without an output URL. Requires `seedance:read` in JWT mode.
 Optional background task (required when `persist_output=true`).

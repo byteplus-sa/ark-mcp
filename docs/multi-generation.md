@@ -124,7 +124,8 @@ Seedance variations are fundamentally different from Seedream/Seed Audio
 because each variation creates a **separate provider task**. The client first
 retrieves the variation summary from the background result, then polls the
 provider task IDs to retrieve results. Poll them all at once with
-`seedance_get_tasks` (1-50 task IDs, one provider list call, `all_terminal`
+`seedance_get_tasks` (1-50 task IDs, one provider list call per page of 20,
+`all_terminal`
 tells you when to stop, and `output_dir` writes finished videos locally), or
 one at a time with `seedance_get_task`. The actual video generation runs
 asynchronously on the provider side.
