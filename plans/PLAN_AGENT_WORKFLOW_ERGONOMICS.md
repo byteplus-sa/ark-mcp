@@ -672,9 +672,11 @@ Where the code departs from the plan:
 
 ## Open questions
 
-1. Seedance list payload: the code already parses list items as full
-   `SeedanceTaskResponse` objects, so the plan assumes one list call. Confirm
-   with a live call that `content.video_url` and `error` are populated for
-   succeeded and failed tasks.
+1. Seedance list payload: the code parses list items as full
+   `SeedanceTaskResponse` objects. As shipped, `seedance_get_tasks` pages the
+   list (20 IDs per call, at most three) and re-fetches any task the list
+   omits or returns without an output URL. Confirm with a live call whether
+   `content.video_url` and `error` are populated for succeeded and failed
+   tasks; if they are, the re-fetch path stays dormant.
 2. `execution_expires_after` default when the provider leaves it out. Confirm
    the value for each service tier.
