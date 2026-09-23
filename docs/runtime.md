@@ -238,7 +238,7 @@ random_value=random.random)`:
 - **Only `ProviderError` is retried**, and only when `exc.retryable` **and**
   `not exc.ambiguous_completion` **and** `attempt < max_attempts` **and**
   (`policy.retry_timeouts` or `exc.code != "TIMEOUT"`). `seed_understand`
-  uses `retry_timeouts=False`: a chat timeout is safe to retry but is not
+  and `seed_audio_understand` use `retry_timeouts=False`: a chat timeout is safe to retry but is not
   retried automatically, because a second full-length thinking run doubles
   latency and token cost; its 429/5xx responses are still retried.
   `ambiguous_completion=True` is deliberately non-retryable: the mutation
@@ -309,7 +309,7 @@ Timeout classification depends on whether the call can create provider state:
 |---|---|---|---|
 | Mutation | Seedance/Seed 3D create, cancel, delete; Seedream/Seed Audio generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
 | Read-only poll | Seedance and Seed 3D `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
-| Chat completion | `seed_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
+| Chat completion | `seed_understand`, `seed_audio_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
 
 MediaKit polls apply the same rule to their own transport normalizer:
 poll timeouts and connection failures are retryable and non-ambiguous, while

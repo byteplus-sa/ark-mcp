@@ -441,6 +441,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
         log_info("tools_skipped", reason="BYTEPLUS_MODELARK_API_KEY not configured")
         return
 
+    from ark_mcp.tools.seed_audio_understand import (
+        TOOL_ANNOTATIONS as audio_understand_annotations,
+    )
+    from ark_mcp.tools.seed_audio_understand import (
+        SeedAudioUnderstandOutput,
+        seed_audio_understand,
+    )
     from ark_mcp.tools.seed_understand import (
         TOOL_ANNOTATIONS as understand_annotations,
     )
@@ -595,6 +602,13 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             SeedUnderstandOutput,
             "understanding:read",
             seed_understand,
+        ),
+        (
+            "seed_audio_understand",
+            audio_understand_annotations,
+            SeedAudioUnderstandOutput,
+            "understanding:read",
+            seed_audio_understand,
         ),
     )
     for name, tool_annotations, output_model, scope, handler in registrations:
@@ -774,7 +788,8 @@ def create_server(
         "Ark Seed Multimodal",
         instructions=(
             "BytePlus multimodal generation server. Provides Seed Audio, Seedream, "
-            "Seedance, Seed 2.1 multimodal understanding, and Speech-to-Text tools. "
+            "Seedance, Seed 2.1 multimodal understanding, Seed audio understanding, and "
+            "Speech-to-Text tools. "
             "BytePlus VOD AI MediaKit enhancement, video transcoding, subtitle burn-in, "
             "subtitle or text removal, and voice and background audio separation are "
             "available when the MediaKit API key is "

@@ -170,6 +170,7 @@ class TestToolDiscovery:
                 "seedance_list_tasks",
                 "seedance_cancel_or_delete_task",
                 "seed_understand",
+                "seed_audio_understand",
                 "speech_to_text",
                 "media_upload",
                 "media_upload_batch",

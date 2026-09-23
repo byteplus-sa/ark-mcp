@@ -186,7 +186,7 @@ default request timeout is 10 minutes (`BYTEPLUS_REQUEST_TIMEOUT_MS=600000`).
 If you experience timeouts:
 
 1. Increase `BYTEPLUS_REQUEST_TIMEOUT_MS` (or `SEED_UNDERSTANDING_TIMEOUT_MS`
-   for `seed_understand` only)
+   for `seed_understand` and `seed_audio_understand` only)
 2. Check your network connectivity to the BytePlus region
 3. Check `retryable` and `ambiguous_completion` on the `TIMEOUT` error. What a
    timeout means depends on the call:
@@ -195,7 +195,7 @@ If you experience timeouts:
 |---|---|---|---|---|
 | Create / generate / cancel / delete / MediaKit submit | `false` | `true` | No | It may have succeeded upstream. Do not retry blindly; reconcile by task ID, request ID, or `client_token` |
 | Task polls (Seedance, Seed 3D, ASR query, MediaKit get) | `true` | `false` | Yes | Safe to poll again |
-| `seed_understand` chat completion | `true` | `false` | No | Safe to retry, but a retry is a new billed completion; consider a longer `SEED_UNDERSTANDING_TIMEOUT_MS` or lower `reasoning_effort` |
+| `seed_understand` / `seed_audio_understand` chat completion | `true` | `false` | No | Safe to retry, but a retry is a new billed completion; consider a longer `SEED_UNDERSTANDING_TIMEOUT_MS` or lower `reasoning_effort` |
 | Variation batch deadline | see `error.phase` | | No | `queued` (`QUEUE_TIMEOUT`) is safe to retry; `generating` is ambiguous |
 
 Budget reservations are committed for every `TIMEOUT`, since a timed-out

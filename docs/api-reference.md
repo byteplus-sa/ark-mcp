@@ -51,6 +51,7 @@ surface.
 | 42 | `seed_media_persist_url` | Artifacts | Optional background task | Local / JWT |
 | 43 | `media_upload_batch` | Object storage (optional) | Required background task | TOS / S3 |
 | 44 | `seedance_get_tasks` | Seedance | Optional background retrieval | ModelArk |
+| 45 | `seed_audio_understand` | Seed audio understanding (optional) | Required background task | ModelArk |
 
 ## Tool Annotations
 
@@ -70,6 +71,7 @@ surface.
 | `media_presign_batch` | true | false | true | false |
 | `seedream_edit_image` | false | false | false | true |
 | `seed_understand` | false | false | false | true |
+| `seed_audio_understand` | false | false | false | true |
 | `seedance_2_5_create_task` | false | false | false | true |
 | `seedance_2_5_create_task_variations` | false | false | false | true |
 | `seed_media_get_artifact` | true | false | true | false |
@@ -101,7 +103,8 @@ surface.
 | `media_upload_batch` | false | false | false | true |
 | `seedance_get_tasks` | false | false | true | false |
 
-`seed_understand` is not read-only because `save_to` writes local files, and the
+`seed_understand` and `seed_audio_understand` are not read-only because `save_to`
+writes local files, and the
 get-task tools (`seedance_get_task`, `seedance_get_tasks`, `hyper3d_get_task`,
 `hitem3d_get_task`, and the `vod_get_*` tools) are not read-only because
 `output_path`/`output_dir` write local files.
@@ -109,7 +112,7 @@ get-task tools (`seedance_get_task`, `seedance_get_tasks`, `hyper3d_get_task`,
 ## Background Execution
 
 Generation and variation tools, `speech_to_text`, `media_upload`,
-`media_upload_batch`, `seed_understand`, and all Seedance, Seed 3D, and
+`media_upload_batch`, `seed_understand`, `seed_audio_understand`, and all Seedance, Seed 3D, and
 MediaKit provider-submission tools declare `execution.taskSupport="required"`. By default, discover them
 with `ark_job_capabilities`, submit them through `ark_job_submit`, and poll
 `ark_job_get` at the advertised two-second interval until terminal. A
@@ -152,7 +155,8 @@ On stdio transport, these fields write output straight to a local file:
 `seed_audio_generate`, `seedance_get_task`, `hyper3d_get_task`,
 `hitem3d_get_task`, and the five MediaKit get tools; `output_dir` on
 `seedream_generate_image_variations`, `seed_audio_generate_variations`, and
-`seedance_get_tasks`; `save_to` on `seed_understand`; and `destination_path`
+`seedance_get_tasks`; `save_to` on `seed_understand` and `seed_audio_understand`;
+and `destination_path`
 on `seed_media_export_artifact`. Each comes with an `overwrite` boolean
 (default `false`).
 
@@ -1872,6 +1876,80 @@ Optional background task (required when `persist_output=true`).
 | `counts` | object | Number of found tasks per status |
 | `all_terminal` | boolean | `true` when every found task has finished |
 | `active_tasks` | integer | Found tasks still queued or running |
+
+---
+
+## 23. seed_audio_understand
+
+Understand, transcribe, translate, or reason about audio clips (speech, music,
+or sound) through a ModelArk chat model with audio input. The model is set by
+`SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`) and is not a
+per-call argument. Deep thinking is always on (depth set by `reasoning_effort`),
+and only the final answer is returned. For long-form transcription with
+word-level timings, use `speech_to_text` instead.
+
+The tool shares `seed_understand`'s answer-shaping fields and output shape:
+`system`, `reasoning_effort`, `response_format`, `json_retry`, `save_to`,
+`overwrite`, `return_content`, `temperature`, `max_tokens`, `top_p`, and
+`repetition_penalty` behave exactly as documented in
+[section 14](#14-seed_understand). It requires background execution and uses the
+`understanding:read` scope and `SEED_UNDERSTANDING_TIMEOUT_MS`.
+
+`json_schema` is enforced by the provider for `seed-2-0-lite-260428`;
+`json_object` is not enforced by that model, so prefer `json_schema` (or set
+`json_retry`) when you need JSON.
+
+### Input
+
+| Field | Type | Required | Default | Constraints |
+|---|---|---|---|---|
+| `prompt` | string | Yes | — | 1-32,000 chars |
+| `audios` | list[UnderstandingAudioInput] | Yes | — | 1-8 clips, sent in order |
+| *(shared fields)* | — | No | — | As `seed_understand`, without `images`, `videos`, `model`, or `thinking` |
+
+**UnderstandingAudioInput:** `kind` (`"url"` or `"base64"`), `url`, `data`,
+`mime_type`.
+
+- `kind="url"`: an HTTPS URL that passes the SSRF policy. The provider fetches
+  and decodes it; `mime_type` is optional.
+- `kind="base64"`: raw Base64 (no `data:` prefix), at most 10 MB decoded.
+  `mime_type` is required and must be one of `audio/wav` (also `audio/x-wav`,
+  `audio/wave`), `audio/mpeg` (`audio/mp3`), `audio/flac` (`audio/x-flac`),
+  `audio/aac` (`audio/x-aac`), or `audio/mp4` (m4a). The provider rejects
+  Base64 Ogg/Opus and raw PCM, so upload those via `media_upload` and pass the
+  URL instead.
+
+### Output
+
+Same fields as [`seed_understand`](#14-seed_understand) (`provider`, `model`,
+`completion_id`, `choices`, `usage`, `attempts`, `saved_path`, `saved_bytes`,
+`request_id`). `model` is the configured `SEED_AUDIO_UNDERSTANDING_MODEL`.
+
+### Example
+
+```json
+// Input
+{
+  "prompt": "Transcribe the speech and identify each speaker's emotion.",
+  "audios": [{ "kind": "url", "url": "https://.../meeting.mp3" }],
+  "reasoning_effort": "low",
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "speech_analysis",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "transcript": { "type": "string" },
+          "emotion": { "type": "string" }
+        },
+        "required": ["transcript", "emotion"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
+```
 
 ---
 

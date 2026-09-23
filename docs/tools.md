@@ -63,6 +63,7 @@ interval:
 - `hyper3d_create_task`
 - `hitem3d_create_task`
 - `seed_understand`
+- `seed_audio_understand`
 - `vod_enhance_video`
 - `vod_transcode_video`
 - `vod_separate_audio`
@@ -111,7 +112,7 @@ straight to a local file, so a client does not need a separate
 | `hyper3d_get_task`, `hitem3d_get_task` | `output_path` | |
 | `vod_get_enhancement_task`, `vod_get_transcode_task`, `vod_get_audio_separation`, `vod_get_subtitle_addition_task`, `vod_get_subtitle_removal_task` | `output_path` | |
 | `seedream_generate_image_variations`, `seed_audio_generate_variations`, `seedance_get_tasks` | `output_dir` | One file per artifact |
-| `seed_understand` | `save_to` | Writes the final answer, not media |
+| `seed_understand`, `seed_audio_understand` | `save_to` | Writes the final answer, not media |
 
 `output_path` names a file, or a directory when it ends with `/`; files written
 into a directory are named `<artifact_id>.<ext>`. Every tool that has one of
@@ -1116,6 +1117,64 @@ Structured review written straight to disk:
   "json_retry": 1,
   "save_to": "/Users/me/project/reviews/ad.json",
   "return_content": "none"
+}
+```
+
+## seed_audio_understand
+
+Understand, transcribe, translate, or reason about audio clips (speech, music,
+or sound) through a ModelArk chat model that accepts audio input. Typical uses:
+transcription, speech translation, speaker or emotion analysis, summaries,
+meeting minutes, and questions about what is heard. For long-form transcription
+with word-level timings, use [`speech_to_text`](#speech_to_text).
+
+The model is configured by `SEED_AUDIO_UNDERSTANDING_MODEL` (default
+`seed-2-0-lite-260428`); it is not a per-call argument. Any ModelArk model that
+accepts Chat Completions `input_audio` parts with deep thinking can be swapped in
+without a code change. Deep thinking is always on and only the final answer is
+returned, exactly as with `seed_understand`.
+
+**Execution:** Required background job, same as `seed_understand`: submit through
+`ark_job_submit` (or native task metadata) and poll. Scope `understanding:read`;
+timeout `SEED_UNDERSTANDING_TIMEOUT_MS`.
+
+**Annotations:** `readOnlyHint=False` (because `save_to` writes local files),
+`destructiveHint=False`, `idempotentHint=False`, `openWorldHint=True`
+
+### Input
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | Yes | The question or task about the audio (1-32,000 chars) |
+| `audios` | list[UnderstandingAudioInput] | Yes | Audio clips (1-8), sent to the model in order |
+| `system`, `reasoning_effort`, `response_format`, `json_retry`, `save_to`, `overwrite`, `return_content`, `temperature`, `max_tokens`, `top_p`, `repetition_penalty` | — | No | Same as [`seed_understand`](#seed_understand) |
+
+**UnderstandingAudioInput** is a `MediaSource` (`kind`, `url`, `data`,
+`mime_type`):
+
+- `kind="url"` — an HTTPS URL; the provider fetches and decodes it. For local
+  files, upload with `media_upload` first.
+- `kind="base64"` — raw Base64 (no `data:` prefix), at most 10 MB decoded.
+  `mime_type` is required: `audio/wav`, `audio/mpeg`, `audio/flac`,
+  `audio/aac`, or `audio/mp4` (m4a), plus their `x-` aliases. The provider
+  rejects Base64 Ogg/Opus and raw PCM; pass those as URLs.
+
+With `seed-2-0-lite-260428`, `json_schema` is enforced by the provider but
+`json_object` is not, so use `json_schema` (or `json_retry`) when you need JSON.
+
+### Output
+
+Returns `SeedAudioUnderstandOutput`, identical in shape to
+`SeedUnderstandOutput`. `model` is the configured audio model.
+
+### Example
+
+```json
+{
+  "prompt": "Summarize this call and list action items with owners.",
+  "audios": [{"kind": "url", "url": "https://.../call.m4a"}],
+  "reasoning_effort": "medium",
+  "save_to": "/Users/me/project/notes/call-summary.md"
 }
 ```
 

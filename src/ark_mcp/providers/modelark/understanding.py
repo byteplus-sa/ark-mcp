@@ -1,4 +1,4 @@
-"""Seed 2.1 understanding adapter — multimodal understanding through ModelArk.
+"""Seed understanding adapter — multimodal understanding through ModelArk.
 
 Translates domain input models to provider DTOs, calls the ModelArk Chat
 Completions API, and maps provider responses to domain output models.
@@ -78,6 +78,7 @@ class SeedUnderstandingService:
         prompt: str,
         image_parts: list[dict[str, Any]] | None = None,
         video_parts: list[dict[str, Any]] | None = None,
+        audio_parts: list[dict[str, Any]] | None = None,
         system: str | None = None,
         thinking: bool = True,
         reasoning_effort: str | None = None,
@@ -90,6 +91,9 @@ class SeedUnderstandingService:
         """Build a provider request from domain-level parameters.
 
         - Translates image/video URL/Base64 inputs into Chat API content parts.
+        - Translates audio inputs into ``input_audio`` parts: URLs as
+          ``{"url": ...}``; Base64 as raw ``{"data": ..., "format": ...}``, where
+          each Base64 part must carry a ``format`` key (e.g. ``wav``, ``mp3``).
         - Forces ``stream: false`` for MVP.
         - ``thinking=True`` (the default) always sends ``thinking.type='enabled'``
           and ``reasoning_effort``; ``thinking=False`` sends neither (used only for
@@ -130,6 +134,20 @@ class SeedUnderstandingService:
                     raise ValueError(
                         "Video Base64 is not supported by the chat endpoint; "
                         "upload via media_upload and pass a URL."
+                    )
+
+        if audio_parts:
+            for part in audio_parts:
+                if part.get("kind") == "url":
+                    content_parts.append(
+                        ChatContentPart(type="input_audio", input_audio={"url": part["url"]})
+                    )
+                elif part.get("kind") == "base64":
+                    content_parts.append(
+                        ChatContentPart(
+                            type="input_audio",
+                            input_audio={"data": part["data"], "format": part["format"]},
+                        )
                     )
 
         content_parts.append(ChatContentPart(type="text", text=prompt))

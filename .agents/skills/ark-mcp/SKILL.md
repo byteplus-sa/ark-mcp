@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, transcribe speech to text, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
+description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -26,6 +26,11 @@ one server, including products served through ModelArk:
   only the final answer is returned. Supports provider-enforced JSON Schemas
   and saving the answer to a local file. Use for OCR, scene analysis, content
   review, and as a visual reasoning sub-agent.
+- **Seed Audio Understanding** — `seed_audio_understand` sends audio clips to
+  a ModelArk chat model (`SEED_AUDIO_UNDERSTANDING_MODEL`, default
+  `seed-2-0-lite-260428`) for transcription, translation, speaker/emotion
+  analysis, summaries, meeting minutes, and Q&A about what is heard. Same
+  always-on thinking, JSON Schema, and `save_to` controls as `seed_understand`.
 - **Speech-to-Text** — background audio transcription via Seed Speech ASR;
   retrieve the completed transcript from the background result.
 - **VOD AI MediaKit** — asynchronous video enhancement using the exact
@@ -56,6 +61,8 @@ Invoke this skill when the user wants to:
 - create, poll, list, cancel, or delete Hyper3D and Hitem3d 3D generation tasks (requires the 3D feature flag);
 - understand images or videos (OCR, scene analysis, content review), or use a
   multimodal reasoning sub-agent;
+- understand or reason about audio (transcription, translation, speaker or
+  emotion analysis, summaries, meeting minutes, Q&A) with `seed_audio_understand`;
 - transcribe audio or video into timestamped, speaker-diarized text;
 - enhance a public HTTPS video with the supported VOD AI MediaKit profile;
 - transcode a public HTTPS video (codec, container, resolution, bitrate, frame
@@ -124,6 +131,7 @@ gracefully degrades to whatever is configured.
 - `seedance_2_5_create_task`
 - `seedance_2_5_create_task_variations`
 - `seed_understand`
+- `seed_audio_understand`
 
 ### Requires `BYTEPLUS_MODELARK_3D_ENABLED=true` (and `BYTEPLUS_MODELARK_API_KEY`)
 
@@ -181,6 +189,7 @@ is contacted:
 - `hyper3d_create_task`
 - `hitem3d_create_task`
 - `seed_understand`
+- `seed_audio_understand`
 - `vod_enhance_video`
 - `vod_transcode_video`
 - `vod_separate_audio`
@@ -370,7 +379,8 @@ On stdio, write output straight to disk instead of exporting afterwards:
   needs a directory.
 - `output_dir` + `overwrite` on `seedream_generate_image_variations`,
   `seed_audio_generate_variations`, and `seedance_get_tasks`.
-- `save_to` + `overwrite` on `seed_understand` (writes the answer).
+- `save_to` + `overwrite` on `seed_understand` and `seed_audio_understand`
+  (writes the answer).
 
 Paths must be absolute and inside the client's MCP roots, or `OUTPUT_ROOTS`
 when the client has none; with neither, path writing is disabled. They are
@@ -1471,6 +1481,75 @@ tasks where speed matters more than reasoning depth.
 
 ---
 
+### Seed Audio Understanding
+
+Requires `BYTEPLUS_MODELARK_API_KEY`. Auth scope: `understanding:read`.
+Required background execution — submit through `ark_job_submit` (or native
+task metadata) and poll, exactly like `seed_understand`.
+
+#### `seed_audio_understand`
+
+Send one or more audio clips plus a prompt to a ModelArk chat model with audio
+input and get back only the final answer. The model is set server-side by
+`SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`, an interim
+choice that will be replaced); there is no per-call `model` argument. Use it
+for:
+
+- **Transcription and translation** — "transcribe verbatim", "translate the
+  speech into English"
+- **Speaker and delivery analysis** — speaker count, gender, emotion, tone
+- **Summaries and meeting minutes** — topics, decisions, action items
+- **Q&A about what is heard** — music, sound events, background noise
+
+For long-form transcription with word-level timestamps and utterances, use
+`speech_to_text` (Seed Speech ASR) instead.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | `str` | Yes | 1–32,000 characters. The question or task about the audio. |
+| `audios` | `list[UnderstandingAudioInput]` | Yes | 1–8 clips, sent in order |
+| `system`, `reasoning_effort`, `response_format`, `json_retry`, `save_to`, `overwrite`, `return_content`, `temperature`, `max_tokens`, `top_p`, `repetition_penalty` | — | No | Same as `seed_understand` |
+
+Audio inputs:
+
+- `{"kind": "url", "url": "https://..."}` — preferred. Upload local files with
+  `media_upload` (via `ark_job_submit`) first.
+- `{"kind": "base64", "data": "<raw base64>", "mime_type": "audio/wav"}` — at
+  most 10 MB decoded, no `data:` prefix. `mime_type` is **required** and must
+  be `audio/wav`, `audio/mpeg`, `audio/flac`, `audio/aac`, or `audio/mp4`
+  (m4a). Base64 Ogg/Opus/PCM is rejected by the provider — use a URL.
+
+Returns `SeedAudioUnderstandOutput` (same shape as `SeedUnderstandOutput`).
+With `seed-2-0-lite-260428`, `json_schema` is enforced but `json_object` is
+not — use `json_schema` when you need structured output.
+
+**Example — structured speech analysis:**
+
+```json
+{
+  "prompt": "Transcribe the speech and describe the speaker's emotion.",
+  "audios": [{ "kind": "url", "url": "https://cdn.example.com/clip.mp3" }],
+  "reasoning_effort": "low",
+  "response_format": {
+    "type": "json_schema",
+    "json_schema": {
+      "name": "speech_analysis",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "transcript": { "type": "string" },
+          "emotion": { "type": "string" }
+        },
+        "required": ["transcript", "emotion"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
+```
+
+---
+
 ### Speech-to-Text
 
 Requires `BYTEPLUS_SEED_SPEECH_API_KEY`. Auth scope: `seed:asr:transcribe`.
@@ -1718,6 +1797,11 @@ quota. Eleven model families, with these default model IDs:
 | **Hyper3D** | `hyper3d-gen2-260112` | Text-to-3D + image-to-3D (5 imgs), GLB/OBJ/USDZ/FBX/STL, seeds, PBR materials |
 | **Hitem3d** | `hitem3d-2-0-251223` | Image-to-3D only (1–4 imgs), OBJ/GLB/STL/FBX/USDZ, resolution + face control |
 
+`seed_audio_understand` is outside this registry: it calls the plain model ID in
+`SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`, audio input
+via URL or Base64 wav/mp3/flac/aac/m4a, deep-thinking) with no family, bindings,
+or capability pre-validation.
+
 Custom model IDs must be explicitly bound via `SEEDREAM_MODEL_BINDINGS`,
 `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`, or
 `SEED3D_MODEL_BINDINGS` JSON. When a client omits the `model` parameter, the
@@ -1923,7 +2007,7 @@ The server retries only explicitly retryable, non-ambiguous errors:
 |---|---|---|
 | Create / generate / cancel / delete / MediaKit submit | `retryable=false`, `ambiguous_completion=true` | No — may have succeeded; reconcile by task/request ID |
 | Task polls (Seedance, Seed 3D, ASR query, MediaKit get) | `retryable=true`, `ambiguous_completion=false` | Yes |
-| `seed_understand` chat completion | `retryable=true`, `ambiguous_completion=false` | No — safe to retry yourself, but each retry is billed |
+| `seed_understand` / `seed_audio_understand` chat completion | `retryable=true`, `ambiguous_completion=false` | No — safe to retry yourself, but each retry is billed |
 
 Any `TIMEOUT` commits the budget reservation (it may have been billed).
 Provider output downloads are retried separately (`ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`,
@@ -2055,7 +2139,9 @@ Set to `0` (default) for record-only mode with no enforcement.
     Schema as `response_format` (`json_schema`), set `json_retry=1`, and use
     `save_to` with `return_content="none"` to keep the answer out of context. Prefer a public HTTPS video URL the provider already accepts;
     download and `media_upload` only when the link is a page/platform URL or
-    otherwise unusable. Video Base64 is not supported.
+    otherwise unusable. Video Base64 is not supported. For audio, use
+    `seed_audio_understand` (transcription, translation, analysis, Q&A) or
+    `speech_to_text` when you need word-level timings.
 
 16. **Choose the right Seedance model.** Use 2.0 (`seedance_create_task`)
     for 4K or lower cost. Use 2.5 (`seedance_2_5_create_task`) for
@@ -2112,7 +2198,8 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 24. **Write outputs straight to the project on stdio.** Pass `output_path`
     (generation and get tools), `output_dir` (variations,
-    `seedance_get_tasks`), or `save_to` (`seed_understand`) with an absolute
+    `seedance_get_tasks`), or `save_to` (`seed_understand`,
+    `seed_audio_understand`) with an absolute
     path inside the client's roots instead of a follow-up
     `seed_media_export_artifact` call. Check `local_path` / `export_error`.
 
@@ -2130,7 +2217,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 ### Provider Credentials
 
-- `BYTEPLUS_MODELARK_API_KEY` — enables Seedream, Seedance, Seed 3D (with flag), and Seed 2.1 Understanding
+- `BYTEPLUS_MODELARK_API_KEY` — enables Seedream, Seedance, Seed 3D (with flag), Seed 2.1 Understanding, and Seed Audio Understanding
 - `BYTEPLUS_SEED_SPEECH_API_KEY` — enables Seed Audio (TTS) and Speech-to-Text (ASR)
 - `BYTEPLUS_VOD_MEDIAKIT_API_KEY` — enables VOD AI MediaKit enhancement, transcoding, subtitle operations, and audio separation
 - `BYTEPLUS_MODELARK_BASE_URL` — override ModelArk data-plane host
@@ -2156,6 +2243,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 - `SEEDREAM_MODEL_BINDINGS`
 - `SEEDANCE_MODEL_BINDINGS`
 - `SEED_UNDERSTANDING_DEFAULT_MODEL`
+- `SEED_AUDIO_UNDERSTANDING_MODEL` — model for `seed_audio_understand` (default `seed-2-0-lite-260428`)
 - `SEED_UNDERSTANDING_MODEL_FAMILY`
 - `SEED_UNDERSTANDING_MODEL_BINDINGS`
 
@@ -2200,7 +2288,7 @@ Use bindings when a custom model ID is not one of the built-in defaults.
 - `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` — output download attempts (default 3)
 - `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` — max inline fallback size when storage fails (default 8 MiB)
 - `OUTPUT_ROOTS` — comma-separated absolute directories for local path writes when the client advertises no MCP roots
-- `SEED_UNDERSTANDING_TIMEOUT_MS` — `seed_understand` request timeout (defaults to `BYTEPLUS_REQUEST_TIMEOUT_MS`)
+- `SEED_UNDERSTANDING_TIMEOUT_MS` — `seed_understand` and `seed_audio_understand` request timeout (defaults to `BYTEPLUS_REQUEST_TIMEOUT_MS`)
 - `PROVIDER_MAX_CONCURRENCY`
 - `PRINCIPAL_MAX_CONCURRENCY`
 - `DAILY_BUDGET_USD`

@@ -253,7 +253,8 @@ safe error messages.
 ## Local output paths
 
 Tools that write to a caller-chosen local path — `output_path`/`output_dir` on
-generation and get tools, `save_to` on `seed_understand`, and
+generation and get tools, `save_to` on `seed_understand` and
+`seed_audio_understand`, and
 `destination_path` on `seed_media_export_artifact` — share one policy in
 `security/output_paths.py`:
 
