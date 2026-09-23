@@ -44,6 +44,7 @@ from ark_mcp.tools._parallel import (
 from ark_mcp.tools._persistence import (
     persist_base64,
     persist_from_url,
+    persistence_issue,
     persistence_variation_error,
     provider_url_ref,
 )
@@ -228,6 +229,18 @@ async def seedream_generate_image_variations(
                             media_type=MediaType.IMAGE,
                             mime_type=mime,
                             source_expires_at=source_expiry,
+                            # Only surfaced if the batch deadline cancels this
+                            # variation mid-persist, so it must already say the
+                            # output is unpersisted.
+                            issue=persistence_issue(
+                                ArtifactPersistenceError(
+                                    "storage_failed",
+                                    "Persistence did not finish before the batch deadline.",
+                                    retryable=True,
+                                ),
+                                MediaType.IMAGE,
+                                source_url_expires_at=source_expiry,
+                            ),
                         ),
                         request_id=request_id,
                     )

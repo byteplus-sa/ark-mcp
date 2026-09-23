@@ -461,3 +461,23 @@ async def test_base64_failure_prefers_provider_url() -> None:
     assert store.put_calls == 1  # non-retryable: no second attempt
     assert ref.id == PROVIDER_URL_ARTIFACT_ID
     assert ref.fallback_data is None
+
+
+async def test_result_returned_when_task_finishes_as_deadline_fires() -> None:
+    """A variation cancelled at the deadline that still returned must not be discarded."""
+    started = asyncio.Event()
+
+    async def factory(idx: int, progress: VariationProgress) -> VariationResult:
+        progress.phase = "generating"
+        started.set()
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            # Completed just as the deadline fired: return normally.
+            return VariationResult(index=idx, task_id=f"task-{idx}")
+        return VariationResult(index=idx, task_id=f"task-{idx}")
+
+    summary = await run_variation_batch(1, factory, batch_deadline=0.1)
+    assert summary.variations[0].task_id == "task-0"
+    assert summary.variations[0].error is None
+    assert summary.succeeded == 1

@@ -425,6 +425,17 @@ async def seed_understand(
                     response = attempt_response
             except ProviderError as exc:
                 await context_log(ctx, "error", f"Understanding failed: {exc.message}")
+                if checked:
+                    # A json_retry attempt failed, but the previous attempt was
+                    # billed and produced an answer: keep it instead of losing it.
+                    log_warning(
+                        "understanding_retry_failed_keeping_previous",
+                        model=caps.model_id,
+                        attempt=attempts,
+                        code=exc.code,
+                    )
+                    attempts -= 1
+                    break
                 return provider_error_result(exc)
 
             usage = SeedUnderstandingService.extract_usage(attempt_response)

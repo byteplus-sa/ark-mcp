@@ -104,7 +104,8 @@ straight to a local file, so a client does not need a separate
 
 | Tool | Field | Notes |
 |---|---|---|
-| `seedream_generate_image`, `seedream_edit_image` | `output_path` | Must be a directory (ending with `/`) when `max_images > 1` |
+| `seedream_generate_image` | `output_path` | Must be a directory (ending with `/`) when `max_images > 1` |
+| `seedream_edit_image` | `output_path` | Extra images get `-2`, `-3` suffixes when a file path is given |
 | `seed_audio_generate` | `output_path` | |
 | `seedance_get_task` | `output_path` | The last frame is written beside the video with a `-last-frame` suffix |
 | `hyper3d_get_task`, `hitem3d_get_task` | `output_path` | |

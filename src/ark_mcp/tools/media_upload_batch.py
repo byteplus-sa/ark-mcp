@@ -152,12 +152,15 @@ async def media_upload_batch(input: MediaUploadBatchInput, ctx: Context) -> Medi
             prepared.append(str(exc))
             continue
         total += size
+        # Fail as soon as the running total crosses the cap, so an oversized
+        # batch cannot first be decoded wholesale into memory.
+        if total > settings.media_upload_batch_max_bytes:
+            raise ValueError(
+                f"Batch exceeds MEDIA_UPLOAD_BATCH_MAX_BYTES "
+                f"({settings.media_upload_batch_max_bytes} bytes) at item {len(prepared)}. "
+                "Split it into smaller batches."
+            )
         prepared.append((single, path, raw, size))
-    if total > settings.media_upload_batch_max_bytes:
-        raise ValueError(
-            f"Batch totals {total} bytes, above MEDIA_UPLOAD_BATCH_MAX_BYTES "
-            f"({settings.media_upload_batch_max_bytes}). Split it into smaller batches."
-        )
     await ctx.report_progress(progress=10, total=100)
 
     limiter = asyncio.Semaphore(input.max_concurrent)

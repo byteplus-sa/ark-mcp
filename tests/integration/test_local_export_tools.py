@@ -145,3 +145,27 @@ async def test_download_retry_then_success(
         result = await seedream_generate_image(SeedreamGenerateInput(prompt="x"), fake_ctx)
     assert isinstance(result, SeedreamGenerateOutput)
     assert result.artifacts[0].persistence_error is None
+
+
+async def test_variation_deadline_partial_is_marked_unpersisted(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A partial handed back at the batch deadline must not look durably stored."""
+    from ark_mcp.domain.artifacts import MediaType
+    from ark_mcp.tools._persistence import persistence_issue, provider_url_ref
+
+    issue = persistence_issue(
+        ArtifactPersistenceError("storage_failed", "deadline", retryable=True),
+        MediaType.IMAGE,
+        source_url_expires_at="2026-09-24T00:00:00+00:00",
+    )
+    ref = provider_url_ref(
+        url="https://tos-ap-southeast.bytepluses.com/partial.png",
+        media_type=MediaType.IMAGE,
+        mime_type="image/png",
+        source_expires_at="2026-09-24T00:00:00+00:00",
+        issue=issue,
+    )
+    assert ref.id == "provider-url"
+    assert ref.persistence_error is not None
+    assert ref.persistence_error.retryable is True

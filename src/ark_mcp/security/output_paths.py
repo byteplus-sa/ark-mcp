@@ -187,18 +187,31 @@ def _fd_directory(dir_fd: int, fallback: Path) -> Path:
     proc_link = f"/proc/self/fd/{dir_fd}"
     if os.path.exists(proc_link):
         return Path(os.readlink(proc_link)).resolve()
-    return Path(os.path.realpath(fallback))
+    # Never fall back to a path-based check: that would reopen the very
+    # race the descriptor check exists to close.
+    raise OutputPathError(
+        f"Cannot verify the output directory safely on this platform ({fallback})."
+    )
 
 
 def _sha256_of(dir_fd: int, name: str) -> str | None:
+    """Digest an existing destination file, or None when there is no readable file.
+
+    A symlink (``O_NOFOLLOW``), a directory, or an unreadable entry yields
+    None, so the caller treats the destination as "not an identical file"
+    rather than leaking a raw OSError.
+    """
     try:
         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=dir_fd)
-    except (FileNotFoundError, OSError):
+    except OSError:
         return None
     digest = hashlib.sha256()
-    with os.fdopen(fd, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError:
+        return None
     return digest.hexdigest()
 
 

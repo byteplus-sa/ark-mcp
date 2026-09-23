@@ -1,8 +1,9 @@
 """``seedance_get_tasks`` tool — check many Seedance tasks in one call.
 
-Replaces a round of N ``seedance_get_task`` calls. Tasks are fetched with a
-single ``list_tasks(filter.task_ids=...)`` provider call; any succeeded task
-whose list entry lacks an output URL is re-fetched individually. Persistence
+Replaces a round of N ``seedance_get_task`` calls. Tasks are fetched with one
+``list_tasks(filter.task_ids=...)`` provider call per page of 20; any task the
+list omits, and any succeeded task whose list entry lacks an output URL, is
+re-fetched individually. Persistence
 reuses the per-task single-flight helper, so overlapping polls never
 download the same video twice.
 """
@@ -35,6 +36,9 @@ from ark_mcp.tools.seedance_get_task import (
 
 _TERMINAL = frozenset({"succeeded", "failed", "expired", "cancelled"})
 _MAX_CONCURRENT_FETCHES = 5
+# The provider's documented list page size; batches larger than this are paged.
+_LIST_PAGE_SIZE = 20
+_MAX_LIST_PAGES = 3
 
 
 class SeedanceGetTasksInput(BaseModel):
@@ -135,10 +139,17 @@ async def seedance_get_tasks(
     found: dict[str, SeedanceTaskResponse] = {}
     try:
         if owned:
-            page, _ = await call_with_retry(
-                lambda: service.list_tasks(page=1, page_size=len(owned), task_ids=owned)
-            )
-            found = {task.id: task for task in page.data if task.id in owned}
+            # The provider may cap page_size below the batch size, so page until
+            # every requested task is seen or a page comes back empty.
+            for page_num in range(1, _MAX_LIST_PAGES + 1):
+                page, _ = await call_with_retry(
+                    lambda page_num=page_num: service.list_tasks(  # type: ignore[misc]
+                        page=page_num, page_size=_LIST_PAGE_SIZE, task_ids=owned
+                    )
+                )
+                found.update({task.id: task for task in page.data if task.id in owned})
+                if len(found) >= len(owned) or not page.data:
+                    break
 
             # Fall back to a full fetch where the list entry is missing or has no output URL.
             refetch = [

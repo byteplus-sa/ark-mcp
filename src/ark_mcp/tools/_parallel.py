@@ -169,7 +169,7 @@ async def run_variation_batch(
 
     tasks = [asyncio.create_task(_guarded(i)) for i in range(count)]
     try:
-        _done, pending = await asyncio.wait(tasks, timeout=batch_deadline)
+        await asyncio.wait(tasks, timeout=batch_deadline)
     finally:
         for task in tasks:
             if not task.done():
@@ -178,7 +178,10 @@ async def run_variation_batch(
 
     variation_results: list[VariationResult] = []
     for i, task in enumerate(tasks):
-        if task in pending or task.cancelled():
+        # Every task is done after the gather above, so classify from its own
+        # state: a task cancelled at the deadline may still have returned a
+        # real result, which must not be discarded.
+        if task.cancelled():
             log_warning("variation_deadline", index=i, phase=progresses[i].phase)
             variation_results.append(_deadline_error(i, progresses[i]))
             continue

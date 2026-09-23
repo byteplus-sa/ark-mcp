@@ -180,11 +180,7 @@ def _build_edit_prompt(
     return f"{markup} {instruction}" if markup else instruction
 
 
-@local_export(
-    "artifacts",
-    require_dir=lambda i: (getattr(i, "max_images", None) or 1) > 1,
-    precondition=_needs_persist,
-)
+@local_export("artifacts", precondition=_needs_persist)
 async def seedream_edit_image(
     input: SeedreamEditInput, ctx: Context
 ) -> SeedreamEditOutput | ToolResult:

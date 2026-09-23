@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from ark_mcp.config.env import get_settings
+from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.modelark.schemas import ChatCompletionProviderResponse
 from ark_mcp.providers.modelark.understanding import SeedUnderstandingService
 from ark_mcp.security.output_paths import OutputPathError
@@ -230,3 +231,41 @@ class TestOutputControls:
 
     def test_tool_is_not_read_only(self) -> None:
         assert TOOL_ANNOTATIONS["readOnlyHint"] is False
+
+
+async def test_retry_failure_keeps_the_billed_first_answer(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A json_retry attempt that fails must not discard the billed first answer."""
+    calls = 0
+
+    async def mock_generate(
+        self: SeedUnderstandingService, request: Any
+    ) -> tuple[ChatCompletionProviderResponse, str | None]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            body = _response('{"beats": [{"start": "x"}]}')
+            return ChatCompletionProviderResponse.model_validate(body), "req-json"
+        raise ProviderError(
+            NormalizedProviderError(
+                provider="modelark",
+                operation="chat_completion",
+                code="TIMEOUT",
+                message="timed out",
+                retryable=True,
+                ambiguous_completion=False,
+            )
+        )
+
+    monkeypatch.setattr(SeedUnderstandingService, "generate", mock_generate)
+    result = await seed_understand(
+        SeedUnderstandInput(prompt="beats", response_format=_schema_format(), json_retry=1),
+        fake_ctx,
+    )
+    assert isinstance(result, SeedUnderstandOutput)
+    assert calls == 2
+    assert result.attempts == 1
+    assert result.choices[0].content == '{"beats": [{"start": "x"}]}'
+    assert result.choices[0].schema_violation is not None
+    assert result.usage.total_tokens == 30

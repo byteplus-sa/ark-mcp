@@ -288,3 +288,48 @@ async def test_batch_unknown_extension_is_a_per_item_error(
     assert isinstance(result, MediaUploadBatchOutput)
     assert result.items[0].error is not None and "infer mime_type" in result.items[0].error
     assert result.succeeded == 1
+
+
+async def test_batch_cap_rejects_before_decoding_every_item(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The cap must stop the walk, not be checked after everything is decoded."""
+    monkeypatch.setenv("MEDIA_UPLOAD_BATCH_MAX_BYTES", "8")
+    get_settings.cache_clear()
+    payload = base64.b64encode(b"0123456789").decode()
+    gw = _gateway()
+    with (
+        patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw),
+        pytest.raises(ValueError, match="at item 0"),
+    ):
+        await media_upload_batch(
+            MediaUploadBatchInput(
+                items=[
+                    {"media_type": "image", "mime_type": "image/png", "data": payload},
+                    {"media_type": "image", "mime_type": "image/png", "data": payload},
+                ]
+            ),
+            fake_ctx,
+        )
+
+
+async def test_get_tasks_pages_when_provider_caps_page_size(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider page smaller than the batch must be paged, not silently truncated."""
+    ids = [f"t-{i}" for i in range(25)]
+    pages: list[int] = []
+
+    async def mock_list(self: SeedanceService, **kwargs: Any) -> Any:
+        page = kwargs["page"]
+        pages.append(page)
+        chunk = ids[(page - 1) * 20 : page * 20]
+        return SeedanceTaskListResponse(data=[_task(i, "queued") for i in chunk]), "req"
+
+    monkeypatch.setattr(SeedanceService, "list_tasks", mock_list)
+    monkeypatch.setattr(SeedanceService, "close", _noop_close)
+    result = await seedance_get_tasks(SeedanceGetTasksInput(task_ids=ids), fake_ctx)
+    assert isinstance(result, SeedanceGetTasksOutput)
+    assert pages == [1, 2]
+    assert len(result.tasks) == 25
+    assert result.errors == []
