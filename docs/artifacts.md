@@ -1,6 +1,6 @@
 # Durable Artifacts
 
-Provider media URLs expire — 2 hours for audio, 24 hours for image/video —
+Provider media URLs expire — 2 hours for audio, 24 hours for image/video/3D —
 so the server persists every generated output to a local store and
 re-exposes it as a stable MCP resource `seed-media://artifacts/{artifact_id}`.
 This document describes the artifact store, its lifecycle, and the
@@ -63,8 +63,12 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 | `created_at` | `str` | — | ISO-8601 creation timestamp |
 | `expires_at` | `str \| None` | `None` | ISO-8601 local-artifact expiry |
 | `source_expires_at` | `str \| None` | `None` | ISO-8601 provider URL expiry |
+| `persistence_error` | `ArtifactPersistenceIssue \| None` | `None` | set when the output was generated (and billed) but not stored; see [Persistence failures](#persistence-failures) |
+| `fallback_data` | `str \| None` | `None` | Base64 output bytes, only for `inline-fallback` references |
+| `local_path` | `str \| None` | `None` | absolute local path written for `output_path` / `output_dir` |
+| `export_error` | `str \| None` | `None` | why the requested local copy was not written |
 
-`MediaType` is a `StrEnum`: `IMAGE`, `AUDIO`, `VIDEO`.
+`MediaType` is a `StrEnum`: `IMAGE`, `AUDIO`, `VIDEO`, `THREE_D`.
 
 ## The store protocol (`artifacts/store.py`)
 
@@ -98,11 +102,76 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 7. Increment `ark_mcp_artifact_operations_total{operation="put", status="success", media_type}`.
 
 `copy_from_trusted_url` passes a host-suffix allowlist
-(`.bytepluses.com`, `.byteplus.com`, `.bytedance.com`, `.bytednsdoc.com`,
-`.volces.com`, `.tos-ap-southeast.bytepluses.com`) as the `trusted_hosts`
-predicate to `SafeDownloader.download`. If the downloaded `content_type`
-differs from the supplied `mime_type`, it logs `artifact_mime_mismatch` and
-overrides the MIME with the actual content type.
+(`.bytepluses.com`, `.byteplus.com`, `.byteplusvod.com`, `.bytedance.com`,
+`.bytednsdoc.com`, `.volces.com`, `.tos-ap-southeast.bytepluses.com`) as the
+`trusted_hosts` predicate to `SafeDownloader.download`. If the downloaded
+`content_type` differs from the supplied `mime_type`, it logs
+`artifact_mime_mismatch` and overrides the MIME with the actual content type.
+
+### Download and upload retries
+
+A GET on a provider output URL has no side effects, so `SafeDownloader`
+retries retryable failures — timeouts, network errors, and 408/429/5xx
+responses — up to `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` times (default 3), waiting
+1s, 2s, 4s, ... between attempts. Each attempt is bounded by
+`ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` (default 120). Both backends use the same
+settings. Policy failures — untrusted host, rejected redirect, oversized body,
+expired source — are never retried.
+
+The object-storage backend also retries transient failures of its data and
+metadata uploads (object keys are fixed per artifact, so a repeated PUT is
+idempotent); a final failure surfaces as `storage_failed`.
+
+## Persistence failures
+
+A billed output is never dropped because storage failed. When persistence
+fails after the retries above, the tool call still succeeds and the returned
+`ArtifactRef` carries `persistence_error` (`ArtifactPersistenceIssue`):
+
+| Field | Meaning |
+|---|---|
+| `code` | `untrusted_output_host`, `output_too_large`, `invalid_output_mime`, `source_expired`, `download_failed`, or `storage_failed` |
+| `message` | credential- and URL-safe explanation |
+| `retryable` | whether persisting again may succeed |
+| `artifact_limit_bytes` | size limit of the durable artifact policy for this media type |
+| `source_url_expires_at` | when the unpersisted provider URL expires |
+
+The reference takes one of two shapes:
+
+| `id` | Used for | Where the bytes are |
+|---|---|---|
+| `provider-url` | URL outputs (Seedream `url`, Seedance video/last frame, Seed 3D files) and inline outputs that also came with a provider URL | `uri` is the temporary provider URL, valid until `source_expires_at` |
+| `inline-fallback` | Inline Base64 outputs with no provider URL (Seed Audio, Seedream `b64_json`) | `fallback_data`, up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables) |
+
+Inline Base64 is retried once against the store before falling back. An inline
+output larger than `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` with no provider URL
+still fails the call. Invalid or oversized Base64 is a validation error, not a
+persistence failure.
+
+To recover a `provider-url` reference, call `seed_media_persist_url` with its
+`uri`, `media_type`, `mime_type`, and `source_expires_at` before the URL
+expires. The tool downloads only trusted provider hosts, through the same
+downloader and limits, and returns a new durable `ArtifactRef`.
+
+In variation batches, a variation whose output was generated but not stored
+reports `error.phase="persisting"`.
+
+For Seedance and Seed 3D get tools, an unpersisted result is not cached, so the
+next poll with `persist_output=true` tries again while the provider URL is
+still valid. MediaKit get tools keep their per-output persistence status
+(`persisted`, `failed`, ...) alongside the provider `source_url`.
+
+## Local copies
+
+On stdio transport, `output_path` / `output_dir` on generation and get tools,
+and `destination_path` on `seed_media_export_artifact`, write a copy of the
+durable artifact to a local file inside an allowed output root (client MCP
+roots, else `OUTPUT_ROOTS`). Bytes come from the local store file, or from the
+store for object storage; `inline-fallback` references are written from
+`fallback_data`. A `provider-url` reference cannot be written locally and gets
+an `export_error` asking you to persist it first. A failed local write never
+affects the durable artifact or fails the call. See
+[Security](security.md#local-output-paths) for the path policy.
 
 ## Artifact ownership (`.meta.json`)
 

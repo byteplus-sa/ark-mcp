@@ -356,7 +356,7 @@ class TestToolAnnotations:
         tools = await server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "seedance_get_task")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.idempotent_hint is True
 
     async def test_seedance_list_readonly(self, configured_server: None) -> None:
@@ -397,7 +397,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_get_enhancement_task")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False
@@ -406,7 +406,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_get_transcode_task")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False
@@ -424,7 +424,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_get_audio_separation")
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False
@@ -451,7 +451,7 @@ class TestToolAnnotations:
         tools = await configured_server.mcp.list_tools()
         tool = next(item for item in tools if item.name == tool_name)
         assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.read_only_hint is False  # output_path can write local files
         assert tool.annotations.destructive_hint is False
         assert tool.annotations.idempotent_hint is True
         assert tool.annotations.open_world_hint is False

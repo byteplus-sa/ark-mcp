@@ -263,3 +263,28 @@ def test_queue_info_running_task() -> None:
 
 def test_queue_info_none_when_finished() -> None:
     assert queue_info(_task("s", "succeeded")) is None
+
+
+async def test_batch_unknown_extension_is_a_per_item_error(
+    test_env: None, fake_ctx: FakeContext, tmp_path: Path
+) -> None:
+    odd = tmp_path / "clip.unknownext"
+    odd.write_bytes(b"x")
+    gw = _gateway()
+    with patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw):
+        result = await media_upload_batch(
+            MediaUploadBatchInput(
+                items=[
+                    {"media_type": "video", "file_path": str(odd)},
+                    {
+                        "media_type": "image",
+                        "mime_type": "image/png",
+                        "data": base64.b64encode(b"png").decode(),
+                    },
+                ]
+            ),
+            fake_ctx,
+        )
+    assert isinstance(result, MediaUploadBatchOutput)
+    assert result.items[0].error is not None and "infer mime_type" in result.items[0].error
+    assert result.succeeded == 1

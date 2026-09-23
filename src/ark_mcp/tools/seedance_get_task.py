@@ -237,8 +237,9 @@ async def persist_seedance_task_outputs(
 
 
 # Tool annotation constants — camelCase per MCP specification.
+# Not read-only: output_path/output_dir can write local files.
 TOOL_ANNOTATIONS = {
-    "readOnlyHint": True,
+    "readOnlyHint": False,
     "destructiveHint": False,
     "idempotentHint": True,
     "openWorldHint": False,

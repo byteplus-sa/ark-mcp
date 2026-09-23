@@ -172,11 +172,17 @@ best-effort persistence succeeds.
 
 ## Object storage (TOS or S3, optional)
 
-The `media_upload` and `media_presign` tools are registered when the selected
-object-storage backend is configured. `media_upload` uploads media to a
-**private** bucket and returns a presigned HTTPS GET URL; `media_presign`
-generates a fresh presigned URL for an existing object without re-uploading.
+The `media_upload`, `media_upload_batch`, `media_presign`, and
+`media_presign_batch` tools are registered when the selected object-storage
+backend is configured. `media_upload` uploads media to a **private** bucket and
+returns a presigned HTTPS GET URL; `media_upload_batch` does the same for 1-50
+files in one call; `media_presign` generates a fresh presigned URL for an
+existing object without re-uploading.
 Use `OBJECT_STORAGE_BACKEND` to select `tos` (default) or `s3`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `MEDIA_UPLOAD_BATCH_MAX_BYTES` | `524288000` (500 MiB) | Maximum total decoded bytes in one `media_upload_batch` call; checked before any upload starts |
 
 ### TOS backend
 
@@ -218,15 +224,32 @@ S3-compatible storage.
 | `ARTIFACT_SWEEP_INTERVAL_SECONDS` | `3600` | Interval between background artifact/state expiry sweeps |
 | `STATE_PRUNE_MAX_AGE_DAYS` | `30` | Max age for ownership/budget/cache rows before pruning |
 | `MCP_INLINE_MEDIA_MAX_BYTES` | `8388608` | Maximum inline MCP media size |
+| `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` | `120` | Timeout for each attempt to download provider output into artifact storage (filesystem and object-storage backends) |
+| `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` | `3` | Attempts (1-10) for a retryable output download (timeouts, network errors, 408/429/5xx), with 1s, 2s, 4s, ... backoff. Expired, untrusted, or oversized sources are never retried |
+| `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` | `8388608` (8 MiB) | When inline Base64 output (Seed Audio, Seedream `b64_json`) cannot be stored, return it inline in `ArtifactRef.fallback_data` up to this decoded size; `0` disables |
 | `PROVIDER_MAX_CONCURRENCY` | `5` | Process-wide slots per provider |
 | `PRINCIPAL_MAX_CONCURRENCY` | `3` | Shared slots per authenticated principal |
 | `DAILY_BUDGET_USD` | `0` | Per-principal UTC daily estimate limit; zero records only |
 | `PERSISTENCE_CACHE_MAX_SIZE` | `10000` | Max cached provider task IDs in artifact-resolution cache |
 | `PERSISTENCE_CACHE_TTL_SECONDS` | `86400` | TTL for cached task-to-artifact mappings (seconds) |
 
+A billed output is never dropped because storage failed; see
+[Artifacts](artifacts.md#persistence-failures).
+
 The filesystem backend enforces principal and tenant ownership. It is suitable
 for one process. Multiple replicas require shared artifact, task-ownership,
 budget, cache, and limiter implementations before horizontal scaling is safe.
+
+## Local output paths
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `OUTPUT_ROOTS` | empty | Comma-separated absolute directories where stdio tools may write files (`output_path`, `output_dir`, `save_to`, `destination_path`) |
+
+The client's MCP roots (`roots/list`) take precedence when the client provides
+them; `OUTPUT_ROOTS` is the fallback. With neither, local path writing is
+disabled and those fields are rejected. Path writing is stdio-only. See
+[Security](security.md#local-output-paths).
 
 ## Timeouts and logging
 
@@ -234,6 +257,7 @@ budget, cache, and limiter implementations before horizontal scaling is safe.
 |---|---|---|
 | `BYTEPLUS_CONNECT_TIMEOUT_MS` | `10000` | Provider connection timeout |
 | `BYTEPLUS_REQUEST_TIMEOUT_MS` | `600000` | Full provider request timeout |
+| `SEED_UNDERSTANDING_TIMEOUT_MS` | unset (uses `BYTEPLUS_REQUEST_TIMEOUT_MS`) | Request timeout for `seed_understand` chat completions. Deep thinking is always on, so long analyses may need more than the general request timeout |
 | `FASTMCP_DOCKET_URL` | `memory://` | FastMCP background-task backend used by generation, transcription, upload, provider submission, understanding, and optional media-persistence calls; Redis can retain task state across restarts of the same single-replica deployment; it does not make SQLite state horizontally scalable |
 | `FASTMCP_TASKS_ENCRYPTION_KEY` | unset | Required for JWT-authenticated Redis task backends; use at least 32 random characters and keep the same key across restarts |
 | `FASTMCP_DOCKET_CONCURRENCY` | `10` | Maximum active background tasks per worker; provider/principal limits still apply |

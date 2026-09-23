@@ -48,6 +48,9 @@ surface.
 | 39 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
 | 40 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
 | 41 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local / JWT |
+| 42 | `seed_media_persist_url` | Artifacts | Optional background task | Local / JWT |
+| 43 | `media_upload_batch` | Object storage (optional) | Required background task | TOS / S3 |
+| 44 | `seedance_get_tasks` | Seedance | Optional background retrieval | ModelArk |
 
 ## Tool Annotations
 
@@ -59,47 +62,55 @@ surface.
 | `seedream_generate_image_variations` | false | false | false | true |
 | `seedance_create_task` | false | false | false | true |
 | `seedance_create_task_variations` | false | false | false | true |
-| `seedance_get_task` | true | false | true | false |
+| `seedance_get_task` | false | false | true | false |
 | `seedance_list_tasks` | true | false | true | false |
 | `seedance_cancel_or_delete_task` | false | true | false | true |
 | `media_upload` | false | false | false | true |
 | `media_presign` | true | false | true | false |
 | `media_presign_batch` | true | false | true | false |
 | `seedream_edit_image` | false | false | false | true |
-| `seed_understand` | true | false | false | true |
+| `seed_understand` | false | false | false | true |
 | `seedance_2_5_create_task` | false | false | false | true |
 | `seedance_2_5_create_task_variations` | false | false | false | true |
 | `seed_media_get_artifact` | true | false | true | false |
 | `seed_media_export_artifact` | false | false | true | false |
 | `speech_to_text` | true | false | true | false |
 | `vod_enhance_video` | false | false | false | true |
-| `vod_get_enhancement_task` | true | false | true | false |
+| `vod_get_enhancement_task` | false | false | true | false |
 | `vod_transcode_video` | false | false | false | true |
-| `vod_get_transcode_task` | true | false | true | false |
+| `vod_get_transcode_task` | false | false | true | false |
 | `vod_separate_audio` | false | false | false | true |
-| `vod_get_audio_separation` | true | false | true | false |
+| `vod_get_audio_separation` | false | false | true | false |
 | `vod_add_subtitles` | false | false | false | true |
-| `vod_get_subtitle_addition_task` | true | false | true | false |
+| `vod_get_subtitle_addition_task` | false | false | true | false |
 | `vod_remove_subtitles` | false | false | false | true |
-| `vod_get_subtitle_removal_task` | true | false | true | false |
+| `vod_get_subtitle_removal_task` | false | false | true | false |
 | `hyper3d_create_task` | false | false | false | true |
-| `hyper3d_get_task` | true | false | true | false |
+| `hyper3d_get_task` | false | false | true | false |
 | `hyper3d_list_tasks` | true | false | true | false |
 | `hyper3d_cancel_or_delete_task` | false | true | false | true |
 | `hitem3d_create_task` | false | false | false | true |
-| `hitem3d_get_task` | true | false | true | false |
+| `hitem3d_get_task` | false | false | true | false |
 | `hitem3d_list_tasks` | true | false | true | false |
 | `hitem3d_cancel_or_delete_task` | false | true | false | true |
 | `ark_job_capabilities` | true | false | true | false |
 | `ark_job_submit` | false | false | false | true |
 | `ark_job_get` | true | false | true | false |
 | `ark_job_cancel` | false | true | false | true |
+| `seed_media_persist_url` | false | false | false | true |
+| `media_upload_batch` | false | false | false | true |
+| `seedance_get_tasks` | false | false | true | false |
+
+`seed_understand` is not read-only because `save_to` writes local files, and the
+get-task tools (`seedance_get_task`, `seedance_get_tasks`, `hyper3d_get_task`,
+`hitem3d_get_task`, and the `vod_get_*` tools) are not read-only because
+`output_path`/`output_dir` write local files.
 
 ## Background Execution
 
 Generation and variation tools, `speech_to_text`, `media_upload`,
-`seed_understand`, and all Seedance, Seed 3D, and MediaKit provider-submission
-tools declare `execution.taskSupport="required"`. By default, discover them
+`media_upload_batch`, `seed_understand`, and all Seedance, Seed 3D, and
+MediaKit provider-submission tools declare `execution.taskSupport="required"`. By default, discover them
 with `ark_job_capabilities`, submit them through `ark_job_submit`, and poll
 `ark_job_get` at the advertised two-second interval until terminal. A
 task-capable client may instead invoke them with MCP task metadata and read the
@@ -110,7 +121,8 @@ In this reference, **background result** means the original tool result under
 terminal `ark_job_get.result`, or the terminal `tasks/get` response on the
 native path.
 
-Seedance, Seed 3D, and MediaKit get tools declare
+Seedance (`seedance_get_task`, `seedance_get_tasks`), Seed 3D, and MediaKit
+get tools, and `seed_media_persist_url`, declare
 `execution.taskSupport="optional"` because a processing-status check is short,
 but a successful response with `persist_output=true` may download a large
 artifact. Use foreground execution with persistence disabled for quick polling,
@@ -132,6 +144,31 @@ The ordinary path uses the same worker, target schema validation, JWT
 target scope, tenant/principal ownership, replay claim, budget, concurrency,
 metrics, and provider adapter as native task augmentation. Ark job IDs and
 provider task IDs are separate identifiers.
+
+## Local Output Paths
+
+On stdio transport, these fields write output straight to a local file:
+`output_path` on `seedream_generate_image`, `seedream_edit_image`,
+`seed_audio_generate`, `seedance_get_task`, `hyper3d_get_task`,
+`hitem3d_get_task`, and the five MediaKit get tools; `output_dir` on
+`seedream_generate_image_variations`, `seed_audio_generate_variations`, and
+`seedance_get_tasks`; `save_to` on `seed_understand`; and `destination_path`
+on `seed_media_export_artifact`. Each comes with an `overwrite` boolean
+(default `false`).
+
+| Rule | Behavior |
+|---|---|
+| Transport | stdio only; rejected on HTTP |
+| Path form | Absolute. `output_path` names a file, or a directory when it ends with `/` (files named `<artifact_id>.<ext>`) |
+| Allowed roots | Client MCP roots (`roots/list`) first, otherwise `OUTPUT_ROOTS`; with neither, path writing is disabled |
+| Timing | Validated before any provider call |
+| Preconditions | `persist=true` (generation tools) or `persist_output=true` (get tools); multi-image `seedream_generate_image` (`max_images > 1`) needs a directory |
+| Existing files | Replaced only with `overwrite=true`; identical content is success |
+| Failure | A failed local write never fails the call; see `ArtifactRef.local_path` / `export_error` |
+
+For `seedance_get_task`, the last frame is written beside the video with a
+`-last-frame` suffix (file target) or as its own `<artifact_id>.<ext>`
+(directory target).
 
 ---
 
@@ -210,6 +247,8 @@ requires the `vod:read` scope in JWT mode.
 |---|---|---|---|
 | `task_id` | string | Yes | Provider task ID from the background result of `vod_enhance_video` |
 | `persist_output` | boolean | No | `true` (requires background execution; use `false` for foreground status) |
+| `output_path` | string | No | — (stdio only, inside an output root, requires `persist_output=true`; see [Local Output Paths](#local-output-paths)) |
+| `overwrite` | boolean | No | `false` |
 
 ### Output
 
@@ -304,6 +343,8 @@ Registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured; requires the
 |---|---|---|---|
 | `task_id` | string | Yes | Provider task ID from the background result of `vod_transcode_video` |
 | `persist_output` | boolean | No | `true` (requires background execution; use `false` for foreground status) |
+| `output_path` | string | No | — (stdio only, inside an output root, requires `persist_output=true`; see [Local Output Paths](#local-output-paths)) |
+| `overwrite` | boolean | No | `false` |
 
 ### Output
 
@@ -379,7 +420,8 @@ the expiring `source_url`, duration/resolution when available, and optionally a
 durable MP4 `video` artifact. `persist_output` defaults to true and requires
 background execution; use `persist_output=false` for a foreground status
 check. Persistence is single-flight and failure is reported separately from
-provider success.
+provider success. `output_path` and `overwrite` write the persisted MP4 to a
+[local path](#local-output-paths).
 
 ## vod_remove_subtitles
 
@@ -398,8 +440,8 @@ are omitted unless explicitly supplied. The output includes the task ID and a
 Poll `GET /tasks/{task_id}` with `vod:read`, using the provider task ID from the
 background result of `vod_remove_subtitles`. The adapter requires
 `task_type="erase-video-subtitle-pro"`; lifecycle normalization, task ownership,
-source-URL preservation, and best-effort single-flight MP4 persistence match
-`vod_get_subtitle_addition_task`.
+source-URL preservation, best-effort single-flight MP4 persistence, and
+`output_path`/`overwrite` match `vod_get_subtitle_addition_task`.
 
 ## vod_separate_audio
 
@@ -452,6 +494,8 @@ configured and requires the `vod:read` scope in JWT mode.
 |---|---|---|---|
 | `task_id` | string | Yes | Provider task ID from the background result of `vod_separate_audio` |
 | `persist_output` | boolean | No | Copy completed tracks into durable artifact storage on first successful poll (default `true`; requires background execution) |
+| `output_path` | string | No | Local file or directory for the separated track; stdio only, requires `persist_output=true` |
+| `overwrite` | boolean | No | Allow `output_path` to replace an existing file (default `false`) |
 
 Returns `VodAudioSeparationTaskOutput` with a normalized `status` of
 `processing`, `succeeded`, or `failed`. On success, `voice`, `background`,
@@ -526,15 +570,32 @@ A durable reference to persisted media.
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | string | Unique artifact ID |
-| `uri` | string | `seed-media://artifacts/{id}` |
-| `media_type` | `"image"` \| `"audio"` \| `"video"` | Logical type |
+| `id` | string | Unique artifact ID, or `provider-url` / `inline-fallback` when the output could not be stored |
+| `uri` | string | `seed-media://artifacts/{id}`, or the temporary provider URL when `id="provider-url"` |
+| `media_type` | `"image"` \| `"audio"` \| `"video"` \| `"three_d"` | Logical type |
 | `mime_type` | string | e.g. `image/png`, `audio/wav`, `video/mp4` |
 | `bytes` | integer | Size in bytes |
 | `sha256` | string | SHA-256 hex digest |
 | `created_at` | string | ISO-8601 timestamp |
 | `expires_at` | string | Local artifact expiry |
-| `source_expires_at` | string | Provider URL expiry (2h audio, 24h image/video) |
+| `source_expires_at` | string | Provider URL expiry (2h audio, 24h image/video/3D) |
+| `persistence_error` | ArtifactPersistenceIssue \| null | Set when the output was generated (and billed) but could not be stored durably |
+| `fallback_data` | string \| null | Base64 output bytes, only for `id="inline-fallback"` (up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`) |
+| `local_path` | string \| null | Absolute local path written for `output_path`/`output_dir` |
+| `export_error` | string \| null | Why the requested local copy was not written; the durable artifact is unaffected |
+
+### ArtifactPersistenceIssue
+
+| Field | Type | Description |
+|---|---|---|
+| `code` | string | `untrusted_output_host`, `output_too_large`, `invalid_output_mime`, `source_expired`, `download_failed`, or `storage_failed` |
+| `message` | string | Credential- and URL-safe failure message |
+| `retryable` | boolean | Whether persistence may succeed if attempted again |
+| `artifact_limit_bytes` | integer | Maximum size accepted by the durable artifact policy |
+| `source_url_expires_at` | string \| null | When the unpersisted provider URL (the artifact's `uri`) expires |
+
+Recover a `provider-url` artifact with `seed_media_persist_url` before
+`source_url_expires_at`.
 
 ### VariationResult
 
@@ -546,9 +607,20 @@ Result of a single variation within a parallel generation.
 | `seed` | integer \| null | Seed used (image only) |
 | `artifact` | ArtifactRef \| null | Generated artifact (null if failed) |
 | `task_id` | string \| null | Provider task ID for Seedance polling, obtained from the enclosing background result |
-| `error` | object \| null | Error details if failed |
+| `error` | VariationError \| null | Error details if failed |
 | `request_id` | string \| null | Provider request ID |
 | `provider_log_id` | string \| null | Provider log ID (Seed Audio) |
+
+### VariationError
+
+| Field | Type | Description |
+|---|---|---|
+| `code` | string | Error code, e.g. `QUEUE_TIMEOUT`, `TIMEOUT`, `GATHER_ERROR`, a provider code, or an upper-cased persistence code |
+| `message` | string | Human-readable message |
+| `request_id` | string \| null | Provider request ID, if available |
+| `retryable` | boolean | Whether the variation may succeed if retried |
+| `ambiguous_completion` | boolean | Whether the provider may have completed despite the error |
+| `phase` | `"queued"` \| `"generating"` \| `"persisting"` \| null | Stage at failure: `queued` never started (safe to retry), `generating` provider call in flight, `persisting` output generated but not stored |
 
 ### VariationSummary
 
@@ -577,6 +649,8 @@ Generate full-scene audio through Seed Speech.
 | `output` | AudioOutputOptions | No | — | Format, rate, pitch |
 | `watermark` | AudioWatermarkOptions | No | — | AIGC watermark |
 | `persist` | boolean | No | `true` | Persist to artifact store |
+| `output_path` | string | No | — | Local file or directory (ending `/`); stdio only, requires `persist=true` |
+| `overwrite` | boolean | No | `false` | Replace an existing `output_path` file |
 
 ### AudioOutputOptions
 
@@ -648,6 +722,8 @@ Generate N independent audio variations in parallel.
 | `output` | AudioOutputOptions | No | — | — |
 | `watermark` | AudioWatermarkOptions | No | — | — |
 | `persist` | boolean | No | `true` | — |
+| `output_dir` | string | No | — | Local directory; stdio only, requires `persist=true` |
+| `overwrite` | boolean | No | `false` | Replace existing files in `output_dir` |
 
 \* Either `text_prompt` or `variation_prompts` must be provided.
 
@@ -707,6 +783,8 @@ Generate or edit an image through ModelArk Seedream.
 | `watermark` | boolean | No | — | AIGC watermark |
 | `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro | Default `standard` |
 | `persist` | boolean | No | `true` | — |
+| `output_path` | string | No | — | Local file, or directory ending `/` (required when `max_images > 1`); stdio only, requires `persist=true` |
+| `overwrite` | boolean | No | `false` | Replace an existing `output_path` file |
 
 ### Output
 
@@ -715,7 +793,7 @@ Generate or edit an image through ModelArk Seedream.
 | `provider` | `"byteplus-modelark"` | Fixed |
 | `model` | string | Model used |
 | `created_at` | string | ISO-8601 |
-| `artifacts` | list[ArtifactRef] | Persisted images |
+| `artifacts` | list[ArtifactRef] | Persisted images; an image that could not be stored is returned as a `provider-url` or `inline-fallback` reference with `persistence_error` instead of failing the call |
 | `item_errors` | list[SeedreamItemError] | Per-item failures |
 | `usage` | SeedreamUsage | Token usage |
 
@@ -771,6 +849,8 @@ Generate N independent image variations in parallel with distinct seeds.
 | `watermark` | boolean | No | — | — |
 | `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro | Default `standard` |
 | `persist` | boolean | No | `true` | — |
+| `output_dir` | string | No | — | Local directory; stdio only, requires `persist=true` |
+| `overwrite` | boolean | No | `false` | Replace existing files in `output_dir` |
 
 \* Either `prompt` or `variation_prompts` must be provided.
 
@@ -986,6 +1066,8 @@ Retrieve the status and output of a Seedance task.
 |---|---|---|---|
 | `task_id` | string | Yes | Provider task ID from the background result of a Seedance create tool |
 | `persist_output` | boolean | No | `true` (requires background execution; use `false` for foreground status) |
+| `output_path` | string | No | — (video file or directory; last frame written beside it with `-last-frame` suffix; see [Local Output Paths](#local-output-paths)) |
+| `overwrite` | boolean | No | `false` |
 
 ### Output
 
@@ -1001,6 +1083,22 @@ Retrieve the status and output of a Seedance task.
 | `last_frame` | ArtifactRef \| null | Persisted last frame |
 | `usage` | SeedanceTaskUsage \| null | Token usage |
 | `settings` | object | Generation settings |
+| `queue` | SeedanceQueueInfo \| null | Server-derived queue timing while `queued`/`running`; `null` once finished |
+
+### SeedanceQueueInfo
+
+ModelArk publishes no queue position or ETA. These values are derived by the
+server from the task's timestamps and expiry setting; they are estimates, not a
+provider SLA.
+
+| Field | Type | Description |
+|---|---|---|
+| `queued_seconds` | integer \| null | Now minus `created_at` while queued; `updated_at` minus `created_at` once running (approximate) |
+| `running_seconds` | integer \| null | Seconds since the last status update while running (approximate) |
+| `service_tier` | string \| null | `default` or `flex` |
+| `expires_at` | string \| null | `created_at + execution_expires_after`: the provider fails the task if unfinished by then |
+| `expires_at_estimated` | boolean | `true` when `execution_expires_after` was not reported and the 48-hour default was assumed |
+| `hint` | string \| null | Human-readable summary |
 
 ### Task Statuses
 
@@ -1058,7 +1156,7 @@ List recent Seedance tasks (last 7 days).
 
 | Field | Type | Description |
 |---|---|---|
-| `tasks` | list[SeedanceTaskSummary] | Task summaries |
+| `tasks` | list[SeedanceTaskSummary] | Task summaries, each with the same `queue` timing as `seedance_get_task` |
 | `total` | integer | Total matching tasks |
 | `page` | integer | Current page |
 | `page_size` | integer | Page size |
@@ -1306,6 +1404,8 @@ one reference image and one coordinate (point or bbox) are required.
 | `watermark` | boolean | No | — | AIGC watermark |
 | `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro | Default `standard` |
 | `persist` | boolean | No | `true` | Persist as durable MCP resources |
+| `output_path` | string | No | — | Local file or directory (ending `/`); stdio only, requires `persist=true` |
+| `overwrite` | boolean | No | `false` | Replace an existing `output_path` file |
 
 \* Provide at least one of `point` or `bbox`.
 
@@ -1336,8 +1436,9 @@ one reference image and one coordinate (point or bbox) are required.
 ## 14. seed_understand
 
 Understand images and videos, or reason about a task, through the Seed 2.1
-multimodal model. Supports deep-thinking (chain-of-thought) reasoning when
-`thinking=true` (deep-thinking is opt-in, not default-on). The default model
+multimodal model. Deep thinking is always on (depth set by `reasoning_effort`),
+and only the final answer is returned: the reasoning trace is discarded and
+never returned, logged, or saved. The default model
 is `dola-seed-2-1-turbo-260628` (Seed 2.1 Turbo); `dola-seed-evolving` (the
 latest Seed-series Pro-tier model) is also supported as a recognized built-in
 ID — set `SEED_UNDERSTANDING_DEFAULT_MODEL=dola-seed-evolving` to opt in; its
@@ -1356,6 +1457,11 @@ server recommends a two-second polling interval. Foreground invocation is
 rejected immediately instead of waiting until the client timeout expires.
 Clients must request a task TTL long enough for the expected analysis duration.
 
+The chat request timeout is `SEED_UNDERSTANDING_TIMEOUT_MS` (default:
+`BYTEPLUS_REQUEST_TIMEOUT_MS`). A timeout returns `TIMEOUT` with
+`retryable=true` and `ambiguous_completion=false`, but is not retried
+automatically; 429 and 5xx responses are retried.
+
 ### Input
 
 | Field | Type | Required | Default | Constraints |
@@ -1365,12 +1471,33 @@ Clients must request a task TTL long enough for the expected analysis duration.
 | `videos` | list[UnderstandingVideoInput] | No | — | Max 32; URL only |
 | `system` | string | No | — | Max 32,000 chars |
 | `model` | string | No | Configured Seed 2.1 model | Must be in capability registry |
-| `thinking` | boolean | No | `false` | When true, response includes `reasoning_content` |
-| `reasoning_effort` | `"low"` \| `"medium"` \| `"high"` | No | — | Only when `thinking=true` |
+| `reasoning_effort` | `"low"` \| `"medium"` \| `"high"` | No | `"medium"` | Depth of deep thinking; always sent |
+| `response_format` | UnderstandingResponseFormat | No | — | JSON / JSON Schema, enforced provider-side |
+| `json_retry` | integer | No | `0` | 0-2 extra billed attempts on a JSON parse/validation failure; skipped when `finish_reason="length"` |
+| `save_to` | string | No | — | Absolute file path; stdio only, inside an output root; validated before billing |
+| `overwrite` | boolean | No | `false` | Replace an existing `save_to` file with different content |
+| `return_content` | `"full"` \| `"summary"` \| `"none"` | No | `"full"` | `summary` inlines the first 2,000 characters; `none` inlines nothing |
 | `temperature` | float | No | — | 0.0-2.0 |
-| `max_tokens` | integer | No | — | 1-32,768 |
+| `max_tokens` | integer | No | — | 1-32,768, including deep-thinking tokens |
 | `top_p` | float | No | — | 0.0-1.0 |
 | `repetition_penalty` | float | No | — | 0.0-2.0; Ark-only |
+| `thinking` | boolean | No | — | Deprecated and ignored; `false` only logs a warning |
+
+### UnderstandingResponseFormat
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `type` | `"text"` \| `"json_object"` \| `"json_schema"` | Yes | — |
+| `json_schema` | object | When `type="json_schema"` | Must be omitted otherwise |
+| `json_schema.name` | string | Yes | `^[A-Za-z0-9_-]{1,64}$` |
+| `json_schema.schema` | object | Yes | Valid JSON Schema draft 2020-12, at most 64 KB serialized |
+| `json_schema.description` | string | No | Max 2,000 chars |
+| `json_schema.strict` | boolean | No | Default `true` |
+
+`save_to` writes the parsed JSON pretty-printed when the answer parsed as JSON,
+otherwise the UTF-8 text. Reasoning is never written. If the write fails after
+billing, the call still succeeds without `saved_path` and returns the full
+answer inline.
 
 ### Output
 
@@ -1379,9 +1506,28 @@ Clients must request a task TTL long enough for the expected analysis duration.
 | `provider` | `"byteplus-modelark"` | Fixed |
 | `model` | string | Model used |
 | `completion_id` | string \| null | Provider completion ID |
-| `choices` | list[UnderstandingChoice] | Content, optional `reasoning_content`, `finish_reason` |
-| `usage` | UnderstandingUsage | Token usage |
+| `choices` | list[UnderstandingChoice] | Final answers; see below |
+| `usage` | UnderstandingUsage | Token usage summed over all attempts |
+| `attempts` | integer | 1 plus any `json_retry` attempts used |
+| `saved_path` | string \| null | Absolute path written for `save_to` |
+| `saved_bytes` | integer \| null | Size of the written file |
 | `request_id` | string \| null | Provider request ID |
+
+**UnderstandingChoice:**
+
+| Field | Type | Description |
+|---|---|---|
+| `role` | `"assistant"` | Fixed |
+| `content` | string | Final answer; truncated for `summary`, empty for `none` |
+| `content_chars` | integer | Full answer length before truncation |
+| `content_truncated` | boolean | `true` when `content` is shorter than the full answer |
+| `parsed` | object \| array \| null | Parsed JSON when a JSON `response_format` parsed (and, for `json_schema`, validated); returned even with `summary`/`none` |
+| `schema_violation` | SchemaViolation \| null | `path` (JSON Pointer, `""` when not JSON), `message`, `finish_reason` |
+| `finish_reason` | string | Provider finish reason; `length` means cut off by `max_tokens` |
+
+**UnderstandingUsage:** `prompt_tokens`, `completion_tokens` (including
+reasoning), `total_tokens`, and `reasoning_tokens` (thinking token cost when
+the provider reports it).
 
 ### Example
 
@@ -1391,7 +1537,6 @@ Clients must request a task TTL long enough for the expected analysis duration.
   "prompt": "Describe what happens in this video and identify the objects in this image.",
   "videos": [{ "kind": "url", "url": "https://.../sample.mp4", "mime_type": "video/mp4" }],
   "images": [{ "kind": "url", "url": "https://.../frame.png", "mime_type": "image/png" }],
-  "thinking": true,
   "reasoning_effort": "medium",
   "max_tokens": 4096
 }
@@ -1537,7 +1682,12 @@ registered; requires `artifacts:read` in JWT mode.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `artifact_id` | string | Yes | Artifact ID returned by a previous generation call |
-| `destination_path` | string | No | Absolute path where the server writes an atomic copy; omit to return the canonical store path |
+| `destination_path` | string | No | Absolute file path inside an allowed output root where the server writes an atomic copy; omit to return the canonical store path |
+| `overwrite` | boolean | No | Replace an existing destination file with different content (default `false`) |
+
+`destination_path` follows the [Local Output Paths](#local-output-paths) policy.
+It must be absolute and inside a client MCP root or `OUTPUT_ROOTS`; an existing
+file is never silently overwritten (identical content is accepted).
 
 ### Output
 
@@ -1549,7 +1699,7 @@ registered; requires `artifacts:read` in JWT mode.
 | `mime_type` | string | MIME type of the stored content |
 | `bytes` | integer | Size in bytes |
 | `sha256` | string \| null | SHA-256 hex digest |
-| `copied` | boolean | `true` when copied to `destination_path`; `false` when `path` is the canonical store location |
+| `copied` | boolean | `true` when copied to `destination_path` (or an identical copy was already there); `false` when `path` is the canonical store location |
 
 ### Example
 
@@ -1618,6 +1768,109 @@ provider task tool or object-storage upload requirement.
   "options": { "language": "en-US", "enable_punc": true, "enable_itn": true }
 }
 ```
+
+---
+
+## 20. seed_media_persist_url
+
+Persist a temporary provider output URL as a durable artifact. Use it to
+recover an `ArtifactRef` with `id="provider-url"` and a `persistence_error`
+before the provider URL expires. Always registered; requires `media:upload` in
+JWT mode. Optional background task.
+
+Only trusted BytePlus provider hosts are downloaded, through the same
+SSRF-resistant downloader, host allowlist, redirect re-validation, and size
+limits as generation-time persistence.
+
+### Input
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `url` | string | Yes | HTTPS provider URL, 1-8192 chars |
+| `media_type` | `"image"` \| `"audio"` \| `"video"` \| `"three_d"` | Yes | — |
+| `mime_type` | string | Yes | Expected MIME type; a specific provider `Content-Type` takes precedence |
+| `source_expires_at` | string | No | ISO-8601 URL expiry, copied from the original reference |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `artifact` | ArtifactRef | The new durable artifact |
+
+A failure is a tool error naming the persistence code and whether it is
+retryable.
+
+---
+
+## 21. media_upload_batch
+
+Upload 1-50 media files to object storage in one call; each item gets its own
+presigned HTTPS GET URL. Items are validated and uploaded with the same rules
+as `media_upload` and fail independently. Registered with object storage;
+requires `media:upload` in JWT mode. Required background task.
+
+### Input
+
+| Field | Type | Required | Default | Constraints |
+|---|---|---|---|---|
+| `items` | list[MediaUploadBatchItemInput] | Yes | — | 1-50 items |
+| `expires_in_seconds` | integer | No | configured TTL | 60–604800, applied to every item |
+| `max_concurrent` | integer | No | `4` | 1-8 |
+
+**MediaUploadBatchItemInput:**
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `media_type` | `"image"` \| `"audio"` \| `"video"` | Yes | — |
+| `mime_type` | string | For `data` items | Inferred from the file extension for `file_path` items when omitted |
+| `data` | string | one of | Base64 bytes; mutually exclusive with `file_path` |
+| `file_path` | string | one of | Absolute local path (stdio only) |
+| `key_prefix` | string | No | Default `"references"`; alphanumeric, `-`, `_`, `/` |
+
+All items are validated and the total decoded size is compared with
+`MEDIA_UPLOAD_BATCH_MAX_BYTES` (default 500 MiB) before any upload starts; an
+oversized batch fails as a whole.
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `items` | list[MediaUploadBatchItem] | Per-item results in request order |
+| `succeeded` | integer | Items uploaded |
+| `failed` | integer | Items that failed |
+| `total_bytes` | integer | Bytes uploaded across successful items |
+
+**MediaUploadBatchItem:** `index`, `file_path` (as given), `url`, `object_key`,
+`expires_at`, `mime_type`, `bytes`, `error` (null on success), and `retryable`
+(null on success).
+
+---
+
+## 22. seedance_get_tasks
+
+Check 1-50 Seedance tasks in one call. Uses one provider list call filtered by
+task ID, and re-fetches individually only tasks missing from the list or
+succeeded without an output URL. Requires `seedance:read` in JWT mode.
+Optional background task (required when `persist_output=true`).
+
+### Input
+
+| Field | Type | Required | Default | Constraints |
+|---|---|---|---|---|
+| `task_ids` | list[string] | Yes | — | 1-50; duplicates ignored |
+| `persist_output` | boolean | No | `false` | Persist each succeeded task's video and last frame once |
+| `output_dir` | string | No | — | Local directory; stdio only, requires `persist_output=true` |
+| `overwrite` | boolean | No | `false` | Replace existing files in `output_dir` |
+
+### Output
+
+| Field | Type | Description |
+|---|---|---|
+| `tasks` | list[SeedanceTaskOutput] | Found tasks in request order, same shape as `seedance_get_task` |
+| `errors` | list[SeedanceTaskLookupError] | `task_id`, `code` (`NOT_OWNED`, `NOT_FOUND`, or a provider code), `message` |
+| `counts` | object | Number of found tasks per status |
+| `all_terminal` | boolean | `true` when every found task has finished |
+| `active_tasks` | integer | Found tasks still queued or running |
 
 ---
 

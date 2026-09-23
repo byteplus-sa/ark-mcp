@@ -13,16 +13,16 @@ products plus artifact access and an optional media upload helper:
 |---|---|---|
 | **Seed Audio** | `seed_audio_generate`, `seed_audio_generate_variations` | Background-task full-scene audio generation through Seed Speech |
 | **Seedream** | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` | Background-task image generation and editing through ModelArk |
-| **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_get_task`, `seedance_list_tasks`, `seedance_cancel_or_delete_task` | Background-task video submission with optionally background output retrieval through ModelArk |
+| **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, `seedance_cancel_or_delete_task` | Background-task video submission with optionally background output retrieval (single or batched status checks with derived queue timing) through ModelArk |
 | **Hyper3D / Hitem3d** | `hyper3d_*`, `hitem3d_*` task tools | Background-task 3D submission with optionally background output retrieval through ModelArk (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
-| **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions |
+| **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions; always thinks, returns only the final answer, enforces JSON Schemas, and can save the answer to a local file |
 | **Speech-to-Text** | `speech_to_text` | Background-task audio transcription through Seed Speech ASR (HTTP) |
 | **VOD AI MediaKit** | `vod_enhance_video`, `vod_get_enhancement_task` | Submit and poll asynchronous AI enhancement for the exact common/professional/4K/high/24-fps profile |
 | **VOD AI MediaKit Transcode** | `vod_transcode_video`, `vod_get_transcode_task` | Submit and poll async video transcoding (codec, container, resolution, bitrate, frame rate) |
 | **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_get_subtitle_addition_task`, `vod_remove_subtitles`, `vod_get_subtitle_removal_task` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
 | **VOD Audio Separation** | `vod_separate_audio`, `vod_get_audio_separation` | Submit and poll voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
-| **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact` | Retrieve persisted media inline by artifact ID, or locate/copy it to a local path without Base64 round-trips |
-| **Object storage** (optional) | `media_upload`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media to TOS or S3; foreground URL renewal without re-uploading |
+| **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url` | Retrieve persisted media inline by artifact ID, locate/copy it to a local path without Base64 round-trips, or durably persist a provider URL whose storage failed |
+| **Object storage** (optional) | `media_upload`, `media_upload_batch`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media (one file or up to 50) to TOS or S3; foreground URL renewal without re-uploading |
 | **Background jobs** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools and the default way to submit and manage long-running work; no task-augmented execution required |
 
 Key features:
@@ -31,8 +31,15 @@ Key features:
   resources remain usable after known provider URL lifetimes (2h audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at
   200 MiB, and completed enhancement URLs have a confirmed 24-hour lifetime
+- **Billed outputs are never dropped** — downloads are retried; if storage
+  still fails, the result returns the provider URL (or inline bytes) with a
+  `persistence_error` instead of an error, recoverable with
+  `seed_media_persist_url`
+- **Local output paths** — on stdio, `output_path` / `output_dir` / `save_to`
+  write results straight into the client's MCP roots (or `OUTPUT_ROOTS`) with
+  symlink-safe, no-silent-overwrite writes
 - **Parallel variations** — generate N independent variations in a single
-  call with `asyncio.gather`, partial failures captured per variation
+  call, partial failures captured per variation with the failure phase
 - **Per-variation seeds** — Seedream supports reproducible generation with
   `base_seed + index` deterministic seeds
 - **Typed inputs** — Pydantic models validate all inputs before spending
@@ -197,9 +204,10 @@ SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-0-260128
 ```
 
 If a credential is absent, the server skips registering that product's
-tools. `seed_media_get_artifact` and `seed_media_export_artifact` are always
-available, provider tools appear only
-when their credentials are configured, `media_upload` and `media_presign` appear
+tools. `seed_media_get_artifact`, `seed_media_export_artifact`, and
+`seed_media_persist_url` are always available, provider tools appear only
+when their credentials are configured, `media_upload`, `media_upload_batch`,
+`media_presign`, and `media_presign_batch` appear
 only when object storage credentials (TOS or S3) are configured, and
 `speech_to_text` appears only when `BYTEPLUS_SEED_SPEECH_API_KEY` is set.
 `vod_enhance_video`, `vod_get_enhancement_task`, `vod_transcode_video`,

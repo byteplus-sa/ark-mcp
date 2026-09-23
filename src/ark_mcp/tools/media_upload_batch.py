@@ -62,12 +62,8 @@ class MediaUploadBatchItemInput(BaseModel):
         if self.mime_type is None:
             if self.file_path is None:
                 raise ValueError("mime_type is required for data items.")
-            guessed, _ = mimetypes.guess_type(self.file_path)
-            if guessed is None:
-                raise ValueError(
-                    f"Could not infer mime_type from '{Path(self.file_path).name}'; set mime_type."
-                )
-            self.mime_type = guessed
+            # Left None when it cannot be guessed; reported as a per-item error.
+            self.mime_type = mimetypes.guess_type(self.file_path)[0]
         return self
 
 
@@ -138,10 +134,14 @@ async def media_upload_batch(input: MediaUploadBatchInput, ctx: Context) -> Medi
     prepared: list[tuple[MediaUploadInput, Path | None, bytes | None, int] | str] = []
     total = 0
     for item in input.items:
+        if item.mime_type is None:
+            name = Path(item.file_path or "").name
+            prepared.append(f"Could not infer mime_type from '{name}'; set mime_type.")
+            continue
         try:
             single = MediaUploadInput(
                 media_type=item.media_type,
-                mime_type=item.mime_type or "",
+                mime_type=item.mime_type,
                 data=item.data,
                 file_path=item.file_path,
                 key_prefix=item.key_prefix,

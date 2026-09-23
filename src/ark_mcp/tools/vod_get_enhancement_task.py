@@ -310,8 +310,9 @@ async def vod_get_enhancement_task(
     )
 
 
+# Not read-only: output_path/output_dir can write local files.
 TOOL_ANNOTATIONS = {
-    "readOnlyHint": True,
+    "readOnlyHint": False,
     "destructiveHint": False,
     "idempotentHint": True,
     "openWorldHint": False,
