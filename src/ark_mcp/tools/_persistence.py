@@ -146,7 +146,7 @@ async def persist_base64(
     Invalid or oversized Base64 (``ValueError`` from the media policy) is not
     a storage failure and propagates unchanged.
     """
-    last_exc: ArtifactPersistenceError | None = None
+    last_exc = ArtifactPersistenceError("storage_failed", _STORAGE_FAILED_MESSAGE, retryable=True)
     for attempt in range(2):
         try:
             return await store.put_base64(
@@ -166,7 +166,6 @@ async def persist_base64(
             )
         log_warning("artifact_persist_base64_retry", attempt=attempt + 1)
 
-    assert last_exc is not None
     if provider_url:
         return provider_url_ref(
             url=provider_url,

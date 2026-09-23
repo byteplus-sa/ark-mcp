@@ -64,7 +64,8 @@ class WriteOutcome:
     status: Literal["written", "overwritten", "already_present"]
 
 
-def _require_stdio(settings: Settings, field: str) -> None:
+def require_stdio(settings: Settings, field: str) -> None:
+    """Raise unless the server runs over stdio, where paths are meaningful."""
     if settings.mcp_transport != "stdio":
         raise OutputPathError(
             f"{field} is only supported in stdio transport mode; "
@@ -151,7 +152,7 @@ async def validate_output_target(
     """Pre-flight check for a tool's output path. Returns (path, roots) or None."""
     if raw is None:
         return None
-    _require_stdio(settings, field)
+    require_stdio(settings, field)
     roots = await allowed_output_roots(ctx, settings)
     return resolve_output_path(raw, roots=roots, kind=kind, field=field), roots
 

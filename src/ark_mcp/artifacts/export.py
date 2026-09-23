@@ -19,7 +19,9 @@ from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.security.output_paths import (
     OutputPathError,
     WriteOutcome,
-    validate_output_target,
+    allowed_output_roots,
+    require_stdio,
+    resolve_output_path,
     write_output_file,
 )
 
@@ -84,11 +86,9 @@ async def prepare_local_export(
             f"{field} must be a directory (ending with '/') because this call can produce "
             "more than one artifact."
         )
-    validated = await validate_output_target(
-        raw, ctx=ctx, settings=settings, kind="dir" if is_dir else "file", field=field
-    )
-    assert validated is not None
-    path, roots = validated
+    require_stdio(settings, field)
+    roots = await allowed_output_roots(ctx, settings)
+    path = resolve_output_path(raw, roots=roots, kind="dir" if is_dir else "file", field=field)
     return LocalExportTarget(path, roots, is_dir=is_dir, overwrite=overwrite)
 
 
@@ -140,6 +140,18 @@ async def export_ref(
     """
     if ref is None or target is None:
         return ref
+    return await _export_one(store, ref, target, auth=auth, suffix=suffix)
+
+
+async def _export_one(
+    store: ArtifactStore,
+    ref: ArtifactRef,
+    target: LocalExportTarget,
+    *,
+    auth: AuthContext | None,
+    suffix: str,
+) -> ArtifactRef:
+    """Write one artifact locally, reporting failure on the returned reference."""
     try:
         outcome = await write_artifact(
             store,
@@ -168,7 +180,5 @@ async def export_refs(
     exported: list[ArtifactRef] = []
     for index, ref in enumerate(refs):
         suffix = "" if index == 0 or target.is_dir else f"-{index + 1}"
-        result = await export_ref(store, ref, target, auth=auth, suffix=suffix)
-        assert result is not None
-        exported.append(result)
+        exported.append(await _export_one(store, ref, target, auth=auth, suffix=suffix))
     return exported

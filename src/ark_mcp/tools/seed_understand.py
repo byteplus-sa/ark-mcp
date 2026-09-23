@@ -462,7 +462,8 @@ async def seed_understand(
         await service.close()
 
     await ctx.report_progress(progress=80, total=100)
-    assert response is not None
+    if response is None:  # unreachable: the loop returns or raises before this
+        raise RuntimeError("Understanding completed without a provider response.")
 
     choices: list[UnderstandingChoice] = []
     for content, finish_reason, parsed, violation in checked:
