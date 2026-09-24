@@ -17,6 +17,7 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable, Iterable
 from typing import Any, Literal
+from weakref import WeakKeyDictionary, WeakValueDictionary
 
 from fastmcp import Context
 
@@ -52,6 +53,23 @@ _OBJECT_KEY_TYPE_SEGMENTS: dict[str, AssetTypeName] = {
     "audio": "Audio",
 }
 TERMINAL_ASSET_STATUSES = frozenset({"Active", "Failed"})
+_SUBJECT_LOCKS: WeakKeyDictionary[
+    asyncio.AbstractEventLoop, WeakValueDictionary[tuple[str, str], asyncio.Lock]
+] = WeakKeyDictionary()
+
+
+def _subject_lock(project_name: str, subject: str) -> asyncio.Lock:
+    event_loop = asyncio.get_running_loop()
+    locks = _SUBJECT_LOCKS.get(event_loop)
+    if locks is None:
+        locks = WeakValueDictionary()
+        _SUBJECT_LOCKS[event_loop] = locks
+    key = (project_name, subject)
+    lock = locks.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        locks[key] = lock
+    return lock
 
 
 def require_asset_library() -> None:
@@ -98,6 +116,25 @@ async def resolve_subject_group(
     Returns ``(group, created)``. Raises ``ValueError`` when two or more groups
     share the exact name, so the caller never writes into an arbitrary one.
     """
+    resolved_project = project_name or get_settings().modelark_project_name
+    async with _subject_lock(resolved_project, subject):
+        return await _resolve_subject_group_unlocked(
+            service,
+            subject=subject,
+            description=description,
+            project_name=project_name,
+            create_if_missing=create_if_missing,
+        )
+
+
+async def _resolve_subject_group_unlocked(
+    service: AssetService,
+    *,
+    subject: str,
+    description: str | None,
+    project_name: str | None,
+    create_if_missing: bool,
+) -> tuple[AssetGroup, bool]:
     matches: list[AssetGroup] = []
     next_token: str | None = None
     for _ in range(20):  # bounded scan: at most 20 pages of fuzzy matches
@@ -118,6 +155,11 @@ async def resolve_subject_group(
         matches.extend(group for group in groups if group.name == subject)
         if not next_token:
             break
+    else:
+        raise ValueError(
+            f"asset_group_scan_incomplete: More than 20 pages matched '{subject}'. "
+            "Pass group_id explicitly."
+        )
 
     if len(matches) > 1:
         ids = ", ".join(group.group_id for group in matches)

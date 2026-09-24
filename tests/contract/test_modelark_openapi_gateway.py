@@ -11,6 +11,7 @@ import respx
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.providers.byteplus_openapi.signing import OpenApiCredentials
 from ark_mcp.providers.modelark.openapi import ModelArkOpenApiGateway
+from ark_mcp.tools._errors import provider_error_result
 
 BASE = "https://ark-openapi.test.example.com"
 
@@ -112,6 +113,7 @@ async def test_create_asset_5xx_is_ambiguous_but_reads_are_retryable() -> None:
     await gateway.close()
 
     assert create_info.value.error.ambiguous_completion is True
+    assert create_info.value.error.retryable is False
     assert get_info.value.error.retryable is True
     assert get_info.value.error.ambiguous_completion is False
 
@@ -128,6 +130,28 @@ async def test_delete_5xx_is_ambiguous(action: str) -> None:
         await gateway.close()
 
     assert info.value.error.ambiguous_completion is True
+    assert info.value.error.retryable is False
+    assert route.call_count == 1
+    result = provider_error_result(info.value)
+    assert "ambiguous_completion=True" in result.content[0].text
+    assert "retryable=False" in result.content[0].text
+    assert "inspect the resource" in result.content[0].text
+
+
+@pytest.mark.parametrize("action", ["CreateAsset", "DeleteAssetGroup", "GetAsset"])
+@respx.mock
+async def test_response_loss_distinguishes_mutations_from_reads(action: str) -> None:
+    route = respx.post(f"{BASE}/").mock(side_effect=httpx.ReadError("response lost"))
+    gateway = _gateway()
+    try:
+        with pytest.raises(ProviderError) as info:
+            await gateway.call(action, {"Id": "test-id", "ProjectName": "default"})
+    finally:
+        await gateway.close()
+
+    mutation = action != "GetAsset"
+    assert info.value.error.retryable is not mutation
+    assert info.value.error.ambiguous_completion is (True if mutation else None)
     assert route.call_count == 1
 
 
@@ -147,4 +171,5 @@ async def test_throttle_code_is_retryable() -> None:
         await gateway.call("CreateAsset", {})
     await gateway.close()
     assert info.value.error.retryable is True
+    assert info.value.error.ambiguous_completion is False
     assert info.value.error.retry_after_seconds == 2.0

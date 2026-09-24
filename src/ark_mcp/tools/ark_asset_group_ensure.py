@@ -20,8 +20,10 @@ async def ark_asset_group_ensure(
 
     Keeps all assets of one subject (a fictional character, mascot, or product)
     in the same group. Fails with ambiguous_asset_group when several AIGC groups
-    share the name, listing their IDs. Real people use LivenessFace groups from
-    ark_asset_verification_result instead. Requires BytePlus AK/SK.
+    share the name, listing their IDs. Subject creation is serialized within
+    one server event loop; separate servers should use a pre-created group ID.
+    Real people use LivenessFace groups from ark_asset_verification_result
+    instead. Requires BytePlus AK/SK.
     """
 
     async def _ensure(service: AssetService) -> tuple[AssetGroup, bool]:
@@ -43,6 +45,6 @@ async def ark_asset_group_ensure(
 TOOL_ANNOTATIONS = {
     "readOnlyHint": False,
     "destructiveHint": False,
-    "idempotentHint": True,
+    "idempotentHint": False,
     "openWorldHint": True,
 }

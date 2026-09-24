@@ -45,7 +45,7 @@ class NormalizedProviderError(BaseModel):
     retryable: bool = Field(..., description="Whether the operation can be safely retried.")
     ambiguous_completion: bool | None = Field(
         default=None,
-        description="True if a mutation timed out after dispatch — the billable operation may have succeeded.",
+        description="True if a mutation failed after dispatch or returned 5xx; it may have succeeded.",
     )
     retry_after_seconds: float | None = Field(
         default=None,

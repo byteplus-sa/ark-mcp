@@ -143,6 +143,17 @@ class ModelArkOpenApiGateway(BaseHttpGateway):
         except httpx.ConnectError as exc:
             raise self.normalize_connection_error(action, exc) from exc
         except httpx.TransportError as exc:
+            if mutation:
+                raise ProviderError(
+                    NormalizedProviderError(
+                        provider=self.PROVIDER,
+                        operation=action,
+                        code="TRANSPORT_ERROR",
+                        message=f"Transport error during '{action}': {exc}",
+                        retryable=False,
+                        ambiguous_completion=True,
+                    )
+                ) from exc
             raise self.normalize_transport_error(action, exc) from exc
 
         body_json: Any
@@ -198,8 +209,9 @@ class ModelArkOpenApiGateway(BaseHttpGateway):
             )
 
         throttled = status == 429 or (code or "") in _THROTTLE_CODES
-        retryable = throttled or status >= 500
         mutation = operation in MUTATING_ACTIONS
+        ambiguous = mutation and status >= 500 and not throttled
+        retryable = throttled or (status >= 500 and not mutation)
         retry_after = response.headers.get("Retry-After")
         try:
             retry_after_seconds = float(retry_after) if retry_after is not None else None
@@ -214,7 +226,7 @@ class ModelArkOpenApiGateway(BaseHttpGateway):
             message=message,
             request_id=request_id,
             retryable=retryable,
-            ambiguous_completion=mutation and status >= 500,
+            ambiguous_completion=ambiguous,
             retry_after_seconds=retry_after_seconds,
         )
         log_error(

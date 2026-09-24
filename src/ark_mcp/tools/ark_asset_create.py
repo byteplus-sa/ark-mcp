@@ -23,7 +23,7 @@ from ark_mcp.tools._asset_shared import (
     resolve_subject_group,
     wait_until_terminal,
 )
-from ark_mcp.tools._errors import provider_error_result
+from ark_mcp.tools._errors import format_provider_error_text, provider_error_result
 from ark_mcp.tools._task_execution import context_log
 
 # CreateAsset downloads asynchronously and may queue; keep presigned sources
@@ -40,8 +40,9 @@ async def ark_asset_create(input: AssetCreateInput, ctx: Context) -> AssetCreate
     faces that do not match the verified person. With wait_until_active (default)
     the tool polls until each asset is Active or Failed. Use the returned
     asset_uri values ('asset://...') as Seedance image/video/audio references
-    and refer to them in prompts as 'Image 1', 'Video 1', etc. Requires Dreamina
-    Seedance Advanced Creation Rights and BytePlus AK/SK.
+    and refer to them in prompts as 'Image 1', 'Video 1', etc. Image references
+    were verified with Seedance 2.5; video/audio provider acceptance is untested.
+    Requires Dreamina Seedance Advanced Creation Rights and BytePlus AK/SK.
     """
     urls: list[str | None] = []
     types: list[AssetTypeName | None] = []
@@ -98,7 +99,7 @@ async def ark_asset_create(input: AssetCreateInput, ctx: Context) -> AssetCreate
                 items.append(
                     AssetCreateItem(
                         index=index,
-                        error=f"{exc.error.code or 'error'}: {exc.error.message}",
+                        error=format_provider_error_text(exc.error.model_dump(mode="json")),
                     )
                 )
                 continue

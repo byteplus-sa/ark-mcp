@@ -60,8 +60,8 @@ in [`SPEC_MODELARK_ASSET_LIBRARY_CONTRACT.md`](../specs/SPEC_MODELARK_ASSET_LIBR
     Audio reject `asset://` (HTTP 400).
   - List tools always send `Filter.GroupType`, defaulting to `AIGC`, because
     the provider requires `Filter`.
-- **Not yet built:** Seedream `save_to_asset_group` output ingestion; a live
-  MCP-level smoke run of the tools.
+- **Not yet built:** Seedream `save_to_asset_group` output ingestion. Live MCP
+  AIGC management, Seedance image-reference, and deletion paths were exercised.
 
 ## What the provider supports (read this first)
 
@@ -70,7 +70,7 @@ These facts constrain the design. They come from the official docs listed in
 
 | Capability | Provider support | Consequence for this plan |
 |---|---|---|
-| `asset://<id>` in **Seedance 2.0 / 2.5** `content[].image_url/video_url/audio_url` | ✅ Documented; a Seedance 2.5 image-reference task completed in the 2026-09-24 live probe. | Native passthrough. This is the main feature. |
+| `asset://<id>` in **Seedance 2.0 / 2.5** `content[].image_url/video_url/audio_url` | Server pass-through is implemented. A Seedance 2.5 image-reference task completed in the 2026-09-24 live probe; video/audio references and Seedance 2.0 are not live-verified. | Pass through to the provider and label untested media types accordingly. |
 | `asset://<id>` in **Seedream** `image` | ❌ Seedream 5.0 Pro returned HTTP 400 `InvalidParameter` for the asset URI in the live probe. | No native support. See [Seedream and Seed Audio](#seedream-and-seed-audio-no-native-asset-support). |
 | `asset://<id>` in **Seed Audio** `references[]` | ❌ Seed Audio 1.0 returned HTTP 400 code `45001132` for the asset URI in the live probe. | Same as Seedream. |
 | Virtual portrait groups (`GroupType=AIGC`) | ✅ `CreateAssetGroup` + `CreateAsset` | Full API management. |
@@ -193,7 +193,10 @@ group is not supported."* The server makes that the default:
   `ListAssetGroups` with a `Name` fuzzy filter, keeps only **exact**
   case-sensitive name matches in the configured project, and creates the group
   if there is none. Two or more exact matches → an `ambiguous_asset_group`
-  error listing the IDs; the tool never picks one silently.
+  error listing the IDs; the tool never picks one silently. Lookup and creation
+  are serialized within one server event loop. Separate stdio servers or
+  replicas need a pre-created explicit `group_id` to avoid a name race. An
+  incomplete bounded page scan fails without creating a group.
 - **Batch upload into one group.** `ark_asset_create` takes a list of sources
   and **one** group target. The contract is "these files are the same
   subject". There is no multi-group batch tool.
@@ -220,7 +223,7 @@ All names use an `ark_asset_` prefix. Every model field gets a
 
 | Tool | Provider action(s) | Scope | Notes |
 |---|---|---|---|
-| `ark_asset_group_ensure` | `ListAssetGroups`, `CreateAssetGroup` | `assets:write` | Idempotent by exact `subject` name. AIGC only. Returns `{group_id, created: bool}`. |
+| `ark_asset_group_ensure` | `ListAssetGroups`, `CreateAssetGroup` | `assets:write` | Reuses an exact `subject` name within one server event loop. AIGC only; cross-process uniqueness is not guaranteed. Returns `{group_id, created: bool}`. |
 | `ark_asset_group_create` | `CreateAssetGroup` | `assets:write` | Explicit create (`name`, `description`). Always creates. |
 | `ark_asset_group_get` / `ark_asset_group_list` | `GetAssetGroup` / `ListAssetGroups` | `assets:read` | Filters: `name` (fuzzy), `group_ids`, `group_type` (`AIGC` / `LivenessFace`). `NextToken` paging with `max_results` (default 20). |
 | `ark_asset_group_update` | `UpdateAssetGroup` | `assets:write` | Name and description only. |

@@ -1930,7 +1930,9 @@ Seedance (Dreamina Seedance Advanced Creation Rights).
    orientation. Wait for `all_active` (or `ark_asset_get` status `Active`).
 3. Pass `asset_uri` values (`asset://asset-…`) in Seedance `images` /
    `videos` / `audios`. In the prompt say "Image 1", "Video 1" by position,
-   never the asset ID or name.
+   never the asset ID or name. Seedance 2.5 image references were verified
+   live; video/audio references and Seedance 2.0 are server pass-through paths
+   still awaiting provider validation.
 4. Seedream and Seed Audio reject `asset://` (provider HTTP 400) unless the
    operator set `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve`, which
    (experimentally) sends the asset's temporary download URL instead.
@@ -1943,6 +1945,12 @@ Seedance (Dreamina Seedance Advanced Creation Rights).
    deletes its assets. This cascade was verified for AIGC. After a timeout or
    5xx, read the target again before retrying because completion may be
    ambiguous.
+
+Subject lookup and creation is serialized within one server event loop. Across
+separate stdio servers or replicas, pre-create the group and pass its
+`group_id` to avoid a duplicate-name race. If the group scan exceeds its page
+bound, the tool fails with `asset_group_scan_incomplete` rather than assuming
+the subject is absent.
 
 ### URL-only Video References
 

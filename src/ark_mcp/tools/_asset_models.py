@@ -50,7 +50,8 @@ class AssetGroupEnsureInput(BaseModel):
         max_length=64,
         description=(
             "Exact subject name. Reuses the single AIGC group with exactly this name, or "
-            "creates it. Use one subject per character/product so its assets stay together."
+            "creates it within one server event loop. Separate servers should use a pre-created "
+            "group ID to avoid concurrent duplicate creation."
         ),
     )
     description: str | None = Field(
@@ -207,7 +208,8 @@ class AssetCreateInput(BaseModel):
         max_length=64,
         description=(
             "AIGC subject name: reuse the single AIGC group with this exact name, or create "
-            "it. Mutually exclusive with group_id."
+            "it within one server event loop. Mutually exclusive with group_id; use group_id "
+            "across separate servers to avoid concurrent duplicate creation."
         ),
     )
     skip_moderation: bool = Field(

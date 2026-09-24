@@ -7,6 +7,7 @@ domain mapping → tool output) runs without network access.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Iterator
 from typing import Any
@@ -17,6 +18,7 @@ import respx
 from fastmcp.tools import ToolResult
 from pydantic import ValidationError
 
+from ark_mcp.providers.modelark.assets import AssetService
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.tools._asset_models import (
@@ -57,6 +59,7 @@ class FakeAssetApi:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.initial_status = "Active"
         self.fail_urls: set[str] = set()
+        self.ambiguous_urls: set[str] = set()
         self.verification_group: str | None = None
 
     def handle(self, request: httpx.Request) -> httpx.Response:
@@ -115,6 +118,8 @@ class FakeAssetApi:
         return self._ok({})
 
     def _CreateAsset(self, body: dict[str, Any]) -> httpx.Response:
+        if body["URL"] in self.ambiguous_urls:
+            return self._error(503, "InternalError", "response lost")
         if body["URL"] in self.fail_urls:
             return self._error(400, "InvalidParameter.URL", "cannot fetch url")
         asset_id = f"asset-{len(self.assets) + 1}"
@@ -182,6 +187,48 @@ async def test_group_ensure_creates_then_reuses(
     assert [action for action, _ in asset_api.calls].count("CreateAssetGroup") == 1
 
 
+async def test_concurrent_group_ensure_reuses_one_group(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    original_create = AssetService.create_group
+
+    async def delayed_create(service: AssetService, **kwargs: Any) -> str:
+        started.set()
+        await release.wait()
+        return await original_create(service, **kwargs)
+
+    monkeypatch.setattr(AssetService, "create_group", delayed_create)
+    first = asyncio.create_task(
+        ark_asset_group_ensure(AssetGroupEnsureInput(subject="Teal Hero"), fake_ctx)
+    )
+    await started.wait()
+    second = asyncio.create_task(
+        ark_asset_group_ensure(AssetGroupEnsureInput(subject="Teal Hero"), fake_ctx)
+    )
+    await asyncio.sleep(0.05)
+    release.set()
+    first_result, second_result = await asyncio.gather(first, second)
+
+    assert isinstance(first_result, AssetGroupResult)
+    assert isinstance(second_result, AssetGroupResult)
+    assert first_result.group.group_id == second_result.group.group_id
+    assert [action for action, _ in asset_api.calls].count("CreateAssetGroup") == 1
+
+
+async def test_group_ensure_fails_closed_when_scan_is_incomplete(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def endless_pages(service: AssetService, **kwargs: Any) -> tuple[list[Any], str]:
+        return [], "next-page"
+
+    monkeypatch.setattr(AssetService, "list_groups", endless_pages)
+    with pytest.raises(ValueError, match="asset_group_scan_incomplete"):
+        await ark_asset_group_ensure(AssetGroupEnsureInput(subject="Teal Hero"), fake_ctx)
+    assert not any(action == "CreateAssetGroup" for action, _ in asset_api.calls)
+
+
 async def test_group_ensure_ignores_fuzzy_matches_and_rejects_duplicates(
     asset_api: FakeAssetApi, fake_ctx: FakeContext
 ) -> None:
@@ -241,6 +288,26 @@ async def test_asset_create_reports_partial_failures(
     assert result.items[1].asset_id is None
     assert "InvalidParameter.URL" in (result.items[1].error or "")
     assert result.all_active is False
+
+
+async def test_asset_create_reports_ambiguous_item_failure(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext
+) -> None:
+    asset_api.ambiguous_urls.add("https://cdn.example.com/uncertain.png")
+    result = await ark_asset_create(
+        AssetCreateInput(
+            group_id="group-existing",
+            wait_until_active=False,
+            sources=[{"url": "https://cdn.example.com/uncertain.png"}],
+        ),
+        fake_ctx,
+    )
+
+    assert isinstance(result, AssetCreateOutput)
+    assert result.items[0].asset_id is None
+    assert "ambiguous_completion=True" in (result.items[0].error or "")
+    assert "retryable=False" in (result.items[0].error or "")
+    assert "inspect" in (result.items[0].error or "")
 
 
 async def test_asset_create_rejects_private_urls(

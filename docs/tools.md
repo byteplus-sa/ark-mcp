@@ -565,7 +565,7 @@ Dreamina Seedance Advanced Creation Rights. Full guide, workflows and limits:
 
 | Tool | Purpose |
 |---|---|
-| `ark_asset_group_ensure` | Reuse or create the single AIGC group named exactly `subject` |
+| `ark_asset_group_ensure` | Reuse or create the AIGC group named exactly `subject`; concurrent calls are serialized within one server event loop |
 | `ark_asset_group_create` | Create a new AIGC (virtual portrait) group |
 | `ark_asset_group_get` / `ark_asset_group_list` | Read groups (`group_type` `AIGC` default or `LivenessFace`) |
 | `ark_asset_group_update` | Rename or re-describe a group |

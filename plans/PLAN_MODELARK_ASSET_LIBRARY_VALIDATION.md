@@ -49,10 +49,11 @@ What ark-mcp will add (full detail in the feature plan):
 
 1. `ark_asset_*` MCP tools: create or ensure a group, upload assets, get, list,
    update, (gated) delete, and real-person verification start/result.
-2. `asset://` references accepted natively by the Seedance 2.0 and 2.5
-   tools. Seedream and Seed Audio rejected native references in the Phase 0
-   probe, so they need an opt-in, experimental "resolve to temporary URL"
-   mode.
+2. `asset://` references forwarded by the Seedance 2.0 and 2.5 tools. The
+   Seedance 2.5 image path is verified; video/audio and Seedance 2.0 still
+   need live provider validation. Seedream and Seed Audio rejected native
+   references in the Phase 0 probe, so they need an opt-in, experimental
+   "resolve to temporary URL" mode.
 3. The "same subject → same asset group" rule, enforced by the tool shapes.
 
 ### Why a second set of credentials is needed
