@@ -573,7 +573,7 @@ Dreamina Seedance Advanced Creation Rights. Full guide, workflows and limits:
 | `ark_asset_get` / `ark_asset_list` | Asset status, type, group and `asset_uri` |
 | `ark_asset_update` | Rename an asset |
 | `ark_asset_verification_start` / `ark_asset_verification_result` | Real-person liveness verification → `LivenessFace` group ID |
-| `ark_asset_delete` / `ark_asset_group_delete` | Irreversible; only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` and `confirm: true` |
+| `ark_asset_delete` / `ark_asset_group_delete` | Irreversible; only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` and `confirm: true`. Deleting a nonempty AIGC group also deletes its assets. |
 
 Seedream and Seed Audio reject `asset://` unless
 `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental), which sends

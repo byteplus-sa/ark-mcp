@@ -80,6 +80,9 @@ An API key cannot create groups or upload assets.
 | Seedance 2.5 with `asset://` reference | ✅ A raw data-plane request using the existing API key completed successfully. The 4.04-second H.264 video is 480 × 854 at 24 fps and visually retains the cartoon character. |
 | Seedream 5.0 Pro with `asset://` image input | ❌ HTTP 400 `InvalidParameter`: `image` rejected as an invalid URL. Native `asset://` input is unsupported in this probe. |
 | Seed Audio 1.0 with `asset://` image reference | ❌ HTTP 400, code `45001132`: its downloader rejected the unsupported `asset` URL scheme. Native `asset://` input is unsupported in this probe. |
+| Live MCP asset tools with temporary STS credentials | ✅ All 11 configured `ark_asset_*` tools were discoverable. Nine management tools were exercised against the live provider: group create/ensure/get/list/update and asset create/get/list/update. The new synthetic image reached `Active`. |
+| Live MCP Seedance `asset://` workflow | ✅ `ark_job_submit` ran `seedance_2_5_create_task` with the new asset ID. Task `cgt-20260924103411-dnn6u` succeeded; a second background job ran `seedance_get_task` and persisted the video as `seed-media://artifacts/236d88e5-8fa4-4d17-af34-c2e5f2d32486` without a persistence error. |
+| Live MCP deletion of synthetic AIGC assets | ✅ With deletion explicitly enabled, `ark_asset_delete` removed one asset while its sibling remained Active. `ark_asset_group_delete` then removed the nonempty group and its remaining asset. Follow-up reads returned HTTP 404. Both tools rejected `confirm: false` before a provider call. |
 
 The live probe in the `default` project created group
 `group-20260924075329-67prc` and asset
@@ -97,6 +100,31 @@ cartoon character. Keep the character design consistent. The character
 blinks once and gives a small friendly wave, with subtle head movement
 against a clean neutral background.” The local review copy is
 `.artifacts/asset-library-probe/seedance-asset-reference.mp4` (gitignored).
+
+The live MCP test on 2026-09-24 created AIGC group
+`group-20260924103259-7mz6c` and image asset
+`asset-20260924103259-4rbnr` from the earlier synthetic character's temporary
+preview URL. The tool waited until the asset was `Active`, then the group and
+asset update tools returned their new descriptions and names. The test group
+and asset remain in the account for review and count against the tier quota.
+No AK/SK, session token, API key, or temporary preview URL was saved.
+The persisted artifact was reopened through `seed_media_export_artifact` in a
+new MCP server process. Its SHA-256 matched the stored digest, and `ffprobe`
+reported a 4.042-second, 480 × 854 video stream. The focused asset tests passed
+(39/39); the full suite passed (1312/1312, with 12 deprecation warnings).
+`make lint`, `mypy src`, and `uv build` also passed.
+
+The deletion test created disposable AIGC group
+`group-20260924104953-hf7mj` with two synthetic image assets
+(`asset-20260924104953-bfszv` and `asset-20260924105013-ljljv`). One asset
+was deleted directly. Deleting the group removed its remaining asset. The
+group and both assets returned HTTP 404 on follow-up reads, so this test left
+no provider-side test resources. It used the opt-in
+`BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` setting and `confirm: true` for
+each destructive call.
+After adding deletion coverage, the full suite passed (1317/1317); the
+focused deletion and registration checks passed (6/6). Lint, type checking,
+and package build passed.
 
 ## 3. Getting BytePlus credentials through TSP (bytedcli)
 
@@ -261,10 +289,10 @@ RESULT group=group-2026…-xxxxx asset=asset-2026…-xxxxx status=Active uri=ass
 
 ## 5. After the probe succeeds
 
-1. **Seedance `asset://` test (API key only): complete.** The raw
-   data-plane request succeeded. The MCP Seedance tools now accept
-   `asset://<asset_id>` (branch `feat/modelark-asset-library`); a live run
-   through the MCP tools is still pending.
+1. **Seedance `asset://` test: complete.** Both the raw
+   data-plane request and the live MCP background-job path succeeded on
+   branch `feat/modelark-asset-library`. The MCP path also persisted the
+   completed video as a durable artifact.
 2. **Seedream and Seed Audio probe: complete.** Both rejected native
    `asset://` input. The feature plan's optional resolve-to-URL mode is
    required for these providers and remains experimental pending written
@@ -275,9 +303,9 @@ RESULT group=group-2026…-xxxxx asset=asset-2026…-xxxxx status=Active uri=ass
    behavior is in
    [`SPEC_MODELARK_ASSET_LIBRARY_CONTRACT.md`](../specs/SPEC_MODELARK_ASSET_LIBRARY_CONTRACT.md).
    Phase 1 can use that contract while the unverified paths remain labeled.
-5. Clean up: the test group `mcp-api-test` remains for review and MCP tool
-   integration tests. Delete it in the console when no longer needed; assets
-   count against the tier quota.
+5. Clean up: the `mcp-api-test` and `mcp-pr74-live-202609240232` test groups
+   remain for review. Delete them in the console when no longer needed; their
+   assets count against the tier quota.
 
 ## 6. Open items
 
@@ -285,8 +313,11 @@ RESULT group=group-2026…-xxxxx asset=asset-2026…-xxxxx status=Active uri=ass
 - [x] TSP authorization for that identity confirmed.
 - [x] AIGC management API probe run to `Active`.
 - [x] Seedance `asset://` generation confirmed.
+- [x] Live MCP group/asset management and Seedance background-job path confirmed.
 - [x] Seedream / Seed Audio `asset://` behavior recorded.
-- [ ] Remove the test group after tool integration testing and review.
+- [x] Live AIGC asset and nonempty asset-group deletion confirmed through MCP.
+- [ ] Live real-person verification remains untested.
+- [ ] Remove both synthetic test groups after tool integration testing and review.
 - [ ] Written BytePlus confirmation on resolve mode for real-human and
       copyright assets (feature plan, open question 2).
 - [ ] Rotate the ByteCloud agent key pair that was pasted into a chat session

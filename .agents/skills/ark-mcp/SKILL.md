@@ -169,7 +169,8 @@ Private asset library (signed ModelArk OpenAPI; independent of the API key):
 - `ark_asset_verification_start`
 - `ark_asset_verification_result`   # optional background job
 - `ark_asset_delete`, `ark_asset_group_delete` — only with
-  `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`
+  `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`; each call also requires
+  `confirm=true`
 
 Scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
 
@@ -1933,8 +1934,15 @@ Seedance (Dreamina Seedance Advanced Creation Rights).
 4. Seedream and Seed Audio reject `asset://` (provider HTTP 400) unless the
    operator set `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve`, which
    (experimentally) sends the asset's temporary download URL instead.
-5. Assets only work with endpoints in the same `project_name`. Deletes are
-   irreversible and opt-in.
+5. Assets only work with endpoints in the same `project_name`.
+6. To delete, enable `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` before server
+   startup. Inspect the exact target ID first (`ark_asset_get` or
+   `ark_asset_group_get`); list a group's members with `ark_asset_list`.
+   Call `ark_asset_delete` with `asset_id` or `ark_asset_group_delete` with
+   `group_id`, and pass `confirm=true`. Deleting a nonempty AIGC group also
+   deletes its assets. This cascade was verified for AIGC. After a timeout or
+   5xx, read the target again before retrying because completion may be
+   ambiguous.
 
 ### URL-only Video References
 

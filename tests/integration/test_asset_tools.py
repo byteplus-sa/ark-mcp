@@ -15,22 +15,28 @@ import httpx
 import pytest
 import respx
 from fastmcp.tools import ToolResult
+from pydantic import ValidationError
 
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.tools._asset_models import (
     AssetCreateInput,
     AssetCreateOutput,
+    AssetDeleteInput,
+    AssetGroupDeleteInput,
     AssetGroupEnsureInput,
     AssetGroupResult,
     AssetListInput,
     AssetPage,
+    DeleteOutput,
     VerificationResultInput,
     VerificationResultOutput,
     VerificationStartInput,
     VerificationStartOutput,
 )
 from ark_mcp.tools.ark_asset_create import ark_asset_create
+from ark_mcp.tools.ark_asset_delete import ark_asset_delete
+from ark_mcp.tools.ark_asset_group_delete import ark_asset_group_delete
 from ark_mcp.tools.ark_asset_group_ensure import ark_asset_group_ensure
 from ark_mcp.tools.ark_asset_list import ark_asset_list
 from ark_mcp.tools.ark_asset_verification_result import ark_asset_verification_result
@@ -97,6 +103,17 @@ class FakeAssetApi:
         }
         return self._ok({"Id": group_id})
 
+    def _DeleteAssetGroup(self, body: dict[str, Any]) -> httpx.Response:
+        group_id = body["Id"]
+        if self.groups.pop(group_id, None) is None:
+            return self._error(404, "NotFound.AssetGroup", "group not found")
+        self.assets = {
+            asset_id: asset
+            for asset_id, asset in self.assets.items()
+            if asset["GroupId"] != group_id
+        }
+        return self._ok({})
+
     def _CreateAsset(self, body: dict[str, Any]) -> httpx.Response:
         if body["URL"] in self.fail_urls:
             return self._error(400, "InvalidParameter.URL", "cannot fetch url")
@@ -117,6 +134,11 @@ class FakeAssetApi:
         if asset is None:
             return self._error(404, "NotFound.Asset", "asset not found")
         return self._ok(asset)
+
+    def _DeleteAsset(self, body: dict[str, Any]) -> httpx.Response:
+        if self.assets.pop(body["Id"], None) is None:
+            return self._error(404, "NotFound.Asset", "asset not found")
+        return self._ok({})
 
     def _ListAssets(self, body: dict[str, Any]) -> httpx.Response:
         if "Filter" not in body:
@@ -243,6 +265,59 @@ async def test_asset_list_always_sends_filter(
     assert page.next_token == "next-1"
     list_body = next(body for action, body in asset_api.calls if action == "ListAssets")
     assert list_body["Filter"] == {"GroupType": "AIGC"}
+
+
+async def test_asset_delete_removes_only_requested_asset(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext
+) -> None:
+    asset_api.assets["asset-1"] = {"Id": "asset-1", "GroupId": "group-1"}
+    asset_api.assets["asset-2"] = {"Id": "asset-2", "GroupId": "group-1"}
+
+    result = await ark_asset_delete(AssetDeleteInput(asset_id="asset-1", confirm=True), fake_ctx)
+
+    assert isinstance(result, DeleteOutput)
+    assert result.id == "asset-1" and result.deleted is True
+    assert set(asset_api.assets) == {"asset-2"}
+    assert asset_api.calls == [("DeleteAsset", {"Id": "asset-1", "ProjectName": "default"})]
+
+
+async def test_asset_group_delete_removes_group_and_its_assets(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext
+) -> None:
+    asset_api.groups["group-1"] = {"Id": "group-1", "Name": "Test", "GroupType": "AIGC"}
+    asset_api.groups["group-2"] = {"Id": "group-2", "Name": "Other", "GroupType": "AIGC"}
+    asset_api.assets["asset-1"] = {"Id": "asset-1", "GroupId": "group-1"}
+    asset_api.assets["asset-2"] = {"Id": "asset-2", "GroupId": "group-2"}
+
+    result = await ark_asset_group_delete(
+        AssetGroupDeleteInput(group_id="group-1", confirm=True), fake_ctx
+    )
+
+    assert isinstance(result, DeleteOutput)
+    assert result.id == "group-1" and result.deleted is True
+    assert set(asset_api.groups) == {"group-2"}
+    assert set(asset_api.assets) == {"asset-2"}
+    assert asset_api.calls == [("DeleteAssetGroup", {"Id": "group-1", "ProjectName": "default"})]
+
+
+async def test_delete_requires_confirmation_and_reports_missing_resource(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext
+) -> None:
+    with pytest.raises(ValidationError):
+        AssetDeleteInput(asset_id="asset-1", confirm=False)
+    with pytest.raises(ValidationError):
+        AssetGroupDeleteInput(group_id="group-1", confirm=False)
+    assert not asset_api.calls
+
+    missing_asset = await ark_asset_delete(
+        AssetDeleteInput(asset_id="asset-missing", confirm=True), fake_ctx
+    )
+    missing_group = await ark_asset_group_delete(
+        AssetGroupDeleteInput(group_id="group-missing", confirm=True), fake_ctx
+    )
+
+    assert isinstance(missing_asset, ToolResult) and missing_asset.is_error
+    assert isinstance(missing_group, ToolResult) and missing_group.is_error
 
 
 async def test_verification_flow(asset_api: FakeAssetApi, fake_ctx: FakeContext) -> None:

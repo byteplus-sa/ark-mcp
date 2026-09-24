@@ -8,6 +8,7 @@ updated: 2026-09-24
 tags: [byteplus, modelark, assets, openapi, seedance]
 source:
   - https://docs.byteplus.com/en/docs/ModelArk/2318271
+  - https://docs.byteplus.com/en/docs/ModelArk/2318278
   - https://docs.byteplus.com/en/docs/ModelArk/2333565
   - https://docs.byteplus.com/en/docs/ModelArk/1520757
   - https://docs.byteplus.com/en/docs/ModelArk/1541523
@@ -22,12 +23,12 @@ related:
 
 ## Scope and evidence
 
-**This spec records the AIGC image path verified on 2026-09-24.** The live
-probe used temporary BytePlus STS credentials, a synthetic cartoon image,
-and the `default` ModelArk project. The exact test resources, prompt, and
-result are in
+**This spec records the AIGC image path verified on 2026-09-24.** The raw
+probe and a later live MCP run used temporary BytePlus STS credentials, a
+synthetic cartoon image, and the `default` ModelArk project. The exact test
+resources, prompt, and results are in
 [the validation runbook](../plans/PLAN_MODELARK_ASSET_LIBRARY_VALIDATION.md).
-The real-human, copyright-IP, and delete paths remain unverified.
+The real-human and copyright-IP paths remain unverified.
 
 ## Authentication and routing
 
@@ -61,8 +62,14 @@ sequenceDiagram
 |---|---|---|
 | `ListAssetGroups` | `Filter: {GroupType: "AIGC"}`, `MaxResults`, `ProjectName` | `Result.Items` and `Result.NextToken`. Omitting `Filter` returned `MissingParameter.Filter`. |
 | `CreateAssetGroup` | `Name`, `Description`, `GroupType: "AIGC"`, `ProjectName` | `Result.Id` identified the new group. |
+| `GetAssetGroup` | `Id`, `ProjectName` | Returned the newly created AIGC group with its name, description, type, and project. |
+| `UpdateAssetGroup` | `Id`, `Description`, `ProjectName` | Updated the test group's description; a subsequent `GetAssetGroup` returned the new value. Updating `Name` was not tested. |
 | `CreateAsset` | `GroupId`, public HTTPS `URL`, `AssetType: "Image"`, `Name`, `ProjectName` | `Result.Id` identified the new asset. |
 | `GetAsset` | `Id`, `ProjectName` | `Result.Status` reached `Active`; the result also contained `GroupId`, `AssetType`, `Name`, `Moderation`, timestamps, and a temporary `URL`. |
+| `ListAssets` | `Filter: {GroupType: "AIGC", GroupIds: [...]}`, `MaxResults`, `ProjectName` | Returned the new asset in the requested group. Other filters and pagination were not tested. |
+| `UpdateAsset` | `Id`, `Name`, `ProjectName` | Renamed the new asset; a subsequent `GetAsset` returned the new name. |
+| `DeleteAsset` | `Id`, `ProjectName` | Deleted one AIGC image asset. The other asset in the same group remained `Active`; a subsequent `GetAsset` on the deleted ID returned HTTP 404 `NotFound.asset_id`. |
+| `DeleteAssetGroup` | `Id`, `ProjectName` | Deleted a nonempty AIGC group. A subsequent `GetAssetGroup` returned HTTP 404 `NotFound.group_id`, and `GetAsset` on its remaining member returned HTTP 404 `NotFound.asset_id`. |
 
 **`asset://<asset-id>` is the durable reference for Seedance.** Treat the
 `URL` returned by `GetAsset` as temporary and sensitive; do not store it
@@ -73,6 +80,7 @@ in durable documentation or logs.
 | Provider | Input | Observed behavior |
 |---|---|---|
 | Seedance 2.5 | `content[].image_url.url = "asset://<asset-id>"` with `role = "reference_image"` | Task submission and generation succeeded. A four-second, 480p silent video retained the synthetic subject. |
+| Seedance 2.5 through MCP | `seedance_2_5_create_task` via `ark_job_submit`, then `seedance_get_task` | Task succeeded with an Active AIGC asset. A second background job persisted the video; a fresh MCP process reopened it with matching SHA-256 and a readable 4.042-second, 480 × 854 video stream. |
 | Seedream 5.0 Pro | `image = "asset://<asset-id>"` | HTTP 400 `InvalidParameter`: invalid URL in `image`. |
 | Seed Audio 1.0 | `references[].image_url = "asset://<asset-id>"` | HTTP 400, code `45001132`: unsupported `asset` protocol scheme. |
 
@@ -88,12 +96,13 @@ confirmation.
 - Copyright-IP management or discovery through OpenAPI.
 - Quota, project-mismatch, and face-mismatch error codes.
 - Native `asset://` behavior for video and audio references in Seedance.
+- `UpdateAssetGroup.Name`, additional `ListAssets` filters, sorting, and pagination.
 - Other regions, non-default projects, and long-lived BytePlus AK/SK.
 - Resolve-to-URL rights and behavior for real-human and copyright assets.
 
 Do not infer these behaviors from the successful AIGC image probe.
 
-## Server implementation mapping (documented, not yet exercised live)
+## Remaining server implementation mapping (not yet exercised live)
 
 ark-mcp (`providers/modelark/assets.py`, `docs/assets.md`) also calls the
 following actions. Their request shapes come from the BytePlus guides or are
@@ -102,12 +111,6 @@ on them.
 
 | Action | Request fields sent | Basis |
 |---|---|---|
-| `GetAssetGroup` | `Id`, `ProjectName` | Inferred from `GetAsset` |
-| `UpdateAssetGroup` | `Id`, `Name?`, `Description?`, `ProjectName` | Inferred |
-| `DeleteAssetGroup` | `Id`, `ProjectName` | Inferred; LivenessFace groups have extra authorization-status rules |
-| `ListAssets` | `Filter` (`GroupType` always sent; `GroupIds?`, `Statuses?`, `Name?`), `MaxResults`, `NextToken?`, `SortBy?`, `SortOrder?`, `ProjectName` | Documented; `Filter` assumed required as for `ListAssetGroups` |
-| `UpdateAsset` | `Id`, `Name`, `ProjectName` | Inferred |
-| `DeleteAsset` | `Id`, `ProjectName` | Inferred |
 | `CreateVisualValidateSession` | `CallbackURL`, `ProjectName` → `BytedToken`, `H5Link` | Documented (real-human guide) |
 | `GetVisualValidateResult` | `BytedToken` (valid ~30 min), `ProjectName` → `GroupId` | Documented; the response while still pending is unknown |
 

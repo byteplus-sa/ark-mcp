@@ -116,6 +116,21 @@ async def test_create_asset_5xx_is_ambiguous_but_reads_are_retryable() -> None:
     assert get_info.value.error.ambiguous_completion is False
 
 
+@pytest.mark.parametrize("action", ["DeleteAsset", "DeleteAssetGroup"])
+@respx.mock
+async def test_delete_5xx_is_ambiguous(action: str) -> None:
+    route = respx.post(f"{BASE}/").mock(return_value=httpx.Response(503, json={}))
+    gateway = _gateway()
+    try:
+        with pytest.raises(ProviderError) as info:
+            await gateway.call(action, {"Id": "test-id", "ProjectName": "default"})
+    finally:
+        await gateway.close()
+
+    assert info.value.error.ambiguous_completion is True
+    assert route.call_count == 1
+
+
 @respx.mock
 async def test_throttle_code_is_retryable() -> None:
     respx.post(f"{BASE}/").mock(

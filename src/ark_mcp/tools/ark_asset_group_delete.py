@@ -18,8 +18,7 @@ async def ark_asset_group_delete(
 ) -> DeleteOutput | ToolResult:
     """Permanently delete an asset group. Irreversible; requires confirm=true.
 
-    Its assets can no longer be used in generation. Real-person (LivenessFace)
-    groups must also meet the provider's authorization-status rules for deletion.
+    Deleting a nonempty AIGC group also deletes its assets.
     Only registered when BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true.
     """
 

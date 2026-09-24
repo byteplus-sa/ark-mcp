@@ -53,7 +53,7 @@ or authorized in the console.
 | `ark_asset_update` | `UpdateAsset` | Rename (search only; the model never sees names). |
 | `ark_asset_verification_start` | `CreateVisualValidateSession` | Returns an H5 liveness link for the person to open, plus a token valid for about 30 minutes. |
 | `ark_asset_verification_result` | `GetVisualValidateResult` | Returns the verified person's `LivenessFace` `group_id`; `wait_seconds` polls. Background-job capable. |
-| `ark_asset_delete` / `ark_asset_group_delete` | `DeleteAsset` / `DeleteAssetGroup` | **Irreversible.** Registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`; each call needs `confirm: true`. |
+| `ark_asset_delete` / `ark_asset_group_delete` | `DeleteAsset` / `DeleteAssetGroup` | **Irreversible.** Registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`; each call needs `confirm: true`. Deleting a nonempty AIGC group also removes its assets. |
 
 JWT scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
 Asset management acts on the whole BytePlus account, not per MCP principal, so
@@ -86,6 +86,25 @@ grant these scopes only to trusted callers.
 Real-human assets that another account authorized to you through the
 console QR flow can be used by ID in Seedance, but the management tools can't
 see them.
+
+### Delete an asset or group
+
+**Deletion is opt-in and permanent.** Set
+`BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` before starting the MCP server;
+the two delete tools then register. Inspect the target with `ark_asset_get` or
+`ark_asset_group_get`, and list a group's members with `ark_asset_list` before
+deleting it. Pass the exact ID and `confirm: true`:
+
+```json
+{"input":{"asset_id":"asset-EXAMPLE","confirm":true}}
+```
+
+Use that input with `ark_asset_delete`. For `ark_asset_group_delete`, pass
+`{"input":{"group_id":"group-EXAMPLE","confirm":true}}`.
+The AIGC group deletion path was verified live with a remaining asset: both
+the group and that asset returned 404 afterward. If a delete call times out or
+returns 5xx, read the target again before any retry because the provider may
+already have deleted it.
 
 ### Copyright IP
 

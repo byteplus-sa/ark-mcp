@@ -196,6 +196,10 @@ class TestToolDiscovery:
         monkeypatch.setenv(
             "BYTEPLUS_MODELARK_SECRET_KEY", "test-openapi-secret"
         )  # pragma: allowlist secret
+        monkeypatch.setenv("BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE", "false")
+        get_settings.cache_clear()
+        disabled_names = {tool.name for tool in await create_server(get_settings()).list_tools()}
+
         monkeypatch.setenv("BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE", "true")
         get_settings.cache_clear()
         try:
@@ -203,8 +207,9 @@ class TestToolDiscovery:
         finally:
             get_settings.cache_clear()
         for name in ("ark_asset_delete", "ark_asset_group_delete"):
+            assert name not in disabled_names
             assert tools[name].annotations is not None
-            assert tools[name].annotations.destructiveHint is True
+            assert tools[name].annotations.destructive_hint is True
 
     async def test_long_running_tools_require_background_execution(
         self, configured_server: None
