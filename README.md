@@ -22,6 +22,7 @@ products plus artifact access and an optional media upload helper:
 | **VOD AI MediaKit Transcode** | `vod_transcode_video`, `vod_get_transcode_task` | Submit and poll async video transcoding (codec, container, resolution, bitrate, frame rate) |
 | **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_get_subtitle_addition_task`, `vod_remove_subtitles`, `vod_get_subtitle_removal_task` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
 | **VOD Audio Separation** | `vod_separate_audio`, `vod_get_audio_separation` | Submit and poll voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
+| **Private Asset Library** | `ark_asset_group_ensure`, `ark_asset_create`, `ark_asset_get`, `ark_asset_list`, `ark_asset_verification_start`, `ark_asset_verification_result`, … | Manage Seedance Advanced Creation Rights assets (virtual portraits, verified real people) with BytePlus AK/SK; reference them as `asset://<id>` in Seedance |
 | **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url` | Retrieve persisted media inline by artifact ID, locate/copy it to a local path without Base64 round-trips, or durably persist a provider URL whose storage failed |
 | **Object storage** (optional) | `media_upload`, `media_upload_batch`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media (one file or up to 50) to TOS or S3; foreground URL renewal without re-uploading |
 | **Background jobs** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools and the default way to submit and manage long-running work; no task-augmented execution required |
@@ -408,6 +409,7 @@ make check-env     # Validate environment configuration
 | [API Reference](docs/api-reference.md) | Complete tool schemas, inputs, outputs, and examples |
 | [Use Cases](docs/use-cases.md) | Common scenarios with example tool calls |
 | [Tools](docs/tools.md) | Tool reference with input/output tables |
+| [Private Asset Library](docs/assets.md) | Real-person, virtual portrait and copyright assets for Seedance (AK/SK) |
 | [Security](docs/security.md) | Consolidated security model (auth, SSRF, body limits) |
 | [Runtime](docs/runtime.md) | Concurrency, budget, ownership, retry |
 | [Observability](docs/observability.md) | Structured logging, metrics, tracing |

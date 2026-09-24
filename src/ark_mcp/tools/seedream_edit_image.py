@@ -19,12 +19,13 @@ from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
-from ark_mcp.domain.media import MediaSource
+from ark_mcp.domain.media import ReferenceImageInput
 from ark_mcp.domain.models import SeedreamItemError, SeedreamUsage
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.tools._asset_shared import resolve_asset_references
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._local_export import (
@@ -85,7 +86,7 @@ class SeedreamEditInput(BaseModel):
             "Coordinate markup is prepended automatically; instruction plus markup must not exceed 4,000 characters."
         ),
     )
-    images: list[MediaSource] = Field(
+    images: list[ReferenceImageInput] = Field(
         ...,
         min_length=1,
         description="Reference images to edit. At least one is required.",
@@ -216,7 +217,12 @@ async def seedream_edit_image(
 
     full_prompt = _build_edit_prompt(input.prompt, input.point, input.bbox)
 
-    images_data = [src.model_dump() for src in input.images]
+    images_data = await resolve_asset_references(
+        ctx,
+        [src.model_dump() for src in input.images],
+        product="Seedream",
+        expected_type="Image",
+    )
 
     request = SeedreamService.build_request(
         model=caps.model_id,

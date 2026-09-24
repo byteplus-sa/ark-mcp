@@ -555,6 +555,30 @@ provider detail. GET polling is automatically retried on retryable errors:
 429, 5xx, and poll timeouts or connection failures (a poll creates no provider
 state).
 
+## Private asset library (`ark_asset_*`)
+
+Registered when `BYTEPLUS_MODELARK_ACCESS_KEY` and
+`BYTEPLUS_MODELARK_SECRET_KEY` are set. They manage asset groups (one subject
+per group), upload trusted media, and run real-person verification for
+Dreamina Seedance Advanced Creation Rights. Full guide, workflows and limits:
+[assets.md](assets.md).
+
+| Tool | Purpose |
+|---|---|
+| `ark_asset_group_ensure` | Reuse or create the AIGC group named exactly `subject`; concurrent calls are serialized within one server event loop |
+| `ark_asset_group_create` | Create a new AIGC (virtual portrait) group |
+| `ark_asset_group_get` / `ark_asset_group_list` | Read groups (`group_type` `AIGC` default or `LivenessFace`) |
+| `ark_asset_group_update` | Rename or re-describe a group |
+| `ark_asset_create` | Add 1–20 files of one subject to one group; waits for `Active` (background-job capable) |
+| `ark_asset_get` / `ark_asset_list` | Asset status, type, group and `asset_uri` |
+| `ark_asset_update` | Rename an asset |
+| `ark_asset_verification_start` / `ark_asset_verification_result` | Real-person liveness verification → `LivenessFace` group ID |
+| `ark_asset_delete` / `ark_asset_group_delete` | Irreversible; only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` and `confirm: true`. Deleting a nonempty AIGC group also deletes its assets. |
+
+Seedream and Seed Audio reject `asset://` unless
+`BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental), which sends
+the asset's temporary download URL instead.
+
 ## seed_audio_generate
 
 Generate full-scene audio through Seed Speech.
@@ -678,9 +702,9 @@ Create an asynchronous Seedance video generation task.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `prompt` | string | No | Text prompt (1-32,000 chars) |
-| `images` | list[SeedanceImageInput] | No | Image inputs with roles. Each entry may be a plain URL string or `{"url": ...}` (coerced to `role=reference_image`) |
-| `videos` | list[SeedanceVideoInput] | No | Reference videos (max 3). Each entry may be a plain URL string or `{"url": ...}` |
-| `audios` | list[SeedanceAudioInput] | No | Reference audio (max 3). Each entry may be a plain URL string or `{"url": ...}` |
+| `images` | list[SeedanceImageInput] | No | Image inputs with roles. Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` (coerced to `role=reference_image`) |
+| `videos` | list[SeedanceVideoInput] | No | Reference videos (max 3). Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` |
+| `audios` | list[SeedanceAudioInput] | No | Reference audio (max 3). Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` |
 | `model` | string | No | Override configured model ID |
 | `resolution` | "480p" \| "720p" \| "1080p" \| "4k" | No | Output resolution |
 | `ratio` | string | No | Aspect ratio. For `extend_video`, stripped (auto-locks to source) to prevent `InvalidParameter.TaskTypeConstraint`. For `edit_video`, auto-derived from input video. For first/last-frame, locks to first image. |
@@ -692,6 +716,11 @@ Create an asynchronous Seedance video generation task.
 | `execution_expires_after` | integer | No | Task TTL in seconds (3600-259200) |
 | `priority` | integer | No | Priority (0-9) |
 | `safety_identifier` | string | No | Safety identifier (max 64 chars) |
+
+Private asset library references (`asset://<asset_id>`, see
+[assets.md](assets.md)) are passed through natively. Refer to them in the
+prompt by position ("Image 1", "Video 1"), never by ID. With AK/SK configured,
+a `GetAsset` preflight rejects `Processing` or `Failed` assets before billing.
 
 Text-only input (prompt with no media) is supported for pure text-to-video
 generation. Audio cannot be the sole media input — at least a prompt,
@@ -729,9 +758,9 @@ Create an asynchronous Seedance 2.5 video generation task. Supports up to
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `prompt` | string | No | Text prompt (1-32,000 chars) |
-| `images` | list[SeedanceImageInput] | No | Reference images (max 30; roles `first_frame`, `last_frame`, `reference_image`). Each entry may be a plain URL string or `{"url": ...}` |
-| `videos` | list[SeedanceVideoInput] | No | Reference videos (max 10; URL-only). Each entry may be a plain URL string or `{"url": ...}` |
-| `audios` | list[SeedanceAudioInput] | No | Reference audio (max 10; audio-only input is supported). Each entry may be a plain URL string or `{"url": ...}` |
+| `images` | list[SeedanceImageInput] | No | Reference images (max 30; roles `first_frame`, `last_frame`, `reference_image`). Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` |
+| `videos` | list[SeedanceVideoInput] | No | Reference videos (max 10; URL or `asset://<asset_id>`). Each entry may be a plain URL string or `{"url": ...}` |
+| `audios` | list[SeedanceAudioInput] | No | Reference audio (max 10; audio-only input is supported). Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` |
 | `model` | string | No | Model ID (defaults to `dreamina-seedance-2-5-260628`) |
 | `resolution` | "480p" \| "720p" \| "1080p" | No | Output resolution (4k not supported) |
 | `ratio` | string | No | Aspect ratio. Stripped for `extend_video`; auto-derived for `edit_video`/first-frame |

@@ -167,6 +167,88 @@ class Settings(BaseSettings):
         description="BytePlus VOD AI MediaKit HTTPS API base URL.",
     )
 
+    # --- ModelArk OpenAPI (private asset library, AK/SK signed) -------------
+
+    modelark_access_key: str = Field(
+        default="",
+        validation_alias="BYTEPLUS_MODELARK_ACCESS_KEY",
+        description=(
+            "BytePlus IAM access key ID for signed ModelArk OpenAPI calls (asset library). "
+            "Long-term (AKLT...) or STS temporary (AKTP..., requires the session token)."
+        ),
+    )
+    modelark_secret_key: str = Field(
+        default="",
+        validation_alias="BYTEPLUS_MODELARK_SECRET_KEY",
+        description="BytePlus IAM secret access key paired with BYTEPLUS_MODELARK_ACCESS_KEY.",
+    )
+    modelark_session_token: str = Field(
+        default="",
+        validation_alias="BYTEPLUS_MODELARK_SESSION_TOKEN",
+        description="STS session token; required only for temporary (AKTP...) credentials.",
+    )
+    modelark_openapi_base_url: str = Field(
+        default="https://ark.ap-southeast-1.byteplusapi.com",
+        validation_alias="BYTEPLUS_MODELARK_OPENAPI_BASE_URL",
+        description="ModelArk OpenAPI (control plane) HTTPS base URL.",
+    )
+    modelark_region: str = Field(
+        default="ap-southeast-1",
+        min_length=1,
+        validation_alias="BYTEPLUS_MODELARK_REGION",
+        description="Region used in the OpenAPI signing credential scope.",
+    )
+    modelark_project_name: str = Field(
+        default="default",
+        min_length=1,
+        validation_alias="BYTEPLUS_MODELARK_PROJECT_NAME",
+        description=(
+            "Default ModelArk project for asset groups and assets. Assets are only usable by "
+            "inference endpoints in the same project."
+        ),
+    )
+    modelark_assets_allow_delete: bool = Field(
+        default=False,
+        validation_alias="BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE",
+        description="Register the irreversible ark_asset_delete and ark_asset_group_delete tools.",
+    )
+    modelark_asset_create_qpm: int = Field(
+        default=3,
+        ge=1,
+        le=6000,
+        validation_alias="BYTEPLUS_MODELARK_ASSET_CREATE_QPM",
+        description=(
+            "Client-side CreateAsset rate limit in requests per minute. Match your Advanced "
+            "Creation Rights tier: 3 (Entry), 120 (Advanced), 300 (Premium)."
+        ),
+    )
+    modelark_asset_verify_callback_url: str = Field(
+        default="",
+        validation_alias="BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL",
+        description=(
+            "Default HTTPS CallbackURL for real-person verification sessions when a call "
+            "does not supply one."
+        ),
+    )
+    modelark_asset_reference_mode: Literal["off", "resolve"] = Field(
+        default="off",
+        validation_alias="BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE",
+        description=(
+            "How Seedream and Seed Audio treat asset://<id> references. Seedance accepts "
+            "them natively; Seedream and Seed Audio reject them (HTTP 400, 2026-09-24 probe). "
+            "'off' rejects them locally; 'resolve' swaps in the asset's temporary GetAsset "
+            "URL (experimental, needs AK/SK)."
+        ),
+    )
+    seedance_asset_preflight: bool = Field(
+        default=True,
+        validation_alias="SEEDANCE_ASSET_PREFLIGHT",
+        description=(
+            "Check asset:// references with GetAsset before a billed Seedance submit and "
+            "stop early when an asset is still Processing or Failed. Needs AK/SK."
+        ),
+    )
+
     # --- Seed Speech ASR (STT) configuration ---------------------------------
 
     seed_speech_asr_base_url: str = Field(
@@ -584,6 +666,11 @@ class Settings(BaseSettings):
         return bool(self.vod_mediakit_api_key)
 
     @property
+    def has_modelark_openapi(self) -> bool:
+        """Whether AK/SK for signed ModelArk OpenAPI calls (asset library) are configured."""
+        return bool(self.modelark_access_key and self.modelark_secret_key)
+
+    @property
     def has_tos(self) -> bool:
         """Whether TOS object storage credentials are configured."""
         return bool(self.tos_access_key and self.tos_secret_key and self.tos_bucket)
@@ -652,12 +739,14 @@ class Settings(BaseSettings):
         "seed_audio_base_url",
         "seed_speech_asr_base_url",
         "vod_mediakit_base_url",
+        "modelark_openapi_base_url",
     )
     @classmethod
     def validate_provider_url(cls, value: str, info: ValidationInfo) -> str:
         parsed = urlsplit(value)
         if parsed.scheme != "https" or not parsed.hostname:
             env_var_map = {
+                "modelark_openapi_base_url": "BYTEPLUS_MODELARK_OPENAPI_BASE_URL",
                 "modelark_base_url": "BYTEPLUS_MODELARK_BASE_URL",
                 "seed_audio_base_url": "BYTEPLUS_SEED_AUDIO_BASE_URL",
                 "seed_speech_asr_base_url": "SEED_SPEECH_ASR_BASE_URL",
@@ -804,6 +893,27 @@ class Settings(BaseSettings):
             and self.mcp_host not in {"127.0.0.1", "::1", "localhost"}
         ):
             raise ValueError("HTTP on a non-loopback host requires MCP_AUTH_MODE=jwt.")
+        if bool(self.modelark_access_key) != bool(self.modelark_secret_key):
+            raise ValueError(
+                "BYTEPLUS_MODELARK_ACCESS_KEY and BYTEPLUS_MODELARK_SECRET_KEY must both be set "
+                "or both be empty."
+            )
+        if self.modelark_session_token and not self.has_modelark_openapi:
+            raise ValueError(
+                "BYTEPLUS_MODELARK_SESSION_TOKEN requires BYTEPLUS_MODELARK_ACCESS_KEY and "
+                "BYTEPLUS_MODELARK_SECRET_KEY."
+            )
+        if self.modelark_asset_verify_callback_url:
+            parsed_callback = urlsplit(self.modelark_asset_verify_callback_url)
+            if parsed_callback.scheme != "https" or not parsed_callback.hostname:
+                raise ValueError(
+                    "BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL must be an HTTPS URL."
+                )
+        if self.modelark_asset_reference_mode == "resolve" and not self.has_modelark_openapi:
+            raise ValueError(
+                "BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve requires "
+                "BYTEPLUS_MODELARK_ACCESS_KEY and BYTEPLUS_MODELARK_SECRET_KEY."
+            )
         if bool(self.tos_access_key) != bool(self.tos_secret_key):
             raise ValueError("TOS_ACCESS_KEY and TOS_SECRET_KEY must both be set or both be empty.")
         if self.tos_access_key and not self.tos_endpoint:
@@ -853,6 +963,8 @@ def validate() -> None:
         raise ValueError("BYTEPLUS_SEED_AUDIO_BASE_URL must use HTTPS")
     if not settings.vod_mediakit_base_url.startswith("https://"):
         raise ValueError("BYTEPLUS_VOD_MEDIAKIT_BASE_URL must use HTTPS")
+    if not settings.modelark_openapi_base_url.startswith("https://"):
+        raise ValueError("BYTEPLUS_MODELARK_OPENAPI_BASE_URL must use HTTPS")
     if settings.artifact_ttl_seconds <= 0:
         raise ValueError("ARTIFACT_TTL_SECONDS must be positive")
     if settings.mcp_inline_media_max_bytes <= 0:

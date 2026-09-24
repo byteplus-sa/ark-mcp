@@ -31,6 +31,10 @@ def configured_server(
     monkeypatch.setenv("TOS_ACCESS_KEY", "ak-test-tos")
     monkeypatch.setenv("TOS_SECRET_KEY", "sk-test-tos")
     monkeypatch.setenv("TOS_BUCKET", "test-bucket")
+    monkeypatch.setenv("BYTEPLUS_MODELARK_ACCESS_KEY", "AKLTtestopenapi")
+    monkeypatch.setenv(
+        "BYTEPLUS_MODELARK_SECRET_KEY", "test-openapi-secret"
+    )  # pragma: allowlist secret
 
     # Clear cached settings.
     get_settings.cache_clear()
@@ -144,7 +148,68 @@ class TestToolDiscovery:
             "vod_get_subtitle_addition_task",
             "vod_remove_subtitles",
             "vod_get_subtitle_removal_task",
+            "ark_asset_group_ensure",
+            "ark_asset_group_create",
+            "ark_asset_group_get",
+            "ark_asset_group_list",
+            "ark_asset_group_update",
+            "ark_asset_create",
+            "ark_asset_get",
+            "ark_asset_list",
+            "ark_asset_update",
+            "ark_asset_verification_start",
+            "ark_asset_verification_result",
         }
+
+    async def test_asset_tools_require_openapi_credentials(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
+        monkeypatch.delenv("BYTEPLUS_MODELARK_ACCESS_KEY", raising=False)
+        monkeypatch.delenv("BYTEPLUS_MODELARK_SECRET_KEY", raising=False)
+        get_settings.cache_clear()
+        try:
+            names = {tool.name for tool in await create_server(get_settings()).list_tools()}
+        finally:
+            get_settings.cache_clear()
+        assert not {name for name in names if name.startswith("ark_asset_")}
+        assert "seedance_create_task" in names
+
+    async def test_asset_tools_register_without_modelark_api_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("BYTEPLUS_MODELARK_API_KEY", raising=False)
+        monkeypatch.setenv("BYTEPLUS_MODELARK_ACCESS_KEY", "AKLTtestopenapi")
+        monkeypatch.setenv(
+            "BYTEPLUS_MODELARK_SECRET_KEY", "test-openapi-secret"
+        )  # pragma: allowlist secret
+        get_settings.cache_clear()
+        try:
+            names = {tool.name for tool in await create_server(get_settings()).list_tools()}
+        finally:
+            get_settings.cache_clear()
+        # Registration depends only on AK/SK (a local .env may still supply an API key).
+        assert "ark_asset_create" in names
+
+    async def test_asset_delete_tools_are_opt_in(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("BYTEPLUS_MODELARK_ACCESS_KEY", "AKLTtestopenapi")
+        monkeypatch.setenv(
+            "BYTEPLUS_MODELARK_SECRET_KEY", "test-openapi-secret"
+        )  # pragma: allowlist secret
+        monkeypatch.setenv("BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE", "false")
+        get_settings.cache_clear()
+        disabled_names = {tool.name for tool in await create_server(get_settings()).list_tools()}
+
+        monkeypatch.setenv("BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE", "true")
+        get_settings.cache_clear()
+        try:
+            tools = {tool.name: tool for tool in await create_server(get_settings()).list_tools()}
+        finally:
+            get_settings.cache_clear()
+        for name in ("ark_asset_delete", "ark_asset_group_delete"):
+            assert name not in disabled_names
+            assert tools[name].annotations is not None
+            assert tools[name].annotations.destructive_hint is True
 
     async def test_long_running_tools_require_background_execution(
         self, configured_server: None

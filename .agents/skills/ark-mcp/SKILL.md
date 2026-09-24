@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
+description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, manage the Seedance private asset library (virtual portraits, verified real people, copyright IP referenced as asset://) with BytePlus AK/SK, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -44,6 +44,11 @@ one server, including products served through ModelArk:
   file export, and recovery of outputs whose storage failed.
 - **Object storage upload** — presigned URL generation for URL-only media
   workflows such as Seedance video references (single or batched uploads).
+- **Private asset library** — `ark_asset_*` tools manage Dreamina Seedance
+  Advanced Creation Rights assets: AIGC groups for fictional characters,
+  real-person liveness verification for `LivenessFace` groups, and uploads.
+  Assets are referenced as `asset://<asset_id>` in Seedance. Requires BytePlus
+  IAM AK/SK (`BYTEPLUS_MODELARK_ACCESS_KEY` / `_SECRET_KEY`).
 
 The server is built on FastMCP v4 and runs locally via `stdio` or as a
 deployable Streamable HTTP service. Generated media is persisted to a local
@@ -147,6 +152,27 @@ gracefully degrades to whatever is configured.
 3D generation is **disabled by default**; it reuses the ModelArk API key and
 base URL but is gated by its own feature flag so it stays off unless
 explicitly enabled.
+
+### Requires `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY`
+
+Private asset library (signed ModelArk OpenAPI; independent of the API key):
+
+- `ark_asset_group_ensure`          # reuse/create the AIGC group for one subject
+- `ark_asset_group_create`
+- `ark_asset_group_get`
+- `ark_asset_group_list`
+- `ark_asset_group_update`
+- `ark_asset_create`                # optional background job
+- `ark_asset_get`
+- `ark_asset_list`
+- `ark_asset_update`
+- `ark_asset_verification_start`
+- `ark_asset_verification_result`   # optional background job
+- `ark_asset_delete`, `ark_asset_group_delete` — only with
+  `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`; each call also requires
+  `confirm=true`
+
+Scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
 
 ### Requires object storage credentials (TOS or S3)
 
@@ -1884,6 +1910,48 @@ default model for that product is used.
 > `hyper3d_*` tools for Hyper3D task IDs and `hitem3d_*` tools for Hitem3d
 > task IDs.
 
+### Private Asset Library Workflow (`asset://`)
+
+Use this for real people, your own virtual characters, or copyright IP in
+Seedance (Dreamina Seedance Advanced Creation Rights).
+
+1. **One subject per group.** Never mix people or characters in one group.
+   - Fictional character or product: `ark_asset_create(subject="<exact name>",
+     sources=[...])` reuses or creates that subject's AIGC group. AIGC assets
+     must not resemble any real person.
+   - Real person: `ark_asset_verification_start(callback_url=...)`, send
+     `h5_link` only to that person (they consent and pass liveness), then
+     `ark_asset_verification_result(verification_token, wait_seconds=...)`
+     for their `LivenessFace` `group_id`, then
+     `ark_asset_create(group_id=..., sources=[...])` with only their media.
+   - Copyright IP: copy the asset ID from the console Copyright Library.
+2. Sources are public HTTPS `url`s or `media_upload` `object_key`s. Best
+   portrait set: a front-facing close-up plus a full-body shot, portrait
+   orientation. Wait for `all_active` (or `ark_asset_get` status `Active`).
+3. Pass `asset_uri` values (`asset://asset-…`) in Seedance `images` /
+   `videos` / `audios`. In the prompt say "Image 1", "Video 1" by position,
+   never the asset ID or name. Seedance 2.5 image references were verified
+   live; video/audio references and Seedance 2.0 are server pass-through paths
+   still awaiting provider validation.
+4. Seedream and Seed Audio reject `asset://` (provider HTTP 400) unless the
+   operator set `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve`, which
+   (experimentally) sends the asset's temporary download URL instead.
+5. Assets only work with endpoints in the same `project_name`.
+6. To delete, enable `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` before server
+   startup. Inspect the exact target ID first (`ark_asset_get` or
+   `ark_asset_group_get`); list a group's members with `ark_asset_list`.
+   Call `ark_asset_delete` with `asset_id` or `ark_asset_group_delete` with
+   `group_id`, and pass `confirm=true`. Deleting a nonempty AIGC group also
+   deletes its assets. This cascade was verified for AIGC. After a timeout or
+   5xx, read the target again before retrying because completion may be
+   ambiguous.
+
+Subject lookup and creation is serialized within one server event loop. Across
+separate stdio servers or replicas, pre-create the group and pass its
+`group_id` to avoid a duplicate-name race. If the group scan exceeds its page
+bound, the tool fails with `asset_group_scan_incomplete` rather than assuming
+the subject is absent.
+
 ### URL-only Video References
 
 1. If the user has Base64 video or a local video file, run `media_upload` in the
@@ -2295,6 +2363,16 @@ Use bindings when a custom model ID is not one of the built-in defaults.
 - `PERSISTENCE_CACHE_MAX_SIZE`
 - `PERSISTENCE_CACHE_TTL_SECONDS`
 - `ARK_LOG_LEVEL`
+
+### Private Asset Library
+
+- `BYTEPLUS_MODELARK_ACCESS_KEY` / `BYTEPLUS_MODELARK_SECRET_KEY` — BytePlus
+  IAM AK/SK (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP…` keys).
+- `BYTEPLUS_MODELARK_PROJECT_NAME` (default `default`),
+  `BYTEPLUS_MODELARK_ASSET_CREATE_QPM` (3 Entry / 120 / 300),
+  `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE` (default false),
+  `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE` (`off` default, `resolve`),
+  `SEEDANCE_ASSET_PREFLIGHT` (default true).
 
 ### Object Storage
 

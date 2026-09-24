@@ -171,6 +171,29 @@ default, `mp3`, `wav`, `m4a`, `flac`). `vod_get_audio_separation` polls
 `source_url` (valid 24 hours) plus a durable `artifact` reference when
 best-effort persistence succeeds.
 
+## Private asset library (AK/SK)
+
+The `ark_asset_*` tools are registered only when both
+`BYTEPLUS_MODELARK_ACCESS_KEY` and `BYTEPLUS_MODELARK_SECRET_KEY` are set; they
+do not need `BYTEPLUS_MODELARK_API_KEY`. Seedance `asset://` references need
+only the API key. See [assets.md](assets.md).
+
+| Variable | Default | Description |
+|---|---|---|
+| `BYTEPLUS_MODELARK_ACCESS_KEY` | empty | BytePlus IAM access key (`AKLT…` long-term or `AKTP…` STS) for signed ModelArk OpenAPI calls |
+| `BYTEPLUS_MODELARK_SECRET_KEY` | empty | Matching secret key; must be set together with the access key |
+| `BYTEPLUS_MODELARK_SESSION_TOKEN` | empty | STS session token, required for `AKTP…` keys (sent as signed `X-Security-Token`) |
+| `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | ModelArk OpenAPI host (HTTPS) |
+| `BYTEPLUS_MODELARK_REGION` | `ap-southeast-1` | Signing region |
+| `BYTEPLUS_MODELARK_PROJECT_NAME` | `default` | Default project for groups and assets; must match the inference endpoint's project |
+| `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE` | `false` | Registers the irreversible `ark_asset_delete` / `ark_asset_group_delete` tools |
+| `BYTEPLUS_MODELARK_ASSET_CREATE_QPM` | `3` | Client-side `CreateAsset` pacing; set to your tier (3 Entry, 120 Advanced, 300 Premium) |
+| `BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL` | empty | Default HTTPS redirect for real-person verification |
+| `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE` | `off` | Seedream / Seed Audio `asset://` handling: `off` rejects, `resolve` swaps in the temporary asset URL (experimental; needs AK/SK) |
+| `SEEDANCE_ASSET_PREFLIGHT` | `true` | With AK/SK, check `asset://` references with `GetAsset` before a billed Seedance submit |
+
+JWT tool scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
+
 ## Object storage (TOS or S3, optional)
 
 The `media_upload`, `media_upload_batch`, `media_presign`, and

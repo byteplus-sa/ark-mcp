@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from ark_mcp.artifacts.store import ArtifactStore
 
-ProviderKey = Literal["modelark", "seed-speech", "vod-mediakit", "tos", "s3"]
+ProviderKey = Literal["modelark", "modelark-openapi", "seed-speech", "vod-mediakit", "tos", "s3"]
 
 
 def _open_sqlite_connection(database_path: Path) -> sqlite3.Connection:
@@ -85,6 +85,7 @@ class ProviderLimiters:
             raise ValueError("Concurrency limits must be positive.")
         self._provider = {
             "modelark": asyncio.Semaphore(provider_limit),
+            "modelark-openapi": asyncio.Semaphore(provider_limit),
             "seed-speech": asyncio.Semaphore(provider_limit),
             "vod-mediakit": asyncio.Semaphore(provider_limit),
             "tos": asyncio.Semaphore(provider_limit),

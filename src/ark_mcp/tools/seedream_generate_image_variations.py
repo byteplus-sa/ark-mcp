@@ -19,12 +19,13 @@ from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
-from ark_mcp.domain.media import MediaSource
+from ark_mcp.domain.media import ReferenceImageInput
 from ark_mcp.domain.models import VariationError, VariationResult, VariationSummary
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.tools._asset_shared import resolve_asset_references
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
 from ark_mcp.tools._local_export import (
     local_export,
@@ -71,7 +72,7 @@ class SeedreamVariationsInput(BaseModel):
         le=2147483647,
         description="Base seed. None = provider-randomized. -1 = client-randomized. N = deterministic (N+i per variation).",
     )
-    images: list[MediaSource] | None = Field(
+    images: list[ReferenceImageInput] | None = Field(
         None,
         description="Reference images for image-to-image or editing. Count limited by model capabilities.",
     )
@@ -185,8 +186,11 @@ async def seedream_generate_image_variations(
     store = runtime.artifact_store
     owner = get_principal(ctx)
 
-    images_data: list[dict[str, Any]] | None = (
-        [src.model_dump() for src in input.images] if input.images else None
+    images_data: list[dict[str, Any]] | None = await resolve_asset_references(
+        ctx,
+        [src.model_dump() for src in input.images] if input.images else None,
+        product="Seedream",
+        expected_type="Image",
     )
 
     service = SeedreamService()

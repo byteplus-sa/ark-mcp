@@ -52,6 +52,19 @@ surface.
 | 43 | `media_upload_batch` | Object storage (optional) | Required background task | TOS / S3 |
 | 44 | `seedance_get_tasks` | Seedance | Optional background retrieval | ModelArk |
 | 45 | `seed_audio_understand` | Seed audio understanding (optional) | Required background task | ModelArk |
+| 46 | `ark_asset_group_ensure` | Asset library (optional) | Write | BytePlus AK/SK |
+| 47 | `ark_asset_group_create` | Asset library (optional) | Write | BytePlus AK/SK |
+| 48 | `ark_asset_group_get` | Asset library (optional) | Read-only | BytePlus AK/SK |
+| 49 | `ark_asset_group_list` | Asset library (optional) | Read-only | BytePlus AK/SK |
+| 50 | `ark_asset_group_update` | Asset library (optional) | Write | BytePlus AK/SK |
+| 51 | `ark_asset_create` | Asset library (optional) | Optional background task | BytePlus AK/SK |
+| 52 | `ark_asset_get` | Asset library (optional) | Read-only | BytePlus AK/SK |
+| 53 | `ark_asset_list` | Asset library (optional) | Read-only | BytePlus AK/SK |
+| 54 | `ark_asset_update` | Asset library (optional) | Write | BytePlus AK/SK |
+| 55 | `ark_asset_verification_start` | Asset library (optional) | Write | BytePlus AK/SK |
+| 56 | `ark_asset_verification_result` | Asset library (optional) | Optional background retrieval | BytePlus AK/SK |
+| 57 | `ark_asset_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
+| 58 | `ark_asset_group_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
 
 ## Tool Annotations
 
@@ -102,6 +115,19 @@ surface.
 | `seed_media_persist_url` | false | false | false | true |
 | `media_upload_batch` | false | false | false | true |
 | `seedance_get_tasks` | false | false | true | false |
+| `ark_asset_group_ensure` | false | false | true | true |
+| `ark_asset_group_create` | false | false | false | true |
+| `ark_asset_group_get` | true | false | true | true |
+| `ark_asset_group_list` | true | false | true | true |
+| `ark_asset_group_update` | false | false | true | true |
+| `ark_asset_create` | false | false | false | true |
+| `ark_asset_get` | true | false | true | true |
+| `ark_asset_list` | true | false | true | true |
+| `ark_asset_update` | false | false | true | true |
+| `ark_asset_verification_start` | false | false | false | true |
+| `ark_asset_verification_result` | true | false | true | true |
+| `ark_asset_delete` | false | true | false | true |
+| `ark_asset_group_delete` | false | true | false | true |
 
 `seed_understand` and `seed_audio_understand` are not read-only because `save_to`
 writes local files, and the
@@ -556,6 +582,12 @@ A media reference by URL or Base64.
 | `data` | string | If kind=base64 | Base64-encoded data |
 | `mime_type` | string | No | MIME type |
 
+Seedance image/audio inputs and the Seedream / Seed Audio `images` /
+`image_reference` inputs (`ReferenceImageInput`) also accept
+`url: "asset://<asset_id>"` for private asset library assets. Seedance passes
+it through natively; Seedream and Seed Audio require
+`BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve`. See [assets.md](assets.md).
+
 ### AudioReference
 
 An audio reference for voice cloning.
@@ -564,7 +596,7 @@ An audio reference for voice cloning.
 |---|---|---|---|
 | `kind` | `"speaker"` \| `"url"` \| `"base64"` | Yes | Reference mode |
 | `speaker_id` | string | If kind=speaker | Preset speaker ID |
-| `url` | string | If kind=url | Reference audio URL |
+| `url` | string | If kind=url | Reference audio URL, or `asset://<asset_id>` (resolve mode only) |
 | `data` | string | If kind=base64 | Base64 audio data (WAV preflight-checked against 30s limit) |
 | `mime_type` | string | No | MIME type |
 

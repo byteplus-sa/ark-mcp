@@ -7,7 +7,7 @@ from fastmcp.tools import ToolResult
 from ark_mcp.domain.errors import ProviderError
 
 
-def _format_error_text(payload: dict[str, object]) -> str:
+def format_provider_error_text(payload: dict[str, object]) -> str:
     """Render a normalized provider error as a human-readable text string.
 
     The leading ``"{provider} {operation} failed: {message}"`` prefix is kept
@@ -27,8 +27,17 @@ def _format_error_text(payload: dict[str, object]) -> str:
     retryable = payload.get("retryable")
     if retryable is not None:
         meta.append(f"retryable={retryable}")
+    ambiguous = payload.get("ambiguous_completion")
+    if ambiguous is not None:
+        meta.append(f"ambiguous_completion={ambiguous}")
 
-    return f"{prefix} [{', '.join(meta)}]" if meta else prefix
+    rendered = f"{prefix} [{', '.join(meta)}]" if meta else prefix
+    if ambiguous is True:
+        return (
+            f"{rendered} The operation may have succeeded; inspect the resource or task status "
+            "before retrying."
+        )
+    return rendered
 
 
 def provider_error_result(exc: ProviderError) -> ToolResult:
@@ -44,6 +53,6 @@ def provider_error_result(exc: ProviderError) -> ToolResult:
     """
     payload = exc.error.model_dump(mode="json")
     return ToolResult(
-        content=_format_error_text(payload),
+        content=format_provider_error_text(payload),
         is_error=True,
     )

@@ -40,6 +40,11 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TOS_ACCESS_KEY", "ak-test-tos")
     monkeypatch.setenv("TOS_SECRET_KEY", "sk-test-tos")
     monkeypatch.setenv("TOS_BUCKET", "test-bucket")
+    monkeypatch.setenv("BYTEPLUS_MODELARK_ACCESS_KEY", "AKLTtestopenapi")
+    monkeypatch.setenv(
+        "BYTEPLUS_MODELARK_SECRET_KEY", "test-openapi-secret"
+    )  # pragma: allowlist secret
+    monkeypatch.setenv("BYTEPLUS_MODELARK_OPENAPI_BASE_URL", "https://ark-openapi.test.example.com")
 
     # Clear cached settings and capability registry.
     from ark_mcp.config.env import get_settings
