@@ -437,6 +437,14 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             auth=_tool_auth(settings, "vod_get_subtitle_removal_task", "vod:read"),
         )(_task_handler("vod_get_subtitle_removal_task", vod_get_subtitle_removal_task))
 
+    if settings.has_modelark_openapi:
+        _register_asset_tools(server, settings)
+    else:
+        log_info(
+            "asset_tools_skipped",
+            reason="BYTEPLUS_MODELARK_ACCESS_KEY / BYTEPLUS_MODELARK_SECRET_KEY not configured",
+        )
+
     if not settings.has_modelark:
         log_info("tools_skipped", reason="BYTEPLUS_MODELARK_API_KEY not configured")
         return
@@ -738,6 +746,147 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             )(_task_handler(seed3d_name, seed3d_handler))
 
 
+def _register_asset_tools(server: FastMCP, settings: Settings) -> None:
+    """Register the private asset library tools (AK/SK-signed ModelArk OpenAPI)."""
+    from ark_mcp.tools._asset_models import (
+        AssetCreateOutput,
+        AssetGroupPage,
+        AssetGroupResult,
+        AssetPage,
+        AssetResult,
+        DeleteOutput,
+        VerificationResultOutput,
+        VerificationStartOutput,
+    )
+    from ark_mcp.tools.ark_asset_create import TOOL_ANNOTATIONS as create_annotations
+    from ark_mcp.tools.ark_asset_create import ark_asset_create
+    from ark_mcp.tools.ark_asset_delete import TOOL_ANNOTATIONS as delete_annotations
+    from ark_mcp.tools.ark_asset_delete import ark_asset_delete
+    from ark_mcp.tools.ark_asset_get import TOOL_ANNOTATIONS as get_annotations
+    from ark_mcp.tools.ark_asset_get import ark_asset_get
+    from ark_mcp.tools.ark_asset_group_create import (
+        TOOL_ANNOTATIONS as group_create_annotations,
+    )
+    from ark_mcp.tools.ark_asset_group_create import ark_asset_group_create
+    from ark_mcp.tools.ark_asset_group_delete import (
+        TOOL_ANNOTATIONS as group_delete_annotations,
+    )
+    from ark_mcp.tools.ark_asset_group_delete import ark_asset_group_delete
+    from ark_mcp.tools.ark_asset_group_ensure import (
+        TOOL_ANNOTATIONS as group_ensure_annotations,
+    )
+    from ark_mcp.tools.ark_asset_group_ensure import ark_asset_group_ensure
+    from ark_mcp.tools.ark_asset_group_get import TOOL_ANNOTATIONS as group_get_annotations
+    from ark_mcp.tools.ark_asset_group_get import ark_asset_group_get
+    from ark_mcp.tools.ark_asset_group_list import TOOL_ANNOTATIONS as group_list_annotations
+    from ark_mcp.tools.ark_asset_group_list import ark_asset_group_list
+    from ark_mcp.tools.ark_asset_group_update import (
+        TOOL_ANNOTATIONS as group_update_annotations,
+    )
+    from ark_mcp.tools.ark_asset_group_update import ark_asset_group_update
+    from ark_mcp.tools.ark_asset_list import TOOL_ANNOTATIONS as list_annotations
+    from ark_mcp.tools.ark_asset_list import ark_asset_list
+    from ark_mcp.tools.ark_asset_update import TOOL_ANNOTATIONS as update_annotations
+    from ark_mcp.tools.ark_asset_update import ark_asset_update
+    from ark_mcp.tools.ark_asset_verification_result import (
+        TOOL_ANNOTATIONS as verification_result_annotations,
+    )
+    from ark_mcp.tools.ark_asset_verification_result import ark_asset_verification_result
+    from ark_mcp.tools.ark_asset_verification_start import (
+        TOOL_ANNOTATIONS as verification_start_annotations,
+    )
+    from ark_mcp.tools.ark_asset_verification_start import ark_asset_verification_start
+
+    registrations: list[tuple[str, dict[str, bool], type[Any], str, Any]] = [
+        (
+            "ark_asset_group_ensure",
+            group_ensure_annotations,
+            AssetGroupResult,
+            "assets:write",
+            ark_asset_group_ensure,
+        ),
+        (
+            "ark_asset_group_create",
+            group_create_annotations,
+            AssetGroupResult,
+            "assets:write",
+            ark_asset_group_create,
+        ),
+        (
+            "ark_asset_group_get",
+            group_get_annotations,
+            AssetGroupResult,
+            "assets:read",
+            ark_asset_group_get,
+        ),
+        (
+            "ark_asset_group_list",
+            group_list_annotations,
+            AssetGroupPage,
+            "assets:read",
+            ark_asset_group_list,
+        ),
+        (
+            "ark_asset_group_update",
+            group_update_annotations,
+            AssetGroupResult,
+            "assets:write",
+            ark_asset_group_update,
+        ),
+        (
+            "ark_asset_create",
+            create_annotations,
+            AssetCreateOutput,
+            "assets:write",
+            ark_asset_create,
+        ),
+        ("ark_asset_get", get_annotations, AssetResult, "assets:read", ark_asset_get),
+        ("ark_asset_list", list_annotations, AssetPage, "assets:read", ark_asset_list),
+        ("ark_asset_update", update_annotations, AssetResult, "assets:write", ark_asset_update),
+        (
+            "ark_asset_verification_start",
+            verification_start_annotations,
+            VerificationStartOutput,
+            "assets:verify",
+            ark_asset_verification_start,
+        ),
+        (
+            "ark_asset_verification_result",
+            verification_result_annotations,
+            VerificationResultOutput,
+            "assets:verify",
+            ark_asset_verification_result,
+        ),
+    ]
+    if settings.modelark_assets_allow_delete:
+        registrations.extend(
+            [
+                (
+                    "ark_asset_delete",
+                    delete_annotations,
+                    DeleteOutput,
+                    "assets:delete",
+                    ark_asset_delete,
+                ),
+                (
+                    "ark_asset_group_delete",
+                    group_delete_annotations,
+                    DeleteOutput,
+                    "assets:delete",
+                    ark_asset_group_delete,
+                ),
+            ]
+        )
+    for name, tool_annotations, output_model, scope, handler in registrations:
+        server.tool(
+            name=name,
+            annotations={**tool_annotations},
+            output_schema=output_model.model_json_schema(),
+            task=_task_config(name),
+            auth=_tool_auth(settings, name, scope),
+        )(_task_handler(name, handler))
+
+
 class HardenedFastMCP(FastMCP):
     """FastMCP subclass that applies ASGI body and rate-limit middleware for HTTP."""
 
@@ -793,7 +942,10 @@ def create_server(
             "BytePlus VOD AI MediaKit enhancement, video transcoding, subtitle burn-in, "
             "subtitle or text removal, and voice and background audio separation are "
             "available when the MediaKit API key is "
-            "configured. Generated media is persisted as durable MCP resources. Run "
+            "configured. Private asset library tools (ark_asset_*) for virtual portraits "
+            "and verified real people are available when BytePlus AK/SK are configured; "
+            "reference assets as asset://<asset_id> in Seedance. "
+            "Generated media is persisted as durable MCP resources. Run "
             "long-running tools through ark_job_capabilities, ark_job_submit, ark_job_get, "
             "and ark_job_cancel; these ordinary tools are the default path because most "
             "clients do not yet support MCP tasks. A client that does negotiate the "
@@ -847,6 +999,7 @@ def create_server(
             "Status: healthy\n"
             f"ModelArk configured: {resolved_settings.has_modelark}\n"
             f"Seed 3D configured: {resolved_settings.has_seed3d}\n"
+            f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
             f"VOD AI MediaKit configured: {resolved_settings.has_vod_mediakit}\n"
             f"TOS configured: {resolved_settings.has_tos}\n"

@@ -21,6 +21,7 @@ from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.tools._asset_shared import collect_asset_ids, preflight_seedance_assets
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._seedance_shared import (
@@ -248,6 +249,9 @@ async def seedance_create_task(
         videos_data = [vid.model_dump() for vid in input.videos]
     if input.audios:
         audios_data = [aud.model_dump() for aud in input.audios]
+
+    # Stop before billing when a referenced asset is still Processing or Failed.
+    await preflight_seedance_assets(ctx, collect_asset_ids(images_data, videos_data, audios_data))
 
     content = SeedanceService.build_content(
         prompt=input.prompt,

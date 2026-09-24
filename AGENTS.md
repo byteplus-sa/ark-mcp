@@ -25,6 +25,12 @@ surface:
   audio separation through the BytePlus VOD AI MediaKit.
 - **Object storage upload** — presigned URL generation for URL-only media
   workflows (TOS or S3 backend).
+- **Private asset library** — `ark_asset_*` tools for Dreamina Seedance
+  Advanced Creation Rights assets (AIGC virtual portraits, real-person
+  liveness verification, uploads) through the AK/SK-signed ModelArk OpenAPI;
+  registered only when `BYTEPLUS_MODELARK_ACCESS_KEY` and
+  `BYTEPLUS_MODELARK_SECRET_KEY` are set. Seedance accepts `asset://<id>`
+  references natively.
 - **Background jobs** — ordinary `ark_job_*` tools are the default route for
   long-running work through the FastMCP worker, since most clients cannot
   negotiate MCP task augmentation; native tasks remain supported for clients
@@ -38,7 +44,8 @@ Seedance, Seedream, Seed 3D, Seed 2.1 Understanding, and Seed Audio
 Understanding share the ModelArk data-plane host and Bearer authentication.
 Seed Audio and Speech-to-Text are
 hosted by Seed Speech and use `X-Api-Key`. VOD AI MediaKit uses a separate
-Bearer key. The server uses three provider gateways behind one normalized
+Bearer key. The asset library uses BytePlus IAM AK/SK with OpenAPI V4
+signatures. The server uses three provider gateways behind one normalized
 domain layer. See `plans/PLAN_ARK_SEED_MULTIMODAL_MCP.md` for the full
 design.
 

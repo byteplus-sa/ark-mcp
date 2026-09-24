@@ -17,12 +17,13 @@ from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
-from ark_mcp.domain.media import AudioReference, MediaSource
+from ark_mcp.domain.media import AudioReference, ReferenceImageInput
 from ark_mcp.domain.models import VariationError, VariationResult, VariationSummary
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.tools._asset_shared import resolve_asset_references
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
 from ark_mcp.tools._local_export import (
     local_export,
@@ -63,7 +64,7 @@ class SeedAudioVariationsInput(BaseModel):
         max_length=3,
         description="Reference audio for voice cloning or scene control (max 3). Mutually exclusive with image_reference.",
     )
-    image_reference: MediaSource | None = Field(
+    image_reference: ReferenceImageInput | None = Field(
         None,
         description="Reference image for visual-guided audio generation. Mutually exclusive with audio_references.",
     )
@@ -145,12 +146,19 @@ async def seed_audio_generate_variations(
     store = runtime.artifact_store
     owner = get_principal(ctx)
 
-    audio_refs_data: list[dict[str, Any]] | None = (
-        [ref.model_dump() for ref in input.audio_references] if input.audio_references else None
+    audio_refs_data: list[dict[str, Any]] | None = await resolve_asset_references(
+        ctx,
+        [ref.model_dump() for ref in input.audio_references] if input.audio_references else None,
+        product="Seed Audio",
+        expected_type="Audio",
     )
-    image_ref_data: dict[str, Any] | None = (
-        input.image_reference.model_dump() if input.image_reference else None
+    image_refs = await resolve_asset_references(
+        ctx,
+        [input.image_reference.model_dump()] if input.image_reference else None,
+        product="Seed Audio",
+        expected_type="Image",
     )
+    image_ref_data: dict[str, Any] | None = image_refs[0] if image_refs else None
 
     audio_config_dict: dict[str, Any] | None = (
         input.output.model_dump(exclude_none=True) if input.output else None

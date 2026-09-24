@@ -16,25 +16,29 @@ from pydantic import BaseModel, Field, model_validator
 from ark_mcp.config.model_capabilities import VideoCapabilities
 from ark_mcp.domain.artifacts import MediaType
 from ark_mcp.domain.errors import ProviderError
-from ark_mcp.domain.media import MediaSource
+from ark_mcp.domain.media import (
+    ASSET_REFERENCE_URL_DESCRIPTION,
+    MediaSource,
+    validate_reference_url,
+)
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
-from ark_mcp.security.url_policy import UrlValidationError, validate_url
+from ark_mcp.tools._asset_shared import collect_asset_ids, preflight_seedance_assets
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
 
 _IMAGE_INPUT_EXAMPLE = (
-    'Expected each image reference to be a URL string ("https://..."), '
-    '{"url": "https://..."}, or {"kind": "url", "url": "https://...", '
-    '"role": "reference_image"}.'
+    'Expected each image reference to be a URL string ("https://..." or '
+    '"asset://<asset_id>"), {"url": "https://..."}, or {"kind": "url", '
+    '"url": "https://...", "role": "reference_image"}.'
 )
 _AUDIO_INPUT_EXAMPLE = (
-    'Expected each audio reference to be a URL string ("https://..."), '
-    '{"url": "https://..."}, or {"kind": "url", "url": "https://..."}.'
+    'Expected each audio reference to be a URL string ("https://..." or '
+    '"asset://<asset_id>"), {"url": "https://..."}, or {"kind": "url", "url": "https://..."}.'
 )
 
 
@@ -42,6 +46,9 @@ class SeedanceImageInput(MediaSource):
     """Image input with an optional role for Seedance."""
 
     MEDIA_CATEGORY: ClassVar[MediaType] = MediaType.IMAGE
+    ALLOW_ASSET_URI: ClassVar[bool] = True
+
+    url: str | None = Field(default=None, description=ASSET_REFERENCE_URL_DESCRIPTION)
     role: Literal["first_frame", "last_frame", "reference_image"] | None = Field(
         None,
         description="Role of this image: first_frame, last_frame, or reference_image. If omitted, provider default applies.",
@@ -73,7 +80,13 @@ class SeedanceVideoInput(BaseModel):
         "url",
         description="Media source kind. Always 'url' for video references.",
     )
-    url: str = Field(..., description="HTTPS URL of the reference video.")
+    url: str = Field(
+        ...,
+        description=(
+            "HTTPS URL of the reference video, or 'asset://<asset_id>' for an Active private "
+            "Video asset."
+        ),
+    )
     role: Literal["reference_video"] = Field(
         "reference_video",
         description="Role of this input. Always 'reference_video'.",
@@ -89,11 +102,9 @@ class SeedanceVideoInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_video_url(self) -> SeedanceVideoInput:
-        try:
-            validate_url(self.url)
-        except UrlValidationError as exc:
-            log_warning("seedance_video_invalid_source_url", error=str(exc))
-            raise ValueError(UrlValidationError.safe_message) from exc
+        validate_reference_url(
+            self.url, allow_asset=True, log_event="seedance_video_invalid_source_url"
+        )
         return self
 
 
@@ -101,6 +112,9 @@ class SeedanceAudioInput(MediaSource):
     """Audio reference input for Seedance."""
 
     MEDIA_CATEGORY: ClassVar[MediaType] = MediaType.AUDIO
+    ALLOW_ASSET_URI: ClassVar[bool] = True
+
+    url: str | None = Field(default=None, description=ASSET_REFERENCE_URL_DESCRIPTION)
     role: Literal["reference_audio"] = Field(
         "reference_audio",
         description="Role of this input. Always 'reference_audio'.",
@@ -179,6 +193,10 @@ async def execute_seedance_create(
         videos_data = [vid.model_dump() for vid in input_model.videos]
     if input_model.audios:
         audios_data = [aud.model_dump() for aud in input_model.audios]
+
+    # asset:// references pass through natively; stop early (before billing)
+    # when a referenced asset we can see is still Processing or has Failed.
+    await preflight_seedance_assets(ctx, collect_asset_ids(images_data, videos_data, audios_data))
 
     content = SeedanceService.build_content(
         prompt=input_model.prompt,

@@ -20,6 +20,7 @@ from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.tools._asset_shared import collect_asset_ids, preflight_seedance_assets
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
 from ark_mcp.tools._parallel import (
     VariationProgress,
@@ -157,6 +158,9 @@ async def seedance_2_5_create_task_variations(
     audios_data: list[dict[str, Any]] | None = (
         [aud.model_dump() for aud in input.audios] if input.audios else None
     )
+
+    # Stop before billing when a referenced asset is still Processing or Failed.
+    await preflight_seedance_assets(ctx, collect_asset_ids(images_data, videos_data, audios_data))
 
     service = SeedanceService()
 

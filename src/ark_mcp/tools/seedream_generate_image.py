@@ -19,12 +19,13 @@ from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
-from ark_mcp.domain.media import MediaSource
+from ark_mcp.domain.media import ReferenceImageInput
 from ark_mcp.domain.models import SeedreamItemError, SeedreamUsage
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.tools._asset_shared import resolve_asset_references
 from ark_mcp.tools._cost import log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._local_export import (
@@ -52,7 +53,7 @@ class SeedreamGenerateInput(BaseModel):
         max_length=4000,
         description="Text prompt describing the image to generate (1-4,000 characters).",
     )
-    images: list[MediaSource] | None = Field(
+    images: list[ReferenceImageInput] | None = Field(
         None,
         description="Reference images for image-to-image or editing. Count limited by model capabilities.",
     )
@@ -169,7 +170,12 @@ async def seedream_generate_image(
     # Build the provider request.
     images_data = None
     if input.images:
-        images_data = [src.model_dump() for src in input.images]
+        images_data = await resolve_asset_references(
+            ctx,
+            [src.model_dump() for src in input.images],
+            product="Seedream",
+            expected_type="Image",
+        )
 
     request = SeedreamService.build_request(
         model=caps.model_id,

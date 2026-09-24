@@ -71,6 +71,8 @@ BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
         "vod_get_audio_separation": BackgroundToolSpec("optional", "vod:read"),
         "vod_get_subtitle_addition_task": BackgroundToolSpec("optional", "vod:read"),
         "vod_get_subtitle_removal_task": BackgroundToolSpec("optional", "vod:read"),
+        "ark_asset_create": BackgroundToolSpec("optional", "assets:write"),
+        "ark_asset_verification_result": BackgroundToolSpec("optional", "assets:verify"),
     }
 )
 

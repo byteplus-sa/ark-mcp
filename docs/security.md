@@ -110,6 +110,10 @@ tool → scope mapping is wired in `server.py::register_tools`:
 | `media:upload` | `media_upload`, `media_upload_batch`, `seed_media_persist_url` |
 | `media:presign` | `media_presign`, `media_presign_batch` |
 | `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}`, `seed_media_get_artifact`, `seed_media_export_artifact` |
+| `assets:read` | `ark_asset_group_get`, `ark_asset_group_list`, `ark_asset_get`, `ark_asset_list` |
+| `assets:write` | `ark_asset_group_ensure`, `ark_asset_group_create`, `ark_asset_group_update`, `ark_asset_create`, `ark_asset_update` |
+| `assets:verify` | `ark_asset_verification_start`, `ark_asset_verification_result` |
+| `assets:delete` | `ark_asset_delete`, `ark_asset_group_delete` (registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
 
 The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
 routes are **not** scope-protected at the FastMCP layer. Seed Audio and
@@ -126,6 +130,20 @@ registered only when object storage credentials are set (TOS:
 `TOS_ACCESS_KEY` / `TOS_SECRET_KEY` / `TOS_BUCKET`, or S3:
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` with
 `OBJECT_STORAGE_BACKEND=s3`).
+
+### Asset library credentials (AK/SK)
+
+`BYTEPLUS_MODELARK_ACCESS_KEY` / `_SECRET_KEY` (plus `_SESSION_TOKEN` for STS
+keys) sign ModelArk OpenAPI requests with BytePlus V4 HMAC-SHA256
+(`providers/byteplus_openapi/signing.py`). They are startup configuration
+only and are never logged, echoed, or accepted as tool arguments. The
+`ark_asset_*` tools are registered only when both keys are set. Asset
+management acts on the whole BytePlus account rather than per MCP principal,
+so grant `assets:*` scopes only to trusted callers. The real-person
+verification `h5_link` embeds temporary credentials: it is returned to the
+caller but never logged. `asset://<asset_id>` references are validated by
+shape and never fetched by the server; `CreateAsset` source URLs pass the
+standard URL policy. See [assets.md](assets.md).
 
 ### Object storage credentials
 
