@@ -13,7 +13,7 @@ from fastmcp import Context
 from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.config.env import get_settings
-from ark_mcp.config.model_capabilities import ModelFamily, get_capability_registry
+from ark_mcp.config.model_capabilities import ModelFamily
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.models import VariationError, VariationResult, VariationSummary
 from ark_mcp.observability.logger import info as log_info
@@ -29,7 +29,10 @@ from ark_mcp.tools._parallel import (
     variation_batch_deadline,
 )
 from ark_mcp.tools._task_execution import context_log
-from ark_mcp.tools.seedance_2_5_create_task import Seedance25CreateTaskInput
+from ark_mcp.tools.seedance_2_5_create_task import (
+    Seedance25CreateTaskInput,
+    resolve_seedance_2_5_capabilities,
+)
 
 
 class Seedance25VariationsInput(Seedance25CreateTaskInput):
@@ -93,57 +96,22 @@ async def seedance_2_5_create_task_variations(
     via ``seedance_get_task``. Partial failures are captured per variation.
     Requires MCP task-augmented execution for the provider submissions.
     """
-    await context_log(
-        ctx, "info", f"Starting {input.variations} parallel Seedance 2.5 task creations"
-    )
+    return await run_seedance_2_5_variations(input, ctx, ModelFamily.SEEDANCE_2_5)
+
+
+async def run_seedance_2_5_variations(
+    input: Seedance25VariationsInput, ctx: Context, family: ModelFamily
+) -> Seedance25VariationsOutput:
+    """Run a parallel variation batch for a Seedance 2.5-generation family."""
+    label = "Seedance 2.5 Premium" if family is ModelFamily.SEEDANCE_2_5_PREMIUM else "Seedance 2.5"
+    await context_log(ctx, "info", f"Starting {input.variations} parallel {label} task creations")
     await ctx.report_progress(progress=10, total=100)
 
     settings = get_settings()
     if not settings.has_modelark:
         raise ValueError("BYTEPLUS_MODELARK_API_KEY is not configured.")
 
-    registry = get_capability_registry()
-
-    if input.model:
-        caps = registry.get_video_capabilities(input.model)
-        if caps.family is not ModelFamily.SEEDANCE_2_5:
-            raise ValueError(
-                f"Model '{input.model}' is not a Seedance 2.5 model. "
-                f"Use seedance_create_task_variations for Seedance 2.0 models."
-            )
-    else:
-        video_models = registry.list_video_models()
-        seedance_2_5_ids = [
-            mid
-            for mid in video_models
-            if registry.get_video_capabilities(mid).family is ModelFamily.SEEDANCE_2_5
-        ]
-        if not seedance_2_5_ids:
-            raise ValueError(
-                "No Seedance 2.5 model is configured. Set SEEDANCE_MODEL_BINDINGS "
-                'to include a {"model_id": "dreamina-seedance-2-5-260628", "family": "seedance_2_5"} binding.'
-            )
-        caps = registry.get_video_capabilities(seedance_2_5_ids[0])
-
-    registry.validate_resolution(caps.model_id, input.resolution)
-    registry.validate_duration(caps.model_id, input.duration)
-
-    if input.priority is not None:
-        lo, hi = caps.priority_range
-        if input.priority < lo or input.priority > hi:
-            raise ValueError(
-                f"Priority {input.priority} is outside the supported range "
-                f"[{lo}, {hi}] for model '{caps.model_id}'."
-            )
-
-    if input.execution_expires_after is not None:
-        lo, hi = caps.execution_expires_after_range
-        if input.execution_expires_after < lo or input.execution_expires_after > hi:
-            raise ValueError(
-                f"execution_expires_after {input.execution_expires_after} is "
-                f"outside the supported range [{lo}, {hi}] for model "
-                f"'{caps.model_id}'."
-            )
+    caps = resolve_seedance_2_5_capabilities(input, family)
 
     log_cost_estimate(product="video", variations=input.variations, model_id=caps.model_id)
 
@@ -232,6 +200,7 @@ async def seedance_2_5_create_task_variations(
     await ctx.report_progress(progress=100, total=100)
     log_info(
         "seedance_2_5_variations_complete",
+        family=str(family),
         total=summary.total,
         succeeded=summary.succeeded,
         failed=summary.failed,

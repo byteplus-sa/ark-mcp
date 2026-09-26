@@ -33,12 +33,14 @@ client is missing tools and that warning is absent, look at
 | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-0-260128` | Default video model/endpoint ID |
 | `SEED_UNDERSTANDING_DEFAULT_MODEL` | `dola-seed-2-1-turbo-260628` | Default understanding model/endpoint ID. Set to `dola-seed-evolving` to use the latest Pro-tier model (auto-resolves to family `pro`, no `SEED_UNDERSTANDING_MODEL_FAMILY` needed) |
 | `SEEDREAM_MODEL_FAMILY` | empty | Family for a custom default: `pro`, `lite`, or `4x` |
-| `SEEDANCE_MODEL_FAMILY` | empty | Family for a custom default: `standard`, `fast`, `mini`, or `seedance_2_5` |
+| `SEEDANCE_MODEL_FAMILY` | empty | Family for a custom default: `standard`, `fast`, `mini`, `seedance_2_5`, or `seedance_2_5_premium` |
 | `SEED_UNDERSTANDING_MODEL_FAMILY` | empty | Family for a custom default: `pro` or `turbo` |
 | `SEEDREAM_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEEDANCE_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | Model/endpoint ID used by `seed_audio_understand`. Any ModelArk model that accepts Chat Completions `input_audio` parts with deep thinking works; change it when a newer audio-capable model ships |
+| `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` | `false` | Feature flag for whitelist-only Seedance 2.5 Premium (4K). Registers `seedance_2_5_premium_create_task` and its variations tool; reuses the ModelArk key. When false, `seedance_2_5_premium` bindings are rejected at startup |
+| `SEEDANCE_2_5_PREMIUM_MODEL` | `dreamina-seedance-2-5-premium-260915` | Premium model/endpoint ID bound automatically when the flag is on and `SEEDANCE_MODEL_BINDINGS` has no `seedance_2_5_premium` binding |
 | `BYTEPLUS_MODELARK_3D_ENABLED` | `false` | Feature flag for 3D generation (Hyper3D + Hitem3d); reuses the ModelArk key, disabled by default |
 | `HYPER3D_DEFAULT_MODEL` | `hyper3d-gen2` | Default Hyper3D model/endpoint ID |
 | `HITEM3D_DEFAULT_MODEL` | `hitem3d-2-0` | Default Hitem3d model/endpoint ID |

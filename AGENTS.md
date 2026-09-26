@@ -10,7 +10,10 @@ surface:
 - **Seedream** — image generation and editing through ModelArk.
 - **Seedance** — asynchronous video generation and task management through
   ModelArk. Supports two model generations: 2.0 (legacy, 15s, 4K) and 2.5
-  (default, 30s, 1080p, structured editing, native extension).
+  (default, 30s, 1080p, structured editing, native extension). Seedance 2.5
+  Premium (`dreamina-seedance-2-5-premium-260915`, adds 4K) is a separate,
+  whitelist-only family with its own `seedance_2_5_premium_*` tools, gated by
+  `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`; disabled by default.
 - **Seed 3D** — asynchronous 3D model generation through ModelArk (Hyper3D
   text-to-3D and Hitem3d image-to-3D). Gated by `BYTEPLUS_MODELARK_3D_ENABLED`;
   disabled by default.
