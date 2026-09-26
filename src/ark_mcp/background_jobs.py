@@ -54,6 +54,10 @@ BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
         "seedance_create_task_variations": BackgroundToolSpec("required", "seedance:create"),
         "seedance_2_5_create_task": BackgroundToolSpec("required", "seedance:create"),
         "seedance_2_5_create_task_variations": BackgroundToolSpec("required", "seedance:create"),
+        "seedance_2_5_premium_create_task": BackgroundToolSpec("required", "seedance:create"),
+        "seedance_2_5_premium_create_task_variations": BackgroundToolSpec(
+            "required", "seedance:create"
+        ),
         "hyper3d_create_task": BackgroundToolSpec("required", "hyper3d:create"),
         "hitem3d_create_task": BackgroundToolSpec("required", "hitem3d:create"),
         "vod_enhance_video": BackgroundToolSpec("required", "vod:enhance"),

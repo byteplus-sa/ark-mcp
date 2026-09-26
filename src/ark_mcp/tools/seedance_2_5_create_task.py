@@ -14,7 +14,11 @@ from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.config.env import get_settings
-from ark_mcp.config.model_capabilities import ModelFamily, get_capability_registry
+from ark_mcp.config.model_capabilities import (
+    ModelFamily,
+    VideoCapabilities,
+    get_capability_registry,
+)
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.tools._seedance_shared import (
     SeedanceAudioInput,
@@ -178,50 +182,55 @@ TOOL_ANNOTATIONS = {
 }
 
 
-async def seedance_2_5_create_task(
-    input: Seedance25CreateTaskInput, ctx: Context
-) -> Seedance25CreateTaskOutput | ToolResult:
-    """Create an asynchronous Seedance 2.5 video generation task.
+_FAMILY_TOOLS: dict[ModelFamily, tuple[str, str, str]] = {
+    ModelFamily.SEEDANCE_2_5: (
+        "Seedance 2.5",
+        "seedance_2_5_create_task",
+        '{"model_id": "dreamina-seedance-2-5-260628", "family": "seedance_2_5"}',
+    ),
+    ModelFamily.SEEDANCE_2_5_PREMIUM: (
+        "Seedance 2.5 Premium",
+        "seedance_2_5_premium_create_task",
+        '{"model_id": "dreamina-seedance-2-5-premium-260915", "family": "seedance_2_5_premium"}',
+    ),
+}
 
-    Accepts text, image, video, and audio references as content input.
-    Supports up to 30-second video generation, 50 multimodal references
-    (30 images, 10 videos, 10 audio), and 480p/720p/1080p resolution.
-    The task runs asynchronously on the provider — use
-    ``seedance_get_task`` to poll for completion. Returns the task ID
-    and a recommended polling interval. Requires MCP task-augmented execution
-    for the provider submission itself.
+
+def resolve_seedance_2_5_capabilities(
+    input: Seedance25CreateTaskInput, family: ModelFamily
+) -> VideoCapabilities:
+    """Resolve and validate the model for a Seedance 2.5-generation tool.
+
+    ``family`` selects the tool's model family (regular 2.5 or Premium). An
+    explicit ``input.model`` must belong to that family; otherwise the first
+    configured binding of the family is used. Resolution, duration, priority,
+    and execution expiry are validated against the resolved capabilities.
     """
-    await context_log(ctx, "info", "Creating Seedance 2.5 video generation task")
-    await ctx.report_progress(progress=10, total=100)
-
-    settings = get_settings()
-    if not settings.has_modelark:
-        raise ValueError(
-            "BYTEPLUS_MODELARK_API_KEY is not configured. Set it in .env to enable Seedance tools."
-        )
-
+    label, _tool_name, binding_example = _FAMILY_TOOLS[family]
     registry = get_capability_registry()
 
     if input.model:
         caps = registry.get_video_capabilities(input.model)
-        if caps.family is not ModelFamily.SEEDANCE_2_5:
-            raise ValueError(
-                f"Model '{input.model}' is not a Seedance 2.5 model. "
-                f"Use seedance_create_task for Seedance 2.0 models."
+        if caps.family is not family:
+            other = _FAMILY_TOOLS.get(caps.family)
+            hint = (
+                f"Use {other[1]} for {other[0]} models."
+                if other
+                else "Use seedance_create_task for Seedance 2.0 models."
             )
+            raise ValueError(f"Model '{input.model}' is not a {label} model. {hint}")
     else:
-        video_models = registry.list_video_models()
-        seedance_2_5_ids = [
+        family_ids = [
             mid
-            for mid in video_models
-            if registry.get_video_capabilities(mid).family is ModelFamily.SEEDANCE_2_5
+            for mid in registry.list_video_models()
+            if registry.get_video_capabilities(mid).family is family
         ]
-        if not seedance_2_5_ids:
+        if not family_ids:
             raise ValueError(
-                "No Seedance 2.5 model is configured. Set SEEDANCE_MODEL_BINDINGS "
-                'to include a {"model_id": "dreamina-seedance-2-5-260628", "family": "seedance_2_5"} binding.'
+                f"No {label} model is configured. Set SEEDANCE_MODEL_BINDINGS "
+                f"to include a {binding_example} binding."
             )
-        caps = registry.get_video_capabilities(seedance_2_5_ids[0])
+        caps = registry.get_video_capabilities(family_ids[0])
 
     registry.validate_resolution(caps.model_id, input.resolution)
     registry.validate_duration(caps.model_id, input.duration)
@@ -242,6 +251,40 @@ async def seedance_2_5_create_task(
                 f"outside the supported range [{lo}, {hi}] for model "
                 f"'{caps.model_id}'."
             )
+    return caps
+
+
+async def seedance_2_5_create_task(
+    input: Seedance25CreateTaskInput, ctx: Context
+) -> Seedance25CreateTaskOutput | ToolResult:
+    """Create an asynchronous Seedance 2.5 video generation task.
+
+    Accepts text, image, video, and audio references as content input.
+    Supports up to 30-second video generation, 50 multimodal references
+    (30 images, 10 videos, 10 audio), and 480p/720p/1080p resolution.
+    The task runs asynchronously on the provider — use
+    ``seedance_get_task`` to poll for completion. Returns the task ID
+    and a recommended polling interval. Requires MCP task-augmented execution
+    for the provider submission itself.
+    """
+    return await run_seedance_2_5_create(input, ctx, ModelFamily.SEEDANCE_2_5)
+
+
+async def run_seedance_2_5_create(
+    input: Seedance25CreateTaskInput, ctx: Context, family: ModelFamily
+) -> Seedance25CreateTaskOutput | ToolResult:
+    """Create one provider task for a Seedance 2.5-generation family."""
+    label = _FAMILY_TOOLS[family][0]
+    await context_log(ctx, "info", f"Creating {label} video generation task")
+    await ctx.report_progress(progress=10, total=100)
+
+    settings = get_settings()
+    if not settings.has_modelark:
+        raise ValueError(
+            "BYTEPLUS_MODELARK_API_KEY is not configured. Set it in .env to enable Seedance tools."
+        )
+
+    caps = resolve_seedance_2_5_capabilities(input, family)
 
     result = await execute_seedance_create(input, ctx, caps)
     if isinstance(result, ToolResult):
@@ -250,6 +293,7 @@ async def seedance_2_5_create_task(
     log_info(
         "seedance_2_5_create_task_complete",
         task_id=task_id,
+        family=str(family),
         model=caps.model_id,
     )
     return Seedance25CreateTaskOutput(
