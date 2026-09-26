@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, manage the Seedance private asset library (virtual portraits, verified real people, copyright IP referenced as asset://) with BytePlus AK/SK, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
+description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5 and whitelist-only 2.5 Premium 4K, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, manage the Seedance private asset library (virtual portraits, verified real people, copyright IP referenced as asset://) with BytePlus AK/SK, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -138,6 +138,13 @@ gracefully degrades to whatever is configured.
 - `seed_understand`
 - `seed_audio_understand`
 
+### Requires `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (and `BYTEPLUS_MODELARK_API_KEY`)
+
+Whitelist-only; disabled by default.
+
+- `seedance_2_5_premium_create_task`
+- `seedance_2_5_premium_create_task_variations`
+
 ### Requires `BYTEPLUS_MODELARK_3D_ENABLED=true` (and `BYTEPLUS_MODELARK_API_KEY`)
 
 - `hyper3d_create_task`
@@ -212,6 +219,8 @@ is contacted:
 - `seedance_create_task_variations`
 - `seedance_2_5_create_task`
 - `seedance_2_5_create_task_variations`
+- `seedance_2_5_premium_create_task` (when enabled)
+- `seedance_2_5_premium_create_task_variations` (when enabled)
 - `hyper3d_create_task`
 - `hitem3d_create_task`
 - `seed_understand`
@@ -248,7 +257,8 @@ MediaKit get tools, and `seed_media_persist_url`, support optional background
 execution. Use foreground calls with `persist_output=false` for quick status
 polling; once a task succeeds, run the get tool in the background with
 `persist_output=true` so completed-media download and persistence cannot exhaust
-the client deadline. List, presign, artifact-read, and cancel/delete tools
+the client deadline. If that background persist fails with "session is not
+available", follow [Background-job output handling](references/background-job-output.md). List, presign, artifact-read, and cancel/delete tools
 remain foreground operations.
 
 In the rest of this skill, **run in the background** means `ark_job_submit`,
@@ -414,6 +424,11 @@ validated before any provider call, and require `persist=true` /
 `persist_output=true`. Each written `ArtifactRef` reports `local_path`, or
 `export_error` if the local write failed (the call still succeeds and the
 durable artifact is kept).
+
+Inside `ark_job_submit`, these local-write options can fail with "session is
+not available". Before relying on them in a background job, read
+[Background-job output handling](references/background-job-output.md) for the
+download-and-hash route, large-result parsing, and output-audit rejections.
 
 Billed outputs are never dropped. When durable storage fails after download
 retries, the `ArtifactRef` carries `persistence_error` (`code`, `message`,
@@ -1130,8 +1145,28 @@ Returns `Seedance25CreateTaskOutput` with `task_id`, `status="queued"`, and `rec
 
 Create multiple Seedance 2.5 video tasks in parallel. Inherits all parameters from `seedance_2_5_create_task` and adds `variations` (1–5) and `variation_prompts`.
 
+#### `seedance_2_5_premium_create_task` / `seedance_2_5_premium_create_task_variations`
+
+Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) is a separate,
+**whitelist-only** model that adds **4K** output to the Seedance 2.5 feature
+set. The tools appear only when the operator sets
+`BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`. Inputs are identical to
+the 2.5 tools except `resolution` also accepts `4k` and `model` defaults to the
+Premium binding. Use Premium when the user needs 4K together with 2.5
+capabilities (30s, 30/10/10 references, editing, extension); otherwise use the
+regular 2.5 tool. Premium model IDs are rejected by the 2.0 and 2.5 tools.
+
+```json
+{
+  "prompt": "A 4K aerial shot over a coastline at golden hour",
+  "resolution": "4k",
+  "ratio": "16:9",
+  "duration": 15
+}
+```
+
 > **Shared lifecycle tools:** `seedance_get_task`, `seedance_list_tasks`, and
-> `seedance_cancel_or_delete_task` work with both 2.0 and 2.5 task IDs. Use
+> `seedance_cancel_or_delete_task` work with 2.0, 2.5, and 2.5 Premium task IDs. Use
 > them the same way regardless of which create tool produced the task.
 
 ---
@@ -1807,13 +1842,14 @@ Each server process maintains shared runtime services:
 ### Model Capability Registry
 
 The server validates inputs against known model capabilities before spending
-quota. Eleven model families, with these default model IDs:
+quota. Twelve model families, with these default model IDs:
 
 | Family | Default Model ID | Key Traits |
 |---|---|---|
 | **Seedream Pro** | `dola-seedream-5-0-pro-260628` | 10 refs, no batch, PNG/JPEG |
 | **Seedream Lite** | *(configured via `SEEDREAM_MODEL_BINDINGS`)* | 14 refs, batch, streaming, PNG/JPEG |
 | **Seedream 4.x** | *(configured via `SEEDREAM_MODEL_BINDINGS`)* | 14 refs, batch, streaming, JPEG only |
+| **Seedance 2.5 Premium** *(whitelist, flag-gated)* | `dreamina-seedance-2-5-premium-260915` | Same as 2.5 plus 4K; tools registered only when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` |
 | **Seedance 2.5** | `dreamina-seedance-2-5-260628` | 30 imgs / 10 vids / 10 audios, 480p / 720p / 1080p, up to 30s, structured editing + extension |
 | **Seedance 2 Standard** | `dreamina-seedance-2-0-260128` | 9 imgs / 3 vids / 3 audios, 480p–4K, 0–15s |
 | **Seedance 2 Fast** | *(configured via `SEEDANCE_MODEL_BINDINGS`)* | 480p, 720p only |
@@ -1868,9 +1904,12 @@ default model for that product is used.
 6. On success, run `seedance_get_task` in the background with
    `persist_output=true` and `output_path` set to the project asset path (or
    `seedance_get_tasks` with `output_dir`), and record artifact ID,
-   `local_path`, byte size, SHA-256, provider timestamps, and usage. If the
-   video has `persistence_error`, recover it with `seed_media_persist_url`
-   before the 24-hour URL expires.
+    `local_path`, byte size, SHA-256, provider timestamps, and usage. If the
+    video has `persistence_error`, recover it with `seed_media_persist_url`
+    before the 24-hour URL expires. Inside `ark_job_submit`, `persist_output`,
+    `output_path`, and `save_to` can fail with "session is not available"; read
+    [Background-job output handling](references/background-job-output.md) for the
+    download-and-hash route, large-result parsing, and output-audit rejections.
 7. Optionally call `seedance_list_tasks` to browse recent tasks.
 8. Call `seedance_cancel_or_delete_task` only when cleanup is explicitly wanted.
 
@@ -1978,7 +2017,8 @@ approved take:
 
 Use `failed`, `cancelled`, or `expired` for terminal failures. While a take is
 under review, record it under `outputs` or `generated_output`; reserve
-`selected_variant` and `approved` for an explicit user choice.
+`selected_variant` and `approved` for a mode-authorized, hash-bound decision
+after passing review.
 
 If the provider returns null or incomplete settings, keep the submitted request
 as the source of intended parameters and use media inspection as the source of
@@ -1999,7 +2039,8 @@ After downloading a Seedance result:
    boundary behavior, forbidden elements, and final location.
 6. When audio is enabled, verify the audio stream and inspect important dynamic
    segments rather than inferring sound quality from the request.
-7. Set the manifest to `review`; only the user can provide creative approval.
+7. Set the manifest to `review`; creative approval requires a passing review
+   and mode-authorized decision through the validated writer.
 8. For HEVC or other review-host-sensitive masters, optionally generate a
    lightweight H.264 proxy while preserving the original master.
 
@@ -2128,6 +2169,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 | `speech_to_text` error code `20000003` | Silent audio — no speech detected, or a format mismatch (e.g. non-16 kHz/16-bit/mono WAV) decoded to silence | Verify the audio contains speech and matches the declared `audio_format`; re-submit with corrected audio |
 | `media_upload` / `media_presign` / `media_presign_batch` not available | Missing TOS/S3 credentials | Set `TOS_*` or `S3_*` env vars and `OBJECT_STORAGE_BACKEND` |
 | Presigned URL expired | TTL elapsed (default 30 min) | Call `media_presign` (single key) or `media_presign_batch` (many keys) with the `object_key` to generate a fresh URL |
+| Seedance 2.5 Premium tools not appearing | `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` not set or ModelArk key missing | The model is whitelist-only; once the account is whitelisted, set the flag to `true` with `BYTEPLUS_MODELARK_API_KEY` configured |
 | 3D tools not appearing | `BYTEPLUS_MODELARK_3D_ENABLED` not set or ModelArk key missing | Set `BYTEPLUS_MODELARK_3D_ENABLED=true` and ensure `BYTEPLUS_MODELARK_API_KEY` is configured |
 | 3D task failed with `AbilityProcessingError` | Transient provider error | Re-submit the same task; do not treat the input as invalid |
 | 3D package imports at the wrong scale or without expected materials | Provider output and Blender scene use different unit, axis, format, or texture assumptions | Preserve the package, import into a quarantine collection, then measure and normalize a working copy before production use |
@@ -2294,6 +2336,11 @@ Set to `0` (default) for record-only mode with no enforcement.
 - `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` — override the VOD AI MediaKit HTTPS API base
 - `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` — seconds between ASR query polls (default 3)
 - `SEED_SPEECH_ASR_POLL_MAX_SECONDS` — maximum total seconds to wait for ASR result (default 600)
+
+### Seedance 2.5 Premium
+
+- `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` — feature flag for the whitelist-only Premium (4K) tools (default `false`; reuses ModelArk key)
+- `SEEDANCE_2_5_PREMIUM_MODEL` — Premium model ID bound when the flag is on (default `dreamina-seedance-2-5-premium-260915`)
 
 ### 3D Generation
 
