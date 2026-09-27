@@ -37,7 +37,8 @@ def isolate_settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     pydantic-settings reads ``os.environ`` and, for ``get_settings()``, the
     project ``.env`` file. Clear the tracked prefixes from ``os.environ`` and
     pin the model-binding variables to empty lists so a developer's ``.env``
-    cannot leak real model bindings (e.g. a Seedance 2.5 binding) into tests.
+    cannot leak real model bindings (e.g. a Seedance 2.5 binding) or the
+    Seedance 2.5 Premium flag into tests.
     Tests that need a value set it via ``monkeypatch.setenv`` after this
     fixture runs, which overrides these pins.
     """
@@ -47,6 +48,9 @@ def isolate_settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("SEEDREAM_MODEL_BINDINGS", "[]")
     monkeypatch.setenv("SEEDANCE_MODEL_BINDINGS", "[]")
     monkeypatch.setenv("SEED_UNDERSTANDING_MODEL_BINDINGS", "[]")
+    # A developer .env with the whitelist-only Premium flag on would otherwise
+    # register the Premium tools and bind the Premium model in every test.
+    monkeypatch.setenv("BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED", "false")
     from ark_mcp.config.env import get_settings
 
     get_settings.cache_clear()
