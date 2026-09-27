@@ -51,7 +51,8 @@ class SeedanceGetTaskInput(BaseModel):
         description=(
             "Provider task ID from the task-augmented result of seedance_create_task, "
             "seedance_create_task_variations, seedance_2_5_create_task, "
-            "or seedance_2_5_create_task_variations."
+            "seedance_2_5_create_task_variations, or (when enabled) "
+            "seedance_2_5_premium_create_task / seedance_2_5_premium_create_task_variations."
         ),
     )
     persist_output: bool = Field(
