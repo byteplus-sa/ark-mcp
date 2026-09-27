@@ -106,12 +106,12 @@ async def seedance_create_task_variations(
     if caps.family is ModelFamily.SEEDANCE_2_5:
         raise ValueError(
             f"Model '{input.model}' is a Seedance 2.5 model. "
-            f"Use seedance_2_5_create_task for Seedance 2.5 models."
+            f"Use seedance_2_5_create_task_variations for Seedance 2.5 models."
         )
     if caps.family is ModelFamily.SEEDANCE_2_5_PREMIUM:
         raise ValueError(
             f"Model '{input.model}' is a Seedance 2.5 Premium model. "
-            f"Use seedance_2_5_premium_create_task for Seedance 2.5 Premium models."
+            f"Use seedance_2_5_premium_create_task_variations for Seedance 2.5 Premium models."
         )
 
     log_cost_estimate(

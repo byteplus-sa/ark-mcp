@@ -22,6 +22,14 @@ from ark_mcp.tools.seedance_2_5_premium_create_task_variations import (
     Seedance25VariationsOutput,
     seedance_2_5_premium_create_task_variations,
 )
+from ark_mcp.tools.seedance_create_task import (
+    SeedanceCreateTaskInput,
+    seedance_create_task,
+)
+from ark_mcp.tools.seedance_create_task_variations import (
+    SeedanceVariationsInput,
+    seedance_create_task_variations,
+)
 from tests.fixtures.fake_context import FakeContext
 
 PREMIUM_MODEL = "dreamina-seedance-2-5-premium-260915"
@@ -163,4 +171,31 @@ class TestSeedance25PremiumVariationsTool:
             await seedance_2_5_premium_create_task_variations(
                 Seedance25PremiumVariationsInput(variations=1, prompt="test"),
                 fake_ctx,
+            )
+
+
+class TestSeedance20ToolsRejectPremium:
+    async def test_create_task_hint_names_premium_tool(self, premium_ctx: FakeContext) -> None:
+        with pytest.raises(
+            ValueError,
+            match=r"Use seedance_2_5_premium_create_task for Seedance 2\.5 Premium models",
+        ):
+            await seedance_create_task(
+                SeedanceCreateTaskInput(prompt="test", model=PREMIUM_MODEL),
+                premium_ctx,
+            )
+
+    async def test_variations_hint_names_premium_variations_tool(
+        self, premium_ctx: FakeContext
+    ) -> None:
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"Use seedance_2_5_premium_create_task_variations for "
+                r"Seedance 2\.5 Premium models"
+            ),
+        ):
+            await seedance_create_task_variations(
+                SeedanceVariationsInput(variations=1, prompt="test", model=PREMIUM_MODEL),
+                premium_ctx,
             )
