@@ -111,7 +111,7 @@ async def run_seedance_2_5_variations(
     if not settings.has_modelark:
         raise ValueError("BYTEPLUS_MODELARK_API_KEY is not configured.")
 
-    caps = resolve_seedance_2_5_capabilities(input, family)
+    caps = resolve_seedance_2_5_capabilities(input, family, variations=True)
 
     log_cost_estimate(product="video", variations=input.variations, model_id=caps.model_id)
 

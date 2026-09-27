@@ -279,7 +279,10 @@ class TestSeedance25CreateTaskVariationsTool:
         seedance_2_5_ctx: FakeContext,
     ) -> None:
         """Passing a 2.0 model ID to the 2.5 variations tool raises an error."""
-        with pytest.raises(ValueError, match=r"not a Seedance 2\.5 model"):
+        with pytest.raises(
+            ValueError,
+            match=r"not a Seedance 2\.5 model\. Use seedance_create_task_variations for",
+        ):
             await seedance_2_5_create_task_variations(
                 Seedance25VariationsInput(
                     variations=1,

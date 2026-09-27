@@ -197,7 +197,7 @@ _FAMILY_TOOLS: dict[ModelFamily, tuple[str, str, str]] = {
 
 
 def resolve_seedance_2_5_capabilities(
-    input: Seedance25CreateTaskInput, family: ModelFamily
+    input: Seedance25CreateTaskInput, family: ModelFamily, *, variations: bool = False
 ) -> VideoCapabilities:
     """Resolve and validate the model for a Seedance 2.5-generation tool.
 
@@ -205,6 +205,7 @@ def resolve_seedance_2_5_capabilities(
     explicit ``input.model`` must belong to that family; otherwise the first
     configured binding of the family is used. Resolution, duration, priority,
     and execution expiry are validated against the resolved capabilities.
+    ``variations`` points wrong-family hints at the ``_variations`` tools.
     """
     label, _tool_name, binding_example = _FAMILY_TOOLS[family]
     registry = get_capability_registry()
@@ -212,11 +213,12 @@ def resolve_seedance_2_5_capabilities(
     if input.model:
         caps = registry.get_video_capabilities(input.model)
         if caps.family is not family:
+            suffix = "_variations" if variations else ""
             other = _FAMILY_TOOLS.get(caps.family)
             hint = (
-                f"Use {other[1]} for {other[0]} models."
+                f"Use {other[1]}{suffix} for {other[0]} models."
                 if other
-                else "Use seedance_create_task for Seedance 2.0 models."
+                else f"Use seedance_create_task{suffix} for Seedance 2.0 models."
             )
             raise ValueError(f"Model '{input.model}' is not a {label} model. {hint}")
     else:

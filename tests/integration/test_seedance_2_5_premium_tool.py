@@ -146,6 +146,18 @@ class TestSeedance25PremiumVariationsTool:
         assert isinstance(result, Seedance25VariationsOutput)
         assert result.summary.succeeded == 2
 
+    async def test_regular_2_5_model_hint_names_variations_tool(
+        self, premium_ctx: FakeContext
+    ) -> None:
+        with pytest.raises(
+            ValueError,
+            match=r"Use seedance_2_5_create_task_variations for Seedance 2\.5 models",
+        ):
+            await seedance_2_5_premium_create_task_variations(
+                Seedance25PremiumVariationsInput(variations=1, prompt="test", model=REGULAR_MODEL),
+                premium_ctx,
+            )
+
     async def test_flag_off_rejects_call(self, test_env: None, fake_ctx: FakeContext) -> None:
         with pytest.raises(ValueError, match="whitelist-only and disabled"):
             await seedance_2_5_premium_create_task_variations(
