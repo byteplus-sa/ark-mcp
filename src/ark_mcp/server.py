@@ -628,6 +628,56 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             auth=_tool_auth(settings, name, scope),
         )(_task_handler(name, handler))
 
+    if settings.has_seedance_2_5_premium:
+        from ark_mcp.tools.seedance_2_5_premium_create_task import (
+            TOOL_ANNOTATIONS as create_premium_annotations,
+        )
+        from ark_mcp.tools.seedance_2_5_premium_create_task import (
+            seedance_2_5_premium_create_task,
+        )
+        from ark_mcp.tools.seedance_2_5_premium_create_task_variations import (
+            TOOL_ANNOTATIONS as premium_var_annotations,
+        )
+        from ark_mcp.tools.seedance_2_5_premium_create_task_variations import (
+            seedance_2_5_premium_create_task_variations,
+        )
+
+        premium_registrations = (
+            (
+                "seedance_2_5_premium_create_task",
+                create_premium_annotations,
+                Seedance25CreateTaskOutput,
+                "seedance:create",
+                seedance_2_5_premium_create_task,
+            ),
+            (
+                "seedance_2_5_premium_create_task_variations",
+                premium_var_annotations,
+                Seedance25VariationsOutput,
+                "seedance:create",
+                seedance_2_5_premium_create_task_variations,
+            ),
+        )
+        for (
+            premium_name,
+            premium_annotations,
+            premium_output,
+            premium_scope,
+            premium_handler,
+        ) in premium_registrations:
+            server.tool(
+                name=premium_name,
+                annotations={**premium_annotations},
+                output_schema=premium_output.model_json_schema(),
+                task=_task_config(premium_name),
+                auth=_tool_auth(settings, premium_name, premium_scope),
+            )(_task_handler(premium_name, premium_handler))
+    else:
+        log_info(
+            "seedance_2_5_premium_tools_skipped",
+            reason="BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED is not true",
+        )
+
     if settings.has_seed3d:
         from ark_mcp.tools._seed3d_shared import (
             Seed3DCancelOrDeleteOutput,

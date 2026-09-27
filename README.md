@@ -14,6 +14,7 @@ products plus artifact access and an optional media upload helper:
 | **Seed Audio** | `seed_audio_generate`, `seed_audio_generate_variations` | Background-task full-scene audio generation through Seed Speech |
 | **Seedream** | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` | Background-task image generation and editing through ModelArk |
 | **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, `seedance_cancel_or_delete_task` | Background-task video submission with optionally background output retrieval (single or batched status checks with derived queue timing) through ModelArk |
+| **Seedance 2.5 Premium** | `seedance_2_5_premium_create_task`, `seedance_2_5_premium_create_task_variations` | Whitelist-only Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) with 4K output; same inputs as Seedance 2.5 and shares the `seedance_get_task` lifecycle tools (gated by `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`, disabled by default) |
 | **Hyper3D / Hitem3d** | `hyper3d_*`, `hitem3d_*` task tools | Background-task 3D submission with optionally background output retrieval through ModelArk (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
 | **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions; always thinks, returns only the final answer, enforces JSON Schemas, and can save the answer to a local file |
 | **Seed Audio Understanding** | `seed_audio_understand` | Background-task audio understanding (transcription, translation, speaker/emotion analysis, summaries, Q&A) through ModelArk Chat Completions `input_audio`; model set by `SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`), same thinking, JSON Schema, and `save_to` controls as `seed_understand` |
@@ -82,6 +83,7 @@ accepts as reference input:
 
 > The `_variations` siblings (`seedream_generate_image_variations`,
 > `seedance_create_task_variations`, `seedance_2_5_create_task_variations`,
+> `seedance_2_5_premium_create_task_variations`,
 > `seed_audio_generate_variations`) accept
 > the same input modalities as their base tools.
 

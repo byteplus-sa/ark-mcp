@@ -65,6 +65,8 @@ surface.
 | 56 | `ark_asset_verification_result` | Asset library (optional) | Optional background retrieval | BytePlus AK/SK |
 | 57 | `ark_asset_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
 | 58 | `ark_asset_group_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
+| 59 | `seedance_2_5_premium_create_task` | Seedance 2.5 Premium (flag-gated) | Required background submission | ModelArk |
+| 60 | `seedance_2_5_premium_create_task_variations` | Seedance 2.5 Premium (flag-gated) | Required background submission | ModelArk |
 
 ## Tool Annotations
 
@@ -87,6 +89,8 @@ surface.
 | `seed_audio_understand` | false | false | false | true |
 | `seedance_2_5_create_task` | false | false | false | true |
 | `seedance_2_5_create_task_variations` | false | false | false | true |
+| `seedance_2_5_premium_create_task` | false | false | false | true |
+| `seedance_2_5_premium_create_task_variations` | false | false | false | true |
 | `seed_media_get_artifact` | true | false | true | false |
 | `seed_media_export_artifact` | false | false | true | false |
 | `speech_to_text` | true | false | true | false |
@@ -1659,6 +1663,19 @@ Inherits all fields from `seedance_2_5_create_task`, plus:
 |---|---|---|
 | `summary` | VariationSummary | Per-variation task IDs and errors |
 | `recommended_poll_after_ms` | integer | Suggested poll delay |
+
+---
+
+### Seedance 2.5 Premium (tools 59-60)
+
+`seedance_2_5_premium_create_task` and
+`seedance_2_5_premium_create_task_variations` take the same input and return
+the same output as tools 15 and 16, with two differences: `resolution` also
+accepts `4k`, and `model` defaults to `SEEDANCE_2_5_PREMIUM_MODEL`
+(`dreamina-seedance-2-5-premium-260915`) and must resolve to the
+`seedance_2_5_premium` family. They are registered only when
+`BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (whitelist-only; default
+`false`) and require `seedance:create`.
 
 ---
 

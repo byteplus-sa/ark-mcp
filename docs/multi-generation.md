@@ -49,6 +49,7 @@ per-variation control like distinct prompts, seeds, or media inputs), the
 | `seed_audio_generate_variations` | Seed Audio | No | `run_variation_batch` |
 | `seedance_create_task_variations` | Seedance | No | `run_variation_batch` |
 | `seedance_2_5_create_task_variations` | Seedance 2.5 | No | `run_variation_batch` |
+| `seedance_2_5_premium_create_task_variations` | Seedance 2.5 Premium (flag-gated) | No | `run_variation_batch` |
 
 ### How it works
 

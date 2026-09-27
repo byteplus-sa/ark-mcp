@@ -9,6 +9,7 @@ These tests exercise the FastMCP layer directly — no provider calls.
 
 from __future__ import annotations
 
+import json
 from datetime import timedelta
 from types import SimpleNamespace
 
@@ -95,6 +96,20 @@ def seed3d_server(
 ) -> None:
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
     monkeypatch.setenv("BYTEPLUS_MODELARK_3D_ENABLED", "true")
+
+    get_settings.cache_clear()
+
+    yield SimpleNamespace(mcp=create_server(get_settings()))
+
+    get_settings.cache_clear()
+
+
+@pytest.fixture
+def seedance_premium_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
+    monkeypatch.setenv("BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED", "true")
 
     get_settings.cache_clear()
 
@@ -297,6 +312,24 @@ class TestToolDiscovery:
             mcp_tool = tool.to_mcp_tool()
             assert mcp_tool.execution is None
 
+    async def test_seedance_premium_tools_gated_by_flag(
+        self,
+        configured_server: None,
+        seedance_premium_server: None,
+    ) -> None:
+        premium_names = {
+            "seedance_2_5_premium_create_task",
+            "seedance_2_5_premium_create_task_variations",
+        }
+        default_names = {tool.name for tool in await configured_server.mcp.list_tools()}
+        assert not premium_names & default_names
+
+        tools_by_name = {tool.name: tool for tool in await seedance_premium_server.mcp.list_tools()}
+        for name in premium_names:
+            tool = tools_by_name[name]
+            assert tool.task_config.mode == "required"
+            assert '"4k"' in json.dumps(tool.parameters)
+
     async def test_seed3d_create_and_retrieval_task_modes(self, seed3d_server: None) -> None:
         tools = await seed3d_server.mcp.list_tools()
         tools_by_name = {tool.name: tool for tool in tools}
@@ -323,12 +356,14 @@ class TestToolDiscovery:
         self,
         configured_server: None,
         seed3d_server: None,
+        seedance_premium_server: None,
     ) -> None:
         configured_tools = await configured_server.mcp.list_tools()
         seed3d_tools = await seed3d_server.mcp.list_tools()
+        premium_tools = await seedance_premium_server.mcp.list_tools()
         task_enabled_names = {
             tool.name
-            for tool in [*configured_tools, *seed3d_tools]
+            for tool in [*configured_tools, *seed3d_tools, *premium_tools]
             if tool.task_config.mode in {"required", "optional"}
         }
 

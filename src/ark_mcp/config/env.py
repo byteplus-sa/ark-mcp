@@ -78,6 +78,7 @@ class SeedanceFamily(StrEnum):
     FAST = "fast"
     MINI = "mini"
     SEEDANCE_2_5 = "seedance_2_5"
+    SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"
 
 
 class SeedUnderstandingFamily(StrEnum):
@@ -299,7 +300,10 @@ class Settings(BaseSettings):
     seedance_model_family: str = Field(
         default="",
         validation_alias="SEEDANCE_MODEL_FAMILY",
-        description="Explicit family: 'standard', 'fast', 'mini', or 'seedance_2_5'. Empty = infer.",
+        description=(
+            "Explicit family: 'standard', 'fast', 'mini', 'seedance_2_5', or "
+            "'seedance_2_5_premium'. Empty = infer."
+        ),
     )
     seedream_model_bindings: list[ImageModelBinding] = Field(
         default_factory=list,
@@ -329,6 +333,27 @@ class Settings(BaseSettings):
         description=(
             "ModelArk model ID used by seed_audio_understand. Must accept Chat "
             "Completions input_audio parts with deep thinking."
+        ),
+    )
+
+    # --- Seedance 2.5 Premium feature flag ----------------------------------
+
+    seedance_2_5_premium_enabled: bool = Field(
+        default=False,
+        validation_alias="BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED",
+        description=(
+            "Feature flag for Seedance 2.5 Premium (4K), a whitelist-only model. "
+            "Disabled by default. When false, the Premium tools are not registered "
+            "and Premium model bindings are rejected."
+        ),
+    )
+    seedance_2_5_premium_model: str = Field(
+        default="dreamina-seedance-2-5-premium-260915",
+        min_length=1,
+        validation_alias="SEEDANCE_2_5_PREMIUM_MODEL",
+        description=(
+            "Seedance 2.5 Premium model ID bound automatically when the Premium "
+            "flag is on and SEEDANCE_MODEL_BINDINGS has no seedance_2_5_premium binding."
         ),
     )
 
@@ -651,6 +676,11 @@ class Settings(BaseSettings):
         return bool(self.modelark_api_key)
 
     @property
+    def has_seedance_2_5_premium(self) -> bool:
+        """Whether whitelist-only Seedance 2.5 Premium is enabled (separate flag, same key)."""
+        return self.seedance_2_5_premium_enabled and bool(self.modelark_api_key)
+
+    @property
     def has_seed3d(self) -> bool:
         """Whether ModelArk 3D generation is enabled (separate flag, same key)."""
         return self.seed3d_enabled and bool(self.modelark_api_key)
@@ -785,6 +815,8 @@ class Settings(BaseSettings):
                     family = SeedanceFamily.STANDARD
                 elif self.seedance_default_model == "dreamina-seedance-2-5-260628":
                     family = SeedanceFamily.SEEDANCE_2_5
+                elif self.seedance_default_model == self.seedance_2_5_premium_model:
+                    family = SeedanceFamily.SEEDANCE_2_5_PREMIUM
                 else:
                     raise ValueError(
                         "A custom SEEDANCE_DEFAULT_MODEL requires "
@@ -795,6 +827,33 @@ class Settings(BaseSettings):
                     model_id=self.seedance_default_model,
                     family=SeedanceFamily(family),
                 )
+            ]
+
+        premium_bound = any(
+            binding.family is SeedanceFamily.SEEDANCE_2_5_PREMIUM
+            for binding in self.seedance_model_bindings
+        )
+        if premium_bound and not self.seedance_2_5_premium_enabled:
+            raise ValueError(
+                "Seedance 2.5 Premium is whitelist-only; set "
+                "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true to bind a "
+                "seedance_2_5_premium model."
+            )
+        if self.seedance_2_5_premium_enabled and not premium_bound:
+            if any(
+                binding.model_id == self.seedance_2_5_premium_model
+                for binding in self.seedance_model_bindings
+            ):
+                raise ValueError(
+                    f"SEEDANCE_2_5_PREMIUM_MODEL '{self.seedance_2_5_premium_model}' is "
+                    "already bound to a non-Premium family."
+                )
+            self.seedance_model_bindings = [
+                *self.seedance_model_bindings,
+                VideoModelBinding(
+                    model_id=self.seedance_2_5_premium_model,
+                    family=SeedanceFamily.SEEDANCE_2_5_PREMIUM,
+                ),
             ]
 
         if not self.seed_understanding_model_bindings:

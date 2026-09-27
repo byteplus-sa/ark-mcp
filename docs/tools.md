@@ -60,6 +60,8 @@ interval:
 - `seedance_create_task_variations`
 - `seedance_2_5_create_task`
 - `seedance_2_5_create_task_variations`
+- `seedance_2_5_premium_create_task` (when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`)
+- `seedance_2_5_premium_create_task_variations` (same flag)
 - `hyper3d_create_task`
 - `hitem3d_create_task`
 - `seed_understand`
@@ -1017,6 +1019,29 @@ to `seedance_get_task`; partial failures are captured per variation.
 \* Either `prompt` or `variation_prompts` must be provided.
 
 **Output:** `VariationSummary` + `recommended_poll_after_ms`.
+
+### seedance_2_5_premium_create_task / seedance_2_5_premium_create_task_variations
+
+Whitelist-only Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`),
+a model separate from regular Seedance 2.5 that adds `4k` output. Registered
+only when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (disabled by
+default) and `BYTEPLUS_MODELARK_API_KEY` is set; both require the
+`seedance:create` scope and run as background submissions.
+
+**Input:** Same fields as `seedance_2_5_create_task` /
+`seedance_2_5_create_task_variations`, except:
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `resolution` | enum | No | — | `480p`, `720p`, `1080p`, or `4k` |
+| `model` | string | No | `SEEDANCE_2_5_PREMIUM_MODEL` | Must resolve to the `seedance_2_5_premium` family |
+
+The regular 2.5 and 2.0 create tools reject Premium model IDs, and the Premium
+tools reject non-Premium IDs. Poll, list, and cancel Premium tasks with the
+shared `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, and
+`seedance_cancel_or_delete_task` tools.
+
+**Output:** Same as the corresponding Seedance 2.5 tool.
 
 ## seed_understand
 

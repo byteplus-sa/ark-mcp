@@ -35,6 +35,7 @@ class ModelFamily(StrEnum):
     SEEDANCE_2_FAST = "seedance_2_fast"
     SEEDANCE_2_MINI = "seedance_2_mini"
     SEEDANCE_2_5 = "seedance_2_5"
+    SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"
     SEED_2_1_PRO = "seed_2_1_pro"
     SEED_2_1_TURBO = "seed_2_1_turbo"
     SEED3D_HYPER3D = "seed3d_hyper3d"
@@ -168,7 +169,10 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
     capabilities: dict[str, VideoCapabilities] = {}
     for binding in settings.seedance_model_bindings:
         resolutions: tuple[str, ...]
-        if binding.family is SeedanceFamily.SEEDANCE_2_5:
+        if binding.family is SeedanceFamily.SEEDANCE_2_5_PREMIUM:
+            family = ModelFamily.SEEDANCE_2_5_PREMIUM
+            resolutions = ("480p", "720p", "1080p", "4k")
+        elif binding.family is SeedanceFamily.SEEDANCE_2_5:
             family = ModelFamily.SEEDANCE_2_5
             resolutions = ("480p", "720p", "1080p")
         elif binding.family is SeedanceFamily.MINI:
@@ -181,7 +185,7 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
             family = ModelFamily.SEEDANCE_2
             resolutions = ("480p", "720p", "1080p", "4k")
 
-        if binding.family is SeedanceFamily.SEEDANCE_2_5:
+        if binding.family in (SeedanceFamily.SEEDANCE_2_5, SeedanceFamily.SEEDANCE_2_5_PREMIUM):
             capabilities[binding.model_id] = VideoCapabilities(
                 family=family,
                 model_id=binding.model_id,

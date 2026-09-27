@@ -8,7 +8,7 @@ with an actionable `ValueError`.
 
 ## Families
 
-`ModelFamily` (`StrEnum`) has eleven members:
+`ModelFamily` (`StrEnum`) has twelve members:
 
 | Member | Value |
 |---|---|
@@ -19,6 +19,7 @@ with an actionable `ValueError`.
 | `SEEDANCE_2_FAST` | `seedance_2_fast` |
 | `SEEDANCE_2_MINI` | `seedance_2_mini` |
 | `SEEDANCE_2_5` | `seedance_2_5` |
+| `SEEDANCE_2_5_PREMIUM` | `seedance_2_5_premium` |
 | `SEED_2_1_PRO` | `seed_2_1_pro` |
 | `SEED_2_1_TURBO` | `seed_2_1_turbo` |
 | `SEED3D_HYPER3D` | `seed3d_hyper3d` |
@@ -28,7 +29,7 @@ The binding enums (`config/env.py`):
 
 - `SeedreamFamily`: `PRO = "pro"`, `LITE = "lite"`, `V4X = "4x"`.
 - `SeedanceFamily`: `STANDARD = "standard"`, `FAST = "fast"`, `MINI = "mini"`,
-  `SEEDANCE_2_5 = "seedance_2_5"`.
+  `SEEDANCE_2_5 = "seedance_2_5"`, `SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"`.
 - `SeedUnderstandingFamily`: `PRO = "pro"`, `TURBO = "turbo"`.
 - `Seed3DFamily`: `HYPER3D = "hyper3d"`, `HITEM3D = "hitem3d"`.
 
@@ -75,6 +76,7 @@ Only `supported_resolutions` differs:
 
 | Family | `supported_resolutions` |
 |---|---|
+| `seedance_2_5_premium` | `("480p", "720p", "1080p", "4k")` |
 | `seedance_2_5` | `("480p", "720p", "1080p")` |
 | `MINI` | `("480p", "720p")` |
 | `FAST` | `("480p", "720p")` |
@@ -84,6 +86,15 @@ Only `supported_resolutions` differs:
 > (`duration_range=(-1, 30)`) and reference counts
 > (`max_reference_images=30`, `max_reference_videos=10`,
 > `max_reference_audios=10`); `4k` is not supported on 2.5.
+>
+> Seedance 2.5 Premium (`seedance_2_5_premium`) is a separate, whitelist-only
+> family with the same 2.5 limits plus `4k`. Its binding exists only when
+> `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`, which adds
+> `SEEDANCE_2_5_PREMIUM_MODEL` (default `dreamina-seedance-2-5-premium-260915`)
+> unless `SEEDANCE_MODEL_BINDINGS` already has a Premium binding. A Premium
+> binding with the flag off fails startup validation. Premium models are
+> accepted only by the `seedance_2_5_premium_*` tools; the regular 2.5 and 2.0
+> tools reject them.
 
 > There is also **no aspect-ratio field** on video capabilities — the
 > `ratio` field exists only on `SeedanceTaskSettings` and the tool input
@@ -133,7 +144,7 @@ to be replaced by a newer audio-capable model.
 | Env var | Format | Default |
 |---|---|---|
 | `SEEDREAM_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "pro"\|"lite"\|"4x"}` | `[]` |
-| `SEEDANCE_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "standard"\|"fast"\|"mini"\|"seedance_2_5"}` | `[]` |
+| `SEEDANCE_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "standard"\|"fast"\|"mini"\|"seedance_2_5"\|"seedance_2_5_premium"}` | `[]` |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "pro"\|"turbo"}` | `[]` |
 | `SEEDREAM_MODEL_FAMILY` | single family string | `""` |
 | `SEEDANCE_MODEL_FAMILY` | single family string | `""` |
