@@ -48,7 +48,8 @@ class Seedance25PremiumVariationsInput(Seedance25VariationsInput):
     resolution: Literal["480p", "720p", "1080p", "4k"] | None = Field(  # type: ignore[assignment]
         None,
         description=(
-            "Output video resolution. Seedance 2.5 Premium supports 480p, 720p, 1080p, and 4k."
+            "Output video resolution. Seedance 2.5 Premium supports 480p, 720p, 1080p, and 4k. "
+            "Draft mode: draft=true allows only 480p (the default when omitted)."
         ),
     )
 
@@ -61,7 +62,9 @@ async def seedance_2_5_premium_create_task_variations(
     Seedance 2.5 Premium is a whitelist-only model separate from regular
     Seedance 2.5. Each variation creates a separate task; the caller polls
     each task ID via ``seedance_get_task``. Partial failures are captured per
-    variation. Requires MCP task-augmented execution for the provider
+    variation. With ``draft=true`` every variation is a 480p Draft preview;
+    render the chosen one with ``seedance_2_5_premium_create_task`` and
+    ``draft_task_id``. Requires MCP task-augmented execution for the provider
     submissions.
     """
     require_seedance_2_5_premium()

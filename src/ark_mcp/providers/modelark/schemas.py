@@ -73,11 +73,12 @@ class SeedreamProviderErrorResponse(BaseModel):
 class SeedanceContentItem(BaseModel):
     """Content item for the Seedance task creation request."""
 
-    type: str = Field(..., description="text, image_url, video_url, or audio_url")
+    type: str = Field(..., description="text, image_url, video_url, audio_url, or draft_task")
     text: str | None = None
     image_url: dict[str, str] | str | None = None
     video_url: dict[str, str] | str | None = None
     audio_url: dict[str, str] | str | None = None
+    draft_task: dict[str, str] | None = None
     role: str | None = None
 
 
@@ -99,6 +100,7 @@ class SeedanceCreateProviderRequest(BaseModel):
     priority: int | None = None
     safety_identifier: str | None = None
     callback_url: str | None = None
+    draft: bool | None = None
 
 
 class SeedanceCreateProviderResponse(BaseModel):

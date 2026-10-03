@@ -7,7 +7,8 @@ timestamp-level prompt control for editing.
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import UTC, datetime, timedelta
+from typing import ClassVar, Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
@@ -19,7 +20,13 @@ from ark_mcp.config.model_capabilities import (
     VideoCapabilities,
     get_capability_registry,
 )
+from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
+from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
+from ark_mcp.providers.modelark.seedance import SeedanceService
+from ark_mcp.providers.retry import call_with_retry
+from ark_mcp.runtime import get_principal, get_runtime
+from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._seedance_shared import (
     SeedanceAudioInput,
     SeedanceImageInput,
@@ -29,9 +36,29 @@ from ark_mcp.tools._seedance_shared import (
 )
 from ark_mcp.tools._task_execution import context_log
 
+# Draft mode rules from the ModelArk Seedance 2.5 guide: Drafts render only at
+# 480p, and the final request must not repeat the settings the provider reuses
+# from the Draft task. The final render resolution is per family
+# (``DRAFT_FINAL_RESOLUTION`` on the input model).
+_DRAFT_RESOLUTION: Literal["480p"] = "480p"
+_DRAFT_REUSED_FIELDS = (
+    "prompt",
+    "images",
+    "videos",
+    "audios",
+    "duration",
+    "ratio",
+    "generate_audio",
+    "omni_reference_task_type",
+)
+_DRAFT_TASK_MAX_AGE = timedelta(days=7)
+
 
 class Seedance25CreateTaskInput(BaseModel):
     """Input model for ``seedance_2_5_create_task``."""
+
+    # The only resolution a final video rendered from a Draft task supports.
+    DRAFT_FINAL_RESOLUTION: ClassVar[str] = "1080p"
 
     prompt: str | None = Field(
         None,
@@ -72,7 +99,11 @@ class Seedance25CreateTaskInput(BaseModel):
     )
     resolution: Literal["480p", "720p", "1080p"] | None = Field(
         None,
-        description="Output video resolution. Seedance 2.5 supports 480p, 720p, and 1080p. 4k is not supported.",
+        description=(
+            "Output video resolution. Seedance 2.5 supports 480p, 720p, and 1080p. 4k is not "
+            "supported. Draft mode: draft=true allows only 480p (the default when omitted); "
+            "draft_task_id allows only 1080p (the default when omitted)."
+        ),
     )
     ratio: str | None = Field(
         None,
@@ -131,10 +162,78 @@ class Seedance25CreateTaskInput(BaseModel):
         max_length=64,
         description="Optional identifier for content safety tracking (max 64 characters).",
     )
+    draft: bool | None = Field(
+        None,
+        description=(
+            "Draft mode step 1. When true, generates a low-cost 480p Draft preview to check "
+            "scene structure, shots, motion, and prompt intent before paying for the final "
+            "video. Billed as a normal 480p video. resolution must be omitted (defaults to "
+            "480p) or '480p'. Once the Draft task has succeeded, pass its task_id as "
+            "draft_task_id to render the final video. Mutually exclusive with draft_task_id."
+        ),
+    )
+    draft_task_id: str | None = Field(
+        None,
+        min_length=1,
+        description=(
+            "Draft mode step 2. Task ID of a succeeded Draft task (created with draft=true "
+            "by this same tool, at most 7 days ago) to render as the final video. The "
+            "provider reuses the Draft task's model, prompt, media, duration, ratio, seed, "
+            "generate_audio, and omni_reference_task_type, so prompt, images, videos, "
+            "audios, duration, ratio, generate_audio, and omni_reference_task_type must be "
+            "omitted. resolution must be omitted or the family's final render resolution "
+            "(1080p for Seedance 2.5, 4k for Seedance 2.5 Premium), which is the default. "
+            "return_last_frame, watermark, execution_expires_after, priority, and "
+            "safety_identifier may be set again; omitted values use the model defaults, "
+            "not the Draft task's values. Billed independently at the final resolution."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_draft_mode(self) -> Seedance25CreateTaskInput:
+        """Enforce the provider's Draft mode parameter rules before spending quota."""
+        if self.draft_task_id is not None:
+            if self.draft:
+                raise ValueError(
+                    "draft and draft_task_id are mutually exclusive. Use draft=true to "
+                    "create a Draft preview, then draft_task_id (without draft) to render "
+                    "the final video."
+                )
+            reused = [
+                name
+                for name in _DRAFT_REUSED_FIELDS
+                if getattr(self, name) is not None and getattr(self, name) != []
+            ]
+            if reused:
+                raise ValueError(
+                    f"{', '.join(reused)} must be omitted with draft_task_id: the provider "
+                    "reuses the Draft task's values and rejects them even when they match."
+                )
+            final = self.DRAFT_FINAL_RESOLUTION
+            if self.resolution is None:
+                # Subclasses widen the resolution Literal to include their final value.
+                self.resolution = final  # type: ignore[assignment]
+            elif self.resolution != final:
+                raise ValueError(
+                    f"Resolution '{self.resolution}' is not supported for a final video "
+                    f"rendered from a Draft task. Omit resolution or set it to '{final}'."
+                )
+        elif self.draft:
+            if self.resolution is None:
+                self.resolution = _DRAFT_RESOLUTION
+            elif self.resolution != _DRAFT_RESOLUTION:
+                raise ValueError(
+                    f"Draft tasks only support resolution '{_DRAFT_RESOLUTION}'; "
+                    f"got '{self.resolution}'. Omit resolution or set it to "
+                    f"'{_DRAFT_RESOLUTION}'."
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_media_required(self) -> Seedance25CreateTaskInput:
         """Seedance 2.5 supports audio-only input; no media at all is rejected."""
+        if self.draft_task_id is not None:
+            return self
         has_images = bool(self.images)
         has_videos = bool(self.videos)
         has_audios = bool(self.audios)
@@ -165,7 +264,13 @@ class Seedance25CreateTaskInput(BaseModel):
 class Seedance25CreateTaskOutput(BaseModel):
     """Output model for ``seedance_2_5_create_task``."""
 
-    task_id: str = Field(..., description="Provider task ID for polling and management.")
+    task_id: str = Field(
+        ...,
+        description=(
+            "Provider task ID for polling and management. For a Draft task (draft=true), "
+            "pass this ID as draft_task_id once it has succeeded to render the final video."
+        ),
+    )
     status: Literal["queued"] = Field(
         "queued", description="Initial task status. Poll with seedance_get_task for updates."
     )
@@ -256,6 +361,46 @@ def resolve_seedance_2_5_capabilities(
     return caps
 
 
+async def _load_draft_task(draft_task_id: str, ctx: Context) -> SeedanceTaskResponse | ToolResult:
+    """Fetch a Draft task and check it can be rendered as a final video.
+
+    Enforces task ownership, then rejects tasks that have not succeeded, were
+    not created in Draft mode, or are past the provider's 7-day Draft window,
+    so the caller gets an actionable error instead of a provider rejection.
+    """
+    await get_runtime(ctx).ownership_store.require_owner(
+        "modelark", draft_task_id, get_principal(ctx)
+    )
+    service = SeedanceService()
+    try:
+        task, _ = await call_with_retry(lambda: service.get_task(draft_task_id))
+    except ProviderError as exc:
+        await context_log(ctx, "error", f"Failed to retrieve Draft task: {exc.message}")
+        return provider_error_result(exc)
+    finally:
+        await service.close()
+
+    if task.draft is False:
+        raise ValueError(
+            f"Task '{draft_task_id}' was not created in Draft mode. Create a Draft "
+            "with draft=true first."
+        )
+    if task.status != "succeeded":
+        raise ValueError(
+            f"Draft task '{draft_task_id}' is {task.status or 'not ready'}; only a "
+            "succeeded Draft task can be rendered as a final video. Poll it with "
+            "seedance_get_task until it succeeds."
+        )
+    if isinstance(task.created_at, (int, float)):
+        created_at = datetime.fromtimestamp(task.created_at, tz=UTC)
+        if datetime.now(UTC) - created_at > _DRAFT_TASK_MAX_AGE:
+            raise ValueError(
+                f"Draft task '{draft_task_id}' was created more than 7 days ago and can "
+                "no longer be rendered as a final video. Create a new Draft task."
+            )
+    return task
+
+
 async def seedance_2_5_create_task(
     input: Seedance25CreateTaskInput, ctx: Context
 ) -> Seedance25CreateTaskOutput | ToolResult:
@@ -264,6 +409,9 @@ async def seedance_2_5_create_task(
     Accepts text, image, video, and audio references as content input.
     Supports up to 30-second video generation, 50 multimodal references
     (30 images, 10 videos, 10 audio), and 480p/720p/1080p resolution.
+    Draft mode: set ``draft=true`` for a cheap 480p preview, then call again
+    with only ``draft_task_id`` (plus optional output settings) to render the
+    approved Draft as a 1080p final video.
     The task runs asynchronously on the provider — use
     ``seedance_get_task`` to poll for completion. Returns the task ID
     and a recommended polling interval. Requires MCP task-augmented execution
@@ -285,6 +433,20 @@ async def run_seedance_2_5_create(
         raise ValueError(
             "BYTEPLUS_MODELARK_API_KEY is not configured. Set it in .env to enable Seedance tools."
         )
+
+    if input.draft_task_id is not None:
+        draft_task = await _load_draft_task(input.draft_task_id, ctx)
+        if isinstance(draft_task, ToolResult):
+            return draft_task
+        if input.model is None:
+            # The final video must use the Draft task's model, which may differ
+            # from the family's default binding.
+            input = input.model_copy(update={"model": draft_task.model})
+        elif input.model != draft_task.model:
+            raise ValueError(
+                f"Model '{input.model}' does not match the Draft task's model "
+                f"'{draft_task.model}'. Omit model to reuse the Draft task's model."
+            )
 
     caps = resolve_seedance_2_5_capabilities(input, family)
 

@@ -174,6 +174,8 @@ async def execute_seedance_create(
             audios, resolution, ratio, duration, omni_reference_task_type,
             generate_audio, watermark, return_last_frame,
             execution_expires_after, priority, safety_identifier fields.
+            Seedance 2.5-generation inputs may also carry ``draft`` and
+            ``draft_task_id``.
         ctx: MCP Context.
         caps: Resolved VideoCapabilities for the target model.
 
@@ -198,12 +200,17 @@ async def execute_seedance_create(
     # when a referenced asset we can see is still Processing or has Failed.
     await preflight_seedance_assets(ctx, collect_asset_ids(images_data, videos_data, audios_data))
 
-    content = SeedanceService.build_content(
-        prompt=input_model.prompt,
-        images=images_data,
-        videos=videos_data,
-        audios=audios_data,
-    )
+    # Only Seedance 2.5-generation inputs carry the Draft mode fields.
+    draft_task_id: str | None = getattr(input_model, "draft_task_id", None)
+    if draft_task_id:
+        content = SeedanceService.build_draft_content(draft_task_id)
+    else:
+        content = SeedanceService.build_content(
+            prompt=input_model.prompt,
+            images=images_data,
+            videos=videos_data,
+            audios=audios_data,
+        )
 
     request = SeedanceService.build_request(
         model=caps.model_id,
@@ -218,6 +225,7 @@ async def execute_seedance_create(
         priority=input_model.priority,
         safety_identifier=input_model.safety_identifier,
         omni_reference_task_type=input_model.omni_reference_task_type,
+        draft=getattr(input_model, "draft", None),
     )
 
     await ctx.report_progress(progress=50, total=100)

@@ -94,6 +94,15 @@ class SeedanceTaskOutput(BaseModel):
         default_factory=lambda: SeedanceTaskSettings(),
         description="Generation settings used for this task (resolution, ratio, duration, etc.).",
     )
+    draft: bool | None = Field(
+        None,
+        description=(
+            "True when this is a Seedance 2.5 or 2.5 Premium Draft task (480p preview). Once "
+            "it has succeeded, pass task_id as draft_task_id to the create tool of the same "
+            "family to render the final video within 7 days of created_at. None when the "
+            "provider does not report the flag."
+        ),
+    )
     queue: SeedanceQueueInfo | None = Field(
         None,
         description=(
@@ -174,6 +183,7 @@ def build_task_output(
         last_frame=last_frame_ref,
         usage=SeedanceService.extract_usage(task),
         settings=SeedanceTaskSettings.model_validate(task.content or {}),
+        draft=task.draft,
         queue=queue_info(task),
     )
 

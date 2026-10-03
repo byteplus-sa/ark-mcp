@@ -6,10 +6,12 @@ provider responses and a temp artifact store.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 
+from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.tools._seedance_shared import (
     SeedanceAudioInput,
@@ -291,3 +293,179 @@ class TestSeedance25CreateTaskVariationsTool:
                 ),
                 seedance_2_5_ctx,
             )
+
+
+def _draft_task(
+    *,
+    status: str = "succeeded",
+    draft: bool | None = True,
+    model: str = "dreamina-seedance-2-5-260628",
+    age: timedelta = timedelta(hours=1),
+) -> SeedanceTaskResponse:
+    return SeedanceTaskResponse(
+        id="cgt-draft",
+        model=model,
+        status=status,
+        draft=draft,
+        created_at=int((datetime.now(UTC) - age).timestamp()),
+    )
+
+
+class TestSeedance25DraftMode:
+    """Draft mode: 480p preview, then a final video rendered from the Draft task."""
+
+    async def test_draft_task_sends_draft_flag_at_480p(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            captured.append(request)
+            return "cgt-draft", "req-draft"
+
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        result = await seedance_2_5_create_task(
+            Seedance25CreateTaskInput(prompt="a girl holds a fox", draft=True, duration=5),
+            seedance_2_5_ctx,
+        )
+
+        assert isinstance(result, Seedance25CreateTaskOutput)
+        body = captured[0].model_dump(exclude_none=True)
+        assert body["draft"] is True
+        assert body["resolution"] == "480p"
+        assert body["content"][0] == {"type": "text", "text": "a girl holds a fox"}
+
+    async def test_final_from_draft_sends_only_draft_reference(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            assert task_id == "cgt-draft"
+            return _draft_task(), "req-get"
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            captured.append(request)
+            return "cgt-final", "req-final"
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        result = await seedance_2_5_create_task(
+            Seedance25CreateTaskInput(draft_task_id="cgt-draft", return_last_frame=True),
+            seedance_2_5_ctx,
+        )
+
+        assert isinstance(result, Seedance25CreateTaskOutput)
+        assert result.task_id == "cgt-final"
+        body = captured[0].model_dump(exclude_none=True)
+        assert body == {
+            "model": "dreamina-seedance-2-5-260628",
+            "content": [{"type": "draft_task", "draft_task": {"id": "cgt-draft"}}],
+            "resolution": "1080p",
+            "watermark": False,
+            "return_last_frame": True,
+        }
+
+    @pytest.mark.parametrize("status", ["queued", "running", "failed"])
+    async def test_final_from_unfinished_draft_rejected(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch, status: str
+    ) -> None:
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return _draft_task(status=status), None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with pytest.raises(ValueError, match=f"is {status}; only a succeeded Draft"):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
+            )
+
+    async def test_final_from_non_draft_task_rejected(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return _draft_task(draft=False), None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with pytest.raises(ValueError, match="not created in Draft mode"):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
+            )
+
+    async def test_final_from_expired_draft_rejected(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return _draft_task(age=timedelta(days=8)), None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with pytest.raises(ValueError, match="more than 7 days ago"):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
+            )
+
+    async def test_final_with_mismatched_model_rejected(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return _draft_task(model="dreamina-seedance-2-5-other"), None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with pytest.raises(ValueError, match="does not match the Draft task's model"):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(
+                    draft_task_id="cgt-draft", model="dreamina-seedance-2-5-260628"
+                ),
+                seedance_2_5_ctx,
+            )
+
+    async def test_final_from_draft_owned_by_another_principal_rejected(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from ark_mcp.runtime import get_runtime
+        from ark_mcp.security.auth_context import PrincipalContext
+
+        await get_runtime(seedance_2_5_ctx).ownership_store.record(
+            "modelark", "cgt-draft", PrincipalContext(principal_id="someone-else")
+        )
+
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            raise AssertionError("provider must not be called for a foreign Draft task")
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+
+        with pytest.raises(PermissionError):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
+            )
+
+    async def test_draft_variations_send_draft_flag(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            captured.append(request)
+            return f"cgt-draft-{len(captured)}", None
+
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        result = await seedance_2_5_create_task_variations(
+            Seedance25VariationsInput(variations=2, prompt="a fox", draft=True),
+            seedance_2_5_ctx,
+        )
+
+        assert result.summary.succeeded == 2
+        assert all(r.draft is True and r.resolution == "480p" for r in captured)

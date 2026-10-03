@@ -1123,6 +1123,7 @@ Retrieve the status and output of a Seedance task.
 | `last_frame` | ArtifactRef \| null | Persisted last frame |
 | `usage` | SeedanceTaskUsage \| null | Token usage |
 | `settings` | object | Generation settings |
+| `draft` | boolean \| null | `true` for a Seedance 2.5 or 2.5 Premium Draft task; pass its `task_id` as `draft_task_id` once it has succeeded. `null` when the provider omits the flag |
 | `queue` | SeedanceQueueInfo \| null | Server-derived queue timing while `queued`/`running`; `null` once finished |
 
 ### SeedanceQueueInfo
@@ -1609,12 +1610,21 @@ Create an asynchronous Seedance 2.5 video generation task. Supports up to
 | `execution_expires_after` | integer | No | — | 3600-259200 seconds |
 | `priority` | integer | No | — | 0-9 |
 | `safety_identifier` | string | No | — | Max 64 chars |
+| `draft` | boolean | No | — | Draft mode step 1: 480p Draft preview. `resolution` must be omitted (becomes `480p`) or `480p`. Mutually exclusive with `draft_task_id` |
+| `draft_task_id` | string | No | — | Draft mode step 2: task ID of a succeeded Draft task created at most 7 days ago. `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, and `omni_reference_task_type` must be omitted; `resolution` must be omitted or `1080p` (the default) |
+
+When `draft_task_id` is set, the tool first checks that the caller owns the
+task, that it succeeded, that it was created in Draft mode, and that it is at
+most 7 days old. It then sends a request whose `content` is only
+`{"type": "draft_task", "draft_task": {"id": ...}}`. If `model` is omitted,
+the Draft task's model is used. See
+[Seedance 2.5 Draft mode](tools.md#seedance-25-draft-mode).
 
 ### Output
 
 | Field | Type | Description |
 |---|---|---|
-| `task_id` | string | Task ID for polling |
+| `task_id` | string | Task ID for polling. For a Draft task, pass it as `draft_task_id` once it has succeeded |
 | `status` | `"queued"` | Initial status |
 | `recommended_poll_after_ms` | integer | Suggested poll delay |
 
@@ -1657,6 +1667,9 @@ Inherits all fields from `seedance_2_5_create_task`, plus:
 
 \* Either `prompt` or `variation_prompts` must be provided.
 
+`draft: true` makes every variation a 480p Draft task. `draft_task_id` is not
+accepted here; render the chosen Draft with `seedance_2_5_create_task`.
+
 ### Output
 
 | Field | Type | Description |
@@ -1670,8 +1683,9 @@ Inherits all fields from `seedance_2_5_create_task`, plus:
 
 `seedance_2_5_premium_create_task` and
 `seedance_2_5_premium_create_task_variations` take the same input and return
-the same output as tools 15 and 16, with two differences: `resolution` also
-accepts `4k`, and `model` defaults to `SEEDANCE_2_5_PREMIUM_MODEL`
+the same output as tools 15 and 16, including Draft mode, with two
+differences: `resolution` also accepts `4k` (Drafts stay `480p`; a final
+rendered from a Draft is `4k`, the default when omitted), and `model` defaults to `SEEDANCE_2_5_PREMIUM_MODEL`
 (`dreamina-seedance-2-5-premium-260915`) and must resolve to the
 `seedance_2_5_premium` family. They are registered only when
 `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (whitelist-only; default

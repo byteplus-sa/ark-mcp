@@ -263,6 +263,15 @@ class SeedanceService:
         return content
 
     @staticmethod
+    def build_draft_content(draft_task_id: str) -> list[SeedanceContentItem]:
+        """Build the ``content[]`` array that renders a final video from a Draft task.
+
+        The provider reuses the Draft task's prompt and media, so the content
+        holds only the ``draft_task`` reference.
+        """
+        return [SeedanceContentItem(type="draft_task", draft_task={"id": draft_task_id})]
+
+    @staticmethod
     def build_request(
         *,
         model: str,
@@ -277,6 +286,7 @@ class SeedanceService:
         priority: int | None = None,
         safety_identifier: str | None = None,
         omni_reference_task_type: str | None = None,
+        draft: bool | None = None,
     ) -> SeedanceCreateProviderRequest:
         """Build a provider request from domain-level parameters."""
         return SeedanceCreateProviderRequest(
@@ -292,6 +302,7 @@ class SeedanceService:
             priority=priority,
             safety_identifier=safety_identifier,
             omni_reference_task_type=omni_reference_task_type,
+            draft=draft,
         )
 
     @staticmethod

@@ -98,6 +98,30 @@ class TestSeedanceContentBuilding:
         )
         assert request.omni_reference_task_type is None
 
+    def test_build_request_draft_serializes_flag(self) -> None:
+        content = SeedanceService.build_content(prompt="a fox in the snow")
+        request = SeedanceService.build_request(
+            model="dreamina-seedance-2-5-260628",
+            content=content,
+            resolution="480p",
+            draft=True,
+        )
+        body = request.model_dump(exclude_none=True)
+        assert body["draft"] is True
+        assert body["resolution"] == "480p"
+
+    def test_build_request_omits_draft_by_default(self) -> None:
+        content = SeedanceService.build_content(prompt="a fox in the snow")
+        request = SeedanceService.build_request(
+            model="dreamina-seedance-2-5-260628", content=content
+        )
+        assert "draft" not in request.model_dump(exclude_none=True)
+
+    def test_build_draft_content_references_only_the_draft_task(self) -> None:
+        content = SeedanceService.build_draft_content("cgt-draft-1")
+        body = [item.model_dump(exclude_none=True) for item in content]
+        assert body == [{"type": "draft_task", "draft_task": {"id": "cgt-draft-1"}}]
+
     def test_prompt_with_video_and_audio(self) -> None:
         content = SeedanceService.build_content(
             prompt="A dancer moving to music",

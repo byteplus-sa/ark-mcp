@@ -774,10 +774,41 @@ Create an asynchronous Seedance 2.5 video generation task. Supports up to
 | `execution_expires_after` | integer | No | Task TTL in seconds (3600-259200) |
 | `priority` | integer | No | Priority (0-9) |
 | `safety_identifier` | string | No | Safety identifier (max 64 chars) |
+| `draft` | boolean | No | Draft mode step 1: generate a 480p Draft preview. `resolution` must be omitted (defaults to `480p`) or `480p`. Mutually exclusive with `draft_task_id` |
+| `draft_task_id` | string | No | Draft mode step 2: render a succeeded Draft task (at most 7 days old) as the final video (1080p; 4k on Premium). See [Draft mode](#seedance-25-draft-mode) |
 
 Seedance 2.5 supports audio-only input (a single BGM, voice, or sound-effect
 track can drive visual pacing, beat matching, and lip-sync). The model must
 resolve to the `seedance_2_5` family or the call raises a `ValueError`.
+
+### Seedance 2.5 Draft mode
+
+Draft mode is a two-step flow for checking a video cheaply before paying for
+the final render. Both Seedance 2.5 and Seedance 2.5 Premium support it; the
+Seedance 2.0 tools do not.
+
+1. Call the create tool with `draft: true` and the usual prompt and media. The
+   tool sends `draft=true` at `480p`, the only Draft resolution. The Draft is
+   billed as a normal 480p video. `seedance_get_task` reports `draft: true`.
+2. Once the Draft task has `succeeded`, call the same family's create tool
+   with `draft_task_id` set to its task ID. The provider reuses the Draft
+   task's model, prompt, media, duration, ratio, seed, `generate_audio`, and
+   `omni_reference_task_type`, so those fields must be omitted. The provider
+   rejects them even when they match. `resolution` may only be omitted or
+   the family's final resolution, which is also the default: `1080p` on
+   Seedance 2.5 and `4k` on Seedance 2.5 Premium. `return_last_frame`, `watermark`, `execution_expires_after`,
+   `priority`, and `safety_identifier` can be set again; omitted values use the
+   model defaults, not the Draft's values. The final video is billed
+   separately at its resolution.
+
+Before submitting step 2, the tool checks that the caller owns the Draft task,
+that it succeeded, that it was created in Draft mode, and that it is at most
+7 days old. If `model` is omitted, the tool uses the Draft task's model. A
+Premium Draft must be rendered with `seedance_2_5_premium_create_task`.
+
+The variations tools accept `draft: true` to create several Draft previews in
+one call. They do not accept `draft_task_id`; render the chosen Draft with the
+single-task create tool.
 
 ### Output
 
@@ -803,7 +834,8 @@ Retrieve the status and output of a Seedance task.
 ### Output
 
 Returns a `SeedanceTaskOutput` with status, error (if any), video/last-frame
-artifact references (on success), usage, generation settings, and `queue`.
+artifact references (on success), usage, generation settings, `draft` (`true`
+for a Seedance 2.5 or 2.5 Premium Draft task), and `queue`.
 
 `queue` (`SeedanceQueueInfo`) is set only while the task is `queued` or
 `running` and is `None` once it finishes. It is derived by this server from the
@@ -1033,7 +1065,7 @@ default) and `BYTEPLUS_MODELARK_API_KEY` is set; both require the
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `resolution` | enum | No | — | `480p`, `720p`, `1080p`, or `4k` |
+| `resolution` | enum | No | — | `480p`, `720p`, `1080p`, or `4k`. Draft mode limits Drafts to `480p`; a final rendered from a Draft is `4k` (the default when omitted) |
 | `model` | string | No | `SEEDANCE_2_5_PREMIUM_MODEL` | Must resolve to the `seedance_2_5_premium` family |
 
 The regular 2.5 and 2.0 create tools reject Premium model IDs, and the Premium

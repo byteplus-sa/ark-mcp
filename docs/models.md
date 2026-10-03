@@ -95,6 +95,12 @@ Only `supported_resolutions` differs:
 > binding with the flag off fails startup validation. Premium models are
 > accepted only by the `seedance_2_5_premium_*` tools; the regular 2.5 and 2.0
 > tools reject them.
+>
+> Draft mode (`draft` / `draft_task_id`) is available only on the 2.5 and 2.5
+> Premium create tools. It is not a capability field: the tool input
+> validators apply its resolution rules: Drafts are always `480p`, and a final
+> rendered from a Draft is `1080p` on `seedance_2_5` and `4k` on
+> `seedance_2_5_premium` (the input model's `DRAFT_FINAL_RESOLUTION`).
 
 > There is also **no aspect-ratio field** on video capabilities — the
 > `ratio` field exists only on `SeedanceTaskSettings` and the tool input
