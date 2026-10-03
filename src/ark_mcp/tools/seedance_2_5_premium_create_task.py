@@ -8,7 +8,7 @@ when ``BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`` is true.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
@@ -45,6 +45,9 @@ class Seedance25PremiumCreateTaskInput(Seedance25CreateTaskInput):
     resolution and the Premium model binding.
     """
 
+    # Premium renders Draft tasks (480p previews) as 4k final videos.
+    DRAFT_FINAL_RESOLUTION: ClassVar[str] = "4k"
+
     model: str | None = Field(
         None,
         description=(
@@ -57,7 +60,9 @@ class Seedance25PremiumCreateTaskInput(Seedance25CreateTaskInput):
     resolution: Literal["480p", "720p", "1080p", "4k"] | None = Field(  # type: ignore[assignment]
         None,
         description=(
-            "Output video resolution. Seedance 2.5 Premium supports 480p, 720p, 1080p, and 4k."
+            "Output video resolution. Seedance 2.5 Premium supports 480p, 720p, 1080p, and 4k. "
+            "Draft mode: draft=true allows only 480p (the default when omitted); "
+            "draft_task_id allows only 4k (the default when omitted)."
         ),
     )
 
@@ -77,7 +82,9 @@ async def seedance_2_5_premium_create_task(
     Seedance 2.5; use it when 4k output is required. Accepts text, image,
     video, and audio references, up to 30-second duration, 50 multimodal
     references (30 images, 10 videos, 10 audio), and 480p/720p/1080p/4k
-    resolution. The task runs asynchronously on the provider — use
+    resolution. Draft mode: set ``draft=true`` for a cheap 480p preview, then
+    call again with only ``draft_task_id`` (plus optional output settings) to
+    render the approved Draft as a 4k final video. The task runs asynchronously on the provider — use
     ``seedance_get_task`` to poll for completion. Returns the task ID and a
     recommended polling interval. Requires MCP task-augmented execution for
     the provider submission itself.

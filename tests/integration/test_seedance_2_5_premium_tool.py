@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.tools.seedance_2_5_create_task import (
     Seedance25CreateTaskInput,
@@ -128,6 +129,72 @@ class TestSeedance25PremiumCreateTaskTool:
                 Seedance25PremiumCreateTaskInput(prompt="test", resolution="4k"),
                 fake_ctx,
             )
+
+
+class TestSeedance25PremiumDraftMode:
+    async def test_final_from_premium_draft_uses_premium_model(
+        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return SeedanceTaskResponse(
+                id=task_id, model=PREMIUM_MODEL, status="succeeded", draft=True
+            ), None
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            captured.append(request)
+            return "cgt-premium-final", None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        result = await seedance_2_5_premium_create_task(
+            Seedance25PremiumCreateTaskInput(draft_task_id="cgt-premium-draft"), premium_ctx
+        )
+
+        assert isinstance(result, Seedance25CreateTaskOutput)
+        assert captured[0].model == PREMIUM_MODEL
+        assert captured[0].content[0].draft_task == {"id": "cgt-premium-draft"}
+        assert captured[0].draft is None
+        assert captured[0].resolution == "4k"
+
+    async def test_regular_tool_rejects_premium_draft(
+        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return SeedanceTaskResponse(
+                id=task_id, model=PREMIUM_MODEL, status="succeeded", draft=True
+            ), None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with pytest.raises(ValueError, match="seedance_2_5_premium_create_task"):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(draft_task_id="cgt-premium-draft"), premium_ctx
+            )
+
+    async def test_premium_draft_sends_480p(
+        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured: list[Any] = []
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            captured.append(request)
+            return "cgt-premium-draft", None
+
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        await seedance_2_5_premium_create_task(
+            Seedance25PremiumCreateTaskInput(prompt="a 4k aerial shot", draft=True), premium_ctx
+        )
+
+        assert captured[0].model == PREMIUM_MODEL
+        assert captured[0].draft is True
+        assert captured[0].resolution == "480p"
 
 
 class TestSeedance25PremiumVariationsTool:

@@ -197,3 +197,125 @@ class TestSeedance25VariationsInput:
             ratio="9:16",
         )
         assert inp.ratio is None
+
+
+class TestSeedance25DraftModeInput:
+    """Draft mode validators shared by the Seedance 2.5 and Premium create tools."""
+
+    def test_draft_defaults_resolution_to_480p(self) -> None:
+        inp = Seedance25CreateTaskInput(prompt="test", draft=True)
+        assert inp.resolution == "480p"
+
+    def test_draft_explicit_480p_accepted(self) -> None:
+        inp = Seedance25CreateTaskInput(prompt="test", draft=True, resolution="480p")
+        assert inp.resolution == "480p"
+
+    def test_draft_other_resolution_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="only support resolution '480p'"):
+            Seedance25CreateTaskInput(prompt="test", draft=True, resolution="720p")
+
+    def test_draft_false_keeps_resolution_unset(self) -> None:
+        inp = Seedance25CreateTaskInput(prompt="test", draft=False)
+        assert inp.resolution is None
+
+    def test_draft_task_id_alone_accepted(self) -> None:
+        inp = Seedance25CreateTaskInput(draft_task_id="cgt-draft")
+        assert inp.draft_task_id == "cgt-draft"
+        assert inp.resolution == "1080p"
+
+    def test_draft_task_id_1080p_accepted(self) -> None:
+        inp = Seedance25CreateTaskInput(draft_task_id="cgt-draft", resolution="1080p")
+        assert inp.resolution == "1080p"
+
+    def test_draft_task_id_other_resolution_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="Draft task"):
+            Seedance25CreateTaskInput(draft_task_id="cgt-draft", resolution="720p")
+
+    @pytest.mark.parametrize("draft", [True, False])
+    def test_draft_and_draft_task_id_rejected(self, draft: bool) -> None:
+        with pytest.raises(ValidationError, match="draft must be omitted"):
+            Seedance25CreateTaskInput(draft=draft, draft_task_id="cgt-draft")
+
+    def test_draft_false_without_draft_task_id_accepted(self) -> None:
+        assert Seedance25CreateTaskInput(prompt="test", draft=False).draft is False
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("prompt", "repeat the prompt"),
+            ("images", ["https://example.com/a.png"]),
+            ("videos", ["https://example.com/a.mp4"]),
+            ("audios", ["https://example.com/a.mp3"]),
+            ("duration", 5),
+            ("ratio", "16:9"),
+            ("generate_audio", True),
+            ("omni_reference_task_type", "auto"),
+        ],
+    )
+    def test_draft_task_id_rejects_reused_fields(self, field: str, value: object) -> None:
+        with pytest.raises(ValidationError, match=f"{field} must be omitted"):
+            Seedance25CreateTaskInput.model_validate({"draft_task_id": "cgt-draft", field: value})
+
+    def test_draft_task_id_allows_output_settings(self) -> None:
+        inp = Seedance25CreateTaskInput(
+            draft_task_id="cgt-draft",
+            watermark=True,
+            return_last_frame=True,
+            priority=3,
+            execution_expires_after=7200,
+            safety_identifier="user-1",
+        )
+        assert inp.watermark is True
+
+    def test_draft_task_id_rejects_4k(self) -> None:
+        with pytest.raises(ValidationError):
+            Seedance25CreateTaskInput.model_validate(
+                {"draft_task_id": "cgt-draft", "resolution": "4k"}
+            )
+
+    def test_premium_draft_task_id_defaults_to_4k(self) -> None:
+        from ark_mcp.tools.seedance_2_5_premium_create_task import (
+            Seedance25PremiumCreateTaskInput,
+        )
+
+        inp = Seedance25PremiumCreateTaskInput(draft_task_id="cgt-draft")
+        assert inp.resolution == "4k"
+
+    def test_premium_draft_task_id_explicit_4k_accepted(self) -> None:
+        from ark_mcp.tools.seedance_2_5_premium_create_task import (
+            Seedance25PremiumCreateTaskInput,
+        )
+
+        inp = Seedance25PremiumCreateTaskInput(draft_task_id="cgt-draft", resolution="4k")
+        assert inp.resolution == "4k"
+
+    def test_premium_draft_task_id_rejects_1080p(self) -> None:
+        from ark_mcp.tools.seedance_2_5_premium_create_task import (
+            Seedance25PremiumCreateTaskInput,
+        )
+
+        with pytest.raises(ValidationError, match="set it to '4k'"):
+            Seedance25PremiumCreateTaskInput(draft_task_id="cgt-draft", resolution="1080p")
+
+    def test_premium_draft_still_480p(self) -> None:
+        from ark_mcp.tools.seedance_2_5_premium_create_task import (
+            Seedance25PremiumCreateTaskInput,
+        )
+
+        with pytest.raises(ValidationError, match="only support resolution '480p'"):
+            Seedance25PremiumCreateTaskInput(prompt="test", draft=True, resolution="4k")
+
+    def test_variations_draft_defaults_480p(self) -> None:
+        inp = Seedance25VariationsInput(prompt="test", variations=2, draft=True)
+        assert inp.resolution == "480p"
+
+    def test_variations_reject_draft_task_id(self) -> None:
+        with pytest.raises(ValidationError):
+            Seedance25VariationsInput.model_validate(
+                {"prompt": "test", "draft_task_id": "cgt-draft"}
+            )
+
+    def test_variations_schema_hides_draft_task_id(self) -> None:
+        props = Seedance25VariationsInput.model_json_schema()["properties"]
+        assert "draft" in props
+        assert "draft_task_id" not in props

@@ -11,6 +11,7 @@ from typing import Annotated, Any
 
 from fastmcp import Context
 from pydantic import BaseModel, Field, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import ModelFamily
@@ -54,6 +55,9 @@ class Seedance25VariationsInput(Seedance25CreateTaskInput):
         None,
         description="Explicit prompts per variation (each 1-32,000 characters). If provided, overrides prompt and must have `variations` entries.",
     )
+    # Rendering a final video from a Draft is a single-task operation; use the
+    # non-variations create tool. Hidden from the schema and rejected if sent.
+    draft_task_id: SkipJsonSchema[None] = None
 
     @model_validator(mode="after")
     def validate_prompt_required(self) -> Seedance25VariationsInput:
@@ -94,6 +98,8 @@ async def seedance_2_5_create_task_variations(
 
     Each variation creates a separate task. The caller polls each task ID
     via ``seedance_get_task``. Partial failures are captured per variation.
+    With ``draft=true`` every variation is a 480p Draft preview; render the
+    chosen one with ``seedance_2_5_create_task`` and ``draft_task_id``.
     Requires MCP task-augmented execution for the provider submissions.
     """
     return await run_seedance_2_5_variations(input, ctx, ModelFamily.SEEDANCE_2_5)
@@ -154,6 +160,7 @@ async def run_seedance_2_5_variations(
                 priority=input.priority,
                 safety_identifier=input.safety_identifier,
                 omni_reference_task_type=input.omni_reference_task_type,
+                draft=input.draft,
             )
 
             async with billed_provider_slot(

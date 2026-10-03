@@ -1121,8 +1121,21 @@ Create an asynchronous Seedance 2.5 video generation task.
 | `execution_expires_after` | `int` | No | Max execution time in seconds (3600–259200). |
 | `priority` | `int` | No | Task priority (0–9). |
 | `safety_identifier` | `str` | No | Content safety tracking ID (max 64 chars). |
+| `draft` | `bool` | No | Draft mode step 1: a cheap 480p preview. `resolution` must be omitted (becomes `480p`) or `480p`. Mutually exclusive with `draft_task_id`. |
+| `draft_task_id` | `str` | No | Draft mode step 2: render a **succeeded** Draft task (at most 7 days old) as the final video (1080p; 4k on Premium). Omit `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, `omni_reference_task_type`, and `draft`; `model` must be omitted or equal the Draft's model; `resolution` may only be omitted or the final resolution (`1080p`, or `4k` on Premium). |
 
 Returns `Seedance25CreateTaskOutput` with `task_id`, `status="queued"`, and `recommended_poll_after_ms`.
+
+> **Draft mode (2.5 and 2.5 Premium only):** to check a shot cheaply first,
+> create it with `draft: true`, poll it with `seedance_get_task` until it
+> succeeds (`draft: true` in the result), and review the preview. If it is
+> right, call the **same family's** create tool with only `draft_task_id` (plus
+> optional `return_last_frame`, `watermark`, `priority`,
+> `execution_expires_after`, `safety_identifier`). The provider reuses the
+> Draft's prompt, media, seed, duration, ratio, and audio settings, and
+> rejects them if you send them again. Each step is billed separately: the
+> Draft as a 480p video, the final at 1080p (4k on Premium). For several candidates, run the
+> variations tool with `draft: true`, then render the chosen task ID.
 
 > **Audio-only input:** Unlike Seedance 2.0, 2.5 supports audio as the sole
 > media input — a single BGM, voice, or sound-effect track can drive visual
@@ -1143,7 +1156,7 @@ Returns `Seedance25CreateTaskOutput` with `task_id`, `status="queued"`, and `rec
 
 #### `seedance_2_5_create_task_variations`
 
-Create multiple Seedance 2.5 video tasks in parallel. Inherits all parameters from `seedance_2_5_create_task` and adds `variations` (1–5) and `variation_prompts`.
+Create multiple Seedance 2.5 video tasks in parallel. Inherits all parameters from `seedance_2_5_create_task` except `draft_task_id`, and adds `variations` (1–5) and `variation_prompts`. `draft: true` creates every variation as a 480p Draft.
 
 #### `seedance_2_5_premium_create_task` / `seedance_2_5_premium_create_task_variations`
 
@@ -1155,6 +1168,9 @@ the 2.5 tools except `resolution` also accepts `4k` and `model` defaults to the
 Premium binding. Use Premium when the user needs 4K together with 2.5
 capabilities (30s, 30/10/10 references, editing, extension); otherwise use the
 regular 2.5 tool. Premium model IDs are rejected by the 2.0 and 2.5 tools.
+Draft mode works the same way on Premium, but a Draft is always 480p and the
+final render from a Draft is 4K (the default; 1080p is rejected). This 4K rule is this server's policy for Premium, not stated in the public guide; revisit it if the provider differs. Render a Premium Draft with
+`seedance_2_5_premium_create_task`.
 
 ```json
 {
@@ -1914,8 +1930,9 @@ default model for that product is used.
 8. Call `seedance_cancel_or_delete_task` only when cleanup is explicitly wanted.
 
 > **Choosing 2.0 vs 2.5:** Use `seedance_2_5_create_task` when you need
-> 30-second generation, 50 multimodal references, structured editing, or
-> native extension. Use `seedance_create_task` for 4K or lower
+> 30-second generation, 50 multimodal references, structured editing,
+> native extension, or Draft mode (a 480p preview before the paid final
+> render). Use `seedance_create_task` for 4K or lower
 > cost per task. The get/list/cancel tools are shared — `seedance_get_task`,
 > `seedance_list_tasks`, and `seedance_cancel_or_delete_task` work with
 > task IDs from either version.
