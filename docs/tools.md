@@ -793,10 +793,13 @@ Seedance 2.0 tools do not.
 2. Once the Draft task has `succeeded`, call the same family's create tool
    with `draft_task_id` set to its task ID. The provider reuses the Draft
    task's model, prompt, media, duration, ratio, seed, `generate_audio`, and
-   `omni_reference_task_type`, so those fields must be omitted. The provider
+   `omni_reference_task_type`, so those fields (and `draft`, even `false`) must
+   be omitted. The provider
    rejects them even when they match. `resolution` may only be omitted or
    the family's final resolution, which is also the default: `1080p` on
-   Seedance 2.5 and `4k` on Seedance 2.5 Premium. `return_last_frame`, `watermark`, `execution_expires_after`,
+   Seedance 2.5 and `4k` on Seedance 2.5 Premium. The Premium `4k` final is this
+   server's rule, not stated in the public guide; revisit it if the provider
+   differs. `return_last_frame`, `watermark`, `execution_expires_after`,
    `priority`, and `safety_identifier` can be set again; omitted values use the
    model defaults, not the Draft's values. The final video is billed
    separately at its resolution.

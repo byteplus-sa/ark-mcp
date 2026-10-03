@@ -231,9 +231,13 @@ class TestSeedance25DraftModeInput:
         with pytest.raises(ValidationError, match="Draft task"):
             Seedance25CreateTaskInput(draft_task_id="cgt-draft", resolution="720p")
 
-    def test_draft_and_draft_task_id_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="mutually exclusive"):
-            Seedance25CreateTaskInput(draft=True, draft_task_id="cgt-draft")
+    @pytest.mark.parametrize("draft", [True, False])
+    def test_draft_and_draft_task_id_rejected(self, draft: bool) -> None:
+        with pytest.raises(ValidationError, match="draft must be omitted"):
+            Seedance25CreateTaskInput(draft=draft, draft_task_id="cgt-draft")
+
+    def test_draft_false_without_draft_task_id_accepted(self) -> None:
+        assert Seedance25CreateTaskInput(prompt="test", draft=False).draft is False
 
     @pytest.mark.parametrize(
         ("field", "value"),

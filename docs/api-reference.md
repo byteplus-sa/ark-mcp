@@ -1611,7 +1611,7 @@ Create an asynchronous Seedance 2.5 video generation task. Supports up to
 | `priority` | integer | No | — | 0-9 |
 | `safety_identifier` | string | No | — | Max 64 chars |
 | `draft` | boolean | No | — | Draft mode step 1: 480p Draft preview. `resolution` must be omitted (becomes `480p`) or `480p`. Mutually exclusive with `draft_task_id` |
-| `draft_task_id` | string | No | — | Draft mode step 2: task ID of a succeeded Draft task created at most 7 days ago. `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, and `omni_reference_task_type` must be omitted; `resolution` must be omitted or `1080p` (the default) |
+| `draft_task_id` | string | No | — | Draft mode step 2: task ID of a succeeded Draft task created at most 7 days ago. `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, `omni_reference_task_type`, and `draft` (even `false`) must be omitted; `resolution` must be omitted or `1080p` (the default) |
 
 When `draft_task_id` is set, the tool first checks that the caller owns the
 task, that it succeeded, that it was created in Draft mode, and that it is at

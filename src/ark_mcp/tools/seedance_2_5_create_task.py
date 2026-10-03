@@ -193,11 +193,13 @@ class Seedance25CreateTaskInput(BaseModel):
     def validate_draft_mode(self) -> Seedance25CreateTaskInput:
         """Enforce the provider's Draft mode parameter rules before spending quota."""
         if self.draft_task_id is not None:
-            if self.draft:
+            if self.draft is not None:
+                # Even draft=false is rejected: the provider does not accept `draft`
+                # on a final render, and exclude_none would still forward False.
                 raise ValueError(
-                    "draft and draft_task_id are mutually exclusive. Use draft=true to "
-                    "create a Draft preview, then draft_task_id (without draft) to render "
-                    "the final video."
+                    "draft must be omitted with draft_task_id (they are mutually "
+                    "exclusive). Use draft=true to create a Draft preview, then "
+                    "draft_task_id (without draft) to render the final video."
                 )
             reused = [
                 name
@@ -361,6 +363,25 @@ def resolve_seedance_2_5_capabilities(
     return caps
 
 
+def _parse_created_at(raw: int | float | str | None) -> datetime | None:
+    """Parse a provider ``created_at`` (epoch seconds or ISO-8601) to an aware datetime.
+
+    Returns ``None`` when the value is missing or unparsable so the local age
+    check is skipped and the provider has the final say.
+    """
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        return datetime.fromtimestamp(raw, tz=UTC)
+    if isinstance(raw, str):
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return None
+
+
 async def _load_draft_task(draft_task_id: str, ctx: Context) -> SeedanceTaskResponse | ToolResult:
     """Fetch a Draft task and check it can be rendered as a final video.
 
@@ -391,13 +412,12 @@ async def _load_draft_task(draft_task_id: str, ctx: Context) -> SeedanceTaskResp
             "succeeded Draft task can be rendered as a final video. Poll it with "
             "seedance_get_task until it succeeds."
         )
-    if isinstance(task.created_at, (int, float)):
-        created_at = datetime.fromtimestamp(task.created_at, tz=UTC)
-        if datetime.now(UTC) - created_at > _DRAFT_TASK_MAX_AGE:
-            raise ValueError(
-                f"Draft task '{draft_task_id}' was created more than 7 days ago and can "
-                "no longer be rendered as a final video. Create a new Draft task."
-            )
+    created_at = _parse_created_at(task.created_at)
+    if created_at is not None and datetime.now(UTC) - created_at > _DRAFT_TASK_MAX_AGE:
+        raise ValueError(
+            f"Draft task '{draft_task_id}' was created more than 7 days ago and can "
+            "no longer be rendered as a final video. Create a new Draft task."
+        )
     return task
 
 

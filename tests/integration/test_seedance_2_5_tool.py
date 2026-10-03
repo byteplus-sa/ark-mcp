@@ -301,13 +301,16 @@ def _draft_task(
     draft: bool | None = True,
     model: str = "dreamina-seedance-2-5-260628",
     age: timedelta = timedelta(hours=1),
+    created_at: int | str | object | None = ...,
 ) -> SeedanceTaskResponse:
+    if created_at is ...:
+        created_at = int((datetime.now(UTC) - age).timestamp())
     return SeedanceTaskResponse(
         id="cgt-draft",
         model=model,
         status=status,
         draft=draft,
-        created_at=int((datetime.now(UTC) - age).timestamp()),
+        created_at=created_at,  # type: ignore[arg-type]
     )
 
 
@@ -412,6 +415,53 @@ class TestSeedance25DraftMode:
             await seedance_2_5_create_task(
                 Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
             )
+
+    async def test_final_from_expired_iso_created_at_rejected(
+        self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        old = (datetime.now(UTC) - timedelta(days=8)).isoformat()
+
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return _draft_task(created_at=old), None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with pytest.raises(ValueError, match="more than 7 days ago"):
+            await seedance_2_5_create_task(
+                Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
+            )
+
+    @pytest.mark.parametrize(
+        "created_at",
+        [
+            lambda: (datetime.now(UTC) - timedelta(hours=1)).isoformat(),
+            lambda: (datetime.now(UTC) - timedelta(hours=1)).replace(tzinfo=None).isoformat(),
+            lambda: None,
+            lambda: "not-a-timestamp",
+        ],
+        ids=["fresh-iso", "naive-iso", "missing", "unparsable"],
+    )
+    async def test_final_skips_age_check_when_created_at_is_fresh_or_unknown(
+        self,
+        seedance_2_5_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        created_at: Any,
+    ) -> None:
+        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
+            return _draft_task(created_at=created_at()), None
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            return "cgt-final", None
+
+        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        result = await seedance_2_5_create_task(
+            Seedance25CreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
+        )
+        assert isinstance(result, Seedance25CreateTaskOutput)
 
     async def test_final_with_mismatched_model_rejected(
         self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
