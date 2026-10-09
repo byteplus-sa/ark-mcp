@@ -78,14 +78,15 @@ class VodEnhancementTaskOutput(BaseModel):
     duration_seconds: float | None = Field(
         default=None, ge=0, description="Output duration in seconds, when reported."
     )
-    fps: int | None = Field(
-        default=None, ge=1, description="Output frame rate in frames per second, when reported."
+    fps: float | None = Field(
+        default=None, gt=0, description="Output frame rate in frames per second, when reported."
     )
     resolution: str | None = Field(
         default=None, description="Output resolution label, such as '4k', when reported."
     )
     tool_version: str | None = Field(
-        default=None, description="Enhancement tier reported by MediaKit, such as 'professional'."
+        default=None,
+        description="Enhancement tier: reported by MediaKit for standard/professional tasks, or 'fast' for fast-tier tasks.",
     )
     created_at: str | None = Field(
         default=None,

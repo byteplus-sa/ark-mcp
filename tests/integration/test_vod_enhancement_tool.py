@@ -12,7 +12,11 @@ from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.domain.artifacts import ArtifactRef
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
-from ark_mcp.providers.vod_mediakit.schemas import EnhancementSubmission, EnhancementTask
+from ark_mcp.providers.vod_mediakit.schemas import (
+    EnhancementSubmission,
+    EnhancementTask,
+    VodMediaKitEnhancementRequest,
+)
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.tools.vod_enhance_video import (
     VodEnhanceVideoInput,
@@ -256,9 +260,91 @@ async def test_provider_error_returns_mcp_error(
     assert result.is_error is True
 
 
-def test_input_rejects_unverified_profile_values() -> None:
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"tool_version": "fast", "resolution": "8k"},
+        {"tool_version": "fast", "resolution": "6k"},
+        {"tool_version": "fast", "resolution_limit": 2161},
+        {"tool_version": "fast", "enhance_style": "natural"},
+        {"resolution": "1080p", "resolution_limit": 1080},
+        {"resolution_limit": 127},
+        {"resolution_limit": 4321},
+        {"resolution": "16k"},
+        {"tool_version": "ultra"},
+        {"bitrate": 9},
+        {"bitrate": 150001},
+        {"fps": 14},
+        {"fps": 121},
+        {"bitrate_level": "extreme"},
+    ],
+)
+def test_input_rejects_unsupported_profile_values(overrides: dict[str, object]) -> None:
     with pytest.raises(ValueError):
-        VodEnhanceVideoInput(video_url="https://example.com/input.mp4", resolution="1080p")  # type: ignore[arg-type]
+        VodEnhanceVideoInput(video_url="https://example.com/input.mp4", **overrides)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"tool_version": "standard", "resolution": "1080p"},
+        {"tool_version": "professional", "resolution": "8k"},
+        {"tool_version": "standard", "resolution_limit": 4320, "enhance_style": "natural"},
+        {"tool_version": "fast", "resolution": "4k"},
+        {"tool_version": "fast", "resolution": "720p", "bitrate": 8000, "fps": 30},
+        {"tool_version": "fast", "resolution_limit": 2160, "fps": None},
+    ],
+)
+def test_input_accepts_documented_profiles(overrides: dict[str, object]) -> None:
+    VodEnhanceVideoInput(video_url="https://example.com/input.mp4", **overrides)  # type: ignore[arg-type]
+
+
+async def test_selected_tier_and_resolution_reach_the_provider_request(
+    test_env: None,
+    fake_ctx: FakeContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[VodMediaKitEnhancementRequest] = []
+
+    async def enhance(
+        _self: VodMediaKitEnhancementService, request: VodMediaKitEnhancementRequest
+    ) -> EnhancementSubmission:
+        captured.append(request)
+        return EnhancementSubmission(status="accepted", task_id="amk-tool-enhance-video-fast-1")
+
+    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", enhance)
+    monkeypatch.setattr(VodMediaKitEnhancementService, "close", _close)
+
+    result = await vod_enhance_video(
+        VodEnhanceVideoInput(
+            video_url="https://example.com/input.mp4",
+            tool_version="fast",
+            resolution="720p",
+            bitrate_level="medium",
+            fps=None,
+        ),
+        fake_ctx,
+    )
+
+    assert isinstance(result, VodEnhanceVideoOutput)
+    assert result.status == "accepted"
+    assert captured[0].is_fast
+    assert captured[0].resolution == "720p"
+    assert captured[0].bitrate_level == "medium"
+    assert captured[0].fps is None
+
+
+def test_default_input_keeps_previous_professional_4k_profile() -> None:
+    request = VodMediaKitEnhancementRequest.model_validate(
+        VodEnhanceVideoInput(video_url="https://example.com/input.mp4").model_dump(
+            exclude={"persist", "input_duration_seconds"}
+        )
+    )
+
+    assert request.tool_version == "professional"
+    assert request.resolution == "4k"
+    assert request.bitrate_level == "high"
+    assert request.fps == 24
 
 
 async def test_poll_enhancement_succeeded_persists_once(

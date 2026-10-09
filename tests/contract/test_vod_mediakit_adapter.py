@@ -19,6 +19,7 @@ from ark_mcp.providers.vod_mediakit.schemas import VodMediaKitEnhancementRequest
 
 BASE_URL = "https://mediakit.ap-southeast-1.bytepluses.com/api/v1"
 ENDPOINT = f"{BASE_URL}/tools/enhance-video"
+FAST_ENDPOINT = f"{BASE_URL}/tools/enhance-video-fast"
 TASK_ENDPOINT = f"{BASE_URL}/tasks/amk-tool-enhance-video-1"
 
 
@@ -77,6 +78,105 @@ class TestVodMediaKitRequestContract:
             "Project": "default",
         }
         assert "test-mediakit-key" not in capsys.readouterr().err
+
+    @respx.mock
+    async def test_standard_request_sends_selected_resolution_and_style(
+        self, service: VodMediaKitEnhancementService
+    ) -> None:
+        route = respx.post(ENDPOINT).mock(
+            return_value=httpx.Response(200, json={"success": True, "task_id": "t-1"})
+        )
+
+        await service.enhance(
+            VodMediaKitEnhancementRequest(
+                video_url="https://media.example.com/source.mp4",
+                tool_version="standard",
+                scene="aigc",
+                enhance_style="natural",
+                resolution="1080p",
+                bitrate=8000,
+                fps=None,
+            )
+        )
+
+        assert json.loads(route.calls.last.request.content) == {
+            "video_url": "https://media.example.com/source.mp4",
+            "scene": "aigc",
+            "tool_version": "standard",
+            "enhance_style": "natural",
+            "resolution": "1080p",
+            "bitrate_level": "high",
+            "bitrate": 8000,
+            "Project": "default",
+        }
+
+    @respx.mock
+    async def test_resolution_limit_replaces_the_default_resolution(
+        self, service: VodMediaKitEnhancementService
+    ) -> None:
+        route = respx.post(ENDPOINT).mock(
+            return_value=httpx.Response(200, json={"success": True, "task_id": "t-1"})
+        )
+
+        await service.enhance(
+            VodMediaKitEnhancementRequest(
+                video_url="https://media.example.com/source.mp4", resolution_limit=1440
+            )
+        )
+
+        body = json.loads(route.calls.last.request.content)
+        assert body["resolution_limit"] == 1440
+        assert "resolution" not in body
+
+    @respx.mock
+    async def test_fast_request_uses_fast_endpoint_without_unsupported_fields(
+        self, service: VodMediaKitEnhancementService
+    ) -> None:
+        standard_route = respx.post(ENDPOINT).mock(return_value=httpx.Response(500))
+        fast_route = respx.post(FAST_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200, json={"success": True, "task_id": "amk-tool-enhance-video-fast-1"}
+            )
+        )
+
+        result = await service.enhance(
+            VodMediaKitEnhancementRequest(
+                video_url="https://media.example.com/source.mp4",
+                tool_version="fast",
+                resolution="720p",
+                bitrate_level="medium",
+                fps=30,
+            )
+        )
+
+        assert result.status == "accepted"
+        assert result.task_id == "amk-tool-enhance-video-fast-1"
+        assert not standard_route.called
+        assert json.loads(fast_route.calls.last.request.content) == {
+            "video_url": "https://media.example.com/source.mp4",
+            "resolution": "720p",
+            "bitrate_level": "medium",
+            "fps": 30,
+        }
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"tool_version": "fast", "resolution": "8k"},
+            {"tool_version": "fast", "resolution_limit": 4000},
+            {"tool_version": "fast", "enhance_style": "hd"},
+            {"resolution": "720p", "resolution_limit": 720},
+            {"tool_version": "turbo"},
+        ],
+    )
+    def test_request_rejects_profiles_the_endpoint_does_not_document(
+        self, overrides: dict[str, object]
+    ) -> None:
+        with pytest.raises(ValidationError):
+            VodMediaKitEnhancementRequest(
+                video_url="https://media.example.com/source.mp4",
+                **overrides,  # type: ignore[arg-type]
+            )
 
     def test_request_rejects_unknown_fields_and_non_https(self) -> None:
         with pytest.raises(ValidationError):
@@ -281,6 +381,58 @@ class TestVodMediaKitEnhancementTaskContract:
         assert result.created_at == "2026-09-08T13:39:47+00:00"
         assert result.finished_at == "2026-09-08T13:54:16+00:00"
         assert result.source_expires_at == "2026-09-09T13:54:15+00:00"
+
+    @respx.mock
+    async def test_fast_task_reports_fast_tier_and_fractional_fps(
+        self, service: VodMediaKitEnhancementService
+    ) -> None:
+        respx.get(f"{BASE_URL}/tasks/amk-tool-enhance-video-fast-1").mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "task_id": "amk-tool-enhance-video-fast-1",
+                    "task_type": "enhance-video-fast",
+                    "status": "completed",
+                    "result": {
+                        "video_url": "https://output.example.com/fast.mp4",
+                        "duration": 65.5,
+                        "fps": 29.97,
+                        "resolution": "720p",
+                    },
+                    "created_at": 1777291767,
+                    "finished_at": 1777291851,
+                },
+            )
+        )
+
+        result = await service.get("amk-tool-enhance-video-fast-1")
+
+        assert result.status == "succeeded"
+        assert result.tool_version == "fast"
+        assert result.fps == 29.97
+        assert result.resolution == "720p"
+
+    @respx.mock
+    async def test_unknown_task_type_is_rejected(
+        self, service: VodMediaKitEnhancementService
+    ) -> None:
+        respx.get(TASK_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "task_id": "amk-tool-enhance-video-1",
+                    "task_type": "transcode-video",
+                    "status": "running",
+                },
+            )
+        )
+
+        with pytest.raises(ProviderError) as exc_info:
+            await service.get("amk-tool-enhance-video-1")
+
+        assert exc_info.value.code == "INVALID_RESPONSE"
 
     @respx.mock
     async def test_running_task_maps_to_processing(

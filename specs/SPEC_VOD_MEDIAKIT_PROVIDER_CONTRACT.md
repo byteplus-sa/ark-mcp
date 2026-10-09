@@ -3,13 +3,15 @@ title: BytePlus VOD AI MediaKit Provider Contract
 status: proposed
 horizon: current
 created: 2026-08-12
-updated: 2026-09-09
+updated: 2026-10-09
 tags:
   - byteplus-vod
   - ai-mediakit
   - provider-contract
 source:
   - https://docs.byteplus.com/en/docs/byteplus-vod/docs-image-enhancement-template
+  - https://docs.byteplus.com/en/docs/byteplus-vod/ai-mediakit-create-a-video-enhancement-task
+  - https://docs.byteplus.com/en/docs/byteplus-vod/ai-mediakit-create-a-video-enhancement-lite-task
   - https://docs.byteplus.com/en/docs/byteplus-vod/reference-startexecution
   - https://docs.byteplus.com/en/docs/byteplus-vod/reference-getexecution
   - https://docs.byteplus.com/zh-CN/docs/byteplus-vod/ai-mediakit-create-a-video-transcoding-task
@@ -32,8 +34,10 @@ related:
 This specification governs the Bearer-authenticated convenience endpoints supplied
 for MCP integration on the AI MediaKit data plane:
 
-- `POST /api/v1/tools/enhance-video` + `GET /api/v1/tasks/{task_id}` (video
-  enhancement, `vod_enhance_video` / `vod_get_enhancement_task`);
+- `POST /api/v1/tools/enhance-video` (standard and professional tiers) and
+  `POST /api/v1/tools/enhance-video-fast` (fast tier) +
+  `GET /api/v1/tasks/{task_id}` (video enhancement, `vod_enhance_video` /
+  `vod_get_enhancement_task`);
 - `POST /api/v1/tools/transcode-video` + `GET /api/v1/tasks/{task_id}` (video
   transcoding, `vod_transcode_video` / `vod_get_transcode_task`);
 - `POST /api/v1/tools/separate-voice` + `GET /api/v1/tasks/{task_id}` (voice
@@ -140,7 +144,11 @@ argument, logged, included in fixtures, or committed.
 
 ## Request Contract
 
-The initial implementation accepts only the supplied profile:
+The tool exposes the parameters documented in the official "Create a video quality
+enhancement task" and "Create a video quality enhancement (fast) task" API
+references (read 2026-10-09). `tool_version` selects the endpoint:
+`standard`/`professional` post to `/tools/enhance-video`; `fast` posts to
+`/tools/enhance-video-fast`.
 
 ```json
 {
@@ -154,18 +162,30 @@ The initial implementation accepts only the supplied profile:
 }
 ```
 
-| Field | MCP field | Type | Initial constraint |
+| Field | MCP field | Type | Constraint |
 | --- | --- | --- | --- |
 | `video_url` | `video_url` | HTTPS URL | Public provider-fetchable video URL; no embedded credentials or local/private/link-local destination. |
-| `scene` | `scene` | string | Literal `common`. |
-| `tool_version` | `tool_version` | string | Literal `professional`. |
-| `resolution` | `resolution` | string | Literal `4k`. |
-| `bitrate_level` | `bitrate_level` | string | Literal `high`. |
-| `fps` | `fps` | integer | Literal `24`. |
-| `Project` | `project` | string | Non-empty, maximum 128 characters; serialized with case-sensitive alias `Project`. |
+| `tool_version` | `tool_version` | string | `fast`, `standard`, or `professional`; MCP default `professional`. `fast` is routed to its own endpoint and the field is not sent. |
+| `scene` | `scene` | string | `common`, `ugc`, `short_series`, `aigc`, `old_film`; default `common`. Provider applies it only to `standard`; not sent for `fast`. |
+| `enhance_style` | `enhance_style` | string | `hd` or `natural` for `standard`/`professional`; rejected for `fast`. Omitted unless set. |
+| `resolution` | `resolution` | string | `240p`, `360p`, `480p`, `540p`, `720p`, `1080p`, `2k`, `4k`, `6k`, `8k` (`fast`: `240p`-`4k`). Mutually exclusive with `resolution_limit`; the MCP defaults to `4k` when neither is set. |
+| `resolution_limit` | `resolution_limit` | integer | Short-side pixels, 128-4320 (`fast`: 128-2160), aspect ratio preserved. |
+| `bitrate_level` | `bitrate_level` | string | `low`, `medium`, `high`; MCP default `high`. |
+| `bitrate` | `bitrate` | integer | kbps, 10-150000; takes precedence over `bitrate_level`. |
+| `fps` | `fps` | number | 15-120 (frame interpolation above the source rate; at most 4x the source is recommended). MCP default 24; `null` omits the field so the source rate is kept. |
+| `Project` | `project` | string | Non-empty, maximum 128 characters; serialized with case-sensitive alias `Project`. Not sent for `fast`. |
 
-Broader values require official documentation or a sanitized credentialed contract
-probe and a spec update.
+Documented but intentionally not exposed: `bit_depth` and `codec` (professional
+only; 10/12/16-bit and ProRes/FFV1/EXR outputs use non-MP4 containers that the
+artifact persistence path does not yet handle), `client_token`, `callback_url`,
+`callback_args`, and `queue_id`.
+
+The fast-tier task result carries no `tool_version`; the adapter reports `fast`
+when the polled `task_type` is `enhance-video-fast`. **Unverified:** the
+task-details reference documents only `task_type="enhance-video"`. The
+`enhance-video-fast` value is inferred from the fast task ID prefix
+(`amk-tool-enhance-video-fast-*`) and must be confirmed by a credentialed probe.
+Result `fps` is a number and may be fractional.
 
 ## Verified Error Contract
 
@@ -236,7 +256,7 @@ sanitized completed response directly observed on 2026-09-08 had this shape:
 }
 ```
 
-The adapter requires `task_type="enhance-video"`, maps `running` to
+The adapter requires `task_type` to be `enhance-video` or `enhance-video-fast`, maps `running` to
 `processing`, `completed` to `succeeded`, and `failed` to `failed`, and fails
 closed for unknown values. A completed task must include `result.video_url`.
 Epoch timestamps are normalized to ISO-8601 UTC. The output URL expires 24 hours

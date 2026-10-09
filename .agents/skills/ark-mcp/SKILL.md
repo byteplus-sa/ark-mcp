@@ -33,8 +33,8 @@ one server, including products served through ModelArk:
   always-on thinking, JSON Schema, and `save_to` controls as `seed_understand`.
 - **Speech-to-Text** — background audio transcription via Seed Speech ASR;
   retrieve the completed transcript from the background result.
-- **VOD AI MediaKit** — asynchronous video enhancement using the exact
-  common/professional/4K/high/24-fps profile with task polling and download,
+- **VOD AI MediaKit** — asynchronous video upscaling/enhancement (fast, standard, or
+  professional tier; 240p–8K targets) with task polling and download,
   asynchronous video transcoding
   (codec, container, resolution, bitrate, frame rate) via a submit-then-poll
   tool pair, subtitle burn-in and precision subtitle/text erasure via two
@@ -449,8 +449,10 @@ and `vod:read`.
 
 #### `vod_enhance_video`
 
-Enhance a public HTTPS video using the exact currently supported profile. The
-operation is asynchronous, mutating, non-idempotent, and open-world. Do
+Upscale and enhance a public HTTPS video. Pick a tier with `tool_version`
+(`fast` for latency-sensitive work, `standard` for balanced quality, `professional`
+for the highest quality and cost) and a target with `resolution` or `resolution_limit`.
+The operation is asynchronous, mutating, non-idempotent, and open-world. Do
 not retry it automatically: a timeout may be ambiguous after provider work has
 started. Run it in the background, then pass the provider `task_id` from its
 background result to `vod_get_enhancement_task`.
@@ -458,11 +460,14 @@ background result to `vod_get_enhancement_task`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | URL | Yes | Public HTTPS source; private/link-local targets rejected |
-| `scene` | `"common"` | No | Fixed current scene profile |
-| `tool_version` | `"professional"` | No | Fixed current enhancement profile |
-| `resolution` | `"4k"` | No | Fixed current output resolution |
-| `bitrate_level` | `"high"` | No | Fixed current bitrate profile |
-| `fps` | `24` | No | Fixed current frame rate |
+| `tool_version` | `"fast"` \| `"standard"` \| `"professional"` | No | Default `"professional"`; `fast` is capped at 4K and 2K input |
+| `resolution` | `"240p"` … `"4k"`, `"6k"`, `"8k"` | No | Defaults to `"4k"`; `fast` max `"4k"`; exclusive with `resolution_limit` |
+| `resolution_limit` | integer | No | Short-side pixels, 128–4320 (128–2160 for `fast`) |
+| `bitrate_level` | `"low"` \| `"medium"` \| `"high"` | No | Default `"high"`; ignored when `bitrate` is set |
+| `bitrate` | integer | No | kbps, 10–150000 |
+| `fps` | number \| null | No | 15–120, default 24; `null` keeps source fps |
+| `scene` | `"common"` \| `"ugc"` \| `"short_series"` \| `"aigc"` \| `"old_film"` | No | `standard` only |
+| `enhance_style` | `"hd"` \| `"natural"` | No | `standard`/`professional` only |
 | `project` | string | No | Defaults to `default`; sent upstream as `Project` |
 | `input_duration_seconds` | number | No | Reserved; no price estimate is currently produced |
 | `persist` | boolean | No | Best-effort durable artifact copy; default `true` |

@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints
+from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
 
 from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
@@ -18,7 +18,13 @@ from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
-from ark_mcp.providers.vod_mediakit.schemas import VodMediaKitEnhancementRequest
+from ark_mcp.providers.vod_mediakit.schemas import (
+    FULL_RESOLUTION_LIMIT_MAX,
+    EnhancementResolution,
+    EnhancementTier,
+    VodMediaKitEnhancementRequest,
+    validate_enhancement_profile,
+)
 from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.media_policy import get_media_limits
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
@@ -30,27 +36,69 @@ HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
 
 
 class VodEnhanceVideoInput(BaseModel):
-    """Input for the exact currently verified MediaKit enhancement profile."""
+    """Input for fast, standard, or professional MediaKit video enhancement."""
 
     video_url: HttpsUrl = Field(
         description="Public HTTPS source-video URL that BytePlus can fetch. Private and link-local destinations are rejected."
     )
-    scene: Literal["common"] = Field(
-        default="common", description="Current MediaKit scene profile; only 'common' is verified."
-    )
-    tool_version: Literal["professional"] = Field(
+    tool_version: EnhancementTier = Field(
         default="professional",
-        description="Current enhancement profile; only 'professional' is verified.",
+        description=(
+            "Enhancement tier. 'fast' is speed-first lightweight super-resolution for latency-sensitive "
+            "work (input up to 2K). 'standard' balances speed and quality with 10+ algorithms and honors "
+            "'scene'. 'professional' is the highest-quality tier with 30+ algorithms, slower and costlier."
+        ),
     )
-    resolution: Literal["4k"] = Field(
-        default="4k", description="Current target resolution; only '4k' is verified."
+    scene: Literal["common", "ugc", "short_series", "aigc", "old_film"] = Field(
+        default="common",
+        description=(
+            "Enhancement scenario preset. Only takes effect when tool_version is 'standard'; ignored "
+            "by 'professional' and not sent for 'fast'."
+        ),
     )
-    bitrate_level: Literal["high"] = Field(
-        default="high", description="Current target bitrate profile; only 'high' is verified."
+    enhance_style: Literal["hd", "natural"] | None = Field(
+        default=None,
+        description=(
+            "Enhancement style for 'standard' and 'professional': 'hd' (provider default) is sharper, "
+            "'natural' reduces sharpening artifacts. Not supported by 'fast'. Omit to use the provider default."
+        ),
     )
-    fps: Literal[24] = Field(
+    resolution: EnhancementResolution | None = Field(
+        default=None,
+        description=(
+            "Target output resolution level. 'standard'/'professional' accept 240p, 360p, 480p, 540p, 720p, "
+            "1080p, 2k, 4k, 6k, 8k; 'fast' accepts 240p up to 4k. Mutually exclusive with resolution_limit. "
+            "Defaults to '4k' when neither resolution nor resolution_limit is set."
+        ),
+    )
+    resolution_limit: int | None = Field(
+        default=None,
+        ge=128,
+        le=FULL_RESOLUTION_LIMIT_MAX,
+        description=(
+            "Target short-side pixel count, scaled proportionally to preserve aspect ratio. Range 128-4320 "
+            "for 'standard'/'professional', 128-2160 for 'fast'. Mutually exclusive with resolution."
+        ),
+    )
+    bitrate_level: Literal["low", "medium", "high"] = Field(
+        default="high",
+        description="Target bitrate tier controlling output quality and file size. Ignored when bitrate is set.",
+    )
+    bitrate: int | None = Field(
+        default=None,
+        ge=10,
+        le=150000,
+        description="Exact target average bitrate in kbps (10-150000). Takes precedence over bitrate_level.",
+    )
+    fps: float | None = Field(
         default=24,
-        description="Current target frame rate in frames per second; only 24 is verified.",
+        ge=15,
+        le=120,
+        description=(
+            "Target frame rate in frames per second (15-120); values above the source rate use frame "
+            "interpolation, and staying within 4x the source rate is recommended. Defaults to 24. "
+            "Pass null to keep the source frame rate."
+        ),
     )
     project: str = Field(
         default="default",
@@ -67,6 +115,17 @@ class VodEnhanceVideoInput(BaseModel):
         default=True,
         description="Best-effort copy of the completed output into the durable MCP artifact store.",
     )
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> VodEnhanceVideoInput:
+        """Reject combinations the selected enhancement tier does not support."""
+        validate_enhancement_profile(
+            tool_version=self.tool_version,
+            resolution=self.resolution,
+            resolution_limit=self.resolution_limit,
+            enhance_style=self.enhance_style,
+        )
+        return self
 
 
 class VodEnhanceVideoOutput(BaseModel):
@@ -121,10 +180,12 @@ class VodEnhanceVideoOutput(BaseModel):
 async def vod_enhance_video(
     input: VodEnhanceVideoInput, ctx: Context
 ) -> VodEnhanceVideoOutput | ToolResult:
-    """Enhance a public video using BytePlus VOD AI MediaKit.
+    """Upscale and enhance a public video using BytePlus VOD AI MediaKit.
 
-    Submits the exact common/professional/4K/high/24-fps profile. The mutation
-    is never retried automatically because completion can be ambiguous after a
+    Choose a tier with tool_version (fast, standard, or professional) and a
+    target resolution from 240p up to 8K (fast tops out at 4K) or a short-side
+    pixel limit. Defaults to professional, 4K, high bitrate, 24 fps. Fast uses
+    its own provider endpoint. The mutation is never retried automatically because completion can be ambiguous after a
     timeout. An accepted response contains a task ID without an output URL; poll
     it with vod_get_enhancement_task. If MediaKit directly returns a completed
     output, its provider URL is preserved and durable persistence is best-effort
@@ -151,8 +212,11 @@ async def vod_enhance_video(
             "video_url": validated_source.url,
             "scene": input.scene,
             "tool_version": input.tool_version,
+            "enhance_style": input.enhance_style,
             "resolution": input.resolution,
+            "resolution_limit": input.resolution_limit,
             "bitrate_level": input.bitrate_level,
+            "bitrate": input.bitrate,
             "fps": input.fps,
             "project": input.project,
         }
