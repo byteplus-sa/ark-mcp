@@ -27,13 +27,15 @@ from ark_mcp.providers.vod_mediakit.schemas import (
 )
 
 _ENHANCE_PATH = "/tools/enhance-video"
+_ENHANCE_FAST_PATH = "/tools/enhance-video-fast"
+_FAST_TASK_TYPE = "enhance-video-fast"
 _TASKS_PATH = "/tasks"
 _OPERATION_SUBMIT = "enhance_video"
 _OPERATION_GET = "get_enhancement_task"
 
 
 class VodMediaKitEnhancementService:
-    """Submit the exact verified video-enhancement profile to MediaKit."""
+    """Submit fast, standard, or professional video-enhancement requests to MediaKit."""
 
     def __init__(self, gateway: VodMediaKitGateway | None = None) -> None:
         self._gateway = gateway or VodMediaKitGateway()
@@ -43,8 +45,8 @@ class VodMediaKitEnhancementService:
         log_debug("vod_enhance_video_submit")
         try:
             response = await self._gateway.post(
-                _ENHANCE_PATH,
-                request.model_dump(mode="json", by_alias=True, exclude_none=True),
+                _ENHANCE_FAST_PATH if request.is_fast else _ENHANCE_PATH,
+                request.to_payload(),
             )
         except httpx.TimeoutException:
             raise VodMediaKitGateway.normalize_ambiguous_transport_error(
@@ -217,7 +219,8 @@ class VodMediaKitEnhancementService:
                 duration_seconds=result.duration,
                 fps=result.fps,
                 resolution=result.resolution,
-                tool_version=result.tool_version,
+                tool_version=result.tool_version
+                or ("fast" if parsed.task_type == _FAST_TASK_TYPE else None),
                 created_at=normalize_timestamp(parsed.created_at),
                 finished_at=normalize_timestamp(parsed.finished_at),
                 source_expires_at=normalize_timestamp(parsed.expires_at),

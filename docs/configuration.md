@@ -132,9 +132,10 @@ JWT tool scope for speech-to-text:
 ## VOD AI MediaKit
 
 `vod_enhance_video` is registered when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is
-set. The initial tool intentionally exposes only the exact
-`common`/`professional`/`4k`/`high`/24-fps profile and serializes the project
-label upstream as case-sensitive `Project`. Submission returns an asynchronous
+set. The tool supports the `fast`, `standard`, and `professional` enhancement
+tiers with target resolutions from 240p to 8K (4K for `fast`) and defaults to
+`professional`/`4k`/`high`/24 fps. It serializes the project label upstream as
+case-sensitive `Project` for `standard`/`professional`. Submission returns an asynchronous
 task ID for `vod_get_enhancement_task`; the poll tool returns and best-effort
 persists completed outputs. The submit POST is not retried automatically.
 Convenience-endpoint pricing is not yet confirmed, so the tool does not emit a

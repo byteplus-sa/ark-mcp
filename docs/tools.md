@@ -290,11 +290,14 @@ the `vod:enhance` JWT scope.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `video_url` | URL | Yes | Public HTTPS source; private and link-local destinations are rejected |
-| `scene` | `"common"` | No | Fixed current scene profile |
-| `tool_version` | `"professional"` | No | Fixed current enhancement profile |
-| `resolution` | `"4k"` | No | Fixed current output resolution |
-| `bitrate_level` | `"high"` | No | Fixed current bitrate profile |
-| `fps` | `24` | No | Fixed current frame rate in frames per second |
+| `tool_version` | `"fast"` \| `"standard"` \| `"professional"` | No | Enhancement tier (default `"professional"`). `fast` is speed-first lightweight upscaling on its own provider endpoint (input up to 2K); `standard` balances speed and quality; `professional` is the highest-quality, slowest, and costliest tier |
+| `resolution` | `"240p"` \| `"360p"` \| `"480p"` \| `"540p"` \| `"720p"` \| `"1080p"` \| `"2k"` \| `"4k"` \| `"6k"` \| `"8k"` | No | Target resolution level; `fast` accepts up to `4k`. Mutually exclusive with `resolution_limit`; defaults to `4k` when neither is set |
+| `resolution_limit` | integer | No | Target short-side pixels, 128–4320 (128–2160 for `fast`), scaled proportionally. Mutually exclusive with `resolution` |
+| `bitrate_level` | `"low"` \| `"medium"` \| `"high"` | No | Target bitrate tier (default `"high"`); ignored when `bitrate` is set |
+| `bitrate` | integer | No | Exact target bitrate in kbps, 10–150000; takes precedence over `bitrate_level` |
+| `fps` | number \| null | No | Target frame rate, 15–120 (default 24); `null` keeps the source frame rate |
+| `scene` | `"common"` \| `"ugc"` \| `"short_series"` \| `"aigc"` \| `"old_film"` | No | Scenario preset (default `"common"`); only takes effect for `standard` and is not sent for `fast` |
+| `enhance_style` | `"hd"` \| `"natural"` | No | Sharper `hd` or softer `natural` look for `standard`/`professional`; rejected for `fast` |
 | `project` | string | No | Defaults to `default`; serialized upstream as `Project` |
 | `input_duration_seconds` | number | No | Reserved for future pricing support; currently produces no estimate |
 | `persist` | boolean | No | Best-effort artifact copy (default: true) |

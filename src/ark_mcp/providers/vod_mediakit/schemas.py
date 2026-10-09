@@ -19,23 +19,84 @@ from pydantic import (
 HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
 
 
+EnhancementTier = Literal["fast", "standard", "professional"]
+EnhancementResolution = Literal[
+    "240p", "360p", "480p", "540p", "720p", "1080p", "2k", "4k", "6k", "8k"
+]
+
+DEFAULT_ENHANCEMENT_RESOLUTION: EnhancementResolution = "4k"
+FAST_ENHANCEMENT_RESOLUTIONS: frozenset[str] = frozenset(
+    {"240p", "360p", "480p", "540p", "720p", "1080p", "2k", "4k"}
+)
+FAST_RESOLUTION_LIMIT_MAX = 2160
+FULL_RESOLUTION_LIMIT_MAX = 4320
+
+
+def validate_enhancement_profile(
+    *,
+    tool_version: str,
+    resolution: str | None,
+    resolution_limit: int | None,
+    enhance_style: str | None,
+) -> None:
+    """Enforce the documented cross-field rules for the enhancement endpoints."""
+    if resolution is not None and resolution_limit is not None:
+        raise ValueError("resolution and resolution_limit are mutually exclusive; set only one")
+    if tool_version != "fast":
+        return
+    if resolution is not None and resolution not in FAST_ENHANCEMENT_RESOLUTIONS:
+        raise ValueError("fast enhancement supports resolutions from 240p up to 4k only")
+    if resolution_limit is not None and resolution_limit > FAST_RESOLUTION_LIMIT_MAX:
+        raise ValueError(
+            f"fast enhancement supports resolution_limit up to {FAST_RESOLUTION_LIMIT_MAX}"
+        )
+    if enhance_style is not None:
+        raise ValueError("enhance_style is not supported by the fast enhancement tier")
+
+
 class VodMediaKitEnhancementRequest(BaseModel):
-    """Exact request profile accepted by ``POST /enhance-video``."""
+    """Request profile for ``POST /enhance-video`` and ``POST /enhance-video-fast``."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     video_url: HttpsUrl
-    scene: Literal["common"] = "common"
-    tool_version: Literal["professional"] = "professional"
-    resolution: Literal["4k"] = "4k"
-    bitrate_level: Literal["high"] = "high"
-    fps: Literal[24] = 24
+    scene: Literal["common", "ugc", "short_series", "aigc", "old_film"] = "common"
+    tool_version: EnhancementTier = "professional"
+    enhance_style: Literal["hd", "natural"] | None = None
+    resolution: EnhancementResolution | None = None
+    resolution_limit: int | None = Field(default=None, ge=128, le=FULL_RESOLUTION_LIMIT_MAX)
+    bitrate_level: Literal["low", "medium", "high"] = "high"
+    bitrate: int | None = Field(default=None, ge=10, le=150000)
+    fps: float | None = Field(default=24, ge=15, le=120)
     project: str = Field(
         default="default",
         min_length=1,
         max_length=128,
         serialization_alias="Project",
     )
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> VodMediaKitEnhancementRequest:
+        """Apply cross-field rules and default the target to 4K when none is given."""
+        validate_enhancement_profile(
+            tool_version=self.tool_version,
+            resolution=self.resolution,
+            resolution_limit=self.resolution_limit,
+            enhance_style=self.enhance_style,
+        )
+        if self.resolution is None and self.resolution_limit is None:
+            self.resolution = DEFAULT_ENHANCEMENT_RESOLUTION
+        return self
+
+    def to_payload(self) -> dict[str, Any]:
+        """Serialize the wire body, omitting fields the selected endpoint does not document."""
+        excluded = {"scene", "enhance_style", "project", "tool_version"} if self.is_fast else set()
+        return self.model_dump(mode="json", by_alias=True, exclude_none=True, exclude=excluded)
+
+    @property
+    def is_fast(self) -> bool:
+        """Whether this request targets the dedicated fast-tier endpoint."""
+        return self.tool_version == "fast"
 
 
 class VodMediaKitProviderErrorDetail(BaseModel):
@@ -153,19 +214,19 @@ class VodMediaKitEnhancementTaskResult(BaseModel):
 
     video_url: HttpsUrl
     duration: float | None = Field(default=None, ge=0)
-    fps: int | None = Field(default=None, ge=1)
+    fps: float | None = Field(default=None, gt=0)
     resolution: str | None = None
     tool_version: str | None = None
 
 
 class VodMediaKitEnhancementTaskResponse(BaseModel):
-    """Live-confirmed response from ``GET /tasks/{task_id}`` for enhancement."""
+    """Response from ``GET /tasks/{task_id}`` for standard, professional, or fast enhancement."""
 
     model_config = ConfigDict(extra="ignore")
 
     success: Literal[True]
     task_id: str = Field(min_length=1)
-    task_type: Literal["enhance-video"]
+    task_type: Literal["enhance-video", "enhance-video-fast"]
     status: str = Field(min_length=1)
     result: VodMediaKitEnhancementTaskResult | None = None
     error: VodMediaKitProviderErrorDetail | None = None
@@ -187,7 +248,7 @@ class EnhancementTask(BaseModel):
     request_id: str | None = None
     output_url: HttpsUrl | None = None
     duration_seconds: float | None = Field(default=None, ge=0)
-    fps: int | None = Field(default=None, ge=1)
+    fps: float | None = Field(default=None, gt=0)
     resolution: str | None = None
     tool_version: str | None = None
     created_at: str | None = None

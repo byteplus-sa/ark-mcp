@@ -213,8 +213,11 @@ MediaKit convenience endpoint. The tool is registered only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured and requires the `vod:enhance`
 scope in JWT mode.
 
-The verified contract returns an accepted asynchronous task and deliberately fixes the
-provider profile to `common` / `professional` / `4k` / `high` / 24 fps. Retrieve
+The tool selects an enhancement tier (`fast`, `standard`, or `professional`) and a
+target resolution from 240p up to 8K (`fast` tops out at 4K) or a short-side pixel
+limit. `standard` and `professional` submit to `/tools/enhance-video`; `fast` submits
+to `/tools/enhance-video-fast`. Defaults preserve the previous profile:
+`professional` / `4k` / `high` / 24 fps. Retrieve
 the provider task ID from the background result, then poll it with
 `vod_get_enhancement_task`. The POST is non-idempotent
 and is never retried automatically because a timeout may occur after the provider
@@ -225,11 +228,14 @@ began processing.
 | Field | Type | Required | Default | Constraints |
 |---|---|---|---|---|
 | `video_url` | URL | Yes | — | Public HTTPS source; private, loopback, and link-local targets rejected |
-| `scene` | `"common"` | No | `"common"` | Exact initial profile |
-| `tool_version` | `"professional"` | No | `"professional"` | Exact initial profile |
-| `resolution` | `"4k"` | No | `"4k"` | Exact initial profile |
-| `bitrate_level` | `"high"` | No | `"high"` | Exact initial profile |
-| `fps` | `24` | No | `24` | Frames per second |
+| `tool_version` | `"fast"` \| `"standard"` \| `"professional"` | No | `"professional"` | Enhancement tier; `fast` uses its own endpoint |
+| `resolution` | `"240p"` … `"4k"`, `"6k"`, `"8k"` | No | `"4k"` when `resolution_limit` is unset | `fast` accepts up to `"4k"`; mutually exclusive with `resolution_limit` |
+| `resolution_limit` | integer | No | — | 128–4320 (128–2160 for `fast`); short-side pixels, aspect ratio preserved |
+| `bitrate_level` | `"low"` \| `"medium"` \| `"high"` | No | `"high"` | Ignored when `bitrate` is set |
+| `bitrate` | integer | No | — | kbps, 10–150000 |
+| `fps` | number \| null | No | `24` | 15–120; `null` keeps the source frame rate |
+| `scene` | `"common"` \| `"ugc"` \| `"short_series"` \| `"aigc"` \| `"old_film"` | No | `"common"` | Effective for `standard` only; not sent for `fast` |
+| `enhance_style` | `"hd"` \| `"natural"` | No | — | `standard`/`professional` only; rejected for `fast` |
 | `project` | string | No | `"default"` | 1–128 characters; serialized upstream as `Project` |
 | `input_duration_seconds` | number \| null | No | `null` | Positive; reserved for future pricing support |
 | `persist` | boolean | No | `true` | Best-effort durable artifact copy |
@@ -257,12 +263,10 @@ live probes. Unknown shapes fail closed.
 ```json
 {
   "video_url": "https://media.example.com/source.mp4",
-  "scene": "common",
-  "tool_version": "professional",
-  "resolution": "4k",
-  "bitrate_level": "high",
-  "fps": 24,
-  "project": "default",
+  "tool_version": "fast",
+  "resolution": "1080p",
+  "bitrate_level": "medium",
+  "fps": null,
   "persist": true
 }
 ```
