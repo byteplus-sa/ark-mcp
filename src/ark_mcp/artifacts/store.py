@@ -125,8 +125,13 @@ class ArtifactStore(Protocol):
         mime_type: str,
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
+        extra_trusted_host_suffixes: tuple[str, ...] = (),
     ) -> ArtifactRef:
-        """Download media from a trusted provider URL and store it."""
+        """Download media from a trusted provider URL and store it.
+
+        ``extra_trusted_host_suffixes`` (dot-prefixed) extends the host allowlist
+        for this call only.
+        """
         ...
 
     async def get(self, artifact_id: str, auth: AuthContext | None = None) -> StoredArtifact:

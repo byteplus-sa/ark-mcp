@@ -1118,6 +1118,7 @@ def create_server(
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
             f"VOD AI MediaKit configured: {resolved_settings.has_vod_mediakit}\n"
+            f"OmniHuman configured: {resolved_settings.has_omnihuman}\n"
             f"TOS configured: {resolved_settings.has_tos}\n"
             f"S3 configured: {resolved_settings.has_s3}\n"
             f"Object storage backend: {resolved_settings.object_storage_backend}\n"
@@ -1220,6 +1221,24 @@ def create_server(
                 )
             finally:
                 await vod_gw.close()
+
+        if resolved_settings.has_omnihuman:
+            from ark_mcp.providers.vision_cv.client import VisionCvGateway
+
+            cv_gw = VisionCvGateway(
+                api_key=resolved_settings.cv_api_key,
+                base_url=resolved_settings.cv_base_url,
+                timeout=resolved_settings.request_timeout_ms / 1000,
+                connect_timeout=resolved_settings.connect_timeout_ms / 1000,
+            )
+            try:
+                providers["vision_cv"] = (
+                    "reachable"
+                    if await cv_gw.health_check(timeout_seconds=timeout)
+                    else "unreachable"
+                )
+            finally:
+                await cv_gw.close()
 
         all_reachable = all(v == "reachable" for v in providers.values())
         if all_reachable:

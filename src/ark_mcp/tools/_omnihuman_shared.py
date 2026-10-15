@@ -18,6 +18,7 @@ ARTIFACT_URI_PREFIX = "seed-media://artifacts/"
 IMAGE_MAX_BYTES = 30 * 1024 * 1024
 AUDIO_MAX_BYTES = 15 * 1024 * 1024
 PRESIGN_TTL_SECONDS = 3600
+OUTPUT_HOST_SUFFIXES: tuple[str, ...] = (".tiktokcdn.com",)
 
 _IMAGE_MIME_TYPES: frozenset[str] = frozenset(
     {

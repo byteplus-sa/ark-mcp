@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 
 from ark_mcp.artifacts.filesystem_store import (
     _GENERIC_OCTET_STREAM,
-    _is_trusted_host,
     _mime_to_ext,
     _translate_download_error,
+    trusted_host_policy,
 )
 from ark_mcp.artifacts.store import (
     ArtifactLocation,
@@ -130,13 +130,15 @@ class ObjectStorageArtifactStore:
         mime_type: str,
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
+        extra_trusted_host_suffixes: tuple[str, ...] = (),
     ) -> ArtifactRef:
         limits = get_media_limits()
         max_bytes = _max_bytes_for(limits, media_type)
+        trusted_hosts = trusted_host_policy(extra_trusted_host_suffixes)
         try:
             downloaded = await self._downloader.download(
                 url,
-                trusted_hosts=_is_trusted_host,
+                trusted_hosts=trusted_hosts,
                 max_bytes=max_bytes,
             )
         except SafeDownloadError as exc:

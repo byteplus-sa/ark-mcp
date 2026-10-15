@@ -32,6 +32,7 @@ from ark_mcp.tools._local_export import (
 from ark_mcp.tools._local_export import (
     needs_persist_output as _needs_persist_output,
 )
+from ark_mcp.tools._omnihuman_shared import OUTPUT_HOST_SUFFIXES
 from ark_mcp.tools._task_execution import context_log, persistence_requires_task
 
 Persistence = Literal["not_applicable", "not_requested", "persisted", "failed"]
@@ -87,11 +88,12 @@ class OmniHumanTaskOutput(BaseModel):
         default=None,
         description=(
             "Provider video URL for a succeeded task; preserved even when durable persistence "
-            "is skipped or fails. Expires one hour after the poll that returned it."
+            "is skipped or fails. The provider documents a one-hour validity; persist promptly."
         ),
     )
     source_expires_at: str | None = Field(
-        default=None, description="ISO-8601 estimate of when source_url expires."
+        default=None,
+        description="ISO-8601 conservative estimate (first poll time plus one hour) of when source_url expires; the provider does not return an exact expiry.",
     )
     persistence: Persistence = Field(
         description="Outcome of durable artifact persistence, independent of provider success."
@@ -111,6 +113,10 @@ class OmniHumanTaskOutput(BaseModel):
                 raise ValueError("succeeded output requires source_url")
             if self.persistence == "not_applicable":
                 raise ValueError("succeeded output must not use not_applicable persistence")
+            if self.persistence == "persisted" and self.video is None:
+                raise ValueError("persisted output requires video")
+            if self.persistence == "failed" and self.persistence_issue is None:
+                raise ValueError("failed persistence requires a persistence issue")
             if self.error is not None:
                 raise ValueError("succeeded output must not carry a provider failure")
         else:
@@ -142,6 +148,7 @@ async def _persist_video(
                 mime_type="video/mp4",
                 source_expires_at=expires_at,
                 auth=owner,
+                extra_trusted_host_suffixes=OUTPUT_HOST_SUFFIXES,
             )
         except ArtifactPersistenceError as exc:
             issue = ArtifactPersistenceIssue(

@@ -253,8 +253,11 @@ downloader accepts.
 
 `FilesystemArtifactStore` restricts `copy_from_trusted_url` to provider hosts
 via suffix allowlist: `.bytepluses.com`, `.byteplus.com`, `.bytedance.com`,
-`.bytednsdoc.com`, `.tiktokcdn.com` (OmniHuman output videos),
-`.volces.com`, `.byteplusvod.com`, `.tos-ap-southeast.bytepluses.com`.
+`.bytednsdoc.com`, `.volces.com`, `.byteplusvod.com`,
+`.tos-ap-southeast.bytepluses.com`. A caller may extend the list for one download
+only: `omnihuman_get_task` additionally trusts `.tiktokcdn.com`, where OmniHuman
+output videos are served, so `seed_media_persist_url` and `speech_to_text` still
+reject that host.
 
 `seed_media_persist_url` accepts a caller-supplied URL, so it relies on the
 same controls: the URL goes through `copy_from_trusted_url` with this host

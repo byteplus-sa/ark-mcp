@@ -45,8 +45,12 @@ class FakeGateway:
 class FakeDownloader:
     def __init__(self, gateway: FakeGateway) -> None:
         self._gateway = gateway
+        self.trusted_hosts: object = None
 
-    async def download(self, url: str, **_: object) -> _Downloaded:
+    async def download(self, url: str, **kwargs: object) -> _Downloaded:
+        if url.startswith("https://out.example.com/"):
+            self.trusted_hosts = kwargs["trusted_hosts"]
+            return _Downloaded(b"video-bytes", "video/mp4")
         key = url.split("store.example.com/", 1)[1].split("?", 1)[0]
         if key not in self._gateway.objects:
             raise SafeDownloadError("download_failed", "missing", retryable=False)
@@ -61,9 +65,16 @@ def gateway() -> FakeGateway:
 
 
 @pytest.fixture
-def store(gateway: FakeGateway, monkeypatch: pytest.MonkeyPatch) -> ObjectStorageArtifactStore:
+def downloader(gateway: FakeGateway) -> FakeDownloader:
+    return FakeDownloader(gateway)
+
+
+@pytest.fixture
+def store(
+    gateway: FakeGateway, downloader: FakeDownloader, monkeypatch: pytest.MonkeyPatch
+) -> ObjectStorageArtifactStore:
     monkeypatch.setattr(object_storage_store, "make_object_storage_gateway", lambda _s: gateway)
-    return ObjectStorageArtifactStore(downloader=FakeDownloader(gateway))  # type: ignore[arg-type]
+    return ObjectStorageArtifactStore(downloader=downloader)  # type: ignore[arg-type]
 
 
 OWNER = AuthContext(principal_id="alice", tenant_id="t1")
@@ -99,6 +110,21 @@ class TestPresign:
 
         assert gateway.data_presigns == []
 
+    async def test_same_principal_id_in_another_tenant_is_rejected(
+        self, store: ObjectStorageArtifactStore, gateway: FakeGateway
+    ) -> None:
+        ref = await store.put_base64(PNG_BASE64, MediaType.IMAGE, "image/png", auth=OWNER)
+        gateway.presigned.clear()
+
+        with pytest.raises(PermissionError):
+            await store.presign(
+                ref.id,
+                expires_in_seconds=3600,
+                auth=AuthContext(principal_id="alice", tenant_id="t2"),
+            )
+
+        assert gateway.data_presigns == []
+
     async def test_unknown_artifact_raises_not_found(
         self, store: ObjectStorageArtifactStore
     ) -> None:
@@ -112,3 +138,25 @@ class TestPresign:
     ) -> None:
         with pytest.raises(ValueError, match="Invalid artifact ID"):
             await store.presign("../etc/passwd", expires_in_seconds=3600, auth=OWNER)
+
+
+class TestScopedTrustedHosts:
+    async def test_extra_suffixes_apply_to_one_call_only(
+        self, store: ObjectStorageArtifactStore, downloader: FakeDownloader
+    ) -> None:
+        await store.copy_from_trusted_url(
+            "https://out.example.com/v.mp4",
+            MediaType.VIDEO,
+            "video/mp4",
+            extra_trusted_host_suffixes=(".tiktokcdn.com",),
+            auth=OWNER,
+        )
+        predicate = downloader.trusted_hosts
+        assert callable(predicate)
+        assert predicate("v16m-default.tiktokcdn.com") is True
+        assert predicate("tiktokcdn.com.attacker.example") is False
+
+        await store.copy_from_trusted_url(
+            "https://out.example.com/v.mp4", MediaType.VIDEO, "video/mp4", auth=OWNER
+        )
+        assert downloader.trusted_hosts("v16m-default.tiktokcdn.com") is False  # type: ignore[operator]

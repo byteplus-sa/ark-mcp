@@ -194,6 +194,31 @@ class TestCreate:
         assert isinstance(result, OmniHumanCreateTaskOutput)
         assert str(submitted[0].image_url) == "https://store.example.com/face.png?sig=1"  # type: ignore[attr-defined]
 
+    async def test_presign_provider_failure_is_a_classified_error_result(
+        self,
+        fake_ctx: FakeContext,
+        submitted: list[object],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        runtime = fake_ctx.lifespan_context["runtime"]
+
+        async def presign(*_args: object, **_kwargs: object) -> PresignedArtifact:
+            raise provider_error(retryable=True, code="SIGNING_FAILED")
+
+        monkeypatch.setattr(runtime.artifact_store, "presign", presign, raising=False)
+
+        result = await omnihuman_create_task(
+            OmniHumanCreateTaskInput(
+                image=f"seed-media://artifacts/{ARTIFACT_ID}", audio=AUDIO_URL
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        assert "SIGNING_FAILED" in result.content[0].text
+        assert submitted == []
+
     async def test_provider_error_returns_error_result_and_records_nothing(
         self, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -274,6 +299,7 @@ class TestGet:
             copies.append(str(kwargs["url"]))
             assert kwargs["media_type"] == MediaType.VIDEO
             assert kwargs["mime_type"] == "video/mp4"
+            assert kwargs["extra_trusted_host_suffixes"] == (".tiktokcdn.com",)
             return ArtifactRef(
                 id=ARTIFACT_ID,
                 uri=f"seed-media://artifacts/{ARTIFACT_ID}",
@@ -427,6 +453,32 @@ class TestCancel:
         assert result.canceled is False
         assert result.message == "already started"
 
+    async def test_other_principal_cannot_cancel_and_nothing_is_sent(
+        self, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        runtime = fake_ctx.lifespan_context["runtime"]
+        await runtime.ownership_store.record(
+            "vision-cv", "oh-1", AuthContext(principal_id="bob", tenant_id="t", transport="http")
+        )
+        called: list[str] = []
+
+        async def cancel(_self: OmniHumanService, task_id: str) -> OmniHumanCancelResult:
+            called.append(task_id)
+            return OmniHumanCancelResult(canceled=True)
+
+        monkeypatch.setattr(OmniHumanService, "cancel", cancel)
+        monkeypatch.setattr(OmniHumanService, "close", _close)
+        from ark_mcp.tools import omnihuman_cancel_task as module
+
+        monkeypatch.setattr(
+            module, "get_principal", lambda _ctx: AuthContext(principal_id="eve", tenant_id="t")
+        )
+
+        with pytest.raises(PermissionError):
+            await omnihuman_cancel_task(OmniHumanCancelTaskInput(task_id="oh-1"), fake_ctx)
+
+        assert called == []
+
     async def test_provider_error_returns_error_result(
         self, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -442,3 +494,23 @@ class TestCancel:
 
         assert isinstance(result, ToolResult)
         assert result.is_error
+
+
+class TestOutputInvariants:
+    def test_persisted_state_requires_a_video(self) -> None:
+        with pytest.raises(ValueError, match="persisted"):
+            OmniHumanTaskOutput(
+                task_id="oh-1",
+                status="succeeded",
+                source_url=VIDEO_URL,
+                persistence="persisted",
+            )
+
+    def test_failed_persistence_requires_an_issue(self) -> None:
+        with pytest.raises(ValueError, match="persistence"):
+            OmniHumanTaskOutput(
+                task_id="oh-1",
+                status="succeeded",
+                source_url=VIDEO_URL,
+                persistence="failed",
+            )
