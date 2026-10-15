@@ -445,6 +445,72 @@ def register_tools(server: FastMCP, settings: Settings) -> None:
             reason="BYTEPLUS_MODELARK_ACCESS_KEY / BYTEPLUS_MODELARK_SECRET_KEY not configured",
         )
 
+    if settings.has_omnihuman:
+        from ark_mcp.tools.omnihuman_cancel_task import (
+            TOOL_ANNOTATIONS as omnihuman_cancel_annotations,
+        )
+        from ark_mcp.tools.omnihuman_cancel_task import (
+            OmniHumanCancelTaskOutput,
+            omnihuman_cancel_task,
+        )
+        from ark_mcp.tools.omnihuman_create_task import (
+            TOOL_ANNOTATIONS as omnihuman_create_annotations,
+        )
+        from ark_mcp.tools.omnihuman_create_task import (
+            OmniHumanCreateTaskOutput,
+            omnihuman_create_task,
+        )
+        from ark_mcp.tools.omnihuman_get_task import (
+            TOOL_ANNOTATIONS as omnihuman_get_annotations,
+        )
+        from ark_mcp.tools.omnihuman_get_task import (
+            OmniHumanTaskOutput,
+            omnihuman_get_task,
+        )
+
+        omnihuman_registrations = (
+            (
+                "omnihuman_create_task",
+                omnihuman_create_annotations,
+                OmniHumanCreateTaskOutput,
+                "omnihuman:create",
+                omnihuman_create_task,
+            ),
+            (
+                "omnihuman_get_task",
+                omnihuman_get_annotations,
+                OmniHumanTaskOutput,
+                "omnihuman:read",
+                omnihuman_get_task,
+            ),
+            (
+                "omnihuman_cancel_task",
+                omnihuman_cancel_annotations,
+                OmniHumanCancelTaskOutput,
+                "omnihuman:cancel",
+                omnihuman_cancel_task,
+            ),
+        )
+        for (
+            omnihuman_name,
+            omnihuman_annotations,
+            omnihuman_output_model,
+            omnihuman_scope,
+            omnihuman_handler,
+        ) in omnihuman_registrations:
+            server.tool(
+                name=omnihuman_name,
+                annotations={**omnihuman_annotations},
+                output_schema=omnihuman_output_model.model_json_schema(),
+                task=_task_config(omnihuman_name),
+                auth=_tool_auth(settings, omnihuman_name, omnihuman_scope),
+            )(_task_handler(omnihuman_name, omnihuman_handler))
+    else:
+        log_info(
+            "omnihuman_tools_skipped",
+            reason="BYTEPLUS_OMNIHUMAN_ENABLED is not true or BYTEPLUS_CV_API_KEY is empty",
+        )
+
     if not settings.has_modelark:
         log_info("tools_skipped", reason="BYTEPLUS_MODELARK_API_KEY not configured")
         return
@@ -1052,6 +1118,7 @@ def create_server(
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
             f"VOD AI MediaKit configured: {resolved_settings.has_vod_mediakit}\n"
+            f"OmniHuman configured: {resolved_settings.has_omnihuman}\n"
             f"TOS configured: {resolved_settings.has_tos}\n"
             f"S3 configured: {resolved_settings.has_s3}\n"
             f"Object storage backend: {resolved_settings.object_storage_backend}\n"
@@ -1155,6 +1222,24 @@ def create_server(
             finally:
                 await vod_gw.close()
 
+        if resolved_settings.has_omnihuman:
+            from ark_mcp.providers.vision_cv.client import VisionCvGateway
+
+            cv_gw = VisionCvGateway(
+                api_key=resolved_settings.cv_api_key,
+                base_url=resolved_settings.cv_base_url,
+                timeout=resolved_settings.request_timeout_ms / 1000,
+                connect_timeout=resolved_settings.connect_timeout_ms / 1000,
+            )
+            try:
+                providers["vision_cv"] = (
+                    "reachable"
+                    if await cv_gw.health_check(timeout_seconds=timeout)
+                    else "unreachable"
+                )
+            finally:
+                await cv_gw.close()
+
         all_reachable = all(v == "reachable" for v in providers.values())
         if all_reachable:
             return JSONResponse({"status": "ready", "providers": providers})
@@ -1175,6 +1260,7 @@ def create_server(
             resolved_settings.has_seed3d,
             resolved_settings.has_stt,
             resolved_settings.has_vod_mediakit,
+            resolved_settings.has_omnihuman,
         )
     ):
         log_warning(
@@ -1198,6 +1284,7 @@ def create_server(
         seed3d_configured=resolved_settings.has_seed3d,
         stt_configured=resolved_settings.has_stt,
         vod_mediakit_configured=resolved_settings.has_vod_mediakit,
+        omnihuman_configured=resolved_settings.has_omnihuman,
         object_storage_backend=resolved_settings.object_storage_backend,
         artifact_backend=resolved_settings.artifact_backend,
         log_level=resolved_settings.log_level,

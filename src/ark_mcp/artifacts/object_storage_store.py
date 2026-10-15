@@ -14,14 +14,15 @@ from typing import TYPE_CHECKING
 
 from ark_mcp.artifacts.filesystem_store import (
     _GENERIC_OCTET_STREAM,
-    _is_trusted_host,
     _mime_to_ext,
     _translate_download_error,
+    trusted_host_policy,
 )
 from ark_mcp.artifacts.store import (
     ArtifactLocation,
     ArtifactMetadata,
     ArtifactPersistenceError,
+    PresignedArtifact,
     StoredArtifact,
 )
 from ark_mcp.config.env import get_settings
@@ -129,13 +130,15 @@ class ObjectStorageArtifactStore:
         mime_type: str,
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
+        extra_trusted_host_suffixes: tuple[str, ...] = (),
     ) -> ArtifactRef:
         limits = get_media_limits()
         max_bytes = _max_bytes_for(limits, media_type)
+        trusted_hosts = trusted_host_policy(extra_trusted_host_suffixes)
         try:
             downloaded = await self._downloader.download(
                 url,
-                trusted_hosts=_is_trusted_host,
+                trusted_hosts=trusted_hosts,
                 max_bytes=max_bytes,
             )
         except SafeDownloadError as exc:
@@ -310,6 +313,19 @@ class ObjectStorageArtifactStore:
             raise PermissionError("Artifact is not owned by the current principal.")
 
         return ArtifactLocation(path=None, ref=metadata.ref)
+
+    async def presign(
+        self,
+        artifact_id: str,
+        *,
+        expires_in_seconds: int,
+        auth: AuthContext | None = None,
+    ) -> PresignedArtifact:
+        """Mint a presigned GET URL for an artifact owned by ``auth``."""
+        location = await self.locate(artifact_id, auth)
+        key = self._data_key(artifact_id, _mime_to_ext(location.ref.mime_type))
+        url = await self._gateway.presign_get(key=key, expires=expires_in_seconds)
+        return PresignedArtifact(url=url, ref=location.ref)
 
     async def delete_expired(self, now: datetime) -> int:
         if not self._sweep_logged:

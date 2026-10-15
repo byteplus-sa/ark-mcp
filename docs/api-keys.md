@@ -10,6 +10,7 @@ tool set.
 | ModelArk | `BYTEPLUS_MODELARK_API_KEY` | `Authorization: Bearer <key>` | Seedream (image), Seedance (video) |
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | `X-Api-Key: <key>` | Seed Audio (speech generation), Speech-to-Text (ASR) |
 | VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `Authorization: Bearer <key>` | Enhancement, transcode, subtitle burn-in/removal, audio separation, and poll tools |
+| Vision AI (OmniHuman) | `BYTEPLUS_CV_API_KEY` | `Authorization: Bearer <key>` | `omnihuman_*` tools (also needs `BYTEPLUS_OMNIHUMAN_ENABLED=true`) |
 | TOS | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` | AK/SK signing | `media_upload`, `media_presign`, `media_presign_batch` |
 | S3 | `S3_ACCESS_KEY` + `S3_SECRET_KEY` + `S3_BUCKET` | AK/SK signing | `media_upload`, `media_presign`, `media_presign_batch` |
 
@@ -134,6 +135,21 @@ The key is sent as `Authorization: Bearer <key>` against
 `https://mediakit.ap-southeast-1.bytepluses.com/api/v1`. It is startup
 configuration only and is never logged, returned, or accepted as a tool
 argument.
+
+## BytePlus Vision AI (OmniHuman)
+
+**Env vars:**
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BYTEPLUS_CV_API_KEY` | empty | Vision AI Bearer key |
+| `BYTEPLUS_OMNIHUMAN_ENABLED` | `false` | Registers the `omnihuman_*` tools |
+| `BYTEPLUS_CV_BASE_URL` | `https://openapi.cv.bytepluses.com` | Vision AI base URL |
+
+Create the key under Access Key Management in the BytePlus console and make
+sure the account has OmniHuman 2.0 enabled. The same service also accepts
+AK/SK-signed requests on `cv.byteplusapi.com`; this server uses the API-key
+path only.
 
 ## Object storage (TOS or S3)
 

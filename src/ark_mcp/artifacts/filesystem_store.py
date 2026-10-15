@@ -12,6 +12,7 @@ import tempfile
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ark_mcp.artifacts.store import (
     ArtifactLocation,
@@ -41,6 +42,9 @@ from ark_mcp.security.safe_downloader import (
     SafeDownloadErrorCode,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 # Host allowlist for downloading provider output URLs.
 _TRUSTED_EXACT_HOSTS: frozenset[str] = frozenset()
 _TRUSTED_HOST_SUFFIXES: tuple[str, ...] = (
@@ -60,6 +64,24 @@ def _is_trusted_host(hostname: str) -> bool:
     return hostname_lower in _TRUSTED_EXACT_HOSTS or any(
         hostname_lower.endswith(suffix) for suffix in _TRUSTED_HOST_SUFFIXES
     )
+
+
+def trusted_host_policy(extra_suffixes: tuple[str, ...] = ()) -> Callable[[str], bool]:
+    """Return the host predicate: the global allowlist plus per-call ``extra_suffixes``.
+
+    Extra suffixes let one caller (for example OmniHuman output downloads) trust a
+    provider CDN without widening the policy for every other tool.
+    """
+    if not extra_suffixes:
+        return _is_trusted_host
+    if any(not suffix.startswith(".") for suffix in extra_suffixes):
+        raise ValueError("Extra trusted host suffixes must start with a dot.")
+    lowered = tuple(suffix.lower() for suffix in extra_suffixes)
+
+    def is_trusted(hostname: str) -> bool:
+        return _is_trusted_host(hostname) or hostname.lower().endswith(lowered)
+
+    return is_trusted
 
 
 # Generic binary content-types that carry no useful file-type signal. When a
@@ -202,12 +224,15 @@ class FilesystemArtifactStore(ArtifactStore):
         mime_type: str,
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
+        extra_trusted_host_suffixes: tuple[str, ...] = (),
     ) -> ArtifactRef:
         """Download media from a trusted provider URL and store it.
 
-        Only downloads from configured BytePlus/TOS host allowlists.
+        Only downloads from configured BytePlus/TOS host allowlists, plus any
+        ``extra_trusted_host_suffixes`` (dot-prefixed) granted for this call.
         Validates URL, MIME, and size before storage.
         """
+        trusted_hosts = trusted_host_policy(extra_trusted_host_suffixes)
         limits = get_media_limits()
         max_bytes = {
             "image": limits.image_max_bytes,
@@ -218,7 +243,7 @@ class FilesystemArtifactStore(ArtifactStore):
         try:
             downloaded = await self._downloader.download(
                 url,
-                trusted_hosts=_is_trusted_host,
+                trusted_hosts=trusted_hosts,
                 max_bytes=max_bytes,
             )
         except SafeDownloadError as exc:

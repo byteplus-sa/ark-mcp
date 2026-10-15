@@ -25,6 +25,7 @@ client is missing tools and that warning is absent, look at
 | `BYTEPLUS_MODELARK_API_KEY` | empty | Enables Seedream, Seedance, and Seed 2.1 understanding; sent as Bearer auth |
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | empty | Enables Seed Audio and speech-to-text; sent as `X-Api-Key` |
 | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | empty | Enables MediaKit enhancement, transcode, subtitle burn-in/removal, audio-separation, and poll tools; sent as Bearer auth |
+| `BYTEPLUS_CV_API_KEY` | empty | BytePlus Vision AI Bearer key for OmniHuman; tools also need `BYTEPLUS_OMNIHUMAN_ENABLED=true` |
 | `BYTEPLUS_MODELARK_BASE_URL` | AP Southeast ModelArk URL | HTTPS data-plane base URL |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | AP Southeast Seed Speech URL | HTTPS service base URL |
 | `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | HTTPS VOD AI MediaKit convenience-endpoint base URL |
@@ -45,6 +46,9 @@ client is missing tools and that warning is absent, look at
 | `HYPER3D_DEFAULT_MODEL` | `hyper3d-gen2` | Default Hyper3D model/endpoint ID |
 | `HITEM3D_DEFAULT_MODEL` | `hitem3d-2-0` | Default Hitem3d model/endpoint ID |
 | `SEED3D_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings (`hyper3d` or `hitem3d`) |
+| `BYTEPLUS_OMNIHUMAN_ENABLED` | `false` | Feature flag for OmniHuman 2.0 (`omnihuman_*` tools); requires `BYTEPLUS_CV_API_KEY` |
+| `BYTEPLUS_CV_BASE_URL` | `https://openapi.cv.bytepluses.com` | HTTPS Vision AI base URL |
+| `BYTEPLUS_OMNIHUMAN_REQ_KEY` | `realman_avatar_picture_omni20_cv` | Service identifier sent as `req_key`; change only if BytePlus issues a new one |
 
 The two built-in default IDs have known families. A custom ID must be bound
 explicitly; the server does not infer capabilities from substrings in an ID.

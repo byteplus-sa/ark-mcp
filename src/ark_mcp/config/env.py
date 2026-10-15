@@ -152,6 +152,12 @@ class Settings(BaseSettings):
         description="BytePlus VOD AI MediaKit Bearer API key.",
     )
 
+    cv_api_key: str = Field(
+        default="",
+        validation_alias="BYTEPLUS_CV_API_KEY",
+        description="BytePlus Vision AI Bearer API key for OmniHuman.",
+    )
+
     # --- Provider base URLs --------------------------------------------------
 
     modelark_base_url: str = Field(
@@ -166,6 +172,28 @@ class Settings(BaseSettings):
         default="https://mediakit.ap-southeast-1.bytepluses.com/api/v1",
         validation_alias="BYTEPLUS_VOD_MEDIAKIT_BASE_URL",
         description="BytePlus VOD AI MediaKit HTTPS API base URL.",
+    )
+    cv_base_url: str = Field(
+        default="https://openapi.cv.bytepluses.com",
+        validation_alias="BYTEPLUS_CV_BASE_URL",
+        description="BytePlus Vision AI HTTPS API base URL.",
+    )
+
+    # --- OmniHuman feature flag ----------------------------------------------
+
+    omnihuman_enabled: bool = Field(
+        default=False,
+        validation_alias="BYTEPLUS_OMNIHUMAN_ENABLED",
+        description=(
+            "Feature flag for OmniHuman 2.0 tools. Disabled by default. When false, no "
+            "OmniHuman tools are registered even if BYTEPLUS_CV_API_KEY is configured."
+        ),
+    )
+    omnihuman_req_key: str = Field(
+        default="realman_avatar_picture_omni20_cv",
+        min_length=1,
+        validation_alias="BYTEPLUS_OMNIHUMAN_REQ_KEY",
+        description="Vision AI service identifier sent as req_key for OmniHuman requests.",
     )
 
     # --- ModelArk OpenAPI (private asset library, AK/SK signed) -------------
@@ -696,6 +724,11 @@ class Settings(BaseSettings):
         return bool(self.vod_mediakit_api_key)
 
     @property
+    def has_omnihuman(self) -> bool:
+        """Whether OmniHuman 2.0 is enabled and a Vision AI API key is configured."""
+        return self.omnihuman_enabled and bool(self.cv_api_key)
+
+    @property
     def has_modelark_openapi(self) -> bool:
         """Whether AK/SK for signed ModelArk OpenAPI calls (asset library) are configured."""
         return bool(self.modelark_access_key and self.modelark_secret_key)
@@ -769,6 +802,7 @@ class Settings(BaseSettings):
         "seed_audio_base_url",
         "seed_speech_asr_base_url",
         "vod_mediakit_base_url",
+        "cv_base_url",
         "modelark_openapi_base_url",
     )
     @classmethod
@@ -781,6 +815,7 @@ class Settings(BaseSettings):
                 "seed_audio_base_url": "BYTEPLUS_SEED_AUDIO_BASE_URL",
                 "seed_speech_asr_base_url": "SEED_SPEECH_ASR_BASE_URL",
                 "vod_mediakit_base_url": "BYTEPLUS_VOD_MEDIAKIT_BASE_URL",
+                "cv_base_url": "BYTEPLUS_CV_BASE_URL",
             }
             variable = env_var_map.get(info.field_name or "", "BYTEPLUS_PROVIDER_BASE_URL")
             raise ValueError(f"{variable} must use HTTPS and include a host")

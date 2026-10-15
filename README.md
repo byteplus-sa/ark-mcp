@@ -16,6 +16,7 @@ products plus artifact access and an optional media upload helper:
 | **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, `seedance_cancel_or_delete_task` | Background-task video submission with optionally background output retrieval (single or batched status checks with derived queue timing) through ModelArk |
 | **Seedance 2.5 Premium** | `seedance_2_5_premium_create_task`, `seedance_2_5_premium_create_task_variations` | Whitelist-only Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) with 4K output; same inputs as Seedance 2.5 (including Draft mode) and shares the `seedance_get_task` lifecycle tools (gated by `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`, disabled by default) |
 | **Hyper3D / Hitem3d** | `hyper3d_*`, `hitem3d_*` task tools | Background-task 3D submission with optionally background output retrieval through ModelArk (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
+| **OmniHuman 2.0** | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task` | Image + audio to talking-avatar video through BytePlus Vision AI; background-task submission, polling with durable video persistence, and queue cancel (gated by `BYTEPLUS_OMNIHUMAN_ENABLED` and `BYTEPLUS_CV_API_KEY`, disabled by default) |
 | **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions; always thinks, returns only the final answer, enforces JSON Schemas, and can save the answer to a local file |
 | **Seed Audio Understanding** | `seed_audio_understand` | Background-task audio understanding (transcription, translation, speaker/emotion analysis, summaries, Q&A) through ModelArk Chat Completions `input_audio`; model set by `SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`), same thinking, JSON Schema, and `save_to` controls as `seed_understand` |
 | **Speech-to-Text** | `speech_to_text` | Background-task audio transcription through Seed Speech ASR (HTTP) |
@@ -203,6 +204,8 @@ Edit `.env` with your BytePlus credentials:
 BYTEPLUS_MODELARK_API_KEY=your_modelark_key
 BYTEPLUS_SEED_SPEECH_API_KEY=your_seed_speech_key  # pragma: allowlist secret
 BYTEPLUS_VOD_MEDIAKIT_API_KEY=your_vod_mediakit_key
+BYTEPLUS_CV_API_KEY=your_vision_ai_key
+BYTEPLUS_OMNIHUMAN_ENABLED=true
 SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628
 SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-0-260128
 ```
@@ -218,7 +221,9 @@ only when object storage credentials (TOS or S3) are configured, and
 `vod_get_transcode_task`, `vod_add_subtitles`, `vod_get_subtitle_addition_task`,
 `vod_remove_subtitles`, `vod_get_subtitle_removal_task`, `vod_separate_audio`,
 and `vod_get_audio_separation` appear only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set.
+`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `omnihuman_create_task`,
+`omnihuman_get_task`, and `omnihuman_cancel_task` appear only when
+`BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is set.
 
 See [Configuration](docs/configuration.md) for the full environment
 variable reference.

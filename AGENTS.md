@@ -17,6 +17,10 @@ surface:
 - **Seed 3D** — asynchronous 3D model generation through ModelArk (Hyper3D
   text-to-3D and Hitem3d image-to-3D). Gated by `BYTEPLUS_MODELARK_3D_ENABLED`;
   disabled by default.
+- **OmniHuman 2.0** — image + audio to talking-avatar video through BytePlus
+  Vision AI (`omnihuman_create_task`, `omnihuman_get_task`,
+  `omnihuman_cancel_task`). Bearer `BYTEPLUS_CV_API_KEY`; gated by
+  `BYTEPLUS_OMNIHUMAN_ENABLED`; disabled by default.
 - **Seed 2.1 Understanding** — multimodal video/image understanding and
   reasoning through ModelArk Chat Completions; supports deep-thinking mode.
 - **Seed Audio Understanding** — audio understanding and reasoning
