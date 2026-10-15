@@ -1408,7 +1408,7 @@ Poll with `task_id`. `status` is `queued`, `running`, `succeeded`, `failed`,
 `canceled`, `expired`, or `not_found`. On the first successful poll with
 `persist_output=true` (default; needs task-augmented execution, or use
 `ark_job_submit`) the video is copied to a durable `seed-media://` artifact
-(`video`). The provider `source_url` expires one hour after it is returned, so
+(`video`). The provider documents a one-hour validity for `source_url`, so
 persist promptly. Use `persist_output=false` for a foreground status check.
 
 #### `omnihuman_cancel_task`

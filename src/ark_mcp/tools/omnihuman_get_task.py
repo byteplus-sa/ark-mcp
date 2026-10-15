@@ -47,8 +47,8 @@ class OmniHumanGetTaskInput(BaseModel):
         description=(
             "Whether to copy a completed video into durable artifact storage on the first "
             "successful poll. The default true requires task-augmented execution; use false for "
-            "a foreground status check. The provider video URL expires one hour after it is first "
-            "returned."
+            "a foreground status check. The provider documents a one-hour validity for the video "
+            "URL, so persist promptly."
         ),
     )
     output_path: str | None = output_path_field("the generated video")
