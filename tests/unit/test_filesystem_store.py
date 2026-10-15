@@ -198,6 +198,10 @@ class TestFilesystemArtifactStore:
         ("notbytepluses.com", False),
         ("3002771874-amk-3000006864-default-934334.vod.ap-southeast-1.byteplusvod.com", True),
         ("evil.byteplusvod.com.attacker.example", False),
+        ("v16m-default.tiktokcdn.com", True),
+        ("tiktokcdn.com", False),
+        ("tiktokcdn.com.attacker.example", False),
+        ("nottiktokcdn.com", False),
     ],
 )
 def test_trusted_host_policy_rejects_suffix_confusion(hostname: str, expected: bool) -> None:

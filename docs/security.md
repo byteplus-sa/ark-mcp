@@ -101,6 +101,9 @@ tool → scope mapping is wired in `server.py::register_tools`:
 | `seedance:read` | `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks` |
 | `seedance:delete` | `seedance_cancel_or_delete_task` |
 | `seed:asr:transcribe` | `speech_to_text` |
+| `omnihuman:create` | `omnihuman_create_task` |
+| `omnihuman:read` | `omnihuman_get_task` |
+| `omnihuman:cancel` | `omnihuman_cancel_task` |
 | `vod:enhance` | `vod_enhance_video` |
 | `vod:transcode` | `vod_transcode_video` |
 | `vod:subtitle:add` | `vod_add_subtitles` |
@@ -250,8 +253,8 @@ downloader accepts.
 
 `FilesystemArtifactStore` restricts `copy_from_trusted_url` to provider hosts
 via suffix allowlist: `.bytepluses.com`, `.byteplus.com`, `.bytedance.com`,
-`.bytednsdoc.com`, `.volces.com`, `.byteplusvod.com`,
-`.tos-ap-southeast.bytepluses.com`.
+`.bytednsdoc.com`, `.tiktokcdn.com` (OmniHuman output videos),
+`.volces.com`, `.byteplusvod.com`, `.tos-ap-southeast.bytepluses.com`.
 
 `seed_media_persist_url` accepts a caller-supplied URL, so it relies on the
 same controls: the URL goes through `copy_from_trusted_url` with this host

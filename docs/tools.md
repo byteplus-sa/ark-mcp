@@ -64,6 +64,7 @@ interval:
 - `seedance_2_5_premium_create_task_variations` (same flag)
 - `hyper3d_create_task`
 - `hitem3d_create_task`
+- `omnihuman_create_task` (when `BYTEPLUS_OMNIHUMAN_ENABLED=true`)
 - `seed_understand`
 - `seed_audio_understand`
 - `vod_enhance_video`
@@ -88,6 +89,7 @@ The following retrieval tools advertise `execution.taskSupport="optional"`:
 - `seed_media_persist_url`
 - `hyper3d_get_task`
 - `hitem3d_get_task`
+- `omnihuman_get_task`
 - `vod_get_enhancement_task`
 - `vod_get_transcode_task`
 - `vod_get_audio_separation`
@@ -559,6 +561,52 @@ provider success. On failure, `error.code`/`error.message` carry the safe
 provider detail. GET polling is automatically retried on retryable errors:
 429, 5xx, and poll timeouts or connection failures (a poll creates no provider
 state).
+
+## omnihuman_create_task / omnihuman_get_task / omnihuman_cancel_task
+
+Generate a video of a person speaking or performing from one portrait image and
+one audio clip with BytePlus OmniHuman 2.0 (`realman_avatar_picture_omni20_cv`).
+The three tools are registered only when `BYTEPLUS_OMNIHUMAN_ENABLED=true` and
+`BYTEPLUS_CV_API_KEY` is set (Bearer auth to the Vision AI host). They use their
+own key, separate from the ModelArk key.
+
+**Execution:** `omnihuman_create_task` is a required background job and
+`omnihuman_get_task` supports optional background execution for video
+persistence. `omnihuman_cancel_task` is a plain foreground tool.
+
+### Input (`omnihuman_create_task`)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `image` | string | Yes | Public HTTPS URL or `seed-media://artifacts/<id>`. jpeg/png/webp/bmp/tiff/gif/heic/heif, under 30 MB, aspect ratio 0.4-2.5, 300-6000 px per side |
+| `audio` | string | Yes | Public HTTPS URL or `seed-media://artifacts/<id>`. wav or mp3, under 15 MB, 4-300 seconds |
+| `prompt` | string | No | Scene, movement, or camera guidance (up to 2000 characters; zh, en, ja, ko, es-MX, id) |
+| `watermark` | boolean | No | Provider watermark; defaults to `true` |
+
+Artifact references need an object-storage artifact backend
+(`ARTIFACT_BACKEND=object_storage`) so BytePlus can fetch a presigned URL
+(valid one hour) minted for the calling principal. With the filesystem backend,
+upload the file with `media_upload` and pass the presigned URL instead. The
+server validates artifact type, MIME type, and size; for plain URLs it applies
+the SSRF policy only, and BytePlus validates dimensions and duration.
+
+### Output
+
+- `omnihuman_create_task` returns `task_id`, `status="accepted"`, and
+  `recommended_poll_after_ms`. Submission is never retried automatically.
+- `omnihuman_get_task` returns `status` (`queued`, `running`, `succeeded`,
+  `failed`, `canceled`, `expired`, `not_found`). On the first successful poll
+  with `persist_output=true` it copies the provider video into a durable
+  `seed-media://` artifact (`video`); `source_url` is kept for one hour.
+  Supports `output_path` on stdio.
+- `omnihuman_cancel_task` returns `canceled`. Only queued tasks can be
+  canceled; a started task returns `canceled=false` with an explanation.
+  Immediately after creation the provider can reject the new ID as invalid
+  (`50200`); retry after a few seconds. Tasks usually start within seconds, so
+  cancelation is only practical when the provider queue is busy.
+
+Tasks are retained by the provider for 12 hours. Auth scopes:
+`omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`.
 
 ## Private asset library (`ark_asset_*`)
 

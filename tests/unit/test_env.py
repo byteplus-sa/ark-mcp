@@ -160,6 +160,31 @@ class TestSettings:
                 ],
             )
 
+    def test_omnihuman_disabled_by_default(self) -> None:
+        settings = Settings(_env_file=None)
+        assert not settings.omnihuman_enabled
+        assert not settings.has_omnihuman
+        assert settings.cv_base_url == "https://openapi.cv.bytepluses.com"
+        assert settings.omnihuman_req_key == "realman_avatar_picture_omni20_cv"
+
+    def test_omnihuman_requires_both_flag_and_key(self) -> None:
+        assert not Settings(_env_file=None, BYTEPLUS_OMNIHUMAN_ENABLED=True).has_omnihuman
+        assert not Settings(
+            _env_file=None,
+            BYTEPLUS_CV_API_KEY="cv-key",  # pragma: allowlist secret
+        ).has_omnihuman
+        assert Settings(
+            _env_file=None,
+            BYTEPLUS_OMNIHUMAN_ENABLED=True,
+            BYTEPLUS_CV_API_KEY="cv-key",  # pragma: allowlist secret
+        ).has_omnihuman
+
+    def test_cv_base_url_override_requires_https(self) -> None:
+        settings = Settings(_env_file=None, BYTEPLUS_CV_BASE_URL="https://cv.example.com/")
+        assert settings.cv_base_url == "https://cv.example.com"
+        with pytest.raises(ValueError, match="BYTEPLUS_CV_BASE_URL must use HTTPS"):
+            Settings(_env_file=None, BYTEPLUS_CV_BASE_URL="http://cv.example.com")
+
     def test_vod_mediakit_base_url_override_requires_https(self) -> None:
         settings = Settings(
             _env_file=None,

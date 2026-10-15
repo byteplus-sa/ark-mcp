@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5 and whitelist-only 2.5 Premium 4K, Hyper3D, Hitem3d, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, manage the Seedance private asset library (virtual portraits, verified real people, copyright IP referenced as asset://) with BytePlus AK/SK, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
+description: Guide for using the Ark Seed Multimodal MCP server to generate or edit images, audio, video, and 3D models (including Seedance 2.5 and whitelist-only 2.5 Premium 4K, Hyper3D, Hitem3d, OmniHuman 2.0 image-plus-audio avatar video, BytePlus VOD AI MediaKit enhancement, transcoding, subtitle burn-in/removal, and voice/background audio separation), understand images and videos through Seed 2.1, understand or reason about audio, transcribe speech to text, manage the Seedance private asset library (virtual portraits, verified real people, copyright IP referenced as asset://) with BytePlus AK/SK, run background jobs, upload reference media, and fetch persisted artifacts. Long-running work is submitted through ark_job_capabilities, ark_job_submit, ark_job_get, and ark_job_cancel by default, because most clients cannot negotiate MCP task augmentation; clients that do negotiate it may call the tools with native task metadata instead.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -21,6 +21,10 @@ one server, including products served through ModelArk:
   (text-to-3D and image-to-3D, up to 5 images, GLB/OBJ/USDZ/FBX/STL output)
   and Hitem3d (image-to-3D only, 1–4 images, OBJ/GLB/STL/FBX/USDZ output).
   Gated by `BYTEPLUS_MODELARK_3D_ENABLED`; disabled by default.
+- **OmniHuman 2.0** — one portrait image plus one audio clip (plus an optional
+  prompt) to a talking or performing avatar video through BytePlus Vision AI.
+  Gated by `BYTEPLUS_OMNIHUMAN_ENABLED` and `BYTEPLUS_CV_API_KEY` (a Vision AI
+  key, separate from the ModelArk key); disabled by default.
 - **Seed 2.1 Understanding** — multimodal video/image understanding and
   reasoning through ModelArk Chat Completions. Deep thinking is always on;
   only the final answer is returned. Supports provider-enforced JSON Schemas
@@ -156,6 +160,14 @@ Whitelist-only; disabled by default.
 - `hitem3d_list_tasks`
 - `hitem3d_cancel_or_delete_task`
 
+### Requires `BYTEPLUS_OMNIHUMAN_ENABLED=true` (and `BYTEPLUS_CV_API_KEY`)
+
+- `omnihuman_create_task`
+- `omnihuman_get_task`
+- `omnihuman_cancel_task`
+
+OmniHuman is **disabled by default** and uses its own Vision AI Bearer key.
+
 3D generation is **disabled by default**; it reuses the ModelArk API key and
 base URL but is gated by its own feature flag so it stays off unless
 explicitly enabled.
@@ -223,6 +235,7 @@ is contacted:
 - `seedance_2_5_premium_create_task_variations` (when enabled)
 - `hyper3d_create_task`
 - `hitem3d_create_task`
+- `omnihuman_create_task` (when enabled)
 - `seed_understand`
 - `seed_audio_understand`
 - `vod_enhance_video`
@@ -1369,6 +1382,43 @@ Returns `Seed3DCancelOrDeleteOutput`.
 
 ---
 
+### OmniHuman 2.0 Tools
+
+Requires `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY`. Auth
+scopes: `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`.
+
+#### `omnihuman_create_task`
+
+Submits one task (required background job; never retried automatically).
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `image` | string | Yes | Public HTTPS URL or `seed-media://artifacts/<id>`. jpeg/png/webp/bmp/tiff/gif/heic/heif, < 30 MB, aspect 0.4-2.5, 300-6000 px per side |
+| `audio` | string | Yes | Public HTTPS URL or `seed-media://artifacts/<id>`. wav or mp3, < 15 MB, 4-300 s; the video length follows the audio |
+| `prompt` | string | No | Scene, movement, camera guidance (<= 2000 chars; zh, en, ja, ko, es-MX, id) |
+| `watermark` | bool | No | Provider watermark; default `true` |
+
+Returns `task_id`, `status="accepted"`, and `recommended_poll_after_ms` (10000).
+`seed-media://` inputs need `ARTIFACT_BACKEND=object_storage`; otherwise upload
+with `media_upload` and pass the presigned URL.
+
+#### `omnihuman_get_task`
+
+Poll with `task_id`. `status` is `queued`, `running`, `succeeded`, `failed`,
+`canceled`, `expired`, or `not_found`. On the first successful poll with
+`persist_output=true` (default; needs task-augmented execution, or use
+`ark_job_submit`) the video is copied to a durable `seed-media://` artifact
+(`video`). The provider `source_url` expires one hour after it is returned, so
+persist promptly. Use `persist_output=false` for a foreground status check.
+
+#### `omnihuman_cancel_task`
+
+Cancels a task that is still `queued`. A started task returns
+`canceled=false` with an explanation instead of an error.
+
+**Workflow:** `omnihuman_create_task` -> poll `omnihuman_get_task` every
+~10 s until `succeeded` -> use `video.uri`. The provider keeps tasks for 12 hours.
+
 ### Seed 2.1 Multimodal Understanding
 
 Requires `BYTEPLUS_MODELARK_API_KEY`. Auth scope: `understanding:read`.
@@ -2193,6 +2243,9 @@ Set to `0` (default) for record-only mode with no enforcement.
 | Presigned URL expired | TTL elapsed (default 30 min) | Call `media_presign` (single key) or `media_presign_batch` (many keys) with the `object_key` to generate a fresh URL |
 | Seedance 2.5 Premium tools not appearing | `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` not set or ModelArk key missing | The model is whitelist-only; once the account is whitelisted, set the flag to `true` with `BYTEPLUS_MODELARK_API_KEY` configured |
 | 3D tools not appearing | `BYTEPLUS_MODELARK_3D_ENABLED` not set or ModelArk key missing | Set `BYTEPLUS_MODELARK_3D_ENABLED=true` and ensure `BYTEPLUS_MODELARK_API_KEY` is configured |
+| OmniHuman tools not appearing | `BYTEPLUS_OMNIHUMAN_ENABLED` not true or `BYTEPLUS_CV_API_KEY` missing | Set both; the Vision AI key is separate from the ModelArk key |
+| `omnihuman_create_task` rejects a `seed-media://` input | Filesystem artifact backend cannot mint provider-readable URLs | Use `ARTIFACT_BACKEND=object_storage`, or `media_upload` and pass the presigned URL |
+| OmniHuman error `50510` | Provider content pre-filter rejected the image or audio | Use different, policy-compliant inputs; do not retry unchanged |
 | 3D task failed with `AbilityProcessingError` | Transient provider error | Re-submit the same task; do not treat the input as invalid |
 | 3D package imports at the wrong scale or without expected materials | Provider output and Blender scene use different unit, axis, format, or texture assumptions | Preserve the package, import into a quarantine collection, then measure and normalize a working copy before production use |
 
@@ -2363,6 +2416,13 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 - `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` — feature flag for the whitelist-only Premium (4K) tools (default `false`; reuses ModelArk key)
 - `SEEDANCE_2_5_PREMIUM_MODEL` — Premium model ID bound when the flag is on (default `dreamina-seedance-2-5-premium-260915`)
+
+### OmniHuman 2.0
+
+- `BYTEPLUS_OMNIHUMAN_ENABLED` — feature flag for the `omnihuman_*` tools (default `false`)
+- `BYTEPLUS_CV_API_KEY` — Vision AI Bearer key (separate from the ModelArk key)
+- `BYTEPLUS_CV_BASE_URL` — Vision AI base URL (default `https://openapi.cv.bytepluses.com`)
+- `BYTEPLUS_OMNIHUMAN_REQ_KEY` — service identifier (default `realman_avatar_picture_omni20_cv`)
 
 ### 3D Generation
 

@@ -86,6 +86,14 @@ class ArtifactLocation:
     ref: ArtifactRef
 
 
+@dataclass(frozen=True, slots=True)
+class PresignedArtifact:
+    """A time-limited HTTPS download URL for a stored artifact plus its reference."""
+
+    url: str
+    ref: ArtifactRef
+
+
 class ArtifactMetadata(BaseModel):
     """Versioned ownership metadata stored beside an artifact."""
 
@@ -138,4 +146,19 @@ class ArtifactStore(Protocol):
 
     async def close(self) -> None:
         """Release backend resources."""
+        ...
+
+
+@runtime_checkable
+class PresignableArtifactStore(Protocol):
+    """Artifact stores that can mint URLs a remote provider is able to fetch."""
+
+    async def presign(
+        self,
+        artifact_id: str,
+        *,
+        expires_in_seconds: int,
+        auth: AuthContext | None = None,
+    ) -> PresignedArtifact:
+        """Return a presigned GET URL after verifying the caller owns the artifact."""
         ...

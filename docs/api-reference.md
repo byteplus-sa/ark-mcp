@@ -67,6 +67,9 @@ surface.
 | 58 | `ark_asset_group_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
 | 59 | `seedance_2_5_premium_create_task` | Seedance 2.5 Premium (flag-gated) | Required background submission | ModelArk |
 | 60 | `seedance_2_5_premium_create_task_variations` | Seedance 2.5 Premium (flag-gated) | Required background submission | ModelArk |
+| 61 | `omnihuman_create_task` | OmniHuman 2.0 (flag-gated) | Required background submission | Vision AI Bearer |
+| 62 | `omnihuman_get_task` | OmniHuman 2.0 (flag-gated) | Optional background retrieval | Vision AI Bearer |
+| 63 | `omnihuman_cancel_task` | OmniHuman 2.0 (flag-gated) | Destructive | Vision AI Bearer |
 
 ## Tool Annotations
 
@@ -112,6 +115,9 @@ surface.
 | `hitem3d_get_task` | false | false | true | false |
 | `hitem3d_list_tasks` | true | false | true | false |
 | `hitem3d_cancel_or_delete_task` | false | true | false | true |
+| `omnihuman_create_task` | false | false | false | true |
+| `omnihuman_get_task` | false | false | true | true |
+| `omnihuman_cancel_task` | false | true | false | true |
 | `ark_job_capabilities` | true | false | true | false |
 | `ark_job_submit` | false | false | false | true |
 | `ark_job_get` | true | false | true | false |
@@ -576,6 +582,28 @@ reference.
 ```
 
 ---
+
+## omnihuman_create_task / omnihuman_get_task / omnihuman_cancel_task
+
+Registered when `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is
+set. Scopes: `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`.
+
+`omnihuman_create_task` input: `image` and `audio` (HTTPS URL or
+`seed-media://artifacts/<id>`), optional `prompt` (max 2000 characters), and
+`watermark` (default `true`). Output: `provider`, `status="accepted"`,
+`task_id`, `request_id`, `recommended_poll_after_ms`.
+
+`omnihuman_get_task` input: `task_id`, `persist_output` (default `true`, needs
+task-augmented execution), `output_path`, `overwrite`. Output: `status`
+(`queued`, `running`, `succeeded`, `failed`, `canceled`, `expired`,
+`not_found`), `video` (durable `ArtifactRef`), `source_url` and
+`source_expires_at` (one-hour provider URL), `persistence`,
+`persistence_issue`, `error` (`code`, `message`, failed tasks only).
+
+`omnihuman_cancel_task` input: `task_id`. Output: `canceled`, `message`
+(explains why a started task cannot be canceled), `request_id`. See
+[tools.md](tools.md#omnihuman_create_task--omnihuman_get_task--omnihuman_cancel_task)
+for limits and artifact-reference behavior.
 
 ## Shared Types
 

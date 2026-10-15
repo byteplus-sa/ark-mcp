@@ -46,7 +46,8 @@ src/ark_mcp/
 │   ├── retry.py
 │   ├── modelark.py        # Seedream + Seedance
 │   ├── seed_speech.py     # Seed Audio
-│   └── vod_mediakit/      # VOD AI MediaKit (Bearer; enhancement, transcode, subtitles, separation)
+│   ├── vod_mediakit/      # VOD AI MediaKit (Bearer; enhancement, transcode, subtitles, separation)
+│   └── vision_cv/         # Vision AI (Bearer; OmniHuman 2.0 submit/query/cancel)
 ├── runtime.py             # lifespan-owned services (limiter, budget, ownership)
 ├── artifacts/             # durable artifact store (filesystem backend)
 │   ├── store.py           # ArtifactStore protocol
@@ -66,6 +67,7 @@ flowchart LR
     Gateway -->|"Bearer auth"| ModelArk["ModelArk\nSeedream + Seedance"]
     Gateway -->|"X-Api-Key"| SeedSpeech["Seed Speech\nSeed Audio"]
     Gateway -->|"Bearer auth"| MediaKit["VOD AI MediaKit\nenhancement + transcode + subtitles + separation"]
+    Gateway -->|"Bearer auth"| VisionCv["Vision AI\nOmniHuman 2.0"]
     Server -.durable.-> Store["Artifact store\n(filesystem)"]
     Server -.state.-> Runtime["Runtime services\n(runtime.py)"]
 ```
@@ -75,6 +77,11 @@ flowchart LR
   `https://ark.ap-southeast.bytepluses.com/api/v3`.
 - **Seed Speech gateway** (`providers/seed_speech.py`) — serves Seed Audio.
   Uses `X-Api-Key` and base URL `https://voice.ap-southeast-1.bytepluses.com`.
+- **Vision AI gateway** (`providers/vision_cv/`) — serves the `omnihuman_*` tools
+  through the common v3 task API (`submit_task_v2`, `get_result_v2`,
+  `cancel_task`). It uses Bearer auth (`BYTEPLUS_CV_API_KEY`), defaults to
+  `https://openapi.cv.bytepluses.com`, and treats `code == 10000` in the
+  response body as the only success signal.
 - **VOD AI MediaKit gateway** (`providers/vod_mediakit/`) — serves the
   `vod_enhance_video` / `vod_get_enhancement_task` submit-then-poll pair, the
   `vod_transcode_video` / `vod_get_transcode_task` submit-then-poll pair, and

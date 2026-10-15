@@ -22,6 +22,7 @@ from ark_mcp.artifacts.store import (
     ArtifactLocation,
     ArtifactMetadata,
     ArtifactPersistenceError,
+    PresignedArtifact,
     StoredArtifact,
 )
 from ark_mcp.config.env import get_settings
@@ -310,6 +311,19 @@ class ObjectStorageArtifactStore:
             raise PermissionError("Artifact is not owned by the current principal.")
 
         return ArtifactLocation(path=None, ref=metadata.ref)
+
+    async def presign(
+        self,
+        artifact_id: str,
+        *,
+        expires_in_seconds: int,
+        auth: AuthContext | None = None,
+    ) -> PresignedArtifact:
+        """Mint a presigned GET URL for an artifact owned by ``auth``."""
+        location = await self.locate(artifact_id, auth)
+        key = self._data_key(artifact_id, _mime_to_ext(location.ref.mime_type))
+        url = await self._gateway.presign_get(key=key, expires=expires_in_seconds)
+        return PresignedArtifact(url=url, ref=location.ref)
 
     async def delete_expired(self, now: datetime) -> int:
         if not self._sweep_logged:

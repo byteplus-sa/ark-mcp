@@ -49,6 +49,7 @@ _TRUSTED_HOST_SUFFIXES: tuple[str, ...] = (
     ".byteplusvod.com",
     ".bytedance.com",
     ".bytednsdoc.com",
+    ".tiktokcdn.com",
     ".volces.com",
     ".tos-ap-southeast.bytepluses.com",
 )
