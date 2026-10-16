@@ -605,6 +605,19 @@ the SSRF policy only, and BytePlus validates dimensions and duration.
   (`50200`); retry after a few seconds. Tasks usually start within seconds, so
   cancelation is only practical when the provider queue is busy.
 
+**Audio failures surface after submission.** The provider does not validate audio
+duration or content when the task is submitted (a 2-second clip is accepted); the
+task fails during processing and `omnihuman_get_task` then returns `status="failed"`
+with `error.code` and `error.message` carrying the provider's own reason, for example
+`InvalidParameter: ... audio duration (seconds) ... must be greater than or equal to 4`.
+That failure is permanent, so do not keep polling or retry it unchanged.
+
+**Long audio:** the documented limit is 4-300 seconds and under 15 MB. A 300-second
+WAV only fits at low sample rates (16 kHz mono is about 9.6 MB, 24 kHz mono about
+14.4 MB); 44.1 kHz or 48 kHz WAV is 26-58 MB and is rejected for size. Use MP3
+(300 s at 128 kbps is about 4.8 MB) or generate shorter clips. `media_upload`
+accepts at most 10 MB of audio.
+
 Tasks are retained by the provider for 12 hours. Auth scopes:
 `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`.
 

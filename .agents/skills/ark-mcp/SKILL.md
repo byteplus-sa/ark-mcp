@@ -2245,6 +2245,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 | 3D tools not appearing | `BYTEPLUS_MODELARK_3D_ENABLED` not set or ModelArk key missing | Set `BYTEPLUS_MODELARK_3D_ENABLED=true` and ensure `BYTEPLUS_MODELARK_API_KEY` is configured |
 | OmniHuman tools not appearing | `BYTEPLUS_OMNIHUMAN_ENABLED` not true or `BYTEPLUS_CV_API_KEY` missing | Set both; the Vision AI key is separate from the ModelArk key |
 | `omnihuman_create_task` rejects a `seed-media://` input | Filesystem artifact backend cannot mint provider-readable URLs | Use `ARTIFACT_BACKEND=object_storage`, or `media_upload` and pass the presigned URL |
+| `omnihuman_get_task` returns `failed` with `InvalidParameter: ... audio ...` | The provider validates audio only after submission (duration 4-300 s, wav/mp3, under 15 MB) | Fix the audio and resubmit; do not retry unchanged. 300 s WAV at 44.1/48 kHz is 26-58 MB, use MP3 or shorter clips |
 | OmniHuman error `50510` | Provider content pre-filter rejected the image or audio | Use different, policy-compliant inputs; do not retry unchanged |
 | 3D task failed with `AbilityProcessingError` | Transient provider error | Re-submit the same task; do not treat the input as invalid |
 | 3D package imports at the wrong scale or without expected materials | Provider output and Blender scene use different unit, axis, format, or texture assumptions | Preserve the package, import into a quarantine collection, then measure and normalize a working copy before production use |
