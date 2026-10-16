@@ -10,7 +10,11 @@ from pydantic import ValidationError
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.observability.logger import debug as log_debug
-from ark_mcp.providers.vision_cv.client import VisionCvGateway, clean_provider_message
+from ark_mcp.providers.vision_cv.client import (
+    VisionCvGateway,
+    clean_provider_message,
+    parse_nested_error,
+)
 from ark_mcp.providers.vision_cv.schemas import (
     CANCEL_NOT_ALLOWED_CODE,
     PROVIDER_STATUS_MAP,
@@ -63,11 +67,22 @@ class OmniHumanService:
             {"req_key": self._req_key, "task_id": task_id},
             _OPERATION_GET,
             mutation=False,
+            task_failure_ok=True,
         )
         request_id = self._request_id(response, envelope)
         data = envelope.data or {}
         provider_status = data.get("status")
         if envelope.code != SUCCESS_CODE:
+            nested = parse_nested_error(envelope.message)
+            if nested is not None and nested.is_rejection:
+                return OmniHumanTaskResult(
+                    status="failed",
+                    request_id=request_id,
+                    error_code=nested.code or str(envelope.code),
+                    error_message=clean_provider_message(
+                        envelope.message, "OmniHuman generation failed."
+                    ),
+                )
             if provider_status == "done":
                 return OmniHumanTaskResult(
                     status="failed",
@@ -132,7 +147,13 @@ class OmniHumanService:
         await self._gateway.close()
 
     async def _call(
-        self, path: str, body: dict[str, object], operation: str, *, mutation: bool
+        self,
+        path: str,
+        body: dict[str, object],
+        operation: str,
+        *,
+        mutation: bool,
+        task_failure_ok: bool = False,
     ) -> tuple[httpx.Response, CvEnvelope]:
         try:
             response = await self._gateway.post(path, body)
@@ -147,6 +168,10 @@ class OmniHumanService:
 
         envelope = self._parse_envelope(response)
         if response.status_code >= 400:
+            if task_failure_ok and envelope is not None:
+                nested = parse_nested_error(envelope.message)
+                if nested is not None and nested.is_rejection:
+                    return response, envelope
             raise VisionCvGateway.error_from_envelope(
                 envelope,
                 operation,

@@ -224,7 +224,7 @@ class TestSubmit:
         assert "<html>" not in message
         assert "xxxx" not in message
         assert message.startswith("Download Url Error.: download image url failed")
-        assert len(message) <= 300
+        assert len(message) <= 600
 
     @respx.mock
     async def test_long_plain_message_is_truncated(self, service: OmniHumanService) -> None:
@@ -235,7 +235,126 @@ class TestSubmit:
         with pytest.raises(ProviderError) as exc_info:
             await service.create(submit_request())
 
-        assert len(exc_info.value.error.message) <= 300
+        assert len(exc_info.value.error.message) <= 600
+
+
+NESTED_INVALID_AUDIO = (
+    'Internal RPC Error: : [{"gateway_code":10001,"gateway_msg":"RPC Internal Error",'
+    '"req_key":"avatar_far2_create_video","algo_code":10001,"algo_msg":"Ark API POST '
+    '/contents/generations/tasks failed with HTTP 400: {\\"error\\":{\\"code\\":'
+    '\\"InvalidParameter\\",\\"message\\":\\"The parameter `content[2]` specified in the '
+    "request is not valid: the parameter audio duration (seconds) specified in the request must "
+    "be greater than or equal to 4 for model dreamina-seedance-2-0-mini in r2v. Request id: "
+    '0217921124561908\\",\\"param\\":\\"content[2]\\",\\"type\\":\\"BadRequest\\"}}"}]'
+)
+NESTED_INTERNAL_SERVER_ERROR = (
+    'Internal RPC Error: : [{"algo_msg":"Ark API POST /contents/generations/tasks failed with '
+    'HTTP 503: {\\"error\\":{\\"code\\":\\"ServiceUnavailable\\",'
+    '\\"message\\":\\"try later\\"}}"}]'
+)
+
+
+class TestNestedProviderFailures:
+    """The provider reports processing failures as HTTP 500 / 50501 wrapping an inner error."""
+
+    @respx.mock
+    async def test_get_reports_inner_rejection_as_a_failed_task_with_the_real_reason(
+        self, service: OmniHumanService
+    ) -> None:
+        respx.post(GET_RESULT).mock(
+            return_value=httpx.Response(
+                500, json=envelope(code=50501, message=NESTED_INVALID_AUDIO)
+            )
+        )
+
+        result = await service.get("t-1")
+
+        assert result.status == "failed"
+        assert result.error_code == "InvalidParameter"
+        assert result.error_message is not None
+        assert "audio duration" in result.error_message
+        assert "greater than or equal to 4" in result.error_message
+        assert "gateway_code" not in result.error_message
+        assert len(result.error_message) <= 600
+
+    @respx.mock
+    async def test_get_failed_result_also_applies_to_http_200_envelopes(
+        self, service: OmniHumanService
+    ) -> None:
+        respx.post(GET_RESULT).mock(
+            return_value=httpx.Response(
+                200,
+                json=envelope(code=50501, message=NESTED_INVALID_AUDIO, data={"status": "done"}),
+            )
+        )
+
+        result = await service.get("t-1")
+
+        assert result.status == "failed"
+        assert "greater than or equal to 4" in (result.error_message or "")
+
+    @respx.mock
+    async def test_get_still_raises_retryable_for_a_genuine_internal_error(
+        self, service: OmniHumanService
+    ) -> None:
+        respx.post(GET_RESULT).mock(
+            return_value=httpx.Response(
+                500, json=envelope(code=50501, message="Internal RPC Error")
+            )
+        )
+
+        with pytest.raises(ProviderError) as exc_info:
+            await service.get("t-1")
+
+        assert exc_info.value.error.retryable is True
+
+    @respx.mock
+    async def test_get_still_raises_retryable_when_the_inner_error_is_a_server_error(
+        self, service: OmniHumanService
+    ) -> None:
+        respx.post(GET_RESULT).mock(
+            return_value=httpx.Response(
+                500, json=envelope(code=50501, message=NESTED_INTERNAL_SERVER_ERROR)
+            )
+        )
+
+        with pytest.raises(ProviderError) as exc_info:
+            await service.get("t-1")
+
+        assert exc_info.value.error.retryable is True
+
+    @respx.mock
+    async def test_submit_inner_rejection_is_not_retryable_nor_ambiguous_and_keeps_the_reason(
+        self, service: OmniHumanService
+    ) -> None:
+        respx.post(SUBMIT).mock(
+            return_value=httpx.Response(
+                500, json=envelope(code=50501, message=NESTED_INVALID_AUDIO)
+            )
+        )
+
+        with pytest.raises(ProviderError) as exc_info:
+            await service.create(submit_request())
+
+        error = exc_info.value.error
+        assert error.retryable is False
+        assert error.ambiguous_completion is False
+        assert "greater than or equal to 4" in error.message
+        assert error.message.startswith("InvalidParameter")
+
+    @respx.mock
+    async def test_long_unrecognised_messages_keep_their_diagnostic_tail_within_the_bound(
+        self, service: OmniHumanService
+    ) -> None:
+        message = "Algorithm failure: " + "step ok; " * 40 + "ROOT CAUSE: bitrate unsupported"
+        respx.post(SUBMIT).mock(
+            return_value=httpx.Response(200, json=envelope(code=50215, message=message))
+        )
+
+        with pytest.raises(ProviderError) as exc_info:
+            await service.create(submit_request())
+
+        assert "ROOT CAUSE: bitrate unsupported" in exc_info.value.error.message
 
 
 class TestSubmitRequestValidation:

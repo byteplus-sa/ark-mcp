@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ark_mcp.config.env import get_settings
@@ -21,11 +23,56 @@ if TYPE_CHECKING:
     import httpx
 
 _ECHOED_BODY_MARKER = ", body:"
-_MESSAGE_MAX_CHARS = 300
+_MESSAGE_MAX_CHARS = 600
+_NESTED_FAILURE = re.compile(r"failed with HTTP (\d{3})")
+_NESTED_CODE = re.compile(r'"code":"([^"]+)"')
+_NESTED_DETAIL = re.compile(r'"message":"(.+?)(?:\. Request id:|","param"|","type"|"\})')
+
+
+@dataclass(frozen=True, slots=True)
+class NestedProviderError:
+    """An inner API error that the provider wraps inside its own error message."""
+
+    http_status: int
+    code: str | None
+    detail: str | None
+
+    @property
+    def is_rejection(self) -> bool:
+        """True for an inner 4xx: the request itself was invalid, so retrying cannot help."""
+        return 400 <= self.http_status < 500
+
+
+def parse_nested_error(message: str) -> NestedProviderError | None:
+    """Extract the inner API error the provider embeds in 50501-style messages.
+
+    The provider reports processing failures as ``Internal RPC Error`` whose text embeds
+    the inner ``... failed with HTTP 400: {"error": {"code": ..., "message": ...}}`` response
+    with escaped quotes. Returns ``None`` when the message carries no such inner failure.
+    """
+    text = message.replace('\\"', '"')
+    match = _NESTED_FAILURE.search(text)
+    if match is None:
+        return None
+    tail = text[match.end() :]
+    code = _NESTED_CODE.search(tail)
+    detail = _NESTED_DETAIL.search(tail)
+    return NestedProviderError(
+        http_status=int(match.group(1)),
+        code=code.group(1) if code else None,
+        detail=detail.group(1) if detail else None,
+    )
 
 
 def clean_provider_message(message: str, fallback: str) -> str:
-    """Redact URLs, drop any echoed upstream response body, and bound the length."""
+    """Redact URLs, drop any echoed upstream response body, and bound the length.
+
+    An embedded inner API rejection is reduced to ``<code>: <detail>`` so the actionable reason
+    survives the length bound instead of the surrounding gateway wrapper.
+    """
+    nested = parse_nested_error(message)
+    if nested is not None and nested.is_rejection and nested.detail:
+        message = f"{nested.code or 'Rejected'}: {nested.detail}"
     head = message.split(_ECHOED_BODY_MARKER, 1)[0]
     cleaned = sanitize_provider_message(head, fallback)
     if len(cleaned) > _MESSAGE_MAX_CHARS:
@@ -106,9 +153,11 @@ class VisionCvGateway(BaseHttpGateway):
         )
         request_id = (envelope.request_id if envelope is not None else None) or fallback_request_id
 
+        nested = parse_nested_error(envelope.message) if envelope is not None else None
+        rejected = nested is not None and nested.is_rejection
         throttled = http_status == 429 or code in THROTTLE_CODES
-        server_failure = code in INTERNAL_ERROR_CODES or (
-            http_status >= 500 and code != CONTENT_FILTER_CODE
+        server_failure = not rejected and (
+            code in INTERNAL_ERROR_CODES or (http_status >= 500 and code != CONTENT_FILTER_CODE)
         )
         ambiguous = mutation and server_failure and not throttled
         retryable = throttled or (server_failure and not mutation)
