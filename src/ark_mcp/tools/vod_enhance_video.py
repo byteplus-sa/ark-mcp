@@ -6,15 +6,16 @@ provider adapter; this tool exposes a stable, bounded persistence outcome.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
+from ark_mcp.domain.media import HttpsUrl
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
@@ -30,9 +31,11 @@ from ark_mcp.security.media_policy import get_media_limits
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
-from ark_mcp.tools._vod_shared import VodArtifactPersistenceIssue
-
-HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
+from ark_mcp.tools._vod_shared import (
+    VOD_OPERATION_DESCRIPTION,
+    VodArtifactPersistenceIssue,
+    VodOperation,
+)
 
 
 class VodEnhanceVideoInput(BaseModel):
@@ -145,8 +148,9 @@ class VodEnhanceVideoOutput(BaseModel):
     )
     task_id: str | None = Field(
         default=None,
-        description="Provider task identifier to poll with vod_get_enhancement_task.",
+        description="Provider task identifier to poll with vod_get_task (operation 'enhance').",
     )
+    operation: VodOperation = Field(default="enhance", description=VOD_OPERATION_DESCRIPTION)
     provider_status: str | None = Field(
         default=None,
         description="Raw provider status label, when included in the accepted success response.",
@@ -187,10 +191,11 @@ async def vod_enhance_video(
     pixel limit. Defaults to professional, 4K, high bitrate, 24 fps. Fast uses
     its own provider endpoint. The mutation is never retried automatically because completion can be ambiguous after a
     timeout. An accepted response contains a task ID without an output URL; poll
-    it with vod_get_enhancement_task. If MediaKit directly returns a completed
-    output, its provider URL is preserved and durable persistence is best-effort
-    under the 200 MiB video policy. Requires MCP task-augmented execution for
-    submission and any immediate persistence.
+    it with vod_get_task using the returned task_id and operation ('enhance').
+    If MediaKit directly returns a completed output, its provider URL is
+    preserved and durable persistence is best-effort under the 200 MiB video
+    policy. Long-running work runs through ark_job_submit (or native MCP task
+    augmentation), including submission and any immediate persistence.
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

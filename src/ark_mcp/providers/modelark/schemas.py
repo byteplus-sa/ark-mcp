@@ -116,11 +116,12 @@ class SeedanceVideoUrl(BaseModel):
     duration: str | None = None
 
 
-class SeedanceGenerationUsage(BaseModel):
-    """Usage data in a Seedance task response."""
+class GenerationTaskUsage(BaseModel):
+    """Usage data in a ModelArk generation task response."""
 
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
+    total_tokens: int | None = None
 
 
 class SeedanceGenerationConfig(BaseModel):
@@ -141,24 +142,29 @@ class SeedanceGenerationConfig(BaseModel):
     safety_identifier: str | None = None
 
 
-class SeedanceErrorDetail(BaseModel):
-    """Error detail in a Seedance task response."""
+class GenerationTaskErrorDetail(BaseModel):
+    """Error detail in a ModelArk generation task response."""
 
     code: str = ""
     message: str = ""
 
 
-class SeedanceTaskResponse(BaseModel):
-    """Full task object from the Seedance retrieve/list APIs."""
+class GenerationTaskResponse(BaseModel):
+    """Full task object from the ModelArk generation task retrieve/list APIs.
+
+    Seedance, Hyper3D and Hitem3d tasks share this shape; outputs live in the
+    ``content`` object under ``video_url``/``last_frame_url`` (video) or
+    ``file_url`` (3D).
+    """
 
     id: str
     model: str = ""
     status: str = ""
     created_at: int | str | None = None
     updated_at: int | str | None = None
-    error: SeedanceErrorDetail | None = None
+    error: GenerationTaskErrorDetail | None = None
     content: dict[str, Any] | None = None
-    usage: SeedanceGenerationUsage | None = None
+    usage: GenerationTaskUsage | None = None
     # Generation settings (may be top-level or inside content).
     seed: int | None = None
     resolution: str | None = None
@@ -175,30 +181,34 @@ class SeedanceTaskResponse(BaseModel):
     @property
     def video_url(self) -> str | None:
         """Extract the video URL from the content object."""
-        if self.content and isinstance(self.content, dict):
-            url = self.content.get("video_url")
-            if isinstance(url, str):
-                return url
-            if isinstance(url, dict):
-                return url.get("url")
-        return None
+        return self._content_url("video_url")
 
     @property
     def last_frame_url(self) -> str | None:
         """Extract the last frame URL from the content object."""
-        if self.content and isinstance(self.content, dict):
-            url = self.content.get("last_frame_url")
-            if isinstance(url, str):
-                return url
-            if isinstance(url, dict):
-                return url.get("url")
+        return self._content_url("last_frame_url")
+
+    @property
+    def file_url(self) -> str | None:
+        """Extract the generated 3D file URL from the content object."""
+        return self._content_url("file_url")
+
+    def _content_url(self, key: str) -> str | None:
+        if not isinstance(self.content, dict):
+            return None
+        url = self.content.get(key)
+        if isinstance(url, str):
+            return url
+        if isinstance(url, dict):
+            nested = url.get("url")
+            return nested if isinstance(nested, str) else None
         return None
 
 
-class SeedanceTaskListResponse(BaseModel):
+class GenerationTaskListResponse(BaseModel):
     """Response from ``GET /contents/generations/tasks``."""
 
-    data: list[SeedanceTaskResponse] = Field(
+    data: list[GenerationTaskResponse] = Field(
         default_factory=list,
         validation_alias=AliasChoices("data", "items"),
     )
@@ -232,55 +242,6 @@ class Seed3DCreateProviderResponse(BaseModel):
     """Response from ``POST /contents/generations/tasks`` (3D)."""
 
     id: str
-
-
-class Seed3DErrorDetail(BaseModel):
-    """Error detail in a Seed3D task response."""
-
-    code: str = ""
-    message: str = ""
-
-
-class Seed3DUsage(BaseModel):
-    """Usage data in a Seed3D task response."""
-
-    completion_tokens: int | None = None
-    total_tokens: int | None = None
-
-
-class Seed3DTaskResponse(BaseModel):
-    """Full task object from the Seed3D retrieve/list APIs."""
-
-    id: str
-    model: str = ""
-    status: str = ""
-    content: dict[str, Any] | None = None
-    created_at: int | str | None = None
-    updated_at: int | str | None = None
-    error: Seed3DErrorDetail | None = None
-    usage: Seed3DUsage | None = None
-
-    @property
-    def file_url(self) -> str | None:
-        """Extract the generated 3D file URL from the content object."""
-        if self.content and isinstance(self.content, dict):
-            url = self.content.get("file_url")
-            if isinstance(url, str):
-                return url
-            if isinstance(url, dict):
-                return url.get("url")
-        return None
-
-
-class Seed3DTaskListResponse(BaseModel):
-    """Response from ``GET /contents/generations/tasks`` (3D)."""
-
-    items: list[Seed3DTaskResponse] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("items", "data"),
-    )
-    total: int = 0
-    has_more: bool | None = None
 
 
 # ---------------------------------------------------------------------------

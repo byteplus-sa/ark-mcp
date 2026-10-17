@@ -26,6 +26,14 @@ truststore.inject_into_ssl()
 from _smoke_context import SmokeClient, require_tool_success, smoke_session  # noqa: E402
 
 from ark_mcp.config.env import get_settings  # noqa: E402
+from ark_mcp.tools.gen_task_get import (  # noqa: E402
+    GenTaskGetInput,
+    GenTaskGetOutput,
+)
+from ark_mcp.tools.gen_task_list import (  # noqa: E402
+    GenTaskListInput,
+    GenTaskPage,
+)
 from ark_mcp.tools.seed_audio_generate_variations import (  # noqa: E402
     SeedAudioVariationsInput,
     SeedAudioVariationsOutput,
@@ -34,14 +42,6 @@ from ark_mcp.tools.seedance_create_task import SeedanceImageInput  # noqa: E402
 from ark_mcp.tools.seedance_create_task_variations import (  # noqa: E402
     SeedanceVariationsInput,
     SeedanceVariationsOutput,
-)
-from ark_mcp.tools.seedance_get_task import (  # noqa: E402
-    SeedanceGetTaskInput,
-    SeedanceTaskOutput,
-)
-from ark_mcp.tools.seedance_list_tasks import (  # noqa: E402
-    SeedanceListTasksInput,
-    SeedanceTaskPage,
 )
 from ark_mcp.tools.seedream_generate_image_variations import (  # noqa: E402
     SeedreamVariationsInput,
@@ -182,9 +182,9 @@ async def test_seedance_variations(
     ctx.save_provider_ids(ARTIFACTS_DIR, task_ids)
     listed = require_tool_success(
         await ctx.call(
-            "seedance_list_tasks",
-            SeedanceListTasksInput(task_ids=task_ids),
-            SeedanceTaskPage,
+            "gen_task_list",
+            GenTaskListInput(task_ids=task_ids),
+            GenTaskPage,
             background=False,
         )
     )
@@ -200,27 +200,32 @@ async def test_seedance_variations(
         for task_id in list(pending):
             task = require_tool_success(
                 await ctx.call(
-                    "seedance_get_task",
-                    SeedanceGetTaskInput(task_id=task_id, persist_output=False),
-                    SeedanceTaskOutput,
+                    "gen_task_get",
+                    GenTaskGetInput(task_ids=[task_id]),
+                    GenTaskGetOutput,
                     background=False,
                 )
-            )
+            ).tasks[0]
             print(f"  Task {task_id}: {task.status}")
             if task.status in {"queued", "running"}:
                 continue
             pending.remove(task_id)
             if task.status == "succeeded":
-                task = await ctx.call(
-                    "seedance_get_task",
-                    SeedanceGetTaskInput(task_id=task_id, persist_output=True),
-                    SeedanceTaskOutput,
-                )
-            if task.status != "succeeded" or task.video is None:
+                task = (
+                    await ctx.call(
+                        "gen_task_get",
+                        GenTaskGetInput(task_ids=[task_id], persist_output=True),
+                        GenTaskGetOutput,
+                    )
+                ).tasks[0]
+            video = next(
+                (output.artifact for output in task.outputs if output.role == "video"), None
+            )
+            if task.status != "succeeded" or video is None:
                 print(f"  Task {task_id} failed: {task.error}")
                 all_verified = False
                 continue
-            stored = await runtime.artifact_store.get(task.video.id)
+            stored = await runtime.artifact_store.get(video.id)
             output_path = ARTIFACTS_DIR / f"variation_video_{task_id}.mp4"
             output_path.write_bytes(stored.data)
             print(

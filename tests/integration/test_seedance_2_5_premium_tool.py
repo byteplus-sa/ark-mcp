@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
+from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
+from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.tools.seedance_2_5_create_task import (
     Seedance25CreateTaskInput,
@@ -138,7 +139,7 @@ class TestSeedance25PremiumDraftMode:
         captured: list[Any] = []
 
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
-            return SeedanceTaskResponse(
+            return GenerationTaskResponse(
                 id=task_id, model=PREMIUM_MODEL, status="succeeded", draft=True
             ), None
 
@@ -146,7 +147,9 @@ class TestSeedance25PremiumDraftMode:
             captured.append(request)
             return "cgt-premium-final", None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "create_task", mock_create)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
@@ -164,11 +167,13 @@ class TestSeedance25PremiumDraftMode:
         self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
-            return SeedanceTaskResponse(
+            return GenerationTaskResponse(
                 id=task_id, model=PREMIUM_MODEL, status="succeeded", draft=True
             ), None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
         with pytest.raises(ValueError, match="seedance_2_5_premium_create_task"):

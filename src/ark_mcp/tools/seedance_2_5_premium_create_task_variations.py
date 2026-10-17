@@ -61,7 +61,7 @@ async def seedance_2_5_premium_create_task_variations(
 
     Seedance 2.5 Premium is a whitelist-only model separate from regular
     Seedance 2.5. Each variation creates a separate task; the caller polls
-    each task ID via ``seedance_get_task``. Partial failures are captured per
+    each task ID via ``gen_task_get``. Partial failures are captured per
     variation. With ``draft=true`` every variation is a 480p Draft preview;
     render the chosen one with ``seedance_2_5_premium_create_task`` and
     ``draft_task_id``. Requires MCP task-augmented execution for the provider

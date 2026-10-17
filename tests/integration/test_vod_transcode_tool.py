@@ -12,18 +12,14 @@ from ark_mcp.domain.artifacts import ArtifactRef
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.vod_mediakit.schemas import TranscodeSubmission, TranscodeTask
 from ark_mcp.providers.vod_mediakit.transcode import VodMediaKitTranscodeService
-from ark_mcp.security.auth_context import AuthContext
-from ark_mcp.tools.vod_get_transcode_task import (
-    VodGetTranscodeTaskInput,
-    VodTranscodeTaskOutput,
-    vod_get_transcode_task,
-)
+from ark_mcp.tools.vod_get_task import VodGetTaskInput, VodTaskOutput, vod_get_task
 from ark_mcp.tools.vod_transcode_video import (
     VodTranscodeVideoInput,
     VodTranscodeVideoOutput,
     vod_transcode_video,
 )
 from tests.fixtures.fake_context import FakeContext
+from tests.fixtures.ownership import owned_task_ids
 
 
 async def _close(_self: VodMediaKitTranscodeService) -> None:
@@ -37,6 +33,10 @@ def _submission() -> TranscodeSubmission:
         provider_log_id="log-1",
         task_id="amk-tool-transcode-video-1",
     )
+
+
+def _poll_input(**kwargs: object) -> VodGetTaskInput:
+    return VodGetTaskInput(operation="transcode", **kwargs)  # type: ignore[arg-type]
 
 
 def _succeeded_task() -> TranscodeTask:
@@ -80,10 +80,9 @@ async def test_transcode_submit_accepts_and_records_ownership(
     assert result.request_id == "body-1"
     assert result.provider_log_id == "log-1"
     assert result.recommended_poll_after_ms == 3000
+    assert result.operation == "transcode"
     assert captured
-    assert await runtime.ownership_store.list_task_ids("vod-mediakit", AuthContext()) == {
-        "amk-tool-transcode-video-1"
-    }
+    assert await owned_task_ids(runtime, "vod-mediakit") == {"amk-tool-transcode-video-1"}
 
 
 async def test_blocked_source_url_returns_sanitized_error(
@@ -200,15 +199,13 @@ async def test_poll_processing_returns_processing(
     monkeypatch.setattr(VodMediaKitTranscodeService, "get", AsyncMock(return_value=task))
     monkeypatch.setattr(VodMediaKitTranscodeService, "close", _close)
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
 
-    assert isinstance(result, VodTranscodeTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "processing"
     assert result.provider_status == "running"
-    assert result.source_url is None
-    assert result.persistence == "not_applicable"
+    assert result.operation == "transcode"
+    assert result.outputs == []
 
 
 async def test_poll_succeeded_persists_artifact_once(
@@ -233,25 +230,24 @@ async def test_poll_succeeded_persists_artifact_once(
     copy = AsyncMock(return_value=ref)
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
 
-    assert isinstance(result, VodTranscodeTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "persisted"
-    assert result.video == ref
-    assert str(result.source_url) == "https://tos-ap-southeast.bytepluses.com/transcoded.mp4"
+    assert result.outputs[0].persistence == "persisted"
+    assert result.outputs[0].artifact == ref
+    assert (
+        str(result.outputs[0].source_url)
+        == "https://tos-ap-southeast.bytepluses.com/transcoded.mp4"
+    )
     assert result.resolution == "720p"
     assert result.video_codec == "h264"
     copy.assert_awaited_once()
 
     # Second poll reuses the cache and does not re-download.
-    result2 = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
-    assert isinstance(result2, VodTranscodeTaskOutput)
-    assert result2.persistence == "persisted"
+    result2 = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
+    assert isinstance(result2, VodTaskOutput)
+    assert result2.outputs[0].persistence == "persisted"
     assert copy.await_count == 1
 
 
@@ -268,16 +264,16 @@ async def test_poll_succeeded_persist_false(
     copy = AsyncMock()
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1", persist_output=False),
+    result = await vod_get_task(
+        _poll_input(task_id="amk-tool-transcode-video-1", persist_output=False),
         fake_ctx,
     )
 
-    assert isinstance(result, VodTranscodeTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "not_requested"
-    assert result.video is None
-    assert result.source_url is not None
+    assert result.outputs[0].persistence == "not_requested"
+    assert result.outputs[0].artifact is None
+    assert result.outputs[0].source_url is not None
     copy.assert_not_awaited()
 
 
@@ -301,17 +297,15 @@ async def test_poll_succeeded_persistence_failure_preserves_success(
         ),
     )
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
 
-    assert isinstance(result, VodTranscodeTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "failed"
-    assert result.persistence_issue is not None
-    assert result.persistence_issue.code == "output_too_large"
-    assert result.persistence_issue.artifact_limit_bytes == 209_715_200
-    assert result.source_url is not None
+    assert result.outputs[0].persistence == "failed"
+    assert result.outputs[0].persistence_issue is not None
+    assert result.outputs[0].persistence_issue.code == "output_too_large"
+    assert result.outputs[0].persistence_issue.artifact_limit_bytes == 209_715_200
+    assert result.outputs[0].source_url is not None
 
 
 async def test_poll_succeeded_generic_storage_failure_preserves_success(
@@ -330,17 +324,15 @@ async def test_poll_succeeded_generic_storage_failure_preserves_success(
         AsyncMock(side_effect=RuntimeError("backend detail")),
     )
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
 
-    assert isinstance(result, VodTranscodeTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "failed"
-    assert result.persistence_issue is not None
-    assert result.persistence_issue.code == "storage_failed"
-    assert "backend detail" not in result.persistence_issue.message
-    assert result.source_url is not None
+    assert result.outputs[0].persistence == "failed"
+    assert result.outputs[0].persistence_issue is not None
+    assert result.outputs[0].persistence_issue.code == "storage_failed"
+    assert "backend detail" not in result.outputs[0].persistence_issue.message
+    assert result.outputs[0].source_url is not None
 
 
 async def test_poll_failed_returns_error(
@@ -359,16 +351,13 @@ async def test_poll_failed_returns_error(
     monkeypatch.setattr(VodMediaKitTranscodeService, "get", AsyncMock(return_value=task))
     monkeypatch.setattr(VodMediaKitTranscodeService, "close", _close)
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
 
-    assert isinstance(result, VodTranscodeTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "failed"
     assert result.error is not None
     assert result.error.code == "DownloadFailed"
-    assert result.source_url is None
-    assert result.persistence == "not_applicable"
+    assert result.outputs == []
 
 
 async def test_poll_provider_error_returns_mcp_error(
@@ -389,9 +378,7 @@ async def test_poll_provider_error_returns_mcp_error(
     monkeypatch.setattr(VodMediaKitTranscodeService, "get", AsyncMock(side_effect=error))
     monkeypatch.setattr(VodMediaKitTranscodeService, "close", _close)
 
-    result = await vod_get_transcode_task(
-        VodGetTranscodeTaskInput(task_id="amk-tool-transcode-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-transcode-video-1"), fake_ctx)
 
     assert isinstance(result, ToolResult)
     assert result.is_error is True

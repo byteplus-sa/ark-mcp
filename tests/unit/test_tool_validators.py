@@ -6,12 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from ark_mcp.domain.media import AudioReference, MediaSource, MediaSourceKind
+from ark_mcp.tools.gen_task_cancel_or_delete import (
+    GenTaskCancelOrDeleteInput,
+)
 from ark_mcp.tools.seed_audio_generate import SeedAudioGenerateInput
 from ark_mcp.tools.seedance_2_5_create_task import Seedance25CreateTaskInput
 from ark_mcp.tools.seedance_2_5_create_task_variations import Seedance25VariationsInput
-from ark_mcp.tools.seedance_cancel_or_delete_task import (
-    SeedanceCancelOrDeleteInput,
-)
 from ark_mcp.tools.seedance_create_task import SeedanceCreateTaskInput
 from ark_mcp.tools.seedance_create_task_variations import SeedanceVariationsInput
 from ark_mcp.tools.seedream_edit_image import (
@@ -196,30 +196,30 @@ class TestSeedanceCreateTaskInput:
         assert inp.ratio == "16:9"
 
 
-class TestSeedanceCancelOrDeleteInput:
+class TestGenTaskCancelOrDeleteInput:
     """Tests for Seedance cancel/delete input validation."""
 
     def test_cancel_queued_valid(self) -> None:
-        inp = SeedanceCancelOrDeleteInput(
+        inp = GenTaskCancelOrDeleteInput(
             task_id="task-123", mode="cancel", expected_status="queued"
         )
         assert inp.mode == "cancel"
 
     def test_delete_succeeded_valid(self) -> None:
-        inp = SeedanceCancelOrDeleteInput(
+        inp = GenTaskCancelOrDeleteInput(
             task_id="task-123", mode="delete", expected_status="succeeded"
         )
         assert inp.mode == "delete"
 
     def test_cancel_succeeded_raises(self) -> None:
         with pytest.raises(ValidationError, match="Cancel mode requires"):
-            SeedanceCancelOrDeleteInput(
+            GenTaskCancelOrDeleteInput(
                 task_id="task-123", mode="cancel", expected_status="succeeded"
             )
 
     def test_delete_queued_raises(self) -> None:
         with pytest.raises(ValidationError, match="Delete mode requires"):
-            SeedanceCancelOrDeleteInput(task_id="task-123", mode="delete", expected_status="queued")
+            GenTaskCancelOrDeleteInput(task_id="task-123", mode="delete", expected_status="queued")
 
 
 class TestSeedanceVariationsInput:

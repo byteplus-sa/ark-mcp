@@ -185,26 +185,26 @@ Create an async video generation task.
 
 The background submission returns a local MCP task or Ark job ID. Read the
 provider task ID from its terminal result, then pass that provider ID to
-`seedance_get_task`.
+`gen_task_get`.
 
 ## 10. Polling for Video Completion
 
-Check the status of a video generation task.
+Check the status of one or more video (or 3D) generation tasks.
 
-**Tool:** `seedance_get_task`
+**Tool:** `gen_task_get`
 
 ```json
 {
-  "task_id": "provider-task-abc123",
-  "persist_output": false
+  "task_ids": ["provider-task-abc123"]
 }
 ```
 
-Use `persist_output=false` for foreground status polling. To persist the
-completed output, run the retrieval as a background job with
-`persist_output=true` (or omit the field) after the provider task reaches a
-terminal state; subsequent polls return the cached artifact without
-re-downloading.
+`persist_output` defaults to `false`, so this is a foreground status poll.
+Wait `recommended_poll_after_ms` between polls and stop when `all_terminal` is
+`true`; **never resubmit the create tool to poll**. To persist the completed
+outputs, run the call as a background job with `persist_output=true` after the
+task reaches a terminal state; subsequent polls return the cached artifact
+without re-downloading.
 
 ## 11. First/Last Frame Video Generation
 
@@ -259,28 +259,29 @@ Create multiple video tasks with different prompts.
 ```
 
 The background submission returns a local MCP task or Ark job ID. Read the
-per-variation provider task IDs from its terminal result, then pass each
-provider ID to `seedance_get_task`.
+per-variation provider task IDs from its terminal result, then pass all of
+them to one `gen_task_get` call.
 
 ## 13. List Recent Video Tasks
 
-List video generation tasks from the last 7 days.
+List your generation tasks from the last 7 days, newest first.
 
-**Tool:** `seedance_list_tasks`
+**Tool:** `gen_task_list`
 
 ```json
 {
-  "page": 1,
   "page_size": 20,
   "status": "succeeded"
 }
 ```
 
+Pass `next_cursor` back as `cursor` with the same filters until it is `null`.
+
 ## 14. Cancel or Delete a Video Task
 
-Cancel a queued task or delete a completed one.
+Cancel a queued task or delete a completed one (Seedance or 3D).
 
-**Tool:** `seedance_cancel_or_delete_task`
+**Tool:** `gen_task_cancel_or_delete`
 
 Cancel (queued):
 
@@ -337,7 +338,7 @@ seedance_create_task({
 3. Poll for video completion in the foreground:
 
 ```
-seedance_get_task({"task_id": "<provider task ID from background result>", "persist_output": false})
+gen_task_get({"task_ids": ["<provider task ID from background result>"]})
 ```
 
 ## 16. Batch Storyboard with Seedream

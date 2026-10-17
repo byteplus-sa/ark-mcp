@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.domain.errors import ProviderError
+from ark_mcp.domain.media import HttpsUrl
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.schemas import (
     VodMediaKitEraseLocation,
@@ -21,8 +22,7 @@ from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
-
-HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
+from ark_mcp.tools._vod_shared import VOD_OPERATION_DESCRIPTION, VodOperation
 
 
 class VodRemoveSubtitlesInput(BaseModel):
@@ -105,7 +105,12 @@ class VodRemoveSubtitlesOutput(BaseModel):
     provider_log_id: str | None = Field(
         default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
     )
-    task_id: str = Field(description="Provider task ID to pass to vod_get_subtitle_removal_task.")
+    task_id: str = Field(
+        description="Provider task ID to pass to vod_get_task (operation 'remove_subtitles')."
+    )
+    operation: VodOperation = Field(
+        default="remove_subtitles", description=VOD_OPERATION_DESCRIPTION
+    )
     recommended_poll_after_ms: int = Field(
         description="Suggested initial polling delay in milliseconds; a heuristic, not a provider guarantee."
     )
@@ -117,10 +122,11 @@ async def vod_remove_subtitles(
     """Remove hardcoded subtitles or recognized on-screen text with MediaKit.
 
     The text mode has a broader visual effect than subtitle mode and may erase
-    titles, labels, or watermarks. Returns a task ID for
-    vod_get_subtitle_removal_task. The request is not automatically retried
-    after ambiguous failures; reuse client_token when reconciling a timeout.
-    Requires MCP task-augmented execution for submission.
+    titles, labels, or watermarks. Returns a task ID; poll it with
+    vod_get_task using the returned task_id and operation ('remove_subtitles').
+    The request is not automatically retried after ambiguous failures; reuse
+    client_token when reconciling a timeout. Long-running work runs through
+    ark_job_submit (or native MCP task augmentation).
     """
     runtime = get_runtime(ctx)
     if not runtime.settings.has_vod_mediakit:

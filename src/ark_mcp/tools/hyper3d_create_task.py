@@ -126,8 +126,9 @@ async def hyper3d_create_task(
     """Create an asynchronous Hyper3D 3D generation task.
 
     Accepts a text prompt and/or up to 5 reference images. The task runs
-    asynchronously — use ``hyper3d_get_task`` to poll for completion. Requires
-    MCP task-augmented execution for the provider submission.
+    asynchronously: poll the returned task_id with gen_task_get until it
+    finishes. Run this tool through ark_job_submit (or native task
+    augmentation); it does not run in the foreground.
     """
     await context_log(ctx, "info", "Creating Hyper3D 3D generation task")
     settings = get_settings()

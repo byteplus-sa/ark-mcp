@@ -152,7 +152,7 @@ class SeedanceCreateTaskOutput(BaseModel):
 
     task_id: str = Field(..., description="Provider task ID for polling and management.")
     status: Literal["queued"] = Field(
-        "queued", description="Initial task status. Poll with seedance_get_task for updates."
+        "queued", description="Initial task status. Poll with gen_task_get for updates."
     )
     recommended_poll_after_ms: int = Field(
         ..., description="Suggested delay in milliseconds before first poll."
@@ -171,7 +171,7 @@ async def seedance_create_task(
 
     Accepts text, image, video, and audio references as content input.
     The task runs asynchronously on the provider — use
-    ``seedance_get_task`` to poll for completion. Returns the task ID
+    ``gen_task_get`` to poll for completion. Returns the task ID
     and a recommended polling interval. Requires MCP task-augmented execution
     for the provider submission itself.
     """

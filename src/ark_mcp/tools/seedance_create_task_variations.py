@@ -2,7 +2,7 @@
 
 Creates N independent Seedance video generation tasks in parallel. Seedance
 2.0 does not support seeds. Each variation creates a separate task; the
-caller polls each task ID via ``seedance_get_task``.
+caller polls each task ID via ``gen_task_get``.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ async def seedance_create_task_variations(
     """Create multiple Seedance video tasks in parallel.
 
     Each variation creates a separate task. The caller polls each task ID
-    via ``seedance_get_task``. Partial failures are captured per variation.
+    via ``gen_task_get``. Partial failures are captured per variation.
     Requires MCP task-augmented execution for the provider submissions.
     """
     await context_log(ctx, "info", f"Starting {input.variations} parallel Seedance task creations")

@@ -11,7 +11,8 @@ from typing import Any
 
 import pytest
 
-from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
+from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
+from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.tools._seedance_shared import (
     SeedanceAudioInput,
@@ -302,10 +303,10 @@ def _draft_task(
     model: str = "dreamina-seedance-2-5-260628",
     age: timedelta = timedelta(hours=1),
     created_at: int | str | object | None = ...,
-) -> SeedanceTaskResponse:
+) -> GenerationTaskResponse:
     if created_at is ...:
         created_at = int((datetime.now(UTC) - age).timestamp())
-    return SeedanceTaskResponse(
+    return GenerationTaskResponse(
         id="cgt-draft",
         model=model,
         status=status,
@@ -353,7 +354,9 @@ class TestSeedance25DraftMode:
             captured.append(request)
             return "cgt-final", "req-final"
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "create_task", mock_create)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
@@ -380,7 +383,9 @@ class TestSeedance25DraftMode:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             return _draft_task(status=status), None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
         with pytest.raises(ValueError, match=f"is {status}; only a succeeded Draft"):
@@ -394,7 +399,9 @@ class TestSeedance25DraftMode:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             return _draft_task(draft=False), None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
         with pytest.raises(ValueError, match="not created in Draft mode"):
@@ -408,7 +415,9 @@ class TestSeedance25DraftMode:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             return _draft_task(age=timedelta(days=8)), None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
         with pytest.raises(ValueError, match="more than 7 days ago"):
@@ -424,7 +433,9 @@ class TestSeedance25DraftMode:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             return _draft_task(created_at=old), None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
         with pytest.raises(ValueError, match="more than 7 days ago"):
@@ -454,7 +465,9 @@ class TestSeedance25DraftMode:
         async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
             return "cgt-final", None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "create_task", mock_create)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
@@ -469,7 +482,9 @@ class TestSeedance25DraftMode:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             return _draft_task(model="dreamina-seedance-2-5-other"), None
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
         with pytest.raises(ValueError, match="does not match the Draft task's model"):
@@ -493,7 +508,9 @@ class TestSeedance25DraftMode:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             raise AssertionError("provider must not be called for a foreign Draft task")
 
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
 
         with pytest.raises(PermissionError):
             await seedance_2_5_create_task(

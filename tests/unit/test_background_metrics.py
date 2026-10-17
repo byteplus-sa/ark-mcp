@@ -108,7 +108,7 @@ async def test_required_native_submission_rejection_is_recorded(instruments):
 
 
 async def test_optional_native_submission_rejection_is_recorded(instruments, monkeypatch):
-    async def seedance_get_task() -> str:
+    async def gen_task_get() -> str:
         return "unused"
 
     create_failure = AsyncMock(
@@ -117,15 +117,15 @@ async def test_optional_native_submission_rejection_is_recorded(instruments, mon
     monkeypatch.setattr("fastmcp_tasks.extension.create_task", create_failure)
     server = FastMCP(middleware=[metrics.MetricsMiddleware()])
     server.add_extension(TasksExtension())
-    server.tool(name="seedance_get_task", task=TaskConfig(mode="optional"))(seedance_get_task)
+    server.tool(name="gen_task_get", task=TaskConfig(mode="optional"))(gen_task_get)
 
     async with Client(server) as client:
         with pytest.raises(MCPError, match="task backend unavailable"):
-            await call_tool_task(client, "seedance_get_task", {})
+            await call_tool_task(client, "gen_task_get", {})
 
     create_failure.assert_awaited_once()
     instruments["BACKGROUND_JOB_SUBMISSIONS"].labels.assert_called_once_with(
-        target="seedance_get_task",
+        target="gen_task_get",
         status="rejected",
         path="native",
     )

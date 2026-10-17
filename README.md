@@ -13,17 +13,19 @@ products plus artifact access and an optional media upload helper:
 |---|---|---|
 | **Seed Audio** | `seed_audio_generate`, `seed_audio_generate_variations` | Background-task full-scene audio generation through Seed Speech |
 | **Seedream** | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` | Background-task image generation and editing through ModelArk |
-| **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, `seedance_cancel_or_delete_task` | Background-task video submission with optionally background output retrieval (single or batched status checks with derived queue timing) through ModelArk |
-| **Seedance 2.5 Premium** | `seedance_2_5_premium_create_task`, `seedance_2_5_premium_create_task_variations` | Whitelist-only Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) with 4K output; same inputs as Seedance 2.5 (including Draft mode) and shares the `seedance_get_task` lifecycle tools (gated by `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`, disabled by default) |
-| **Hyper3D / Hitem3d** | `hyper3d_*`, `hitem3d_*` task tools | Background-task 3D submission with optionally background output retrieval through ModelArk (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
+| **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_2_5_create_task`, `seedance_2_5_create_task_variations` | Background-task video submission through ModelArk; poll with the shared generation task tools |
+| **Seedance 2.5 Premium** | `seedance_2_5_premium_create_task`, `seedance_2_5_premium_create_task_variations` | Whitelist-only Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) with 4K output; same inputs as Seedance 2.5 (including Draft mode) and shares the `gen_task_*` lifecycle tools (gated by `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`, disabled by default) |
+| **Hyper3D / Hitem3d** | `hyper3d_create_task`, `hitem3d_create_task` | Background-task 3D submission through ModelArk; poll with the shared generation task tools (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
+| **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | One lifecycle for every ModelArk generation task (Seedance video and 3D): batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
 | **OmniHuman 2.0** | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task` | Image + audio to talking-avatar video through BytePlus Vision AI; background-task submission, polling with durable video persistence, and queue cancel (gated by `BYTEPLUS_OMNIHUMAN_ENABLED` and `BYTEPLUS_CV_API_KEY`, disabled by default) |
 | **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions; always thinks, returns only the final answer, enforces JSON Schemas, and can save the answer to a local file |
 | **Seed Audio Understanding** | `seed_audio_understand` | Background-task audio understanding (transcription, translation, speaker/emotion analysis, summaries, Q&A) through ModelArk Chat Completions `input_audio`; model set by `SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`), same thinking, JSON Schema, and `save_to` controls as `seed_understand` |
 | **Speech-to-Text** | `speech_to_text` | Background-task audio transcription through Seed Speech ASR (HTTP) |
-| **VOD AI MediaKit** | `vod_enhance_video`, `vod_get_enhancement_task` | Submit and poll asynchronous AI video upscaling/enhancement with fast, standard, or professional tiers and target resolutions from 240p to 8K |
-| **VOD AI MediaKit Transcode** | `vod_transcode_video`, `vod_get_transcode_task` | Submit and poll async video transcoding (codec, container, resolution, bitrate, frame rate) |
-| **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_get_subtitle_addition_task`, `vod_remove_subtitles`, `vod_get_subtitle_removal_task` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
-| **VOD Audio Separation** | `vod_separate_audio`, `vod_get_audio_separation` | Submit and poll voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
+| **VOD AI MediaKit** | `vod_enhance_video` | Submit asynchronous AI video upscaling/enhancement with fast, standard, or professional tiers and target resolutions from 240p to 8K |
+| **VOD AI MediaKit Transcode** | `vod_transcode_video` | Submit async video transcoding (codec, container, resolution, bitrate, frame rate) |
+| **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_remove_subtitles` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
+| **VOD Audio Separation** | `vod_separate_audio` | Submit voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
+| **VOD task polling** | `vod_get_task` | One poller for every `vod_*` task: pass the `task_id` and `operation` the create tool returned; normalized status and outputs with optionally background durable persistence |
 | **Private Asset Library** | `ark_asset_group_ensure`, `ark_asset_create`, `ark_asset_get`, `ark_asset_list`, `ark_asset_verification_start`, `ark_asset_verification_result`, … | Manage Seedance Advanced Creation Rights assets (virtual portraits, verified real people) with BytePlus AK/SK; reference them as `asset://<id>` in Seedance |
 | **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url` | Retrieve persisted media inline by artifact ID, locate/copy it to a local path without Base64 round-trips, or durably persist a provider URL whose storage failed |
 | **Object storage** (optional) | `media_upload`, `media_upload_batch`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media (one file or up to 50) to TOS or S3; foreground URL renewal without re-uploading |
@@ -217,10 +219,8 @@ when their credentials are configured, `media_upload`, `media_upload_batch`,
 `media_presign`, and `media_presign_batch` appear
 only when object storage credentials (TOS or S3) are configured, and
 `speech_to_text` appears only when `BYTEPLUS_SEED_SPEECH_API_KEY` is set.
-`vod_enhance_video`, `vod_get_enhancement_task`, `vod_transcode_video`,
-`vod_get_transcode_task`, `vod_add_subtitles`, `vod_get_subtitle_addition_task`,
-`vod_remove_subtitles`, `vod_get_subtitle_removal_task`, `vod_separate_audio`,
-and `vod_get_audio_separation` appear only when
+`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
+`vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` appear only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `omnihuman_create_task`,
 `omnihuman_get_task`, and `omnihuman_cancel_task` appear only when
 `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is set.

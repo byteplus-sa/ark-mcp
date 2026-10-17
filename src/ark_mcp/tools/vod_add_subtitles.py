@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.domain.errors import ProviderError
+from ark_mcp.domain.media import HttpsUrl
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.schemas import (
     VodMediaKitAddSubtitlesRequest,
@@ -19,8 +20,8 @@ from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
+from ark_mcp.tools._vod_shared import VOD_OPERATION_DESCRIPTION, VodOperation
 
-HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
 SubtitleFont = Literal[
     "inter",
     "montserrat",
@@ -116,7 +117,10 @@ class VodAddSubtitlesOutput(BaseModel):
     provider_log_id: str | None = Field(
         default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
     )
-    task_id: str = Field(description="Provider task ID to pass to vod_get_subtitle_addition_task.")
+    task_id: str = Field(
+        description="Provider task ID to pass to vod_get_task (operation 'add_subtitles')."
+    )
+    operation: VodOperation = Field(default="add_subtitles", description=VOD_OPERATION_DESCRIPTION)
     recommended_poll_after_ms: int = Field(
         description="Suggested initial polling delay in milliseconds; a heuristic, not a provider guarantee."
     )
@@ -135,11 +139,12 @@ async def vod_add_subtitles(
 ) -> VodAddSubtitlesOutput | ToolResult:
     """Burn subtitle cues or an SRT/VTT/ASS file into a video with MediaKit.
 
-    Returns an asynchronous task ID for vod_get_subtitle_addition_task. When
-    both subtitle_url and subtitles are supplied, MediaKit uses subtitle_url.
-    The request is not automatically retried after ambiguous failures; supply
-    and reuse client_token when reconciling a timed-out submission. Requires MCP
-    task-augmented execution for submission.
+    Returns an asynchronous task ID; poll it with vod_get_task using the
+    returned task_id and operation ('add_subtitles'). When both subtitle_url
+    and subtitles are supplied, MediaKit uses subtitle_url. The request is not
+    automatically retried after ambiguous failures; supply and reuse
+    client_token when reconciling a timed-out submission. Long-running work
+    runs through ark_job_submit (or native MCP task augmentation).
     """
     runtime = get_runtime(ctx)
     if not runtime.settings.has_vod_mediakit:

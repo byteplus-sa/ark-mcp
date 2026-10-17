@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.domain.errors import ProviderError
+from ark_mcp.domain.media import HttpsUrl
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.schemas import VodMediaKitTranscodeRequest
 from ark_mcp.providers.vod_mediakit.transcode import VodMediaKitTranscodeService
@@ -16,8 +17,7 @@ from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
-
-HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
+from ark_mcp.tools._vod_shared import VOD_OPERATION_DESCRIPTION, VodOperation
 
 
 class VodTranscodeVideoOptions(BaseModel):
@@ -134,8 +134,9 @@ class VodTranscodeVideoOutput(BaseModel):
         default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
     )
     task_id: str = Field(
-        description="Provider task ID to pass to vod_get_transcode_task for polling."
+        description="Provider task ID to pass to vod_get_task (operation 'transcode') for polling."
     )
+    operation: VodOperation = Field(default="transcode", description=VOD_OPERATION_DESCRIPTION)
     recommended_poll_after_ms: int = Field(
         description="Server-side suggested poll delay; a heuristic, not a provider guarantee."
     )
@@ -149,9 +150,10 @@ async def vod_transcode_video(
     Accepts a public HTTPS source URL and transcoding options (codec, container
     format, scaling, bitrate, frame rate, HDR). The default options reproduce
     the verified portrait-to-720x720 letterbox profile. Returns an accepted
-    task ID for polling with vod_get_transcode_task. The mutation is never
-    retried automatically because completion can be ambiguous after a timeout.
-    Requires MCP task-augmented execution for the provider submission.
+    task ID; poll it with vod_get_task using the returned task_id and operation
+    ('transcode'). The mutation is never retried automatically because
+    completion can be ambiguous after a timeout. Long-running work runs through
+    ark_job_submit (or native MCP task augmentation).
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

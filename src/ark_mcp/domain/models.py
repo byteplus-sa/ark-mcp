@@ -11,25 +11,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ark_mcp.domain.artifacts import ArtifactRef
+from ark_mcp.domain.artifacts import ArtifactPersistenceIssue, ArtifactRef
+from ark_mcp.domain.media import HttpsUrl
 
 
-class SeedanceTaskStatus(StrEnum):
-    QUEUED = "queued"
-    RUNNING = "running"
-    CANCELLED = "cancelled"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    EXPIRED = "expired"
-    UNKNOWN = "unknown"
-
-    @classmethod
-    def _missing_(cls, value: object) -> SeedanceTaskStatus:
-        return cls.UNKNOWN
-
-
-class Seed3DTaskStatus(StrEnum):
-    """Task lifecycle states for 3D generation (identical to Seedance)."""
+class GenTaskStatus(StrEnum):
+    """Lifecycle state of a ModelArk generation task (Seedance, Hyper3D, Hitem3d)."""
 
     QUEUED = "queued"
     RUNNING = "running"
@@ -40,8 +27,71 @@ class Seed3DTaskStatus(StrEnum):
     UNKNOWN = "unknown"
 
     @classmethod
-    def _missing_(cls, value: object) -> Seed3DTaskStatus:
+    def _missing_(cls, value: object) -> GenTaskStatus:
         return cls.UNKNOWN
+
+
+VodTaskStatus = Literal["processing", "succeeded", "failed"]
+
+TaskOutputRole = Literal["video", "last_frame", "model_file", "voice", "background", "music", "sfx"]
+
+
+class TaskError(BaseModel):
+    """Safe provider failure detail for an asynchronous task."""
+
+    code: str | None = Field(None, description="Provider failure code, when returned.")
+    message: str = Field("", description="Failure explanation without credentials or signed URLs.")
+
+
+class TaskUsage(BaseModel):
+    """Token usage reported for a finished ModelArk generation task."""
+
+    prompt_tokens: int | None = Field(None, description="Prompt tokens consumed, when reported.")
+    completion_tokens: int | None = Field(
+        None, description="Completion tokens consumed, when reported."
+    )
+    total_tokens: int | None = Field(None, description="Total tokens consumed, when reported.")
+
+
+class GenTaskLookupError(BaseModel):
+    """A task ID that could not be checked."""
+
+    task_id: str = Field(..., description="The task ID that could not be checked.")
+    code: str = Field(
+        ...,
+        description="NOT_OWNED (not created by this caller), NOT_FOUND, or a provider error code.",
+    )
+    message: str = Field(..., description="Human-readable reason.")
+
+
+class TaskOutputFile(BaseModel):
+    """One output file of a finished task (ModelArk generation or VOD MediaKit)."""
+
+    role: TaskOutputRole = Field(
+        ...,
+        description=(
+            "What this output is: video or last_frame (Seedance), model_file (3D), video "
+            "(VOD enhance, transcode, subtitles), or voice, background, music or sfx (VOD "
+            "audio separation)."
+        ),
+    )
+    artifact: ArtifactRef | None = Field(
+        None,
+        description="Durable artifact when persisted; local_path is set when it was also exported.",
+    )
+    source_url: HttpsUrl | None = Field(
+        None,
+        description="Expiring provider URL; kept even when persistence is skipped or fails.",
+    )
+    source_expires_at: str | None = Field(
+        None, description="ISO-8601 time when source_url is expected to expire."
+    )
+    persistence: Literal["not_requested", "persisted", "failed"] = Field(
+        ..., description="Durable persistence outcome, independent of task success."
+    )
+    persistence_issue: ArtifactPersistenceIssue | None = Field(
+        None, description="Safe explanation when persistence failed."
+    )
 
 
 class SubtitleUtterance(BaseModel):
@@ -93,13 +143,6 @@ class SeedreamUsage(BaseModel):
     total_tokens: int | None = Field(None, description="Total tokens consumed.")
 
 
-class SeedanceTaskUsage(BaseModel):
-    """Usage/billing information for a completed Seedance task."""
-
-    completion_tokens: int | None = Field(default=None, description="Total tokens consumed.")
-    prompt_tokens: int | None = Field(default=None, description="Prompt tokens consumed.")
-
-
 class SeedanceQueueInfo(BaseModel):
     """Server-derived queue timing for a Seedance task.
 
@@ -142,20 +185,6 @@ class SeedanceQueueInfo(BaseModel):
     )
 
 
-class SeedanceTaskSummary(BaseModel):
-    """Summary of a Seedance task for list results."""
-
-    task_id: str = Field(..., description="Provider task ID.")
-    model: str = Field(..., description="Model ID used for generation.")
-    status: SeedanceTaskStatus = Field(..., description="Current task status.")
-    created_at: str = Field(..., description="ISO-8601 timestamp of task creation.")
-    updated_at: str = Field(..., description="ISO-8601 timestamp of last status update.")
-    queue: SeedanceQueueInfo | None = Field(
-        None,
-        description="Server-derived queue timing (queued/running tasks only; None when finished).",
-    )
-
-
 class VariationError(BaseModel):
     """Machine-readable failure for one variation."""
 
@@ -178,13 +207,6 @@ class VariationError(BaseModel):
     )
 
 
-class SeedanceTaskError(BaseModel):
-    """Typed task failure returned by Seedance."""
-
-    code: str = Field("", description="Provider error code.")
-    message: str = Field("", description="Error description.")
-
-
 class SeedanceTaskSettings(BaseModel):
     """Known Seedance settings, preserving provider extensions."""
 
@@ -203,34 +225,6 @@ class SeedanceTaskSettings(BaseModel):
     )
     service_tier: str | None = Field(None, description="Service tier used (default or flex).")
     priority: int | None = Field(None, description="Task priority (0-9).")
-
-
-class Seed3DTaskUsage(BaseModel):
-    """Usage/billing information for a completed Seed3D task."""
-
-    completion_tokens: int | None = Field(
-        default=None, description="Tokens consumed generating 3D."
-    )
-    total_tokens: int | None = Field(
-        default=None, description="Total tokens consumed (equals completion_tokens for 3D)."
-    )
-
-
-class Seed3DTaskSummary(BaseModel):
-    """Summary of a Seed3D task for list results."""
-
-    task_id: str = Field(..., description="Provider task ID.")
-    model: str = Field(..., description="Model ID used for generation.")
-    status: Seed3DTaskStatus = Field(..., description="Current task status.")
-    created_at: str = Field(..., description="ISO-8601 timestamp of task creation.")
-    updated_at: str = Field(..., description="ISO-8601 timestamp of last status update.")
-
-
-class Seed3DTaskError(BaseModel):
-    """Typed task failure returned by Seed3D."""
-
-    code: str = Field("", description="Provider error code.")
-    message: str = Field("", description="Error description.")
 
 
 class VariationResult(BaseModel):

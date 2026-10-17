@@ -125,11 +125,11 @@ Seedance variations are fundamentally different from Seedream/Seed Audio
 because each variation creates a **separate provider task**. The client first
 retrieves the variation summary from the background result, then polls the
 provider task IDs to retrieve results. Poll them all at once with
-`seedance_get_tasks` (1-50 task IDs, one provider list call per page of 20,
-`all_terminal`
-tells you when to stop, and `output_dir` writes finished videos locally), or
-one at a time with `seedance_get_task`. The actual video generation runs
-asynchronously on the provider side.
+`gen_task_get` (1-50 task IDs, one provider list call per page of 20;
+`all_terminal` tells you when to stop, and `output_dir` writes finished videos
+locally). **Never resubmit the variations tool to poll**: that starts new
+billed tasks. The actual video generation runs asynchronously on the provider
+side.
 
 ### Cost
 
@@ -146,6 +146,6 @@ usage fields.
 | Multiple images, Pro model | `seedream_generate_image_variations` |
 | Per-variation prompts, seeds, or reference images | `*_variations` tool |
 | Multiple audio outputs | `seed_audio_generate_variations` |
-| Multiple video tasks | `seedance_create_task_variations`, then `seedance_get_tasks` |
+| Multiple video tasks | `seedance_create_task_variations` (or `seedance_2_5_create_task_variations`), then `gen_task_get` |
 
 [`run_variation_batch`]: ../src/ark_mcp/tools/_parallel.py

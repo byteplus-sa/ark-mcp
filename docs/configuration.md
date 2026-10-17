@@ -100,7 +100,8 @@ claim. Tool scopes are enforced by FastMCP:
 
 - `seed:audio:generate`
 - `seedream:generate`
-- `seedance:create`, `seedance:read`, `seedance:delete`
+- `seedance:create`
+- `gen:read`, `gen:delete` (`gen_task_*` tools for Seedance and 3D tasks)
 - `understanding:read`
 - `vod:enhance`
 - `vod:transcode`
@@ -140,22 +141,23 @@ set. The tool supports the `fast`, `standard`, and `professional` enhancement
 tiers with target resolutions from 240p to 8K (4K for `fast`) and defaults to
 `professional`/`4k`/`high`/24 fps. It serializes the project label upstream as
 case-sensitive `Project` for `standard`/`professional`. Submission returns an asynchronous
-task ID for `vod_get_enhancement_task`; the poll tool returns and best-effort
-persists completed outputs. The submit POST is not retried automatically.
+task ID and `operation="enhance"` for `vod_get_task`, the single MediaKit
+poller, which returns and best-effort persists completed outputs. The submit POST is not retried automatically.
 Convenience-endpoint pricing is not yet confirmed, so the tool does not emit a
 cost estimate.
 
-`vod_transcode_video` and `vod_get_transcode_task` are also registered when
+`vod_transcode_video` and `vod_get_task` are also registered when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `vod_transcode_video` submits an async
 transcoding task (codec, container format, scaling, bitrate, frame rate, HDR);
-`vod_get_transcode_task` polls it and best-effort persists the completed output.
+`vod_get_task` with `operation="transcode"` polls it and best-effort persists
+the completed output.
 The transcode request/status contract is verified from the official AI MediaKit
 API reference; the output URL hostname (`*.byteplusvod.com`) is confirmed and
 trusted for durable persistence. `queue_id`/`Project` request params remain
 unverified and are not exposed.
 
-`vod_add_subtitles` / `vod_get_subtitle_addition_task` and
-`vod_remove_subtitles` / `vod_get_subtitle_removal_task` use the same API key.
+`vod_add_subtitles` and `vod_remove_subtitles` (polled with `vod_get_task`,
+`operation="add_subtitles"` or `"remove_subtitles"`) use the same API key.
 Addition accepts a public HTTPS SRT, VTT, or ASS file or inline timed cues and
 burns them into the output video. Removal defaults to dialogue-subtitle mode;
 the broader `text` mode may also erase titles, labels, or watermarks. Both
@@ -166,17 +168,19 @@ convenience-endpoint extensions and are omitted unless explicitly supplied.
 
 ## VOD AI MediaKit audio separation
 
-`vod_separate_audio` and `vod_get_audio_separation` are registered when
+`vod_separate_audio` and `vod_get_task` are registered when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set, sharing the same Bearer-authenticated
 convenience surface as enhancement and transcoding.
 
 `vod_separate_audio` submits a `POST /api/v1/tools/separate-voice` task from a
 public HTTPS `audio_url` or `video_url` (exactly one) plus an optional `scene`
 (`Audio` default, `Music`, `Drama`, `Narrate`) and `output_format` (`aac`
-default, `mp3`, `wav`, `m4a`, `flac`). `vod_get_audio_separation` polls
-`GET /api/v1/tasks/{task_id}` and returns each separated track's expiring
-`source_url` (valid 24 hours) plus a durable `artifact` reference when
-best-effort persistence succeeds.
+default, `mp3`, `wav`, `m4a`, `flac`). `vod_get_task` with
+`operation="separate_audio"` polls `GET /api/v1/tasks/{task_id}` and returns
+each separated track (`voice`, `background`, `music`, `sfx`) as an output with
+its expiring `source_url` (valid 24 hours) plus a durable `artifact` reference
+when best-effort persistence succeeds. An `output_path` directory receives
+every track.
 
 ## Private asset library (AK/SK)
 

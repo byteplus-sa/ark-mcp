@@ -99,9 +99,10 @@ async def hitem3d_create_task(
 ) -> Seed3DCreateTaskOutput | ToolResult:
     """Create an asynchronous Hitem3d 3D generation task.
 
-    Hitem3d is image-to-3D only. The task runs asynchronously — use
-    ``hitem3d_get_task`` to poll for completion. Requires MCP task-augmented
-    execution for the provider submission.
+    Hitem3d is image-to-3D only. The task runs asynchronously: poll the
+    returned task_id with gen_task_get until it finishes. Run this tool through
+    ark_job_submit (or native task augmentation); it does not run in the
+    foreground.
     """
     await context_log(ctx, "info", "Creating Hitem3d 3D generation task")
     settings = get_settings()

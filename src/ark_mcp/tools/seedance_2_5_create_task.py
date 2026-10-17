@@ -22,8 +22,8 @@ from ark_mcp.config.model_capabilities import (
 )
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
-from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
-from ark_mcp.providers.modelark.seedance import SeedanceService
+from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
+from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.tools._errors import provider_error_result
@@ -274,7 +274,7 @@ class Seedance25CreateTaskOutput(BaseModel):
         ),
     )
     status: Literal["queued"] = Field(
-        "queued", description="Initial task status. Poll with seedance_get_task for updates."
+        "queued", description="Initial task status. Poll with gen_task_get for updates."
     )
     recommended_poll_after_ms: int = Field(
         ..., description="Suggested delay in milliseconds before first poll."
@@ -382,7 +382,7 @@ def _parse_created_at(raw: int | float | str | None) -> datetime | None:
     return None
 
 
-async def _load_draft_task(draft_task_id: str, ctx: Context) -> SeedanceTaskResponse | ToolResult:
+async def _load_draft_task(draft_task_id: str, ctx: Context) -> GenerationTaskResponse | ToolResult:
     """Fetch a Draft task and check it can be rendered as a final video.
 
     Enforces task ownership, then rejects tasks that have not succeeded, were
@@ -392,7 +392,7 @@ async def _load_draft_task(draft_task_id: str, ctx: Context) -> SeedanceTaskResp
     await get_runtime(ctx).ownership_store.require_owner(
         "modelark", draft_task_id, get_principal(ctx)
     )
-    service = SeedanceService()
+    service = GenerationTaskService()
     try:
         task, _ = await call_with_retry(lambda: service.get_task(draft_task_id))
     except ProviderError as exc:
@@ -410,7 +410,7 @@ async def _load_draft_task(draft_task_id: str, ctx: Context) -> SeedanceTaskResp
         raise ValueError(
             f"Draft task '{draft_task_id}' is {task.status or 'not ready'}; only a "
             "succeeded Draft task can be rendered as a final video. Poll it with "
-            "seedance_get_task until it succeeds."
+            "gen_task_get until it succeeds."
         )
     created_at = _parse_created_at(task.created_at)
     if created_at is not None and datetime.now(UTC) - created_at > _DRAFT_TASK_MAX_AGE:
@@ -433,7 +433,7 @@ async def seedance_2_5_create_task(
     with only ``draft_task_id`` (plus optional output settings) to render the
     approved Draft as a 1080p final video.
     The task runs asynchronously on the provider — use
-    ``seedance_get_task`` to poll for completion. Returns the task ID
+    ``gen_task_get`` to poll for completion. Returns the task ID
     and a recommended polling interval. Requires MCP task-augmented execution
     for the provider submission itself.
     """

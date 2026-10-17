@@ -162,25 +162,28 @@ async def main():
 
         for _ in range(30):
             status = await client.call_tool(
-                "seedance_get_task",
-                {"input": {"task_id": provider_id, "persist_output": False}},
+                "gen_task_get",
+                {"input": {"task_ids": [provider_id], "persist_output": False}},
             )
-            state = status.structured_content["status"]
+            result = status.structured_content
+            if result["errors"]:
+                raise RuntimeError(f"Provider task {provider_id}: {result['errors'][0]}")
+            state = result["tasks"][0]["status"]
             if state == "succeeded":
                 break
             if state in {"failed", "cancelled", "expired"}:
                 raise RuntimeError(f"Provider task {provider_id}: {state}")
-            await asyncio.sleep(10)
+            await asyncio.sleep(result["recommended_poll_after_ms"] / 1000)
         else:
             raise TimeoutError(f"Resume polling provider task {provider_id}")
 
         persistence = await call_tool_task(
             client,
-            "seedance_get_task",
-            {"input": {"task_id": provider_id, "persist_output": True}},
+            "gen_task_get",
+            {"input": {"task_ids": [provider_id], "persist_output": True}},
         )
         completed = await persistence.result()
-        print(completed.structured_content["video"])
+        print(completed.structured_content["tasks"][0]["outputs"])
 
 
 asyncio.run(main())

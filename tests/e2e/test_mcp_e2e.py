@@ -26,10 +26,11 @@ from mcp.shared.exceptions import MCPError
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import refresh_capability_registry
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
+from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
 from ark_mcp.providers.modelark.schemas import (
     ChatCompletionProviderResponse,
-    SeedanceTaskListResponse,
-    SeedanceTaskResponse,
+    GenerationTaskListResponse,
+    GenerationTaskResponse,
 )
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.modelark.understanding import SeedUnderstandingService
@@ -166,10 +167,9 @@ class TestToolDiscovery:
                 "seedance_create_task_variations",
                 "seedance_2_5_create_task",
                 "seedance_2_5_create_task_variations",
-                "seedance_get_task",
-                "seedance_get_tasks",
-                "seedance_list_tasks",
-                "seedance_cancel_or_delete_task",
+                "gen_task_get",
+                "gen_task_list",
+                "gen_task_cancel_or_delete",
                 "seed_understand",
                 "seed_audio_understand",
                 "speech_to_text",
@@ -178,15 +178,11 @@ class TestToolDiscovery:
                 "media_presign",
                 "media_presign_batch",
                 "vod_enhance_video",
-                "vod_get_enhancement_task",
                 "vod_transcode_video",
-                "vod_get_transcode_task",
                 "vod_separate_audio",
-                "vod_get_audio_separation",
                 "vod_add_subtitles",
-                "vod_get_subtitle_addition_task",
                 "vod_remove_subtitles",
-                "vod_get_subtitle_removal_task",
+                "vod_get_task",
             }
 
     async def test_tool_has_input_schema(self, e2e_server: object) -> None:
@@ -292,11 +288,11 @@ class TestBackgroundJobCompatibility:
 
         targets = {target["tool_name"]: target for target in result.structured_content["targets"]}
         assert targets["seed_understand"]["task_mode"] == "required"
-        assert targets["seedance_get_task"]["task_mode"] == "optional"
+        assert targets["gen_task_get"]["task_mode"] == "optional"
         assert "input" in targets["seed_understand"]["input_schema"]["properties"]
         assert "hyper3d_create_task" not in targets
 
-    @pytest.mark.parametrize("tool_name", ["seedance_list_tasks", "ark_job_submit"])
+    @pytest.mark.parametrize("tool_name", ["gen_task_list", "ark_job_submit"])
     async def test_legacy_client_rejects_non_background_target(
         self,
         e2e_server: object,
@@ -916,7 +912,7 @@ class TestSeedanceLifecycleE2E:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         mcp: FastMCP = e2e_server.mcp  # type: ignore[attr-defined]
-        task = SeedanceTaskResponse(
+        task = GenerationTaskResponse(
             id="task-e2e-123",
             model="dreamina-seedance-2-0-260128",
             status="queued",
@@ -930,14 +926,14 @@ class TestSeedanceLifecycleE2E:
         async def mock_get(
             self: SeedanceService,
             task_id: str,
-        ) -> tuple[SeedanceTaskResponse, str | None]:
+        ) -> tuple[GenerationTaskResponse, str | None]:
             assert task_id == task.id
             return task, "get-request-e2e"
 
         async def mock_list(
             self: SeedanceService, **kwargs: object
-        ) -> tuple[SeedanceTaskListResponse, str | None]:
-            return SeedanceTaskListResponse(
+        ) -> tuple[GenerationTaskListResponse, str | None]:
+            return GenerationTaskListResponse(
                 data=[task], total=1, has_more=False
             ), "list-request-e2e"
 
@@ -949,10 +945,11 @@ class TestSeedanceLifecycleE2E:
             return None
 
         monkeypatch.setattr(SeedanceService, "create_task", mock_create)
-        monkeypatch.setattr(SeedanceService, "get_task", mock_get)
-        monkeypatch.setattr(SeedanceService, "list_tasks", mock_list)
-        monkeypatch.setattr(SeedanceService, "delete_task", mock_delete)
         monkeypatch.setattr(SeedanceService, "close", mock_close)
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "list_tasks", mock_list)
+        monkeypatch.setattr(GenerationTaskService, "delete_task", mock_delete)
+        monkeypatch.setattr(GenerationTaskService, "close", mock_close)
 
         red_pixel = (
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/"
@@ -979,16 +976,16 @@ class TestSeedanceLifecycleE2E:
                 },
             )
             fetched = await client.call_tool(
-                "seedance_get_task",
-                {"input": {"task_id": task.id, "persist_output": False}},
+                "gen_task_get",
+                {"input": {"task_ids": [task.id]}},
             )
             async with _foreground_client(mcp) as foreground_client:
                 with pytest.raises(
                     ToolError, match="persist_output=true requires task-augmented execution"
                 ):
                     await foreground_client.call_tool(
-                        "seedance_get_task",
-                        {"input": {"task_id": task.id}},
+                        "gen_task_get",
+                        {"input": {"task_ids": [task.id], "persist_output": True}},
                     )
                 compatibility_job_id, compatibility_created = await _call_compatibility_tool(
                     foreground_client,
@@ -1003,17 +1000,17 @@ class TestSeedanceLifecycleE2E:
                 )
                 _, compatibility_fetched = await _call_compatibility_tool(
                     foreground_client,
-                    "seedance_get_task",
-                    {"input": {"task_id": task.id}},
+                    "gen_task_get",
+                    {"input": {"task_ids": [task.id], "persist_output": True}},
                 )
             background_fetched = await _call_background_tool(
                 client,
-                "seedance_get_task",
-                {"input": {"task_id": task.id}},
+                "gen_task_get",
+                {"input": {"task_ids": [task.id], "persist_output": True}},
             )
-            listed = await client.call_tool("seedance_list_tasks", {"input": {}})
+            listed = await client.call_tool("gen_task_list", {"input": {}})
             cancelled = await client.call_tool(
-                "seedance_cancel_or_delete_task",
+                "gen_task_cancel_or_delete",
                 {
                     "input": {
                         "task_id": task.id,
@@ -1028,10 +1025,10 @@ class TestSeedanceLifecycleE2E:
         assert created.structured_content["task_id"] == task.id
         assert compatibility_job_id != task.id
         assert compatibility_created["structured_content"]["task_id"] == task.id
-        assert fetched.structured_content["status"] == "queued"
-        assert background_fetched.structured_content["status"] == "queued"
-        assert compatibility_fetched["structured_content"]["status"] == "queued"
-        assert listed.structured_content["total"] == 1
+        assert fetched.structured_content["tasks"][0]["status"] == "queued"
+        assert background_fetched.structured_content["tasks"][0]["status"] == "queued"
+        assert compatibility_fetched["structured_content"]["tasks"][0]["status"] == "queued"
+        assert listed.structured_content["next_cursor"] is None
         assert listed.structured_content["tasks"][0]["task_id"] == task.id
         assert cancelled.structured_content["mode"] == "cancel"
 

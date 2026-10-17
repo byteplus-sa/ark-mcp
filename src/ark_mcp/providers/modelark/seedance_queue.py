@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from ark_mcp.domain.models import SeedanceQueueInfo
 
 if TYPE_CHECKING:
-    from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
+    from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 
 # Provider default for execution_expires_after when a task does not report it.
 DEFAULT_EXECUTION_EXPIRES_AFTER_SECONDS = 172_800  # 48 hours
@@ -44,7 +44,7 @@ def _minutes(seconds: int) -> str:
 
 
 def queue_info(
-    task: SeedanceTaskResponse, *, now: datetime | None = None
+    task: GenerationTaskResponse, *, now: datetime | None = None
 ) -> SeedanceQueueInfo | None:
     """Return derived queue timing for a queued/running task, or None when finished."""
     if task.status not in _ACTIVE_STATUSES:

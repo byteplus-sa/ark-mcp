@@ -87,18 +87,20 @@ async def test_video_workflows_persist_after_status_and_never_resubmit(
                 )
             )
         assert "provider-123" in (tmp_path / "smoke_provider_tasks.jsonl").read_text()
-        if name == "seedance_list_tasks":
+        if name == "gen_task_list":
             return SimpleNamespace(tasks=[SimpleNamespace(task_id="provider-123")])
         if poll_failure:
             raise RuntimeError("poll interrupted")
-        return SimpleNamespace(
+        output = SimpleNamespace(role="video", artifact=artifact if params.persist_output else None)
+        task = SimpleNamespace(
             status="succeeded",
-            video=artifact if params.persist_output else None,
+            outputs=[output],
             error=None,
             model="test",
             created_at=None,
             updated_at=None,
         )
+        return SimpleNamespace(tasks=[task])
 
     monkeypatch.setattr(smoke, "call", call)
     workflow = (
@@ -112,7 +114,7 @@ async def test_video_workflows_persist_after_status_and_never_resubmit(
     else:
         result = await workflow
         assert result == (True if variation else {"video": "video"})
-        assert [entry[1:] for entry in calls if entry[0] == "seedance_get_task"] == [
+        assert [entry[1:] for entry in calls if entry[0] == "gen_task_get"] == [
             (False, False),
             (True, True),
         ]
@@ -128,10 +130,13 @@ async def test_smoke_session_persists_video_through_real_server(tmp_path, monkey
 
     import ark_mcp.runtime as runtime_module
     from ark_mcp.config.env import Settings
-    from ark_mcp.providers.modelark.schemas import SeedanceTaskResponse
-    from ark_mcp.providers.modelark.seedance import SeedanceService
+    from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
+    from ark_mcp.providers.modelark.schemas import (
+        GenerationTaskListResponse,
+        GenerationTaskResponse,
+    )
     from ark_mcp.security.safe_downloader import DownloadedMedia, SafeDownloader
-    from ark_mcp.tools.seedance_get_task import SeedanceGetTaskInput, SeedanceTaskOutput
+    from ark_mcp.tools.gen_task_get import GenTaskGetInput, GenTaskGetOutput
 
     create_runtime = AsyncMock(wraps=runtime_module.create_runtime_services)
     monkeypatch.setattr(runtime_module, "create_runtime_services", create_runtime)
@@ -143,18 +148,19 @@ async def test_smoke_session_persists_video_through_real_server(tmp_path, monkey
 
     task_contexts = []
 
-    async def get_task(*args, **kwargs):
+    async def list_tasks(*args, **kwargs):
         task_contexts.append(get_context().task_id)
-        return SeedanceTaskResponse(
+        task = GenerationTaskResponse(
             id="provider-123",
             model="dreamina-seedance-2-0-260128",
             status="succeeded",
             created_at=1721400000,
             updated_at=1721400000,
             content={"video_url": "https://example.com/video.mp4"},
-        ), None
+        )
+        return GenerationTaskListResponse(data=[task]), None
 
-    monkeypatch.setattr(SeedanceService, "get_task", get_task)
+    monkeypatch.setattr(GenerationTaskService, "list_tasks", list_tasks)
     download = AsyncMock(
         return_value=DownloadedMedia(
             body=b"video", content_type="video/mp4", final_url="https://example.com/video.mp4"
@@ -163,20 +169,21 @@ async def test_smoke_session_persists_video_through_real_server(tmp_path, monkey
     monkeypatch.setattr(SafeDownloader, "download", download)
     async with smoke_session(settings) as (smoke, runtime):
         status = await smoke.call(
-            "seedance_get_task",
-            SeedanceGetTaskInput(task_id="provider-123", persist_output=False),
-            SeedanceTaskOutput,
+            "gen_task_get",
+            GenTaskGetInput(task_ids=["provider-123"]),
+            GenTaskGetOutput,
             background=False,
         )
-        assert status.status == "succeeded"
-        assert status.video is None
+        assert status.tasks[0].status == "succeeded"
+        assert status.tasks[0].outputs[0].artifact is None
         result = await smoke.call(
-            "seedance_get_task",
-            SeedanceGetTaskInput(task_id="provider-123", persist_output=True),
-            SeedanceTaskOutput,
+            "gen_task_get",
+            GenTaskGetInput(task_ids=["provider-123"], persist_output=True),
+            GenTaskGetOutput,
         )
-        assert result.video is not None
-        assert (await runtime.artifact_store.get(result.video.id)).data == b"video"
+        video = result.tasks[0].outputs[0].artifact
+        assert video is not None
+        assert (await runtime.artifact_store.get(video.id)).data == b"video"
     download.assert_awaited_once()
     assert task_contexts[0] is None
     assert task_contexts[1] is not None

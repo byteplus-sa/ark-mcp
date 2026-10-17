@@ -85,7 +85,7 @@ async def seedance_2_5_premium_create_task(
     resolution. Draft mode: set ``draft=true`` for a cheap 480p preview, then
     call again with only ``draft_task_id`` (plus optional output settings) to
     render the approved Draft as a 4k final video. The task runs asynchronously on the provider — use
-    ``seedance_get_task`` to poll for completion. Returns the task ID and a
+    ``gen_task_get`` to poll for completion. Returns the task ID and a
     recommended polling interval. Requires MCP task-augmented execution for
     the provider submission itself.
     """

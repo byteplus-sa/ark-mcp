@@ -80,21 +80,16 @@ poll `tasks/get`. Either way the terminal response contains the final tool
 output, and a foreground direct call to a required target is rejected before
 any provider request is made. For Seedance, Seed 3D, and MediaKit
 create/submit tools, the background job covers the provider submission; its
-result contains the provider task ID used by the corresponding get tool.
+result contains the provider task ID. **Poll Seedance and 3D tasks with
+`gen_task_get` and MediaKit tasks with `vod_get_task`; never resubmit a create
+tool to poll**, because that starts a second billed task.
 
 The following retrieval tools advertise `execution.taskSupport="optional"`:
 
-- `seedance_get_task`
-- `seedance_get_tasks`
+- `gen_task_get`
 - `seed_media_persist_url`
-- `hyper3d_get_task`
-- `hitem3d_get_task`
 - `omnihuman_get_task`
-- `vod_get_enhancement_task`
-- `vod_get_transcode_task`
-- `vod_get_audio_separation`
-- `vod_get_subtitle_addition_task`
-- `vod_get_subtitle_removal_task`
+- `vod_get_task`
 
 Use foreground execution for quick status checks with persistence disabled.
 Use background execution when `persist_output=true` and a completed media file
@@ -112,10 +107,8 @@ straight to a local file, so a client does not need a separate
 | `seedream_generate_image` | `output_path` | Must be a directory (ending with `/`) when `max_images > 1` |
 | `seedream_edit_image` | `output_path` | Extra images get `-2`, `-3` suffixes when a file path is given |
 | `seed_audio_generate` | `output_path` | |
-| `seedance_get_task` | `output_path` | The last frame is written beside the video with a `-last-frame` suffix |
-| `hyper3d_get_task`, `hitem3d_get_task` | `output_path` | |
-| `vod_get_enhancement_task`, `vod_get_transcode_task`, `vod_get_audio_separation`, `vod_get_subtitle_addition_task`, `vod_get_subtitle_removal_task` | `output_path` | |
-| `seedream_generate_image_variations`, `seed_audio_generate_variations`, `seedance_get_tasks` | `output_dir` | One file per artifact |
+| `vod_get_task` | `output_path` | Must be a directory (ending with `/`) for `operation="separate_audio"`, which writes every track |
+| `seedream_generate_image_variations`, `seed_audio_generate_variations`, `gen_task_get` | `output_dir` | One file per artifact (`gen_task_get`: every output of each succeeded task) |
 | `seed_understand`, `seed_audio_understand` | `save_to` | Writes the final answer, not media |
 
 `output_path` names a file, or a directory when it ends with `/`; files written
@@ -342,8 +335,9 @@ the `vod:enhance` JWT scope.
 
 ### Output and execution limits
 
-The verified provider contract returns `status="accepted"` with a task ID for
-`vod_get_enhancement_task`. The non-idempotent POST is not retried automatically
+The verified provider contract returns `status="accepted"` with a `task_id` and
+`operation="enhance"` for [`vod_get_task`](#vod_get_task). The non-idempotent
+POST is not retried automatically
 because a timeout can have ambiguous completion. A completed output always
 preserves `source_url`. Persistence is reported as `not_applicable`, `persisted`,
 `failed`, or `not_requested`, and a failed artifact copy does not erase provider success.
@@ -352,35 +346,6 @@ Durable video copies remain subject to the 200 MiB limit.
 The success-body mapping remains provisional and rejects unknown response
 shapes. `estimated_cost_usd` is always null until convenience-endpoint pricing
 is confirmed.
-
-## vod_get_enhancement_task
-
-Poll the status and retrieve the output of a BytePlus VOD AI MediaKit enhancement
-task. This tool is registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set
-and uses the `vod:read` JWT scope.
-
-**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
-`idempotentHint=True`, `openWorldHint=False`
-
-### Input
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the background result of `vod_enhance_video` |
-| `persist_output` | boolean | No | Persist the completed output on first successful poll (default: true; background execution required when true) |
-| `output_path` | string | No | Local file (or directory ending with `/`) for the enhanced video; stdio only, inside an output root, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
-| `overwrite` | boolean | No | Allow `output_path` to replace an existing file with different content (default: false) |
-
-### Output and execution limits
-
-Returns `VodEnhancementTaskOutput` with normalized `processing`, `succeeded`, or
-`failed` status. A completed result includes `source_url`, its 24-hour expiry,
-duration, resolution, frame rate, enhancement tier, and provider timestamps.
-With `persist_output=true`, concurrent first polls share one artifact copy and
-the result is cached by task ID for later reuse. Cache failures emit safe
-warnings but preserve any created artifact and the provider success. Artifact
-copy failures are reported separately; durable video copies remain capped at
-200 MiB.
 
 ## vod_transcode_video
 
@@ -419,8 +384,9 @@ tool is registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the
 
 ### Output
 
-Returns `VodTranscodeVideoOutput` with `status="accepted"` plus the `task_id`
-to poll via `vod_get_transcode_task` and a heuristic `recommended_poll_after_ms`.
+Returns `VodTranscodeVideoOutput` with `status="accepted"`, the `task_id` and
+`operation="transcode"` to poll via [`vod_get_task`](#vod_get_task), and a
+heuristic `recommended_poll_after_ms`.
 The non-idempotent POST is not retried automatically because a timeout can have
 ambiguous completion.
 
@@ -439,47 +405,14 @@ ambiguous completion.
 }
 ```
 
-## vod_get_transcode_task
-
-Poll the status and output of a BytePlus VOD AI MediaKit transcode task. This
-tool is registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the
-`vod:read` JWT scope.
-
-**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
-`idempotentHint=True`, `openWorldHint=False`
-
-### Input
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the background result of `vod_transcode_video` |
-| `persist_output` | boolean | No | Persist the completed output on first successful poll (default: true; background execution required when true) |
-| `output_path` | string | No | Local file (or directory ending with `/`) for the transcoded video; stdio only, inside an output root, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
-| `overwrite` | boolean | No | Allow `output_path` to replace an existing file with different content (default: false) |
-
-### Output and execution limits
-
-Returns `VodTranscodeTaskOutput` with a normalized `status` of `processing`,
-`succeeded`, or `failed` (the provider documents only `running`/`completed`/
-`failed`). On success, `source_url` (24-hour lifetime) and optional metadata
-(`duration_seconds`, `resolution`, `video_codec`) are returned; when
-`persist_output=true` the output is copied once into the durable artifact store
-and cached by task ID so repeated polls do not re-download. Persistence is
-reported as `not_applicable`, `not_requested`, `persisted`, or `failed`, and a
-failed artifact copy does not erase provider success. Durable video copies
-remain subject to the 200 MiB limit. On failure, `error.code`/`error.message`
-carry the safe provider failure detail. GET polling is automatically retried
-on retryable errors: 429, 5xx, and poll timeouts or connection failures (a
-poll creates no provider state).
-
 ## vod_add_subtitles
 
 Burn subtitles into a public HTTPS video with MediaKit. Supply either
 `subtitle_url` for an SRT, VTT, or ASS file or a non-empty `subtitles` list of
 `subtitle_text`, `start_time`, and `end_time` cues. If both are supplied, the
 subtitle file takes priority. The tool uses `vod:subtitle:add` in JWT mode and
-runs in the background; pass the provider task ID from its background result to
-`vod_get_subtitle_addition_task`.
+runs in the background; pass the `task_id` and `operation="add_subtitles"`
+from its background result to [`vod_get_task`](#vod_get_task).
 
 Style options are `subtitle_pos_preset` (`bottom_center`, `top_center`,
 `center`, `lower_third`), positive `subtitle_font_size`, RGBA
@@ -491,21 +424,6 @@ and is omitted by default.
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
 
-## vod_get_subtitle_addition_task
-
-Poll the provider task ID returned in the background result of
-`vod_add_subtitles`. The tool uses `vod:read`, maps provider lifecycle states to
-`processing`, `succeeded`, or `failed`, and can best-effort persist the MP4
-output when `persist_output=true` (default). A succeeded response always
-preserves the expiring `source_url`; persistence failure is reported separately
-and does not erase provider success. Persistence requires background execution;
-use `persist_output=false` for a foreground status check. With
-`persist_output=true`, `output_path` (plus `overwrite`) also writes the video
-to a [local path](#writing-outputs-to-local-paths).
-
-**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
-`idempotentHint=True`, `openWorldHint=False`
-
 ## vod_remove_subtitles
 
 Remove hardcoded dialogue subtitles or recognized on-screen text from a public
@@ -516,24 +434,11 @@ include up to 20 normalized erasure rectangles, selected/skipped time segments,
 subtitle OCR thresholds, callbacks, a queue ID, and a `client_token`. The
 legacy `model_version` (`v4`/`v5`) and `project` extensions are omitted unless
 explicitly supplied. The tool uses `vod:subtitle:remove` and runs in the
-background; pass the provider task ID from its background result to
-`vod_get_subtitle_removal_task`.
+background; pass the `task_id` and `operation="remove_subtitles"` from its
+background result to [`vod_get_task`](#vod_get_task).
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
-
-## vod_get_subtitle_removal_task
-
-Poll the provider task ID returned in the background result of
-`vod_remove_subtitles`. Its normalized lifecycle, optional durable MP4
-persistence, source-URL preservation, and failure behavior match
-`vod_get_subtitle_addition_task`, including the optional `output_path` and
-`overwrite` fields. The tool uses `vod:read`; persistence requires
-background execution, while `persist_output=false` allows a foreground
-status check.
-
-**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
-`idempotentHint=True`, `openWorldHint=False`
 
 ## vod_separate_audio
 
@@ -562,15 +467,20 @@ and an `output_format`.
 Returns `VodSeparateAudioOutput` with `provider` `byteplus-vod-mediakit`,
 `status` `accepted`, the provider `request_id` and `provider_log_id`, and a
 heuristic `recommended_poll_after_ms`. Run it in the background, then pass the
-provider task ID from its result to
-`vod_get_audio_separation`. The POST is non-idempotent and is never retried
-automatically (timeout/5xx means ambiguous completion).
+`task_id` and `operation="separate_audio"` from its result to
+[`vod_get_task`](#vod_get_task). The POST is non-idempotent and is never
+retried automatically (timeout/5xx means ambiguous completion).
 
-## vod_get_audio_separation
+## vod_get_task
 
-Poll a BytePlus VOD AI MediaKit separate-voice task (`GET
-/api/v1/tasks/{task_id}`). This tool is registered when
+Poll the status and outputs of **any** BytePlus VOD AI MediaKit task: one
+poller for every `vod_*` create tool. Pass the `task_id` and the `operation`
+that the create tool returned. This tool is registered when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the `vod:read` JWT scope.
+
+**Execution:** Optional background job; background execution is required when
+`persist_output=true` (the default). Use `persist_output=false` for a quick
+foreground status check.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=True`, `openWorldHint=False`
@@ -579,24 +489,82 @@ Poll a BytePlus VOD AI MediaKit separate-voice task (`GET
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the background result of `vod_separate_audio` |
-| `persist_output` | boolean | No | Copy completed tracks into durable artifact storage on first successful poll (default `true`; background execution required when true) |
-| `output_path` | string | No | Local file (or directory ending with `/`) for the separated audio track; stdio only, inside an output root, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
+| `task_id` | string | Yes | MediaKit task ID returned by a `vod_*` create tool (1-256 chars, `[A-Za-z0-9._:-]`) |
+| `operation` | `"enhance"` \| `"transcode"` \| `"separate_audio"` \| `"add_subtitles"` \| `"remove_subtitles"` | Yes | Operation that created the task, echoed as `operation` by every `vod_*` create tool |
+| `persist_output` | boolean | No | Copy finished outputs into durable artifact storage, once per task (default: **true**; background execution required when true) |
+| `output_path` | string | No | Local file (or directory ending with `/`) for the output; **a directory is required for `separate_audio`**, which writes every track. stdio only, inside an output root, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
 | `overwrite` | boolean | No | Allow `output_path` to replace an existing file with different content (default: false) |
 
-### Output and execution limits
+| `operation` | Create tool | Output roles |
+|---|---|---|
+| `enhance` | `vod_enhance_video` | `video` |
+| `transcode` | `vod_transcode_video` | `video` |
+| `add_subtitles` | `vod_add_subtitles` | `video` |
+| `remove_subtitles` | `vod_remove_subtitles` | `video` |
+| `separate_audio` | `vod_separate_audio` | `voice`, `background` (`Audio`/`Music` scenes) or `voice`, `music`, `sfx` (`Drama`/`Narrate` scenes) |
 
-Returns `VodAudioSeparationTaskOutput` with a normalized `status` of
-`processing`, `succeeded`, or `failed`. On success, `voice`, `background`,
-`music`, and `sfx` each carry the track's expiring `source_url` (valid 24
-hours) and, when best-effort persistence succeeds, a durable `artifact`
-reference. `persist_output=true` copies each track once and caches it by task
-ID so repeated polls do not re-download; persistence is reported per track as
-`not_requested`, `persisted`, or `failed`, and a failed copy does not erase
-provider success. On failure, `error.code`/`error.message` carry the safe
-provider detail. GET polling is automatically retried on retryable errors:
-429, 5xx, and poll timeouts or connection failures (a poll creates no provider
-state).
+A wrong `operation` usually surfaces as a not-found provider error; the error
+message then asks you to check that `operation` matches the create tool's
+output.
+
+### Output
+
+Returns `VodTaskOutput`:
+
+| Field | Description |
+|---|---|
+| `provider` | Always `byteplus-vod-mediakit` |
+| `task_id`, `operation` | Echo of the polled task |
+| `status` | Normalized `processing` (queued or running; poll again), `succeeded`, or `failed` |
+| `provider_status`, `request_id` | Raw provider status label and diagnostic request ID, when returned |
+| `created_at`, `finished_at` | ISO-8601 provider timestamps, when returned |
+| `duration_seconds` | Output duration (input duration for `separate_audio`), when reported |
+| `resolution`, `fps`, `video_codec`, `tool_version` | Output metadata, when reported (`fps` and `tool_version` for enhance; `video_codec` for transcode) |
+| `outputs` | List of `TaskOutputFile`; empty until `succeeded` |
+| `error` | `code` and safe `message` when `status="failed"` |
+
+Each `TaskOutputFile` carries `role`, the expiring `source_url` (kept even
+when persistence is skipped or fails), `source_expires_at`, `persistence`
+(`not_requested`, `persisted`, or `failed`), a durable `artifact` when
+persisted (with `local_path` when also exported), and a safe
+`persistence_issue` when the copy failed. A failed copy never erases provider
+success.
+
+With `persist_output=true`, concurrent first polls share one artifact copy per
+task and the result is cached by task ID, so repeated polls do not
+re-download. Durable copies are capped by the media policy (200 MiB for
+video). GET polling is automatically retried on retryable errors: 429, 5xx,
+and poll timeouts or connection failures (a poll creates no provider state).
+
+### Example
+
+Foreground status check:
+
+```json
+{"task_id": "<task_id from vod_separate_audio>", "operation": "separate_audio", "persist_output": false}
+```
+
+Once `status` is `succeeded`, submit through `ark_job_submit` to persist and
+export every track:
+
+```json
+{
+  "tool_name": "vod_get_task",
+  "arguments": {
+    "input": {
+      "task_id": "<task_id>",
+      "operation": "separate_audio",
+      "persist_output": true,
+      "output_path": "/Users/me/Videos/stems/"
+    }
+  }
+}
+```
+
+**Polling workflow:** submit the create tool through `ark_job_submit`, read
+`task_id` and `operation` from the job result, then poll `vod_get_task` with
+`persist_output=false` until `status` is not `processing`. **Never resubmit the
+create tool to poll.**
 
 ## omnihuman_create_task / omnihuman_get_task / omnihuman_cancel_task
 
@@ -849,7 +817,7 @@ poll delay in `recommended_poll_after_ms`.
 
 Create an asynchronous Seedance 2.5 video generation task. Supports up to
 30-second video generation, 50 multimodal references (30 images, 10 videos,
-10 audio), and 480p/720p/1080p resolution. Poll with `seedance_get_task`.
+10 audio), and 480p/720p/1080p resolution. Poll with [`gen_task_get`](#gen_task_get).
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -888,7 +856,7 @@ Seedance 2.0 tools do not.
 
 1. Call the create tool with `draft: true` and the usual prompt and media. The
    tool sends `draft=true` at `480p`, the only Draft resolution. The Draft is
-   billed as a normal 480p video. `seedance_get_task` reports `draft: true`.
+   billed as a normal 480p video. `gen_task_get` reports `draft: true`.
 2. Once the Draft task has `succeeded`, call the same family's create tool
    with `draft_task_id` set to its task ID. The provider reuses the Draft
    task's model, prompt, media, duration, ratio, seed, `generate_audio`, and
@@ -917,54 +885,18 @@ single-task create tool.
 Returns a `Seedance25CreateTaskOutput` with task ID, status, and recommended
 poll delay in `recommended_poll_after_ms`.
 
-## seedance_get_task
+## gen_task_get
 
-Retrieve the status and output of a Seedance task.
+Check the status and outputs of **any** ModelArk generation task: Seedance
+video (2.0, 2.5, and 2.5 Premium), Hyper3D, and Hitem3d. Pass every task ID you
+are waiting on in one call. Registered when `BYTEPLUS_MODELARK_API_KEY` is set
+(not gated by the 3D flag) and uses the `gen:read` JWT scope.
 
-**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
-`idempotentHint=True`, `openWorldHint=False`
-
-### Input
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `task_id` | string | Yes | Provider task ID from the background result of a Seedance create tool |
-| `persist_output` | boolean | No | Persist video/last-frame on success (default: true; background execution required when true) |
-| `output_path` | string | No | Local file (or directory ending with `/`) for the video; the last frame is written beside it with a `-last-frame` suffix. stdio only, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
-| `overwrite` | boolean | No | Allow `output_path` to replace an existing file (default: false) |
-
-### Output
-
-Returns a `SeedanceTaskOutput` with status, error (if any), video/last-frame
-artifact references (on success), usage, generation settings, `draft` (`true`
-for a Seedance 2.5 or 2.5 Premium Draft task), and `queue`.
-
-`queue` (`SeedanceQueueInfo`) is set only while the task is `queued` or
-`running` and is `None` once it finishes. It is derived by this server from the
-task's own timestamps, because ModelArk publishes no queue position or ETA:
-
-| Field | Description |
-|---|---|
-| `queued_seconds` | Seconds queued: now minus `created_at` while queued, or `updated_at` minus `created_at` once running (approximate) |
-| `running_seconds` | Seconds since the last status update while running (approximate) |
-| `service_tier` | `default` or `flex`; flex tasks usually queue longer |
-| `expires_at` | ISO-8601 time after which the provider fails an unfinished task: `created_at + execution_expires_after` |
-| `expires_at_estimated` | `true` when the provider did not report `execution_expires_after` and the 48-hour default was assumed |
-| `hint` | Human-readable summary to relay to the user |
-
-If the video or last frame cannot be stored, the reference comes back with
-`id="provider-url"` and a `persistence_error`; re-persist it with
-`seed_media_persist_url` before the 24-hour provider URL expires.
-
-## seedance_get_tasks
-
-Check the status of several Seedance tasks in one call instead of a round of
-`seedance_get_task` calls. The server makes one provider list call per page of
-20 task IDs (at most three), filtered by
-the requested task IDs and re-fetches individually only the tasks missing from
-the list or reported succeeded without an output URL. Persistence reuses the
-per-task single-flight cache, so overlapping polls never download the same
-video twice. Uses the `seedance:read` JWT scope.
+The server makes one provider list call per page of 20 task IDs (at most
+three), filtered by the requested IDs, and re-fetches individually only the
+tasks missing from the list or reported succeeded without an output URL.
+Persistence uses a per-task single-flight cache, so overlapping polls never
+download the same file twice.
 
 **Execution:** Optional background job; background execution is required when
 `persist_output=true`.
@@ -976,29 +908,107 @@ video twice. Uses the `seedance:read` JWT scope.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `task_ids` | list[string] | Yes | 1-50 Seedance task IDs; duplicates are ignored |
-| `persist_output` | boolean | No | Copy each succeeded task's video and last frame into durable storage, once per task (default: **false**) |
-| `output_dir` | string | No | Local directory for each succeeded task's files (`<artifact_id>.<ext>`); stdio only, requires `persist_output=true` |
+| `task_ids` | list[string] | Yes | 1-50 ModelArk generation task IDs from `seedance_*_create_task`, `hyper3d_create_task`, or `hitem3d_create_task` (not Ark job IDs); duplicates are ignored |
+| `persist_output` | boolean | No | Copy each succeeded task's outputs into durable storage, once per task (default: **false**) |
+| `output_dir` | string | No | Local directory for each succeeded task's files (`<artifact_id>.<ext>`); stdio only, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
 | `overwrite` | boolean | No | Allow `output_dir` writes to replace existing files (default: false) |
 
 ### Output
 
-Returns `SeedanceGetTasksOutput`:
+Returns `GenTaskGetOutput`:
 
 | Field | Description |
 |---|---|
-| `tasks` | Full status for each found task, in request order, in the same shape as `seedance_get_task` (including `queue`) |
+| `tasks` | One `GenTask` per found task, in request order |
 | `errors` | Task IDs that could not be checked, each with `task_id`, `code` (`NOT_OWNED`, `NOT_FOUND`, or a provider code), and `message` |
-| `counts` | Number of found tasks per status |
 | `all_terminal` | `true` when every found task has finished, so polling can stop |
 | `active_tasks` | Number of found tasks still queued or running |
+| `recommended_poll_after_ms` | Suggested delay before the next poll (5000 while any task is active); `null` when `all_terminal` |
+
+Each `GenTask` contains:
+
+| Field | Description |
+|---|---|
+| `task_id`, `model` | Provider task ID and the model that ran it |
+| `family` | Registry family of the model; `null` when the model is not configured on this server |
+| `kind` | `video`, `3d`, or `unknown`, from the registry binding for `model` |
+| `status` | `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `expired` |
+| `created_at`, `updated_at` | ISO-8601 creation and last status-change times |
+| `outputs` | List of `TaskOutputFile`: roles `video` and `last_frame` for video tasks, `model_file` for 3D tasks. Empty until the task succeeds |
+| `error` | Provider failure `code` and `message` when failed |
+| `usage` | Token usage reported by the provider |
+| `draft` | `true` for a Seedance Draft task (480p preview); pass `task_id` as `draft_task_id` within 7 days. `null` for 3D |
+| `settings` | Video generation settings echoed by the provider; `null` for 3D |
+| `queue` | Server-derived queue timing for a queued or running video task (below); `null` once finished and for 3D |
+
+Each `TaskOutputFile` carries `role`, the expiring provider `source_url`
+(about 24 hours, kept even when persistence is skipped or fails),
+`source_expires_at`, `persistence` (`not_requested`, `persisted`, or
+`failed`), a durable `artifact` when persisted (with `local_path` when also
+exported), and a safe `persistence_issue` when the copy failed. Re-persist a
+failed output with `seed_media_persist_url` before its source URL expires.
 
 Task IDs not created by the caller are reported in `errors` instead of failing
-the batch. A failure of the provider list call itself fails the whole call.
+the call. A failure of the provider list call itself fails the whole call.
 
-## seedance_list_tasks
+`queue` (`SeedanceQueueInfo`) is set only while the task is `queued` or
+`running` and is `null` once it finishes. It is derived by this server from the
+task's own timestamps, because ModelArk publishes no queue position or ETA:
 
-List recent Seedance video generation tasks (last 7 days).
+| Field | Description |
+|---|---|
+| `queued_seconds` | Seconds queued: now minus `created_at` while queued, or `updated_at` minus `created_at` once running (approximate) |
+| `running_seconds` | Seconds since the last status update while running (approximate) |
+| `service_tier` | `default` or `flex`; flex tasks usually queue longer |
+| `expires_at` | ISO-8601 time after which the provider fails an unfinished task: `created_at + execution_expires_after` |
+| `expires_at_estimated` | `true` when the provider did not report `execution_expires_after` and the 48-hour default was assumed |
+| `hint` | Human-readable summary to relay to the user |
+
+### Example
+
+Foreground status poll of three tasks:
+
+```json
+{"task_ids": ["cgt-20261017-aaaa", "cgt-20261017-bbbb", "cgt-20261017-cccc"]}
+```
+
+Once `all_terminal` is `true`, keep the outputs durably (and optionally write
+them locally) through a background job:
+
+```json
+{
+  "tool_name": "gen_task_get",
+  "arguments": {
+    "input": {
+      "task_ids": ["cgt-20261017-aaaa", "cgt-20261017-bbbb"],
+      "persist_output": true,
+      "output_dir": "/Users/me/Videos/seedance/"
+    }
+  }
+}
+```
+
+### Polling workflow
+
+1. Submit a create tool (`seedance_create_task`, `seedance_2_5_create_task`,
+   `hyper3d_create_task`, and so on) through `ark_job_submit`, poll
+   `ark_job_get`, and read the provider `task_id` (or every variation's task
+   ID) from the job result.
+2. Call `gen_task_get` in the foreground with all the task IDs and the default
+   `persist_output=false`. `queued` or `running` is not a failure; wait
+   `recommended_poll_after_ms` and poll again.
+3. When `all_terminal` is `true`, call `gen_task_get` once more through
+   `ark_job_submit` with `persist_output=true` before the ~24-hour source URLs
+   expire.
+
+**Never resubmit the create tool to poll**: that creates a second billed task.
+
+## gen_task_list
+
+List your ModelArk generation tasks (Seedance video and 3D), **newest first**,
+from the last 7 days (the provider's list window). Registered when
+`BYTEPLUS_MODELARK_API_KEY` is set and uses the `gen:read` JWT scope. Use
+`gen_task_get` for outputs.
 
 **Annotations:** `readOnlyHint=True`, `destructiveHint=False`,
 `idempotentHint=True`, `openWorldHint=False`
@@ -1007,22 +1017,36 @@ List recent Seedance video generation tasks (last 7 days).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `page` | integer | No | Page number (1-500) |
-| `page_size` | integer | No | Page size (1-100, server caps at 100) |
-| `status` | SeedanceTaskStatus | No | Filter by status |
-| `task_ids` | list[string] | No | Filter by task IDs |
-| `model` | string | No | Filter by model |
-| `service_tier` | "default" \| "flex" | No | Filter by service tier |
+| `page_size` | integer | No | Maximum tasks to return (1-100, default 20) |
+| `cursor` | string | No | Opaque `next_cursor` from a previous call made with the same filters |
+| `status` | `queued` \| `running` \| `succeeded` \| `failed` \| `cancelled` \| `expired` | No | Only return tasks in this status |
+| `model` | string | No | Only return tasks run by this exact model ID |
+| `task_ids` | list[string] | No | Only return these task IDs (up to 100); IDs the caller does not own are skipped |
 
 ### Output
 
-Returns a `SeedanceTaskPage` with task summaries, total count, and
-pagination info. Each summary includes the same server-derived `queue` timing
-as `seedance_get_task` for queued and running tasks.
+Returns `GenTaskPage` with `tasks` (newest first) and `next_cursor`. Each
+summary has `task_id`, `model`, `kind` (`video`, `3d`, or `unknown`),
+`status`, `created_at`, and `error` (when failed). Follow `next_cursor` until
+it is `null`. **A page may hold fewer than `page_size` tasks while
+`next_cursor` is non-null**, so keep paging.
 
-## seedance_cancel_or_delete_task
+**Cursors are bound to their filters.** Changing `status`, `model`,
+`task_ids`, or `page_size` between pages rejects the cursor; repeat the
+original filters or start again without a cursor.
 
-Cancel (queued) or delete (terminal) a Seedance task.
+**Ownership:** For the local stdio principal the tool lists the account's
+tasks directly from the provider. For every other principal it pages the caller's owned task IDs from the ownership
+store in slices of 100 and asks the provider only for those IDs, so the
+provider request URL never overflows and other callers' tasks are never
+listed.
+
+## gen_task_cancel_or_delete
+
+Cancel (queued) or delete (terminal) any ModelArk generation task: Seedance,
+Hyper3D, or Hitem3d. Registered when `BYTEPLUS_MODELARK_API_KEY` is set and
+uses the `gen:delete` JWT scope. A deleted task's outputs are no longer
+retrievable through `gen_task_get`.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=True`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -1031,7 +1055,7 @@ Cancel (queued) or delete (terminal) a Seedance task.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `task_id` | string | Yes | Task ID |
+| `task_id` | string | Yes | ModelArk generation task ID |
 | `mode` | "cancel" \| "delete" | Yes | Operation mode |
 | `expected_status` | "queued" \| "succeeded" \| "failed" \| "expired" | Yes | Expected current status |
 | `confirm` | true | Yes | Explicit confirmation required |
@@ -1120,8 +1144,8 @@ Generate N independent audio variations in parallel.
 ### seedance_create_task_variations
 
 Create N independent Seedance video tasks in parallel. The background result
-contains the per-variation provider task IDs for async polling via
-`seedance_get_task`.
+contains the per-variation provider task IDs; poll them all in one
+`gen_task_get` call.
 
 **Input:** Inherits all fields from `seedance_create_task`, plus:
 
@@ -1137,8 +1161,8 @@ contains the per-variation provider task IDs for async polling via
 ### seedance_2_5_create_task_variations
 
 Create N independent Seedance 2.5 video tasks in parallel (each a separate
-provider task). Retrieve the background result, then pass each provider task ID
-to `seedance_get_task`; partial failures are captured per variation.
+provider task). Retrieve the background result, then pass every provider task
+ID to one `gen_task_get` call; partial failures are captured per variation.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -1172,8 +1196,7 @@ default) and `BYTEPLUS_MODELARK_API_KEY` is set; both require the
 
 The regular 2.5 and 2.0 create tools reject Premium model IDs, and the Premium
 tools reject non-Premium IDs. Poll, list, and cancel Premium tasks with the
-shared `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, and
-`seedance_cancel_or_delete_task` tools.
+shared `gen_task_get`, `gen_task_list`, and `gen_task_cancel_or_delete` tools.
 
 **Output:** Same as the corresponding Seedance 2.5 tool.
 
@@ -1595,27 +1618,16 @@ provider task ID from its background result.
 Returns `Seed3DCreateTaskOutput` with `task_id`, `status="queued"`, and a
 recommended polling delay.
 
-## hyper3d_get_task / hitem3d_get_task
+### Polling, listing, and cancelling 3D tasks
 
-Retrieve a 3D task's status and, on first success, persist the provider's
-zip URL into durable artifact storage (`seed-media://artifacts/{id}`).
+3D tasks share the ModelArk generation task lifecycle with Seedance:
 
-**Execution:** Optional background job. Poll in foreground with
-`persist_output=false`, then use background execution with `persist_output=true`
-for the completed download.
-
-With `persist_output=true`, `output_path` (a file, or a directory ending with
-`/`) and `overwrite` also write the 3D file to a
-[local path](#writing-outputs-to-local-paths). If the file cannot be stored,
-the reference comes back with `id="provider-url"` and a `persistence_error`;
-re-persist it with `seed_media_persist_url` before the provider URL expires.
-
-## hyper3d_list_tasks / hitem3d_list_tasks
-
-List recent 3D tasks (provider keeps 7 days), filtered by status, task IDs,
-or model.
-
-## hyper3d_cancel_or_delete_task / hitem3d_cancel_or_delete_task
-
-Cancel a queued task or delete the record of a terminal (succeeded, failed,
-expired) task. The handler verifies `expected_status` matches before acting.
+- **Poll** with [`gen_task_get`](#gen_task_get). A 3D task reports
+  `kind="3d"` and one `model_file` output (usually a zip) once it succeeds.
+  Poll in the foreground with `persist_output=false`, then call it through
+  `ark_job_submit` with `persist_output=true` (and optionally `output_dir`) to
+  copy the file into durable storage (`seed-media://artifacts/{id}`).
+- **List** with [`gen_task_list`](#gen_task_list) (last 7 days; filter by
+  `model` to see only Hyper3D or Hitem3d tasks).
+- **Cancel or delete** with
+  [`gen_task_cancel_or_delete`](#gen_task_cancel_or_delete).

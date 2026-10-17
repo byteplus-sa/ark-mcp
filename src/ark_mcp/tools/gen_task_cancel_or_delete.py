@@ -1,4 +1,4 @@
-"""``seedance_cancel_or_delete_task`` tool — cancel or delete a Seedance task.
+"""``gen_task_cancel_or_delete`` tool — cancel or delete a ModelArk generation task.
 
 The handler first retrieves the task, compares current and expected
 status, enforces cancel-only-for-queued and delete-only-for-terminal
@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import warning as log_warning
-from ark_mcp.providers.modelark.seedance import SeedanceService
+from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.tools._errors import provider_error_result
@@ -33,10 +33,15 @@ _CANCELABLE_STATES: frozenset[str] = frozenset({"queued"})
 _DELETABLE_STATES: frozenset[str] = frozenset({"succeeded", "failed", "expired"})
 
 
-class SeedanceCancelOrDeleteInput(BaseModel):
-    """Input model for ``seedance_cancel_or_delete_task``."""
+class GenTaskCancelOrDeleteInput(BaseModel):
+    """Input model for ``gen_task_cancel_or_delete``."""
 
-    task_id: str = Field(..., description="The task ID to cancel or delete.")
+    task_id: str = Field(
+        ...,
+        description=(
+            "ModelArk generation task ID (Seedance, Hyper3D, or Hitem3d) to cancel or delete."
+        ),
+    )
     mode: Literal["cancel", "delete"] = Field(
         ...,
         description="Action to perform: 'cancel' stops a queued task; 'delete' removes the record of a terminal task.",
@@ -55,7 +60,7 @@ class SeedanceCancelOrDeleteInput(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_mode_status_consistency(self) -> SeedanceCancelOrDeleteInput:
+    def validate_mode_status_consistency(self) -> GenTaskCancelOrDeleteInput:
         """Ensure the mode is valid for the expected status."""
         if self.mode == "cancel" and self.expected_status not in _CANCELABLE_STATES:
             raise ValueError(
@@ -72,8 +77,8 @@ class SeedanceCancelOrDeleteInput(BaseModel):
         return self
 
 
-class SeedanceCancelOrDeleteOutput(BaseModel):
-    """Output model for ``seedance_cancel_or_delete_task``."""
+class GenTaskCancelOrDeleteOutput(BaseModel):
+    """Output model for ``gen_task_cancel_or_delete``."""
 
     task_id: str = Field(..., description="The task ID that was cancelled or deleted.")
     mode: Literal["cancel", "delete"] = Field(
@@ -85,10 +90,10 @@ class SeedanceCancelOrDeleteOutput(BaseModel):
     message: str = Field(..., description="Human-readable confirmation message.")
 
 
-async def seedance_cancel_or_delete_task(
-    input: SeedanceCancelOrDeleteInput, ctx: Context
-) -> SeedanceCancelOrDeleteOutput | ToolResult:
-    """Cancel (queued) or delete (terminal) a Seedance video generation task.
+async def gen_task_cancel_or_delete(
+    input: GenTaskCancelOrDeleteInput, ctx: Context
+) -> GenTaskCancelOrDeleteOutput | ToolResult:
+    """Cancel (queued) or delete (terminal) a ModelArk generation task (Seedance or 3D).
 
     .. warning::
 
@@ -97,8 +102,8 @@ async def seedance_cancel_or_delete_task(
         - **cancel**: Stops a queued task. The task transitions to
           ``cancelled`` and cannot be resumed.
         - **delete**: Permanently removes the task record for a completed,
-          failed, or expired task. The generated video (if any) is no
-          longer retrievable via the task API.
+          failed, or expired task. Its outputs are no longer retrievable
+          through gen_task_get.
 
     The handler first fetches the current task state and rejects the
     operation if the actual status does not match ``expected_status``.
@@ -108,7 +113,7 @@ async def seedance_cancel_or_delete_task(
     await context_log(
         ctx,
         "info",
-        f"Seedance {input.mode} task {input.task_id} (expected_status={input.expected_status})",
+        f"Generation task {input.mode} {input.task_id} (expected_status={input.expected_status})",
     )
     await ctx.report_progress(progress=20, total=100)
     await get_runtime(ctx).ownership_store.require_owner(
@@ -117,7 +122,7 @@ async def seedance_cancel_or_delete_task(
         get_principal(ctx),
     )
 
-    service = SeedanceService()
+    service = GenerationTaskService()
 
     # 1. Fetch current state.
     try:
@@ -156,7 +161,7 @@ async def seedance_cancel_or_delete_task(
     await ctx.report_progress(progress=60, total=100)
 
     # 3. Issue DELETE.
-    service = SeedanceService()
+    service = GenerationTaskService()
     try:
         request_id = await call_with_retry(lambda: service.delete_task(input.task_id))
     except ProviderError as exc:
@@ -171,14 +176,14 @@ async def seedance_cancel_or_delete_task(
         f"Task '{input.task_id}' has been {'cancelled' if input.mode == 'cancel' else 'deleted'}."
     )
     log_warning(
-        "seedance_task_destructive_action",
+        "generation_task_destructive_action",
         task_id=input.task_id,
         mode=input.mode,
         previous_status=actual_status,
         request_id=request_id,
     )
 
-    return SeedanceCancelOrDeleteOutput(
+    return GenTaskCancelOrDeleteOutput(
         task_id=input.task_id,
         mode=input.mode,
         previous_status=actual_status,

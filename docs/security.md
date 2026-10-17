@@ -99,16 +99,12 @@ tool → scope mapping is the `scope` column of the static tool catalog
 | `seed:audio:generate` | `seed_audio_generate`, `seed_audio_generate_variations` |
 | `seedream:generate` | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` |
 | `seedance:create` | `seedance_create_task`, `seedance_create_task_variations`, and the Seedance 2.5 and 2.5 Premium create tools |
-| `seedance:read` | `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks` |
-| `seedance:delete` | `seedance_cancel_or_delete_task` |
+| `gen:read` | `gen_task_get`, `gen_task_list` (Seedance, Hyper3D and Hitem3d tasks) |
+| `gen:delete` | `gen_task_cancel_or_delete` |
 | `seed:asr:transcribe` | `speech_to_text` |
 | `understanding:read` | `seed_understand`, `seed_audio_understand` |
 | `hyper3d:create` | `hyper3d_create_task` |
-| `hyper3d:read` | `hyper3d_get_task`, `hyper3d_list_tasks` |
-| `hyper3d:delete` | `hyper3d_cancel_or_delete_task` |
 | `hitem3d:create` | `hitem3d_create_task` |
-| `hitem3d:read` | `hitem3d_get_task`, `hitem3d_list_tasks` |
-| `hitem3d:delete` | `hitem3d_cancel_or_delete_task` |
 | `omnihuman:create` | `omnihuman_create_task` |
 | `omnihuman:read` | `omnihuman_get_task` |
 | `omnihuman:cancel` | `omnihuman_cancel_task` |
@@ -126,6 +122,10 @@ tool → scope mapping is the `scope` column of the static tool catalog
 | `assets:verify` | `ark_asset_verification_start`, `ark_asset_verification_result` |
 | `assets:delete` | `ark_asset_delete`, `ark_asset_group_delete` (registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
 
+**Create scopes are per product because that is where spend happens; read
+and delete scopes are shared** (`gen:read`, `gen:delete`) because the
+ownership store already limits every principal to the tasks it created.
+
 `ark_job_*` and `ark_list_models` need an authenticated principal but no
 scope: job tools enforce the target tool's scope at submit time, and
 `ark_list_models` returns only configured model IDs and limits.
@@ -134,11 +134,8 @@ The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
 routes are **not** scope-protected at the FastMCP layer. Seed Audio and
 speech-to-text tools are registered only when `BYTEPLUS_SEED_SPEECH_API_KEY`
 is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
-`vod_enhance_video`, `vod_get_enhancement_task`,
-`vod_transcode_video`, `vod_get_transcode_task`, `vod_add_subtitles`,
-`vod_get_subtitle_addition_task`, `vod_remove_subtitles`,
-`vod_get_subtitle_removal_task`, `vod_separate_audio`, and
-`vod_get_audio_separation` only when
+`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
+`vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload`,
 `media_upload_batch`, `media_presign`, and `media_presign_batch` tools are
 registered only when object storage credentials are set (TOS:

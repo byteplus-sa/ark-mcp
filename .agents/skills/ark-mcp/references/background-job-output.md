@@ -19,17 +19,18 @@ has not been established yet.
 failure happens before billing. A retry without those options is a new, valid
 submission; record the failed Ark job ID beside the operation first.
 
-Observed on 2026-09-24 for `seedance_get_task` (`persist_output=true`,
-`output_path`), `seed_audio_generate` (`output_path`), and `seed_understand` /
+Observed on 2026-09-24 for the Seedance task poller (`persist_output=true`,
+`output_path`; now `gen_task_get` with `output_dir`), `seed_audio_generate` (`output_path`), and `seed_understand` /
 `seed_audio_understand` (`save_to`).
 
 Default route for background submissions:
 
 1. Omit `output_path`, `output_dir`, and `save_to`.
 2. Read the answer or provider URL from `ark_job_get.result.structured_content`.
-3. For Seedance, poll `seedance_get_task` in the foreground with
-   `persist_output=false`, then download `settings.video_url` (valid about 24 h)
-   to the project path with an HTTPS client.
+3. For Seedance, poll `gen_task_get` in the foreground (`persist_output`
+   omitted) until `all_terminal`, then download the `source_url` of the output
+   with `role="video"` (valid about 24 h) to the project path with an HTTPS
+   client.
 4. Record bytes, SHA-256, and `ffprobe` properties in the task registry and shot
    manifest. Set the artifact `source` to the provider-URL download. There is no
    durable MCP artifact ID in this case.

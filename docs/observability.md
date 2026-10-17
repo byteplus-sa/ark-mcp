@@ -64,7 +64,7 @@ Policy (per the module docstring): never log prompt text, full media URLs,
 Base64, subtitles, or credentials. Redaction is a safety net; call sites
 avoid passing these fields in the first place.
 
-`vod_enhance_video` and `vod_get_enhancement_task` log lifecycle and safe
+`vod_enhance_video` and `vod_get_task` log lifecycle and safe
 persistence messages only. Their
 source and output URLs and Bearer credential are not logged. A successful
 enhancement whose best-effort artifact copy fails remains a successful tool

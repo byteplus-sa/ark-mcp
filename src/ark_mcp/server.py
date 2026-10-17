@@ -81,9 +81,9 @@ SERVER_INSTRUCTIONS = (
     "configured IDs it returns, and it lists per-model limits and which optional services "
     "are enabled. Run long-running tools through ark_job_submit and ark_job_get; this is the "
     "default path because most clients do not support MCP tasks, and native task "
-    "augmentation also works. Poll Seedance tasks with seedance_get_task, 3D tasks with "
-    "hyper3d_get_task or hitem3d_get_task, OmniHuman tasks with omnihuman_get_task, and VOD "
-    "tasks with the matching VOD polling tool; never resubmit a create tool to poll. "
+    "augmentation also works. Poll Seedance and 3D tasks with gen_task_get, VOD tasks with "
+    "vod_get_task (pass the operation the create tool returned), and OmniHuman tasks with "
+    "omnihuman_get_task; never resubmit a create tool to poll. "
     "Generated media is persisted as seed-media:// resources; reference private assets as "
     "asset://<asset_id> in Seedance."
 )

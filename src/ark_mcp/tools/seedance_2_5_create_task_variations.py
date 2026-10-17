@@ -2,7 +2,7 @@
 
 Creates N independent Seedance 2.5 video generation tasks in parallel.
 Each variation creates a separate task; the caller polls each task ID
-via ``seedance_get_task``.
+via ``gen_task_get``.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ async def seedance_2_5_create_task_variations(
     """Create multiple Seedance 2.5 video tasks in parallel.
 
     Each variation creates a separate task. The caller polls each task ID
-    via ``seedance_get_task``. Partial failures are captured per variation.
+    via ``gen_task_get``. Partial failures are captured per variation.
     With ``draft=true`` every variation is a 480p Draft preview; render the
     chosen one with ``seedance_2_5_create_task`` and ``draft_task_id``.
     Requires MCP task-augmented execution for the provider submissions.
