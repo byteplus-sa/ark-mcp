@@ -11,8 +11,8 @@ products plus artifact access and an optional media upload helper:
 
 | Product | Tools | Description |
 |---|---|---|
-| **Seed Audio** | `seed_audio_generate`, `seed_audio_generate_variations` | Background-task full-scene audio generation through Seed Speech |
-| **Seedream** | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` | Background-task image generation and editing through ModelArk |
+| **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech; one clip or 1-5 parallel variations |
+| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: text-to-image, reference editing, point/box edits, transparent cut-outs (5.0 Pro), provider batches, 1-10 parallel variations, and `dry_run` request and cost previews |
 | **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (2.0, 2.5 by default, and whitelist-only 2.5 Premium with 4K when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`): pick the model from `ark_list_models(kind='video')`, create 1-5 variations, use Draft mode on 2.5, or `dry_run` for a free request and cost preview; poll with the shared generation task tools |
 | **Hyper3D / Hitem3d** | `hyper3d_create_task`, `hitem3d_create_task` | Background-task 3D submission through ModelArk; poll with the shared generation task tools (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
 | **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | One lifecycle for every ModelArk generation task (Seedance video and 3D): batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
@@ -45,8 +45,8 @@ Key features:
   symlink-safe, no-silent-overwrite writes
 - **Parallel variations** — generate N independent variations in a single
   call, partial failures captured per variation with the failure phase
-- **Per-variation seeds** — Seedream supports reproducible generation with
-  `base_seed + index` deterministic seeds
+- **Per-variation seeds** — Seedream supports reproducible variations: with
+  `variations > 1`, `seed` is the base seed and variation *i* uses `seed + i`
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
 - **Timeout-safe long operations** — generation, transcription, large upload,
@@ -83,10 +83,10 @@ accepts as reference input:
 | `seed_audio_generate` | Audio | ✓ | ✓ | ✓ | — | 3 | Exclusive w/ image |
 | `seed_audio_generate` | Image | ✓ | ✓ | — | — | 1 | Exclusive w/ audio |
 
-> The `_variations` siblings (`seedream_generate_image_variations`,
-> `seed_audio_generate_variations`) accept the same input modalities as their
-> base tools. Seedance variations use `seedance_create_task` itself
-> (`variations`, 1-5), with the same limits as a single task.
+> Variations are a field on the base tools (`variations` on
+> `seedream_generate_image`, `seed_audio_generate`, and
+> `seedance_create_task`), so they accept the same input modalities and limits
+> as a single call.
 
 > [!NOTE]
 > **Video references must be pre-hosted.** `seedance_create_task` accepts

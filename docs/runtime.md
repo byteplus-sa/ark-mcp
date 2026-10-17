@@ -342,7 +342,8 @@ submit failures stay ambiguous.
 
 Re-exports `DEFAULT_MAX_CONCURRENT = 5`.
 
-- **`generate_seeds(base_seed, count)`** — `None` → provider-randomized (seed
+- **`generate_seeds(...)`** — derives Seedream variation seeds from
+  the request's `seed` (the base seed): `None` → provider-randomized (seed
   not recorded); `-1` → per-variation `secrets.randbelow(2**31)` (recorded);
   `N` → deterministic `(N + i) % 2**31`.
 - **`resolve_prompts(base_prompt, variation_prompts, count)`** — uses

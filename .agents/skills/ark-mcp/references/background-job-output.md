@@ -34,8 +34,9 @@ Default route for background submissions:
 4. Record bytes, SHA-256, and `ffprobe` properties in the task registry and shot
    manifest. Set the artifact `source` to the provider-URL download. There is no
    durable MCP artifact ID in this case.
-5. For Seed Audio, keep `persist=true` so the durable artifact is created
-   server-side. If the result carries `persistence_error`, recover with
+5. For Seed Audio and Seedream, keep `persist=true` so the durable artifacts
+   are created server-side (with `variations > 1` they are in
+   `summary.variations[]`, not `artifact` / `artifacts`). If the result carries `persistence_error`, recover with
    `seed_media_persist_url` before the 2 h audio URL expires.
 
 When a client has confirmed native task augmentation, the local-write options

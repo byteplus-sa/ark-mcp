@@ -94,7 +94,10 @@ class SeedreamGenerateInput(BaseModel):
         None,
         ge=-1,
         le=2147483647,
-        description="Random seed (-1 = random). With variations > 1, each variation uses seed + its index.",
+        description=(
+            "Random seed. With variations > 1: N gives variation i seed N + i, -1 picks a random "
+            "recorded seed per variation, and omitted lets the provider randomize each one."
+        ),
     )
     max_images: int | None = Field(
         None,

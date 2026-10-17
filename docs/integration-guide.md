@@ -404,10 +404,14 @@ The server skips registering tools for products without credentials. Check:
 
 If only some products' tools are registered:
 
-- No ModelArk key → no Seedream or Seedance tools (5 tools missing)
-- No Seed Audio key → no Seed Audio tools (2 tools missing)
+- No ModelArk key → no `seedream_generate_image`, `seedance_create_task`,
+  `gen_task_*`, `seed_understand`, or `seed_audio_understand`
+- No Seed Speech key → no `seed_audio_generate` or `speech_to_text`
+- Optional products (Seed 3D, OmniHuman, VOD MediaKit, object storage, asset
+  library) also need their own keys or feature flags; see
+  [Configuration](configuration.md).
 
-Both keys are required for all 9 tools to appear.
+`ark_list_models` reports which optional services are enabled.
 
 ## Environment Variables Reference
 

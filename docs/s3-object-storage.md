@@ -179,7 +179,7 @@ transferred — only a new URL is minted. This works with both the TOS and S3
 backends through the shared `ObjectStorageGateway` protocol.
 
 The presigned URL is passed directly to BytePlus generation tools
-(`seedance_create_task` video references, `seedream_edit_image` reference
+(`seedance_create_task` video references, `seedream_generate_image` reference
 images, `seed_audio_generate` audio references). Your S3 bucket must be
 reachable from BytePlus endpoints — if it is behind a restrictive firewall
 or VPC, the presigned URL will not resolve and the generation will fail.

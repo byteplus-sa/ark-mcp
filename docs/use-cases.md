@@ -74,15 +74,16 @@ Using the same seed and prompt produces the same image.
 ## 4. Parallel Image Variations
 
 Generate multiple distinct image variations in a single call to give the
-user choices. Each variation gets a distinct seed.
+user choices. With `variations > 1`, `seed` is the base seed, so each
+variation gets a distinct seed.
 
-**Tool:** `seedream_generate_image_variations`
+**Tool:** `seedream_generate_image`
 
 ```json
 {
   "prompt": "A futuristic city skyline, cyberpunk aesthetic",
   "variations": 5,
-  "base_seed": 100,
+  "seed": 100,
   "size": "1024x1024",
   "persist": true
 }
@@ -90,13 +91,14 @@ user choices. Each variation gets a distinct seed.
 
 This produces 5 images with seeds [100, 101, 102, 103, 104]. Each is an
 independent generation. Partial failures are captured — if 4 of 5 succeed,
-the tool returns 4 artifacts and 1 error.
+`summary` holds 4 artifacts and 1 error. Add `"dry_run": true` first to see
+the five request bodies and the estimated cost without billing.
 
 ## 5. Per-Variation Prompts
 
 Generate variations with different prompts for each.
 
-**Tool:** `seedream_generate_image_variations`
+**Tool:** `seedream_generate_image`
 
 ```json
 {
@@ -150,9 +152,10 @@ Generate audio that mimics a reference voice.
 
 ## 8. Parallel Audio Variations
 
-Generate multiple audio takes to choose from.
+Generate multiple audio takes to choose from (`variations` 1-5; results are
+in `summary`).
 
-**Tool:** `seed_audio_generate_variations`
+**Tool:** `seed_audio_generate`
 
 ```json
 {

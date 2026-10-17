@@ -9,8 +9,9 @@ The Ark Seed MCP server exposes BytePlus multimodal generation through a typed,
 safe MCP tool surface. It wraps multiple BytePlus AI product families behind
 one server, including products served through ModelArk:
 
-- **Seedream** — image generation and editing (text-to-image, reference-based
-  editing, batch generation).
+- **Seedream** — image generation and editing through **one tool**,
+  `seedream_generate_image` (text-to-image, reference-based editing, point/box
+  edits, provider batches, parallel variations, dry run).
 - **Seed Audio** — full-scene audio generation with voice cloning, subtitles,
   and watermarking.
 - **Seedance** — asynchronous video generation with task-based lifecycle
@@ -89,7 +90,7 @@ Invoke this skill when the user wants to:
 - fetch a previously persisted artifact by ID;
 - locate or copy a previously persisted artifact to a local path without
   streaming Base64 through the context window, or write generated output
-  straight to a local path with `output_path` / `output_dir`;
+  straight to a local path with `output_path` (or `output_dir` on `gen_task_get`);
 - recover a generated output whose durable storage failed
   (`persistence_error`) with `seed_media_persist_url`;
 - upload local or Base64 media to object storage (TOS or S3) to obtain a
@@ -127,8 +128,7 @@ and why. It makes no provider calls and needs no scope.
 
 ### Requires `BYTEPLUS_SEED_SPEECH_API_KEY`
 
-- `seed_audio_generate`
-- `seed_audio_generate_variations`
+- `seed_audio_generate`             # single clip or 1-5 parallel variations
 - `speech_to_text`
 
 ### Requires `BYTEPLUS_VOD_MEDIAKIT_API_KEY`
@@ -142,9 +142,7 @@ and why. It makes no provider calls and needs no scope.
 
 ### Requires `BYTEPLUS_MODELARK_API_KEY`
 
-- `seedream_generate_image`
-- `seedream_edit_image`
-- `seedream_generate_image_variations`
+- `seedream_generate_image`         # the only Seedream tool: generate, edit, batches, variations
 - `seedance_create_task`            # every Seedance model, variations, Draft, dry run
 - `gen_task_get`                    # shared: checks 1-50 Seedance or 3D tasks
 - `gen_task_list`                   # shared: lists Seedance and 3D tasks
@@ -227,11 +225,8 @@ is contacted:
 - `media_upload`
 - `media_upload_batch`
 - `seed_audio_generate`
-- `seed_audio_generate_variations`
 - `speech_to_text`
 - `seedream_generate_image`
-- `seedream_edit_image`
-- `seedream_generate_image_variations`
 - `seedance_create_task`
 - `hyper3d_create_task`
 - `hitem3d_create_task`
@@ -423,13 +418,13 @@ Returns `{artifact}` with the new durable `ArtifactRef`.
 On stdio, write output straight to disk instead of exporting afterwards:
 
 - `output_path` (file, or directory ending with `/`) + `overwrite` on
-  `seedream_generate_image`, `seedream_edit_image`, `seed_audio_generate`,
-  and `vod_get_task` (`separate_audio` needs a directory and writes every
-  track). Multi-image `seedream_generate_image` (`max_images > 1`) needs a
-  directory.
-- `output_dir` + `overwrite` on `seedream_generate_image_variations`,
-  `seed_audio_generate_variations`, and `gen_task_get` (each succeeded task's
-  video, last frame, or 3D file, named `<artifact_id>.<ext>`).
+  `seedream_generate_image`, `seed_audio_generate`, and `vod_get_task`
+  (`separate_audio` needs a directory and writes every track). **A directory
+  is required** when `seedream_generate_image` produces several images
+  (`variations > 1` or `max_images > 1`) and when `seed_audio_generate` runs
+  `variations > 1`.
+- `output_dir` + `overwrite` on `gen_task_get` (each succeeded task's video,
+  last frame, or 3D file, named `<artifact_id>.<ext>`).
 - `save_to` + `overwrite` on `seed_understand` and `seed_audio_understand`
   (writes the answer).
 
@@ -688,25 +683,36 @@ Requires `BYTEPLUS_SEED_SPEECH_API_KEY`. Auth scope: `seed:audio:generate`.
 
 #### `seed_audio_generate`
 
-Generate a full-scene audio clip from a text prompt. Supports voice cloning via
-audio references, optional image input for context-aware audio, subtitle
-generation, and watermarking.
+Generate a full-scene audio clip — or **1–5 parallel variations** — from a
+text prompt. Supports voice cloning via audio references, optional image input
+for context-aware audio, subtitle generation, and watermarking. Run it through
+`ark_job_submit` (or native task augmentation).
 
 **Constraint:** `audio_references` and `image_reference` are mutually
 exclusive.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `text_prompt` | `str` | Yes | 1–3000 characters |
+| `text_prompt` | `str` | Yes* | 1–3000 characters. *Optional when `variation_prompts` is set; one of them is required. |
 | `audio_references` | `list[AudioReference]` | No | Up to 3 references (speaker ID, URL, or Base64). Base64 WAV is preflight-checked against the 30s limit. |
-| `image_reference` | `MediaSource` | No | Image for context-aware audio |
+| `image_reference` | `ReferenceImageInput` | No | Image for context-aware audio |
 | `output` | `AudioOutputOptions` | No | Format (wav/mp3/pcm/ogg), sample_rate, speech_rate, loudness_rate, pitch_rate, subtitle options |
 | `watermark` | `AudioWatermarkOptions` | No | Enable watermark and optional metadata |
-| `persist` | `bool` | Yes (default `true`) | Persist to artifact store |
+| `variations` | `int` | No | 1–5 (default 1) independent parallel generations. **Seed Audio has no seed**; variations differ by sampling. Partial failures reported per variation. |
+| `variation_prompts` | `list[str]` | No | Exactly `variations` entries (each 1–3000 chars); overrides `text_prompt`. |
+| `persist` | `bool` | No (default `true`) | Persist to artifact store |
+| `output_path` | `str` | No | stdio-only local export: a file, or a directory ending in `/`. **Must be a directory when `variations > 1`.** Requires `persist=true`. |
+| `overwrite` | `bool` | No (default `false`) | Replace an existing file at `output_path`. |
 
-Returns `SeedAudioGenerateOutput` with `artifact: ArtifactRef`,
-`duration_seconds`, `billing_duration_seconds`, optional `subtitle`,
-`request_id`, `provider_log_id`, optional `source_url`.
+Returns `SeedAudioGenerateOutput`:
+
+- **Single call (`variations=1`)** — `artifact: ArtifactRef`,
+  `duration_seconds`, `billing_duration_seconds`, optional `subtitle`,
+  `request_id`, `provider_log_id`, optional `source_url`.
+- **Variations (`variations > 1`)** — `artifact`, `duration_seconds`, and
+  `billing_duration_seconds` are **null**; `summary: VariationSummary`
+  carries `total`, `succeeded`, `failed`, and per-variation `artifact` or
+  `error`.
 
 **Example — basic audio generation:**
 
@@ -716,8 +722,7 @@ Returns `SeedAudioGenerateOutput` with `artifact: ArtifactRef`,
   "output": {
     "format": "wav",
     "sample_rate": 44100
-  },
-  "persist": true
+  }
 }
 ```
 
@@ -733,27 +738,11 @@ Returns `SeedAudioGenerateOutput` with `artifact: ArtifactRef`,
     "format": "mp3",
     "subtitle": true,
     "subtitle_type": "word"
-  },
-  "persist": true
+  }
 }
 ```
 
-#### `seed_audio_generate_variations`
-
-Generate 1–5 audio variations in parallel. Each variation is an independent
-generation (no seeds are supported for audio).
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `text_prompt` | `str` | Yes | Base prompt (1–3000 chars) |
-| `variations` | `int` | Yes | 1–5 |
-| `variation_prompts` | `list[str]` | No | Per-variation prompts (one per variation) |
-| All other audio params | — | No | Same as `seed_audio_generate` |
-
-Returns `SeedAudioVariationsOutput` with `VariationSummary` (total, succeeded,
-failed, per-variation results with partial failure capture).
-
-**Example — 3 variations with per-variation prompts:**
+**Example — 3 variations with per-variation prompts, saved locally:**
 
 ```json
 {
@@ -764,7 +753,7 @@ failed, per-variation results with partial failure capture).
   ],
   "variations": 3,
   "output": { "format": "mp3" },
-  "persist": true
+  "output_path": "/abs/project/audio/ambience/"
 }
 ```
 
@@ -798,138 +787,148 @@ storage with duplicate copies of the same reference images.
 
 Requires `BYTEPLUS_MODELARK_API_KEY`. Auth scope: `seedream:generate`.
 
-#### `seedream_edit_image`
-
-Interactive image editing with spatial precision. Supports point-based and
-bounding-box editing through structured coordinate inputs. At least one
-reference image and one coordinate (point or bbox) are required.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `prompt` | `str` | Yes | 1–4000 characters. Natural-language edit instruction. |
-| `images` | `list[MediaSource]` | Yes | Reference images to edit (at least 1). |
-| `point` | `EditCoordinate` | No* | Point coordinate `{x, y}` (0–999). *Required if bbox not provided. |
-| `bbox` | `EditBbox` | No* | Bounding-box `{x1, y1, x2, y2}` (0–999). *Required if point not provided. |
-| All other image params | — | No | Same as `seedream_generate_image` |
-
-Returns `SeedreamEditOutput` with `artifacts: list[ArtifactRef]` and
-`usage: SeedreamUsage`.
-
-**Example — replace an object near a point:**
-
-```json
-{
-  "prompt": "Replace the object with a crown.",
-  "images": [{"kind": "url", "url": "https://example.com/photo.png"}],
-  "point": {"x": 520, "y": 460}
-}
-```
-
-**Example — replace a region with a bounding box:**
-
-```json
-{
-  "prompt": "Replace with a garden.",
-  "images": [{"kind": "url", "url": "https://example.com/photo.png"}],
-  "bbox": {"x1": 120, "y1": 180, "x2": 640, "y2": 760}
-}
-```
-
-Coordinates are normalized to 0–999 (top-left = `0,0`, bottom-right =
-`999,999`). Convert pixel coordinates: `normalized = round(pixel / dimension * 1000)`.
-
----
-
 #### `seedream_generate_image`
 
-Generate images from text prompts. Supports text-to-image, reference-based
-generation, batch generation (Lite/4x models), seed-based reproducibility, and
-prompt optimization. For interactive editing with spatial coordinates, use
-`seedream_edit_image` instead.
+**The only Seedream tool.** One call covers text-to-image, image-to-image and
+reference-based editing, point/box edits on the first image, provider batches
+(`max_images`), parallel variations (`variations`), and dry runs. Run it
+through `ark_job_submit` (or native task augmentation); a foreground direct
+call is rejected.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `prompt` | `str` | Yes | 1–4000 characters |
-| `images` | `list[MediaSource]` | No | Reference images for editing |
-| `model` | `str` | No | Model ID. Default: `dola-seedream-5-0-pro-260628` (Pro). Lite and 4x IDs are configured via `SEEDREAM_MODEL_BINDINGS`. |
-| `size` | `str` | No | e.g. `1024x1024` |
-| `seed` | `int` | No | -1 to 2147483647; -1 = client-randomized |
-| `max_images` | `int` | No | 1–15 (batch for Lite/4x models only) |
-| `output_format` | `"png"` \| `"jpeg"` | No | Default: `png` |
-| `response_format` | `"url"` \| `"b64_json"` | No | Default: `url` |
-| `watermark` | `bool` | No | Provider watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | Prompt enhancement; 5.0 Pro falls back to the server-configured `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard` by default), pass `fast` for lower latency |
-| `persist` | `bool` | Yes (default `true`) | Persist to artifact store |
+| `prompt` | `str` | Yes* | 1–4000 characters, **including** any point/bbox markup. With `images` it is the edit instruction. *Optional when `variation_prompts` is set. |
+| `images` | `list[ReferenceImageInput]` | No | Reference or source images (URL, Base64, `asset://`). Max count is per model (Pro 10, Lite/4.x 14), checked at runtime. |
+| `point` | `EditCoordinate` | No | `{x, y}` (0–999) on the **first** image. Requires `images`. |
+| `bbox` | `EditBbox` | No | `{x1, y1, x2, y2}` (0–999, `x1 <= x2`, `y1 <= y2`) on the **first** image. Requires `images`. |
+| `model` | `str` | No | Exact configured ID from `ark_list_models(kind='image')`. Omit for the default (`SEEDREAM_DEFAULT_MODEL`, Seedream 5.0 Pro `dola-seedream-5-0-pro-260628` unless changed). |
+| `size` | `str` | No | e.g. `2048x2048`; validated when the model has a size list. |
+| `seed` | `int` | No | -1 to 2147483647. Single call: sent as-is (-1 = random). With `variations > 1` it is the **base seed** (see below). |
+| `max_images` | `int` | No | 1–15 images from **one provider call**; only on batch-capable models (Lite, 4.x). **Cannot be combined with `variations > 1`.** |
+| `output_format` | `"png"` \| `"jpeg"` | No | Per model: Pro/Lite png or jpeg, 4.x jpeg only. |
+| `response_format` | `"url"` \| `"b64_json"` | No | Provider response format. |
+| `watermark` | `bool` | No | AIGC watermark. |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | Omitted: 5.0 Pro uses `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard` by default); other models use the provider default. Rejected on models without support. |
+| `background` | `"opaque"` \| `"transparent"` | No | `transparent` needs a supporting model (Seedream 5.0 Pro), **exactly one** input image with an alpha channel, and `output_format` omitted or `png`. |
+| `variations` | `int` | No | 1–10 (default 1) independent parallel generations; partial failures reported per variation. |
+| `variation_prompts` | `list[str]` | No | Exactly `variations` entries (each 1–4000 chars); overrides `prompt`. |
+| `persist` | `bool` | No (default `true`) | Persist to the artifact store. |
+| `dry_run` | `bool` | No (default `false`) | Validate and return the request bodies and a cost estimate; **no provider call, nothing billed**. |
+| `output_path` | `str` | No | stdio-only local export: a file, or a directory ending in `/`. **Must be a directory** when `variations > 1` or `max_images > 1`. Requires `persist=true`. |
+| `overwrite` | `bool` | No (default `false`) | Replace an existing file at `output_path`. |
 
-Returns `SeedreamGenerateOutput` with `artifacts: list[ArtifactRef]` and
-`usage: SeedreamUsage`.
+**Point/bbox edits.** The tool prepends markup to the prompt —
+`Image 1<bbox>x1 y1 x2 y2</bbox>` and/or `Image 1<point>x y</point>` (bbox
+first when both) — and applies it to **every** variation prompt. Coordinates
+are normalized (top-left `0,0`, bottom-right `999,999`); convert pixels with
+`normalized = round(pixel / dimension * 1000)`, capped at 999.
+
+**Seeds with variations.** With `variations > 1`, `seed` is the base seed:
+
+| `seed` | Per-variation seeds |
+|---|---|
+| omitted | Provider randomizes each; seed **not recorded** in `summary` |
+| `-1` | Client picks a random seed per variation; **recorded** |
+| `N` | `N, N+1, N+2, …` (wrapped modulo 2147483648) |
+
+**`max_images` vs `variations`.** `max_images` is one provider batch
+(one request, one `usage`, Lite/4.x only). `variations` runs separate calls in
+parallel (works on every model, per-variation prompts and seeds). On Pro, use
+`variations`.
+
+**Runtime validation.** Before any provider call the request is checked
+against the resolved model: reference count, `output_format`, `size`,
+`max_images > 1` without batch support, `prompt_optimization` support, and the
+transparent-background rules. Every violation is listed in **one** error that
+ends with `Call ark_list_models(kind='image') for per-model limits.`
+
+Built-in family limits (**`ark_list_models(kind='image')` is
+authoritative**):
+
+| Family | Max references | `max_images` batch | `output_format` | `prompt_optimization` | Transparent background |
+|---|---|---|---|---|---|
+| **Pro** (Seedream 5.0 Pro, default) | 10 | No | png, jpeg | Yes (default from `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Yes |
+| **Lite** | 14 | Yes | png, jpeg | Yes | No |
+| **4.x** | 14 | Yes | jpeg | Yes | No |
+
+Returns `SeedreamGenerateOutput`:
+
+- `provider` (`byteplus-modelark`), `model`, `created_at`, `dry_run`.
+- `artifacts: list[ArtifactRef]` — images from a single call
+  (`variations=1`); **empty for variations and dry runs**.
+- `item_errors` — per-image errors from a single provider batch.
+- `usage: SeedreamUsage | null` — token usage of a single call; null for
+  variations and dry runs.
+- `summary: VariationSummary | null` — when `variations > 1`: `total`,
+  `succeeded`, `failed`, and per-variation `index`, `seed`, `artifact` or
+  `error`, `request_id`.
+- `preview` — dry run only: `requests` (provider bodies, one per variation;
+  reference URLs reduced to scheme and host, inline Base64 to its size) and
+  `estimated_cost_usd` (static estimate, not a provider quote).
 
 **Example — text-to-image:**
 
 ```json
 {
   "prompt": "A serene mountain landscape at sunset, digital art style",
-  "size": "1024x1024",
-  "output_format": "jpeg",
-  "persist": true
+  "size": "2048x2048",
+  "output_format": "jpeg"
 }
 ```
 
-**Example — image editing with a reference:**
+**Example — edit with a reference image:**
 
 ```json
 {
   "prompt": "Change the background to a beach scene while keeping the subject unchanged",
-  "images": [
-    { "kind": "url", "url": "https://cdn.example.com/original.png" }
-  ],
-  "size": "1024x1024",
-  "persist": true
+  "images": [{ "kind": "url", "url": "https://cdn.example.com/original.png" }]
 }
 ```
 
-**Example — reproducible generation with a seed:**
+**Example — point and bbox edits:**
 
 ```json
 {
-  "prompt": "A cat sitting on a windowsill looking outside",
-  "seed": 42,
-  "size": "1024x1024",
-  "persist": true
+  "prompt": "Replace the object with a crown.",
+  "images": [{ "kind": "url", "url": "https://example.com/photo.png" }],
+  "point": { "x": 520, "y": 460 }
 }
 ```
 
-#### `seedream_generate_image_variations`
+```json
+{
+  "prompt": "Replace with a garden.",
+  "images": [{ "kind": "url", "url": "https://example.com/photo.png" }],
+  "bbox": { "x1": 120, "y1": 180, "x2": 640, "y2": 760 }
+}
+```
 
-Generate 1–10 image variations in parallel. Each variation gets a distinct
-seed, making every result different. Supports per-variation prompts and
-deterministic seed sequences.
+**Example — transparent cut-out (Seedream 5.0 Pro):**
 
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `prompt` | `str` | Yes | Base prompt (1–4000 chars) |
-| `variations` | `int` | Yes | 1–10 |
-| `variation_prompts` | `list[str]` | No | Per-variation prompts |
-| `base_seed` | `int` | No | None=random, -1=client-randomized, N=deterministic sequence |
-| All other image params | — | No | Same as `seedream_generate_image` |
+```json
+{
+  "prompt": "Cut out the product and remove the background",
+  "images": [{ "kind": "url", "url": "https://cdn.example.com/product-rgba.png" }],
+  "background": "transparent",
+  "output_format": "png"
+}
+```
 
-Returns `SeedreamVariationsOutput` with `VariationSummary`.
-
-**Example — 4 variations with deterministic seeds:**
+**Example — 4 variations with deterministic seeds, saved locally:**
 
 ```json
 {
   "prompt": "A futuristic city skyline, cyberpunk aesthetic",
   "variations": 4,
-  "base_seed": 100,
-  "size": "1024x1024",
-  "persist": true
+  "seed": 100,
+  "output_path": "/abs/project/renders/skyline/"
 }
 ```
 
-This produces 4 images with seeds [100, 101, 102, 103].
+This produces 4 images with seeds `[100, 101, 102, 103]`, reported in
+`summary`.
 
-**Example — per-variation seasonal prompts:**
+**Example — per-variation prompts:**
 
 ```json
 {
@@ -939,8 +938,18 @@ This produces 4 images with seeds [100, 101, 102, 103].
     "A cat in autumn, fallen leaves",
     "A cat in winter, snow"
   ],
-  "variations": 4,
-  "persist": true
+  "variations": 4
+}
+```
+
+**Example — dry run before a batch (Lite/4.x model):**
+
+```json
+{
+  "prompt": "Product shots of a ceramic mug on a wooden table",
+  "model": "<lite-or-4.x-id-from-ark_list_models>",
+  "max_images": 4,
+  "dry_run": true
 }
 ```
 
@@ -2023,7 +2032,9 @@ default model for that product is used.
 2. Poll the local job at the advertised interval and retrieve its background
    result.
 3. The tool returns an `ArtifactRef` with `uri` (e.g.
-   `seed-media://artifacts/abc123`).
+   `seed-media://artifacts/abc123`) — in `artifacts` / `artifact` for a single
+   call, or per variation in `summary.variations[]` when `variations > 1`.
+   For Seedream, `dry_run: true` first returns `preview` without billing.
 4. Use the artifact URI as a stable reference to the media. The artifact
    survives provider URL expiry.
 
@@ -2206,10 +2217,13 @@ After downloading a Seedance result:
 
 ### Parallel Variations
 
-Use variation tools when you want to give the user multiple options:
+Set `variations` on the generation tool when you want to give the user
+multiple options — there are **no separate variation tools**:
 
-- `seedream_generate_image_variations` — up to 10 distinct images in one call.
-- `seed_audio_generate_variations` — up to 5 audio clips in one call.
+- `seedream_generate_image` with `variations` (1–10) — distinct images, one
+  provider call each; optional `variation_prompts` and base `seed`.
+- `seed_audio_generate` with `variations` (1–5) — independent audio clips;
+  optional `variation_prompts` (no seed).
 - `seedance_create_task` with `variations` (1–5) — up to 5 parallel video
   tasks, any Seedance model; per-variation results are in `tasks[]`.
 
@@ -2221,26 +2235,29 @@ entry (with `task_id` or `error`) per variation. There is no per-variation timeo
 (queue wait never counts); one batch deadline bounds the call. A deadline or
 storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry),
 `generating` (may have completed — do not retry blindly), or `persisting`
-(billed output not stored). Use `output_dir` on the image/audio variation
-tools to write results locally, and one `gen_task_get` call to poll all video
+(billed output not stored). Use `output_path` with a directory ending in `/`
+on the image/audio tools to write variation results locally, and one `gen_task_get` call to poll all video
 variations.
 
 ### Deterministic Reproduction
 
 For Seedream images, pass a `seed` to reproduce the same output with the same
-prompt. For variation tools, pass `base_seed` to get a deterministic sequence
-(e.g., `base_seed=100` with `variations=4` produces seeds [100, 101, 102,
-103]).
+prompt. With `variations > 1`, `seed` is the **base seed** of a
+deterministic sequence (e.g., `seed=100` with `variations=4` produces seeds
+[100, 101, 102, 103]); `seed=-1` picks and records a random seed per
+variation. Seed Audio has no seed.
 
 ### Image Editing
 
-For interactive, coordinate-based editing, use `seedream_edit_image` with
-structured `point` or `bbox` coordinates. The tool constructs the `<point>`
-and `<bbox>` markup automatically. Do not force point or bbox logic into
-`seedream_generate_image`.
+All editing goes through `seedream_generate_image`:
 
-For reference-based generation without spatial targeting, use
-`seedream_generate_image` with the `images` parameter.
+- **Reference-based edits** — pass `images` and an edit instruction as
+  `prompt`.
+- **Spatial edits** — add structured `point` or `bbox` coordinates (0–999) on
+  the first image. The tool builds the `<point>` / `<bbox>` markup; do not
+  write it into `prompt` yourself.
+- **Transparent cut-outs** — `background="transparent"` with exactly one RGBA
+  input on Seedream 5.0 Pro.
 
 ---
 
@@ -2316,6 +2333,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 | Presigned URL expired | TTL elapsed (default 30 min) | Call `media_presign` (single key) or `media_presign_batch` (many keys) with the `object_key` to generate a fresh URL |
 | Seedance 2.5 Premium model missing from `ark_list_models(kind='video')` or rejected by `seedance_create_task` | `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` not set or ModelArk key missing | The model is whitelist-only; once the account is whitelisted, set the flag to `true` with `BYTEPLUS_MODELARK_API_KEY` configured. There are no separate Premium tools |
 | `seedance_create_task` returns `Request is not valid for model ...` | The request breaks that model's limits (every violation is listed) | Fix each listed item, or pick another model from `ark_list_models(kind='video')`; use `dry_run: true` to re-check without billing |
+| `seedream_generate_image` returns `Request is not valid for model ...` | Too many references, unsupported `output_format`/`size`, `max_images > 1` on Pro, unsupported `prompt_optimization`, or broken transparent-background rules | Fix each listed item or pick another model from `ark_list_models(kind='image')`; on Pro use `variations` instead of `max_images`; `dry_run: true` re-checks without billing |
 | 3D tools not appearing | `BYTEPLUS_MODELARK_3D_ENABLED` not set or ModelArk key missing | Set `BYTEPLUS_MODELARK_3D_ENABLED=true` and ensure `BYTEPLUS_MODELARK_API_KEY` is configured |
 | OmniHuman tools not appearing | `BYTEPLUS_OMNIHUMAN_ENABLED` not true or `BYTEPLUS_CV_API_KEY` missing | Set both; the Vision AI key is separate from the ModelArk key |
 | `omnihuman_create_task` rejects a `seed-media://` input | Filesystem artifact backend cannot mint provider-readable URLs | Use `ARTIFACT_BACKEND=object_storage`, or `media_upload` and pass the presigned URL |
@@ -2344,15 +2362,15 @@ Set to `0` (default) for record-only mode with no enforcement.
    first provider poll. A process timeout must continue the existing job, not
    create a duplicate.
 
-4. **Use variation tools for choice.** When the user needs options (e.g., "show
-   me a few versions"), use a variation tool (or `variations` on
-   `seedance_create_task`) rather than calling the single generate tool
-   multiple times. Variations run in parallel and handle partial
+4. **Use `variations` for choice.** When the user needs options (e.g., "show
+   me a few versions"), set `variations` on `seedream_generate_image`,
+   `seed_audio_generate`, or `seedance_create_task` rather than calling the
+   tool multiple times. Variations run in parallel and handle partial
    failures gracefully.
 
 5. **Set seeds for reproducibility.** When the user wants consistent or
-   reproducible output, pass a fixed `seed` to `seedream_generate_image` or a
-   `base_seed` to `seedream_generate_image_variations`.
+   reproducible output, pass a fixed `seed` to `seedream_generate_image`; with
+   `variations > 1` it becomes the base seed (`N, N+1, …`).
 
 6. **Check health first.** Call `seed-health://status` to verify which products
    are configured before attempting generation.
@@ -2463,8 +2481,8 @@ Set to `0` (default) for record-only mode with no enforcement.
     approval distinct.
 
 24. **Write outputs straight to the project on stdio.** Pass `output_path`
-    (generation tools, `vod_get_task`), `output_dir` (variations,
-    `gen_task_get`), or `save_to` (`seed_understand`,
+    (generation tools, `vod_get_task`; a directory for multi-output calls),
+    `output_dir` (`gen_task_get`), or `save_to` (`seed_understand`,
     `seed_audio_understand`) with an absolute
     path inside the client's roots instead of a follow-up
     `seed_media_export_artifact` call. Check `local_path` / `export_error`.
