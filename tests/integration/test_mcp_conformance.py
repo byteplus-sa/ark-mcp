@@ -132,7 +132,6 @@ class TestToolDiscovery:
             "ark_job_submit",
             "ark_list_models",
             "seed_audio_generate",
-            "seed_audio_generate_variations",
             "seed_media_export_artifact",
             "seed_media_get_artifact",
             "seed_media_persist_url",
@@ -226,7 +225,6 @@ class TestToolDiscovery:
         required_task_names = {
             "media_upload",
             "seed_audio_generate",
-            "seed_audio_generate_variations",
             "speech_to_text",
             "seed_understand",
             "seed_audio_understand",
@@ -492,7 +490,7 @@ class TestInputSchemas:
         assert schema is not None
         assert "properties" in schema
         assert "text_prompt" in schema["properties"]["input"]["properties"]
-        assert schema["properties"]["input"]["required"] == ["text_prompt"]
+        assert "required" not in schema["properties"]["input"]
 
     async def test_seedream_input_schema(self, configured_server: None) -> None:
         tools = await configured_server.mcp.list_tools()
@@ -635,13 +633,12 @@ class TestVariationToolAnnotations:
         assert "seedream_generate_image" in names
         assert not {"seedream_edit_image", "seedream_generate_image_variations"} & names
 
-    async def test_seed_audio_variations_annotations(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seed_audio_generate_variations")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False
-        assert tool.annotations.open_world_hint is True
+    async def test_seed_audio_variations_are_part_of_generate(
+        self, configured_server: None
+    ) -> None:
+        names = {tool.name for tool in await configured_server.mcp.list_tools()}
+        assert "seed_audio_generate" in names
+        assert "seed_audio_generate_variations" not in names
 
     async def test_seedance_variations_are_part_of_create(self, configured_server: None) -> None:
         names = {tool.name for tool in await configured_server.mcp.list_tools()}
@@ -660,14 +657,10 @@ class TestVariationInputSchemas:
         assert "base_seed" not in input_props
 
     async def test_seed_audio_variations_input_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seed_audio_generate_variations")
-        schema = tool.parameters
-        assert schema is not None
-        input_props = schema["properties"]["input"]["properties"]
-        assert "text_prompt" in input_props
-        assert "variations" in input_props
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seed_audio_generate")
+        input_props = tool.parameters["properties"]["input"]["properties"]
+        assert {"text_prompt", "variations", "variation_prompts"} <= input_props.keys()
 
     async def test_seedance_variations_input_schema(self, configured_server: None) -> None:
         tools = await configured_server.mcp.list_tools()
@@ -687,12 +680,11 @@ class TestVariationOutputSchemas:
         assert {"artifacts", "summary", "preview"} <= schema["properties"].keys()
 
     async def test_seed_audio_variations_output_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seed_audio_generate_variations")
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seed_audio_generate")
         schema = tool.output_schema
         assert schema is not None
-        assert "summary" in schema["properties"]
+        assert {"artifact", "summary"} <= schema["properties"].keys()
 
     async def test_seedance_variations_output_schema(self, configured_server: None) -> None:
         tools = await configured_server.mcp.list_tools()

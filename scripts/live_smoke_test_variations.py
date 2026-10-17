@@ -34,9 +34,9 @@ from ark_mcp.tools.gen_task_list import (  # noqa: E402
     GenTaskListInput,
     GenTaskPage,
 )
-from ark_mcp.tools.seed_audio_generate_variations import (  # noqa: E402
-    SeedAudioVariationsInput,
-    SeedAudioVariationsOutput,
+from ark_mcp.tools.seed_audio_generate import (  # noqa: E402
+    SeedAudioGenerateInput,
+    SeedAudioGenerateOutput,
 )
 from ark_mcp.tools.seedance_create_task import (  # noqa: E402
     SeedanceCreateTaskInput,
@@ -107,21 +107,24 @@ async def test_audio_variations(ctx: SmokeClient, store: ArtifactStore) -> bool:
     header("Seed Audio: 3 Audio Variations")
     result = require_tool_success(
         await ctx.call(
-            "seed_audio_generate_variations",
-            SeedAudioVariationsInput(
+            "seed_audio_generate",
+            SeedAudioGenerateInput(
                 text_prompt="Hello, this is a parallel variation test of the Seed Audio MCP tool.",
                 variations=3,
             ),
-            SeedAudioVariationsOutput,
+            SeedAudioGenerateOutput,
         )
     )
 
-    print(f"  Total: {result.summary.total}")
-    print(f"  Succeeded: {result.summary.succeeded}")
-    print(f"  Failed: {result.summary.failed}")
+    summary = result.summary
+    if summary is None:
+        return False
+    print(f"  Total: {summary.total}")
+    print(f"  Succeeded: {summary.succeeded}")
+    print(f"  Failed: {summary.failed}")
 
-    all_verified = result.summary.failed == 0
-    for v in result.summary.variations:
+    all_verified = summary.failed == 0
+    for v in summary.variations:
         if v.artifact:
             stored = await store.get(v.artifact.id)
             path = ARTIFACTS_DIR / f"variation_audio_{v.index}.wav"

@@ -156,7 +156,6 @@ class TestToolDiscovery:
                 "ark_job_get",
                 "ark_job_submit",
                 "seed_audio_generate",
-                "seed_audio_generate_variations",
                 "seed_media_export_artifact",
                 "seed_media_get_artifact",
                 "seed_media_persist_url",
@@ -1063,7 +1062,7 @@ class TestVariationToolsE2E:
         async with Client(mcp) as client:
             result = await _call_background_tool(
                 client,
-                "seed_audio_generate_variations",
+                "seed_audio_generate",
                 {"input": {"text_prompt": "gentle rain", "variations": 2}},
             )
 

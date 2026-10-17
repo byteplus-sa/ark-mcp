@@ -100,6 +100,7 @@ async def main() -> int:
         # Step 8: Create an actual Seedance task using the S3 presigned URL
         print("\n--- Step 8: Create Seedance task with S3 video reference ---")
         from ark_mcp.providers.modelark.client import ModelArkGateway
+        from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
         from ark_mcp.providers.modelark.schemas import (
             SeedanceContentItem,
             SeedanceCreateProviderRequest,
@@ -130,7 +131,7 @@ async def main() -> int:
         print("Waiting 5s for task to be queued...")
         time.sleep(5)
 
-        task, _ = await service.get_task(task_id)
+        task, _ = await GenerationTaskService(gateway=gateway_modelark).get_task(task_id)
         print(f"Task status: {task.status}")
         if task.status == "failed":
             print(f"Task failed: {task.error}")

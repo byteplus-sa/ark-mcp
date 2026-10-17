@@ -87,7 +87,7 @@ async def test_image_generation(ctx: SmokeClient, store: ArtifactStore) -> dict[
     print(f"  Created: {result.created_at}")
     print(f"  Artifacts: {len(result.artifacts)}")
     print(f"  Item errors: {len(result.item_errors)}")
-    print(f"  Usage: {result.usage.model_dump()}")
+    print(f"  Usage: {result.usage.model_dump() if result.usage else None}")
 
     assert len(result.artifacts) >= 1, "Expected at least 1 artifact"
     artifact = result.artifacts[0]
@@ -217,6 +217,9 @@ async def test_video_generation_with_image(
     )
 
     task_id = create_result.tasks[0].task_id
+    if task_id is None:
+        print(f"\n  Submission failed: {create_result.tasks[0].error}")
+        return {"video": "submission_failed"}
     ctx.save_provider_ids(ARTIFACTS_DIR, [task_id])
     print(f"\n  Task ID: {task_id}")
     print(f"  Submitted: {create_result.submitted}")
@@ -294,8 +297,12 @@ async def test_video_generation_with_image(
 
         return {"video": artifact.id}
 
-    if final_result.last_frame:
-        artifact = final_result.last_frame
+    last_frame = next(
+        (output.artifact for output in final_result.outputs if output.role == "last_frame"),
+        None,
+    )
+    if last_frame:
+        artifact = last_frame
         print(f"\n  Last frame artifact ID: {artifact.id}")
         stored = await store.get(artifact.id)
         output_path = ARTIFACTS_DIR / "smoke_test_last_frame.jpg"
