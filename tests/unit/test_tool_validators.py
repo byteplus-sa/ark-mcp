@@ -6,18 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from ark_mcp.domain.media import AudioReference, MediaSource, MediaSourceKind
+from ark_mcp.tools._seedream_shared import EditCoordinate, edit_prompt
 from ark_mcp.tools.gen_task_cancel_or_delete import (
     GenTaskCancelOrDeleteInput,
 )
 from ark_mcp.tools.seed_audio_generate import SeedAudioGenerateInput
 from ark_mcp.tools.seedance_create_task import SeedanceCreateTaskInput
-from ark_mcp.tools.seedream_edit_image import (
-    EditCoordinate,
-    SeedreamEditInput,
-    _coordinate_markup,
-)
 from ark_mcp.tools.seedream_generate_image import SeedreamGenerateInput
-from ark_mcp.tools.seedream_generate_image_variations import SeedreamVariationsInput
 
 
 class TestSeedAudioGenerateInput:
@@ -266,28 +261,28 @@ class TestSeedreamPromptLength:
             SeedreamGenerateInput(prompt="x" * 4001)
 
     def test_variations_prompt_at_max_length_valid(self) -> None:
-        inp = SeedreamVariationsInput(prompt="x" * 4000, variations=1)
+        inp = SeedreamGenerateInput(prompt="x" * 4000, variations=1)
         assert len(inp.prompt or "") == 4000
 
     def test_variations_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedreamVariationsInput(prompt="x" * 4001, variations=1)
+            SeedreamGenerateInput(prompt="x" * 4001, variations=1)
 
     def test_variation_prompt_at_max_length_valid(self) -> None:
-        inp = SeedreamVariationsInput(variation_prompts=["x" * 4000], variations=1)
+        inp = SeedreamGenerateInput(variation_prompts=["x" * 4000], variations=1)
         assert len(inp.variation_prompts[0]) == 4000
 
     def test_variation_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedreamVariationsInput(variation_prompts=["x" * 4001], variations=1)
+            SeedreamGenerateInput(variation_prompts=["x" * 4001], variations=1)
 
     def _edit_image(self) -> MediaSource:
         return MediaSource(kind=MediaSourceKind.url, url="https://example.com/img.png")
 
     def test_edit_prompt_at_max_length_with_markup_valid(self) -> None:
         point = EditCoordinate(x=500, y=500)
-        markup_len = len(_coordinate_markup(point, None))
-        inp = SeedreamEditInput(
+        markup_len = len(edit_prompt("", point, None).rstrip())
+        inp = SeedreamGenerateInput(
             prompt="x" * (4000 - markup_len - 1),
             images=[self._edit_image()],
             point=point,
@@ -296,9 +291,9 @@ class TestSeedreamPromptLength:
 
     def test_edit_prompt_with_markup_too_long_raises(self) -> None:
         point = EditCoordinate(x=500, y=500)
-        markup_len = len(_coordinate_markup(point, None))
+        markup_len = len(edit_prompt("", point, None).rstrip())
         with pytest.raises(ValidationError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="x" * (4000 - markup_len),
                 images=[self._edit_image()],
                 point=point,
@@ -306,7 +301,7 @@ class TestSeedreamPromptLength:
 
     def test_edit_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="x" * 4001,
                 images=[self._edit_image()],
                 point=EditCoordinate(x=500, y=500),

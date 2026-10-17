@@ -178,7 +178,7 @@ async def test_variation_cancelled_while_persisting_returns_unpersisted_partial(
     hand back the provider URL marked as unpersisted, so a client re-persists it."""
     import asyncio
 
-    from ark_mcp.tools import seedream_generate_image_variations as variations_module
+    from ark_mcp.tools import _seedream_shared as variations_module
 
     _patch(monkeypatch, [{"url": "https://tos-ap-southeast.bytepluses.com/slow.png"}])
     monkeypatch.setattr(variations_module, "variation_batch_deadline", lambda *a, **k: 0.15)
@@ -190,8 +190,8 @@ async def test_variation_cancelled_while_persisting_returns_unpersisted_partial(
         "ark_mcp.artifacts.filesystem_store.FilesystemArtifactStore.copy_from_trusted_url",
         new=never_finishes,
     ):
-        result = await variations_module.seedream_generate_image_variations(
-            variations_module.SeedreamVariationsInput(prompt="slow", variations=1),
+        result = await seedream_generate_image(
+            SeedreamGenerateInput(prompt="slow", variations=2),
             fake_ctx,
         )
 

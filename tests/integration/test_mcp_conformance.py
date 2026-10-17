@@ -136,9 +136,7 @@ class TestToolDiscovery:
             "seed_media_export_artifact",
             "seed_media_get_artifact",
             "seed_media_persist_url",
-            "seedream_edit_image",
             "seedream_generate_image",
-            "seedream_generate_image_variations",
             "seedance_create_task",
             "gen_task_get",
             "gen_task_list",
@@ -233,8 +231,6 @@ class TestToolDiscovery:
             "seed_understand",
             "seed_audio_understand",
             "seedream_generate_image",
-            "seedream_edit_image",
-            "seedream_generate_image_variations",
             "seedance_create_task",
             "vod_enhance_video",
             "vod_transcode_video",
@@ -499,13 +495,18 @@ class TestInputSchemas:
         assert schema["properties"]["input"]["required"] == ["text_prompt"]
 
     async def test_seedream_input_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
+        tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "seedream_generate_image")
-        schema = tool.parameters
-        assert schema is not None
-        assert "prompt" in schema["properties"]["input"]["properties"]
-        assert schema["properties"]["input"]["required"] == ["prompt"]
+        input_props = tool.parameters["properties"]["input"]["properties"]
+        assert {
+            "prompt",
+            "images",
+            "point",
+            "bbox",
+            "background",
+            "variations",
+            "dry_run",
+        } <= input_props.keys()
 
     async def test_seedance_create_input_schema(self, configured_server: None) -> None:
         server = configured_server
@@ -629,14 +630,10 @@ class TestOutputSchemas:
 class TestVariationToolAnnotations:
     """Verify ToolAnnotations for the three variation tools."""
 
-    async def test_seedream_variations_annotations(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seedream_generate_image_variations")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False
-        assert tool.annotations.destructive_hint is False
-        assert tool.annotations.open_world_hint is True
+    async def test_seedream_variations_are_part_of_generate(self, configured_server: None) -> None:
+        names = {tool.name for tool in await configured_server.mcp.list_tools()}
+        assert "seedream_generate_image" in names
+        assert not {"seedream_edit_image", "seedream_generate_image_variations"} & names
 
     async def test_seed_audio_variations_annotations(self, configured_server: None) -> None:
         server = configured_server
@@ -656,15 +653,11 @@ class TestVariationInputSchemas:
     """Verify inputSchema is auto-generated for variation tools."""
 
     async def test_seedream_variations_input_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seedream_generate_image_variations")
-        schema = tool.parameters
-        assert schema is not None
-        input_props = schema["properties"]["input"]["properties"]
-        assert "prompt" in input_props
-        assert "variations" in input_props
-        assert "base_seed" in input_props
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seedream_generate_image")
+        input_props = tool.parameters["properties"]["input"]["properties"]
+        assert {"variations", "variation_prompts", "seed"} <= input_props.keys()
+        assert "base_seed" not in input_props
 
     async def test_seed_audio_variations_input_schema(self, configured_server: None) -> None:
         server = configured_server
@@ -687,12 +680,11 @@ class TestVariationOutputSchemas:
     """Verify outputSchema is auto-generated for variation tools."""
 
     async def test_seedream_variations_output_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seedream_generate_image_variations")
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seedream_generate_image")
         schema = tool.output_schema
         assert schema is not None
-        assert "summary" in schema["properties"]
+        assert {"artifacts", "summary", "preview"} <= schema["properties"].keys()
 
     async def test_seed_audio_variations_output_schema(self, configured_server: None) -> None:
         server = configured_server

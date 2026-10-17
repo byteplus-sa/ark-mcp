@@ -1,87 +1,115 @@
-"""``seedream_generate_image`` tool — image generation and editing through ModelArk.
+"""``seedream_generate_image`` tool — generate or edit images with ModelArk Seedream.
 
-The handler derives ``sequential_image_generation`` from ``max_images``,
-forces ``stream: false`` for MVP, and validates model-specific features.
-For example, Pro rejects batch/streaming fields, and 4.x rejects
-``output_format`` until the API-reference/tutorial conflict is resolved.
+One tool covers text-to-image, reference-based editing, point/box edits,
+provider batches (``max_images``) and parallel variations. Model-specific
+limits are checked at runtime from the capability registry.
 """
 
 from __future__ import annotations
 
-from datetime import UTC
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue, model_validator
 
 from ark_mcp.config.env import get_settings
-from ark_mcp.config.model_capabilities import get_capability_registry
-from ark_mcp.domain.artifacts import ArtifactRef, MediaType
+from ark_mcp.config.model_capabilities import ImageCapabilities, get_capability_registry
+from ark_mcp.domain.artifacts import ArtifactRef
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.media import ReferenceImageInput
-from ark_mcp.domain.models import SeedreamItemError, SeedreamUsage
+from ark_mcp.domain.models import SeedreamItemError, SeedreamUsage, VariationSummary
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
-from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
+from ark_mcp.runtime import billed_provider_slot
 from ark_mcp.tools._asset_shared import resolve_asset_references
-from ark_mcp.tools._cost import log_cost_estimate
+from ark_mcp.tools._capability_checks import check_image_request, raise_on_violations
+from ark_mcp.tools._cost import estimate_cost, log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
-from ark_mcp.tools._local_export import (
-    local_export,
-    output_path_field,
-    overwrite_field,
+from ark_mcp.tools._local_export import local_export, output_path_field, overwrite_field
+from ark_mcp.tools._local_export import needs_persist as _needs_persist
+from ark_mcp.tools._parallel import generate_seeds
+from ark_mcp.tools._redaction import redact_media_url
+from ark_mcp.tools._seedream_shared import (
+    MAX_PROMPT_CHARACTERS,
+    EditBbox,
+    EditCoordinate,
+    build_seedream_request,
+    edit_prompt,
+    run_seedream_variations,
+    store_response_images,
 )
-from ark_mcp.tools._local_export import (
-    needs_persist as _needs_persist,
-)
-from ark_mcp.tools._persistence import persist_base64, persist_from_url
 from ark_mcp.tools._task_execution import context_log
 
-# ---------------------------------------------------------------------------
-# Input / Output models
-# ---------------------------------------------------------------------------
+MAX_VARIATIONS = 10
+
+__all__ = [
+    "EditBbox",
+    "EditCoordinate",
+    "SeedreamGenerateInput",
+    "SeedreamGenerateOutput",
+    "SeedreamGeneratePreview",
+    "seedream_generate_image",
+]
 
 
 class SeedreamGenerateInput(BaseModel):
     """Input model for ``seedream_generate_image``."""
 
-    prompt: str = Field(
-        ...,
+    prompt: str | None = Field(
+        None,
         min_length=1,
-        max_length=4000,
-        description="Text prompt describing the image to generate (1-4,000 characters).",
+        max_length=MAX_PROMPT_CHARACTERS,
+        description=(
+            "What to generate, or the edit instruction when images are given (1-4,000 "
+            "characters, including any point/bbox markup). Required unless variation_prompts "
+            "is set."
+        ),
     )
     images: list[ReferenceImageInput] | None = Field(
         None,
-        description="Reference images for image-to-image or editing. Count limited by model capabilities.",
+        description=(
+            "Reference or source images for image-to-image and editing. The model's maximum is "
+            "checked at runtime (see ark_list_models(kind='image'))."
+        ),
+    )
+    point: EditCoordinate | None = Field(
+        None,
+        description="Edit mode: a point (0-999 normalized) on the first image to edit. Requires images.",
+    )
+    bbox: EditBbox | None = Field(
+        None,
+        description="Edit mode: a box (0-999 normalized) on the first image to edit. Requires images.",
     )
     model: str | None = Field(
         None,
-        description=(
-            "Model ID. Available: 'dola-seedream-5-0-pro-260628' (Pro, default, no batch, 10 refs, PNG/JPEG). "
-            "Lite and 4x model IDs are configured via SEEDREAM_MODEL_BINDINGS. Omit to use the default."
-        ),
+        description="Exact configured Seedream model ID from ark_list_models(kind='image'). Omit to use the default.",
     )
     size: str | None = Field(
-        None,
-        description="Output image size (e.g. '1024x1024', '2048x1152'). Must be valid for the selected model.",
+        None, description="Output image size (e.g. '2048x2048'); validated against the model."
     )
     seed: int | None = Field(
-        None, ge=-1, le=2147483647, description="Random seed. -1 = random, 0+ = fixed."
+        None,
+        ge=-1,
+        le=2147483647,
+        description="Random seed (-1 = random). With variations > 1, each variation uses seed + its index.",
     )
     max_images: int | None = Field(
         None,
         ge=1,
         le=15,
-        description="Number of images to generate in a single call (1-15). Only supported by Lite and 4.x models. Pro models are limited to 1.",
+        description=(
+            "Images from one provider call (1-15), for models that support batches. Use "
+            "variations instead when the model does not. Cannot be combined with variations > 1."
+        ),
     )
     output_format: Literal["png", "jpeg"] | None = Field(
-        None, description="Output image format. Not supported by 4.x models."
+        None, description="Output image format; the model's supported set is checked at runtime."
     )
     response_format: Literal["url", "b64_json"] | None = Field(
-        None, description="Response format for generated images: URL or Base64 JSON."
+        None, description="Provider response format for generated images: URL or Base64 JSON."
     )
     watermark: bool | None = Field(
         None, description="Whether to apply an AIGC watermark to generated images."
@@ -89,17 +117,89 @@ class SeedreamGenerateInput(BaseModel):
     prompt_optimization: Literal["standard", "fast"] | None = Field(
         None,
         description=(
-            "Prompt optimization mode: standard (higher quality) or fast (lower latency). "
-            "When omitted, Seedream 5.0 Pro uses the server-configured default "
-            "(SEEDREAM_PROMPT_OPTIMIZATION_MODE, standard unless the operator changes "
-            "it); other models use the provider default. Pass fast to prioritize lower latency."
+            "Prompt optimization mode: standard (higher quality) or fast (lower latency). When "
+            "omitted, Seedream 5.0 Pro uses SEEDREAM_PROMPT_OPTIMIZATION_MODE (standard unless "
+            "the operator changes it); other models use the provider default."
         ),
+    )
+    background: Literal["opaque", "transparent"] | None = Field(
+        None,
+        description=(
+            "Background mode on models that support it (Seedream 5.0 Pro). 'transparent' needs "
+            "exactly one input image with an alpha channel and png output."
+        ),
+    )
+    variations: int = Field(
+        1,
+        ge=1,
+        le=MAX_VARIATIONS,
+        description="Independent generations to run in parallel (1-10); partial failures are reported per variation.",
+    )
+    variation_prompts: (
+        list[Annotated[str, Field(min_length=1, max_length=MAX_PROMPT_CHARACTERS)]] | None
+    ) = Field(
+        None,
+        description="One prompt per variation, overriding prompt. Must have exactly `variations` entries.",
     )
     persist: bool = Field(
         True, description="Whether to persist generated images as durable MCP resources."
     )
-    output_path: str | None = output_path_field("the generated image(s)")
+    dry_run: bool = Field(
+        False,
+        description="Validate and return the provider request bodies and a cost estimate without generating or billing.",
+    )
+    output_path: str | None = output_path_field(
+        "the generated image(s); use a directory ending in '/' when several images are produced"
+    )
     overwrite: bool = overwrite_field()
+
+    @model_validator(mode="after")
+    def validate_request_shape(self) -> SeedreamGenerateInput:
+        """Check prompt, edit and variation combinations that hold for every model."""
+        if self.variation_prompts is not None and len(self.variation_prompts) != self.variations:
+            raise ValueError(
+                f"variation_prompts must have exactly {self.variations} entries; got "
+                f"{len(self.variation_prompts)}."
+            )
+        if not self.prompt and not self.variation_prompts:
+            raise ValueError("Either prompt or variation_prompts is required.")
+        if (self.point or self.bbox) and not self.images:
+            raise ValueError("point and bbox edit the first image; provide images.")
+        if self.variations > 1 and (self.max_images or 1) > 1:
+            raise ValueError("Use either max_images (one provider batch) or variations, not both.")
+        for prompt in self.prompts():
+            length = len(prompt)
+            if length > MAX_PROMPT_CHARACTERS:
+                raise ValueError(
+                    f"Prompt with coordinate markup is {length} characters; must not exceed "
+                    f"{MAX_PROMPT_CHARACTERS}."
+                )
+        return self
+
+    def prompts(self) -> list[str]:
+        """Return the final prompt for each variation, with any edit markup."""
+        base = (
+            list(self.variation_prompts)
+            if self.variation_prompts
+            else [self.prompt or ""] * self.variations
+        )
+        return [edit_prompt(prompt, self.point, self.bbox) for prompt in base]
+
+
+class SeedreamGeneratePreview(BaseModel):
+    """What a dry run would have submitted."""
+
+    requests: list[dict[str, JsonValue]] = Field(
+        ...,
+        description=(
+            "Provider request bodies that would be sent, one per variation. Reference image "
+            "URLs are reduced to scheme and host and inline Base64 data to its size."
+        ),
+    )
+    estimated_cost_usd: float = Field(
+        ...,
+        description="Static estimate in USD from the server's price table; not a provider quote.",
+    )
 
 
 class SeedreamGenerateOutput(BaseModel):
@@ -110,97 +210,104 @@ class SeedreamGenerateOutput(BaseModel):
     )
     model: str = Field(..., description="Model ID used for generation.")
     created_at: str = Field(..., description="ISO-8601 timestamp of generation.")
+    dry_run: bool = Field(False, description="True when nothing was generated; see preview.")
     artifacts: list[ArtifactRef] = Field(
-        ..., description="Durable artifact references for generated images."
+        default_factory=list,
+        description="Images from a single call (variations=1). Empty for variations and dry runs.",
     )
     item_errors: list[SeedreamItemError] = Field(
-        ..., description="Per-image errors for any failed items in a batch."
+        default_factory=list, description="Per-image errors from a single provider batch."
     )
-    usage: SeedreamUsage = Field(..., description="Token usage for this generation.")
+    usage: SeedreamUsage | None = Field(
+        None, description="Token usage of a single call; null for variations and dry runs."
+    )
+    summary: VariationSummary | None = Field(
+        None,
+        description="Per-variation results (seed, artifact or error) when variations > 1.",
+    )
+    preview: SeedreamGeneratePreview | None = Field(
+        None, description="Request bodies and cost estimate; set only for a dry run."
+    )
 
 
-# ---------------------------------------------------------------------------
-# Tool handler
-# ---------------------------------------------------------------------------
+TOOL_ANNOTATIONS = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": False,
+    "openWorldHint": True,
+}
 
 
 @local_export(
-    "artifacts", require_dir=lambda i: (i.max_images or 1) > 1, precondition=_needs_persist
+    "artifacts",
+    "summary",
+    require_dir=lambda i: i.variations > 1 or (i.max_images or 1) > 1,
+    precondition=_needs_persist,
 )
 async def seedream_generate_image(
     input: SeedreamGenerateInput, ctx: Context
 ) -> SeedreamGenerateOutput | ToolResult:
-    """Generate or edit an image through ModelArk Seedream.
+    """Generate or edit images with Seedream (text-to-image, image-to-image, point/box edits).
 
-    Supports text-to-image and reference-based editing. The ``max_images``
-    parameter enables batch generation for models that support it (Lite,
-    4.x). Pro models are limited to single-image generation. Requires MCP
-    task-augmented execution so generation and persistence run in the background.
+    Pass images to edit or use them as references; add point or bbox to
+    target one spot of the first image. Set variations (up to 10) for
+    independent parallel generations, or max_images for one provider batch on
+    models that support it. background='transparent' cuts out the subject of
+    one RGBA input image on Seedream 5.0 Pro. Call ark_list_models(kind='image')
+    for configured models and their limits; requests outside them are
+    rejected with every problem listed. dry_run=true returns the request
+    bodies and a cost estimate without billing. Run this tool through
+    ark_job_submit (or native task augmentation).
     """
-    await context_log(ctx, "info", "Starting Seedream image generation")
-    await ctx.report_progress(progress=10, total=100)
-
     settings = get_settings()
     if not settings.has_modelark:
         raise ValueError(
             "BYTEPLUS_MODELARK_API_KEY is not configured. Set it in .env to enable Seedream tools."
         )
+    await context_log(ctx, "info", "Starting Seedream image generation")
+    await ctx.report_progress(progress=10, total=100)
 
-    registry = get_capability_registry()
-    caps = registry.get_image_capabilities(input.model)
-
-    # Validate model-specific features.
-    if input.max_images and input.max_images > 1 and not caps.supports_batch:
-        raise ValueError(
-            f"Model '{caps.model_id}' does not support batch generation. "
-            f"Set max_images to 1 or omit it."
-        )
-
-    if len(input.images or []) > caps.max_references:
-        raise ValueError(
-            f"Model '{caps.model_id}' supports at most {caps.max_references} "
-            f"reference images, got {len(input.images or [])}."
-        )
-
-    registry.validate_output_format(input.model, input.output_format)
-    registry.validate_image_size(input.model, input.size)
-
-    await ctx.report_progress(progress=30, total=100)
-
-    # Build the provider request.
-    images_data = None
-    if input.images:
-        images_data = await resolve_asset_references(
-            ctx,
-            [src.model_dump() for src in input.images],
-            product="Seedream",
-            expected_type="Image",
-        )
-
-    request = SeedreamService.build_request(
-        model=caps.model_id,
-        prompt=input.prompt,
-        images=images_data,
-        size=input.size,
-        seed=input.seed,
-        max_images=input.max_images,
-        output_format=input.output_format,
-        response_format=input.response_format,
-        watermark=input.watermark,
-        prompt_optimization=caps.resolve_prompt_optimization(input.prompt_optimization),
+    caps = get_capability_registry().resolve_image_model(input.model)
+    raise_on_violations(
+        check_image_request(input, caps),
+        model_id=caps.model_id,
+        family=caps.family.value,
+        kind="image",
     )
+    images = await resolve_asset_references(
+        ctx,
+        [source.model_dump() for source in input.images] if input.images else None,
+        product="Seedream",
+        expected_type="Image",
+    )
+    prompts = input.prompts()
+    seeds = generate_seeds(input.seed, input.variations) if input.variations > 1 else [input.seed]
 
-    await ctx.report_progress(progress=50, total=100)
+    if input.dry_run:
+        return _preview(input, caps, images, prompts, seeds)
+    if input.variations > 1:
+        summary = await run_seedream_variations(input, ctx, caps, images, prompts, seeds)
+        await ctx.report_progress(progress=100, total=100)
+        return SeedreamGenerateOutput(
+            model=caps.model_id, created_at=datetime.now(UTC).isoformat(), summary=summary
+        )
+    return await _generate_single(input, ctx, caps, images, prompts[0])
 
+
+async def _generate_single(
+    input: SeedreamGenerateInput,
+    ctx: Context,
+    caps: ImageCapabilities,
+    images: list[dict[str, object]] | None,
+    prompt: str,
+) -> SeedreamGenerateOutput | ToolResult:
+    await ctx.report_progress(progress=30, total=100)
+    request = build_seedream_request(input, caps, images, prompt=prompt, seed=input.seed)
     estimated_cost = log_cost_estimate(product="image", variations=input.max_images or 1)
-
     service = SeedreamService()
     try:
         async with billed_provider_slot(
-            ctx,
-            provider="modelark",
-            product="image",
-            estimated_cost_usd=estimated_cost,
+            ctx, provider="modelark", product="image", estimated_cost_usd=estimated_cost
         ):
             response, request_id = await call_with_retry(lambda: service.generate(request))
     except ProviderError as exc:
@@ -210,59 +317,9 @@ async def seedream_generate_image(
         await service.close()
 
     await ctx.report_progress(progress=80, total=100)
-
-    # Persist artifacts.
-    artifacts: list[ArtifactRef] = []
-    if input.persist:
-        store = get_runtime(ctx).artifact_store
-        owner = get_principal(ctx)
-        from datetime import datetime, timedelta
-
-        source_expiry = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
-
-        for item in response.data:
-            mime_type = f"image/{item.output_format or input.output_format or 'jpeg'}"
-            # Each item degrades on its own, so one storage failure never
-            # drops items that were already stored or the billed output itself.
-            if item.b64_json:
-                ref = await persist_base64(
-                    store,
-                    data=item.b64_json,
-                    media_type=MediaType.IMAGE,
-                    mime_type=mime_type,
-                    source_expires_at=source_expiry,
-                    auth=owner,
-                    provider_url=item.url,
-                )
-                artifacts.append(ref)
-            elif item.url:
-                ref = await persist_from_url(
-                    store,
-                    url=item.url,
-                    media_type=MediaType.IMAGE,
-                    mime_type=mime_type,
-                    source_expires_at=source_expiry,
-                    auth=owner,
-                )
-                artifacts.append(ref)
-    else:
-        # Return unpersisted references to provider URLs (will expire).
-        from datetime import datetime, timedelta
-
-        source_expiry = (datetime.now(UTC) + timedelta(hours=24)).isoformat()
-        for item in response.data:
-            if item.url:
-                artifacts.append(
-                    ArtifactRef(
-                        id="provider-url",
-                        uri=item.url,
-                        media_type=MediaType.IMAGE,
-                        mime_type=f"image/{item.output_format or input.output_format or 'jpeg'}",
-                        created_at=datetime.now(UTC).isoformat(),
-                        source_expires_at=source_expiry,
-                    )
-                )
-
+    artifacts = await store_response_images(
+        ctx, response, persist=input.persist, output_format=input.output_format
+    )
     await ctx.report_progress(progress=100, total=100)
     log_info(
         "seedream_complete",
@@ -270,7 +327,6 @@ async def seedream_generate_image(
         artifacts_count=len(artifacts),
         request_id=request_id,
     )
-
     return SeedreamGenerateOutput(
         model=caps.model_id,
         created_at=SeedreamService.get_created_at(response),
@@ -280,10 +336,36 @@ async def seedream_generate_image(
     )
 
 
-# Tool annotation constants — camelCase per MCP specification.
-TOOL_ANNOTATIONS = {
-    "readOnlyHint": False,
-    "destructiveHint": False,
-    "idempotentHint": False,
-    "openWorldHint": True,
-}
+def _preview(
+    input: SeedreamGenerateInput,
+    caps: ImageCapabilities,
+    images: list[dict[str, object]] | None,
+    prompts: list[str],
+    seeds: list[int | None],
+) -> SeedreamGenerateOutput:
+    requests = [
+        _redact(
+            build_seedream_request(input, caps, images, prompt=prompt, seed=seed).model_dump(
+                exclude_none=True
+            )
+        )
+        for prompt, seed in zip(prompts, seeds, strict=True)
+    ]
+    cost = estimate_cost(product="image", variations=len(prompts) * (input.max_images or 1))
+    return SeedreamGenerateOutput(
+        model=caps.model_id,
+        created_at=datetime.now(UTC).isoformat(),
+        dry_run=True,
+        preview=SeedreamGeneratePreview(requests=requests, estimated_cost_usd=cost),
+    )
+
+
+def _redact(body: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    image = body.get("image")
+    if isinstance(image, str):
+        body["image"] = redact_media_url(image)
+    elif isinstance(image, list):
+        body["image"] = [
+            redact_media_url(item) if isinstance(item, str) else item for item in image
+        ]
+    return body

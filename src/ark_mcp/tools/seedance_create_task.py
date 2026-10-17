@@ -9,7 +9,6 @@ and every violation is reported at once.
 from __future__ import annotations
 
 from typing import Annotated, Literal
-from urllib.parse import urlsplit
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
@@ -22,6 +21,7 @@ from ark_mcp.observability.logger import info as log_info
 from ark_mcp.tools._asset_shared import preflight_seedance_assets
 from ark_mcp.tools._capability_checks import check_video_request, raise_on_violations
 from ark_mcp.tools._cost import estimate_cost
+from ark_mcp.tools._redaction import redact_media_url
 from ark_mcp.tools._seedance_shared import (
     DRAFT_RESOLUTION,
     DRAFT_REUSED_FIELDS,
@@ -502,14 +502,5 @@ def _redact_part(part: JsonValue) -> JsonValue:
     for key in ("image_url", "video_url", "audio_url"):
         media = redacted.get(key)
         if isinstance(media, dict) and isinstance(media.get("url"), str):
-            redacted[key] = {**media, "url": _redact_url(str(media["url"]))}
+            redacted[key] = {**media, "url": redact_media_url(str(media["url"]))}
     return redacted
-
-
-def _redact_url(url: str) -> str:
-    if url.startswith("data:"):
-        return f"<base64: {len(url)} bytes>"
-    if url.startswith("https://"):
-        parts = urlsplit(url)
-        return f"{parts.scheme}://{parts.netloc}"
-    return url

@@ -88,6 +88,7 @@ class SeedreamService:
         response_format: str | None = None,
         watermark: bool | None = None,
         prompt_optimization: str | None = None,
+        background: str | None = None,
     ) -> SeedreamProviderRequest:
         """Build a provider request from domain-level parameters.
 
@@ -126,6 +127,7 @@ class SeedreamService:
             response_format=response_format,
             watermark=watermark,
             optimize_prompt_options=optimize_options,
+            background=background,
         )
 
     @staticmethod

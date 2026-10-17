@@ -285,20 +285,6 @@ CATALOG: tuple[CatalogEntry, ...] = (
         gate=_modelark,
     ),
     _entry(
-        "seedream_edit_image",
-        "SeedreamEditOutput",
-        "seedream:generate",
-        background="required",
-        gate=_modelark,
-    ),
-    _entry(
-        "seedream_generate_image_variations",
-        "SeedreamVariationsOutput",
-        "seedream:generate",
-        background="required",
-        gate=_modelark,
-    ),
-    _entry(
         "seedance_create_task",
         "SeedanceCreateTaskOutput",
         "seedance:create",

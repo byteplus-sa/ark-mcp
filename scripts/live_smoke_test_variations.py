@@ -43,9 +43,9 @@ from ark_mcp.tools.seedance_create_task import (  # noqa: E402
     SeedanceCreateTaskOutput,
     SeedanceImageInput,
 )
-from ark_mcp.tools.seedream_generate_image_variations import (  # noqa: E402
-    SeedreamVariationsInput,
-    SeedreamVariationsOutput,
+from ark_mcp.tools.seedream_generate_image import (  # noqa: E402
+    SeedreamGenerateInput,
+    SeedreamGenerateOutput,
 )
 
 if TYPE_CHECKING:
@@ -68,26 +68,29 @@ async def test_image_variations(
     header("Seedream: 3 Image Variations (seeds 42, 43, 44)")
     result = require_tool_success(
         await ctx.call(
-            "seedream_generate_image_variations",
-            SeedreamVariationsInput(
+            "seedream_generate_image",
+            SeedreamGenerateInput(
                 prompt="A beautiful mountain landscape, digital art",
                 variations=3,
-                base_seed=42,
+                seed=42,
                 size="1024x1024",
                 response_format="url",
                 persist=True,
             ),
-            SeedreamVariationsOutput,
+            SeedreamGenerateOutput,
         )
     )
 
-    print(f"  Total: {result.summary.total}")
-    print(f"  Succeeded: {result.summary.succeeded}")
-    print(f"  Failed: {result.summary.failed}")
+    summary = result.summary
+    if summary is None:
+        return False, None
+    print(f"  Total: {summary.total}")
+    print(f"  Succeeded: {summary.succeeded}")
+    print(f"  Failed: {summary.failed}")
 
-    all_verified = result.summary.failed == 0
+    all_verified = summary.failed == 0
     reference_image: ArtifactRef | None = None
-    for v in result.summary.variations:
+    for v in summary.variations:
         if v.artifact:
             stored = await store.get(v.artifact.id)
             reference_image = reference_image or v.artifact

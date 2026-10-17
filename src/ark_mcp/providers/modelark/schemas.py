@@ -31,6 +31,7 @@ class SeedreamProviderRequest(BaseModel):
     response_format: str | None = None
     watermark: bool | None = None
     optimize_prompt_options: dict[str, str] | None = None
+    background: str | None = None
 
 
 class SeedreamImageData(BaseModel):

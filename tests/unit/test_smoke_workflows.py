@@ -123,7 +123,8 @@ async def test_smoke_session_persists_video_through_real_server(tmp_path, monkey
     from _smoke_context import smoke_session
 
     import ark_mcp.runtime as runtime_module
-    from ark_mcp.config.env import Settings
+    from ark_mcp.config.env import Settings, get_settings
+    from ark_mcp.config.model_capabilities import refresh_capability_registry
     from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
     from ark_mcp.providers.modelark.schemas import (
         GenerationTaskListResponse,
@@ -132,6 +133,8 @@ async def test_smoke_session_persists_video_through_real_server(tmp_path, monkey
     from ark_mcp.security.safe_downloader import DownloadedMedia, SafeDownloader
     from ark_mcp.tools.gen_task_get import GenTaskGetInput, GenTaskGetOutput
 
+    get_settings.cache_clear()
+    refresh_capability_registry()
     create_runtime = AsyncMock(wraps=runtime_module.create_runtime_services)
     monkeypatch.setattr(runtime_module, "create_runtime_services", create_runtime)
 

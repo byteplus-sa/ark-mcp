@@ -160,9 +160,7 @@ class TestToolDiscovery:
                 "seed_media_export_artifact",
                 "seed_media_get_artifact",
                 "seed_media_persist_url",
-                "seedream_edit_image",
                 "seedream_generate_image",
-                "seedream_generate_image_variations",
                 "seedance_create_task",
                 "gen_task_get",
                 "gen_task_list",
@@ -1086,12 +1084,12 @@ class TestVariationToolsE2E:
             async with Client(mcp) as client:
                 result = await _call_background_tool(
                     client,
-                    "seedream_generate_image_variations",
+                    "seedream_generate_image",
                     {
                         "input": {
                             "prompt": "A small paper boat",
                             "variations": 2,
-                            "base_seed": 10,
+                            "seed": 10,
                         }
                     },
                 )

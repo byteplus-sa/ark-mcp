@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Protocol
 
-from ark_mcp.config.model_capabilities import VideoCapabilities
+from ark_mcp.config.model_capabilities import ImageCapabilities, VideoCapabilities
 
 
 class VideoRequest(Protocol):
@@ -105,6 +105,65 @@ def check_video_request(request: VideoRequest, caps: VideoCapabilities) -> list[
             f"output_format '{request.output_format}' is not supported; allowed: "
             f"{list(caps.supported_output_formats) or 'none'}"
         )
+    return violations
+
+
+class ImageRequest(Protocol):
+    """Fields of a Seedream request that depend on the model."""
+
+    @property
+    def images(self) -> Sequence[object] | None: ...
+
+    @property
+    def size(self) -> str | None: ...
+
+    @property
+    def output_format(self) -> str | None: ...
+
+    @property
+    def max_images(self) -> int | None: ...
+
+    @property
+    def background(self) -> str | None: ...
+
+    @property
+    def prompt_optimization(self) -> str | None: ...
+
+
+def check_image_request(request: ImageRequest, caps: ImageCapabilities) -> list[str]:
+    """Return every way the request exceeds the image model's capabilities."""
+    violations: list[str] = []
+    image_count = len(request.images or [])
+    if image_count > caps.max_references:
+        violations.append(
+            f"{image_count} reference images exceed the maximum of {caps.max_references}"
+        )
+    if request.output_format and request.output_format not in caps.supported_output_formats:
+        violations.append(
+            f"output_format '{request.output_format}' is not supported; allowed: "
+            f"{list(caps.supported_output_formats)}"
+        )
+    if (
+        caps.supported_sizes is not None
+        and request.size
+        and request.size not in caps.supported_sizes
+    ):
+        violations.append(
+            f"size '{request.size}' is not supported; allowed: {list(caps.supported_sizes)}"
+        )
+    if (request.max_images or 1) > 1 and not caps.supports_batch:
+        violations.append("max_images > 1 (batch generation) is not supported; use variations")
+    if request.prompt_optimization and not caps.supports_prompt_optimization:
+        violations.append("prompt_optimization is not supported")
+    if request.background == "transparent":
+        if not caps.supports_transparent_background:
+            violations.append("background='transparent' is not supported")
+        if image_count != 1:
+            violations.append(
+                "background='transparent' needs exactly one input image with an alpha channel"
+            )
+        if request.output_format not in (None, "png"):
+            violations.append("background='transparent' requires output_format omitted or 'png'")
     return violations
 
 
