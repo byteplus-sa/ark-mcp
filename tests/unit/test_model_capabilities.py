@@ -342,3 +342,102 @@ class TestSeedance25PremiumCapabilities:
         assert registry.validate_resolution("dreamina-seedance-2-5-premium-260915", "4k") == "4k"
         with pytest.raises(ValueError, match="not supported"):
             registry.validate_resolution("dreamina-seedance-2-5-260628", "4k")
+
+
+@pytest.fixture
+def two_seedance_bindings(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    from ark_mcp.config.env import get_settings
+    from ark_mcp.config.model_capabilities import refresh_capability_registry
+
+    monkeypatch.setenv(
+        "SEEDANCE_MODEL_BINDINGS",
+        '[{"model_id":"dreamina-seedance-2-0-260128","family":"standard"},'
+        '{"model_id":"dreamina-seedance-2-5-260628","family":"seedance_2_5"}]',
+    )
+    get_settings.cache_clear()
+    refresh_capability_registry()
+    yield
+    get_settings.cache_clear()
+    refresh_capability_registry()
+
+
+class TestExactModelResolution:
+    """``resolve_*_model`` accepts exact configured IDs and suggests near misses."""
+
+    def test_exact_id_resolves(self, two_seedance_bindings: None) -> None:
+        caps = get_capability_registry().resolve_video_model("dreamina-seedance-2-5-260628")
+        assert caps.family is ModelFamily.SEEDANCE_2_5
+        assert caps.supports_draft is True
+        assert caps.draft_final_resolution == "1080p"
+        assert caps.supported_output_formats == ("mp4", "mov")
+
+    def test_omitted_model_uses_configured_default(self, two_seedance_bindings: None) -> None:
+        caps = get_capability_registry().resolve_video_model(None)
+        assert caps.model_id == "dreamina-seedance-2-0-260128"
+
+    def test_family_name_is_rejected_with_suggestion(self, two_seedance_bindings: None) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            get_capability_registry().resolve_video_model("dreamina-seedance-2.5")
+        message = str(excinfo.value)
+        assert "is not configured" in message
+        assert "Did you mean 'dreamina-seedance-2-5-260628'?" in message
+        assert "ark_list_models(kind='video')" in message
+
+    def test_unrelated_id_gets_no_suggestion(self, two_seedance_bindings: None) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            get_capability_registry().resolve_video_model("xyz")
+        assert "Did you mean" not in str(excinfo.value)
+
+    def test_seedance_2_has_no_2_5_only_capabilities(self, two_seedance_bindings: None) -> None:
+        caps = get_capability_registry().resolve_video_model("dreamina-seedance-2-0-260128")
+        assert caps.supports_draft is False
+        assert caps.supported_task_types == ()
+        assert caps.supported_output_formats == ()
+        assert caps.supports_audio_only_input is False
+
+    def test_image_default_supports_transparent_background(self) -> None:
+        caps = get_capability_registry().resolve_image_model(None)
+        assert caps.family is ModelFamily.SEEDREAM_PRO
+        assert caps.supports_transparent_background is True
+
+    def test_understanding_routes_audio_to_audio_model(self) -> None:
+        from ark_mcp.config.env import get_settings
+
+        settings = get_settings()
+        registry = get_capability_registry()
+        with_audio = registry.resolve_understanding_model(None, has_audio=True)
+        without_audio = registry.resolve_understanding_model(None, has_audio=False)
+        assert with_audio.model_id == settings.seed_audio_understanding_model
+        assert with_audio.supports_audio is True
+        assert with_audio.supports_image is True
+        assert without_audio.model_id == settings.seed_understanding_default_model
+        assert without_audio.supports_audio is False
+
+    def test_explicit_understanding_model_wins_over_routing(self) -> None:
+        from ark_mcp.config.env import get_settings
+
+        default = get_settings().seed_understanding_default_model
+        caps = get_capability_registry().resolve_understanding_model(default, has_audio=True)
+        assert caps.model_id == default
+
+    def test_task_model_lookup_covers_video_and_unknown(self, two_seedance_bindings: None) -> None:
+        registry = get_capability_registry()
+        assert registry.resolve_task_model("dreamina-seedance-2-5-260628") is not None
+        assert registry.resolve_task_model("not-a-model") is None
+
+
+def test_audio_model_already_bound_as_seed_2_1_gains_audio(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ark_mcp.config.env import get_settings
+    from ark_mcp.config.model_capabilities import refresh_capability_registry
+
+    monkeypatch.setenv("SEED_AUDIO_UNDERSTANDING_MODEL", "dola-seed-2-1-turbo-260628")
+    get_settings.cache_clear()
+    try:
+        registry = refresh_capability_registry()
+        caps = registry.get_understanding_capabilities("dola-seed-2-1-turbo-260628")
+        assert caps.family is ModelFamily.SEED_2_1_TURBO
+        assert caps.supports_audio is True
+        assert registry.list_understanding_models().count("dola-seed-2-1-turbo-260628") == 1
+    finally:
+        get_settings.cache_clear()
+        refresh_capability_registry()

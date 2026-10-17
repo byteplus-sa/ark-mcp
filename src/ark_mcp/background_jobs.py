@@ -21,6 +21,7 @@ from ark_mcp.domain.background_jobs import (
     BackgroundJobSnapshot,
     BackgroundJobToolResult,
 )
+from ark_mcp.tools._catalog import CATALOG
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -38,48 +39,19 @@ class BackgroundToolSpec:
     required_scope: str
 
 
+def _background_specs_from_catalog() -> dict[str, BackgroundToolSpec]:
+    specs: dict[str, BackgroundToolSpec] = {}
+    for entry in CATALOG:
+        if entry.background is None:
+            continue
+        if entry.scope is None:
+            raise ValueError(f"Background tool {entry.name!r} must declare an authorization scope.")
+        specs[entry.name] = BackgroundToolSpec(entry.background, entry.scope)
+    return specs
+
+
 BACKGROUND_TOOL_SPECS: Mapping[str, BackgroundToolSpec] = MappingProxyType(
-    {
-        "media_upload": BackgroundToolSpec("required", "media:upload"),
-        "media_upload_batch": BackgroundToolSpec("required", "media:upload"),
-        "seed_audio_generate": BackgroundToolSpec("required", "seed:audio:generate"),
-        "seed_audio_generate_variations": BackgroundToolSpec("required", "seed:audio:generate"),
-        "speech_to_text": BackgroundToolSpec("required", "seed:asr:transcribe"),
-        "seed_understand": BackgroundToolSpec("required", "understanding:read"),
-        "seed_audio_understand": BackgroundToolSpec("required", "understanding:read"),
-        "seedream_generate_image": BackgroundToolSpec("required", "seedream:generate"),
-        "seedream_edit_image": BackgroundToolSpec("required", "seedream:generate"),
-        "seedream_generate_image_variations": BackgroundToolSpec("required", "seedream:generate"),
-        "seedance_create_task": BackgroundToolSpec("required", "seedance:create"),
-        "seedance_create_task_variations": BackgroundToolSpec("required", "seedance:create"),
-        "seedance_2_5_create_task": BackgroundToolSpec("required", "seedance:create"),
-        "seedance_2_5_create_task_variations": BackgroundToolSpec("required", "seedance:create"),
-        "seedance_2_5_premium_create_task": BackgroundToolSpec("required", "seedance:create"),
-        "seedance_2_5_premium_create_task_variations": BackgroundToolSpec(
-            "required", "seedance:create"
-        ),
-        "hyper3d_create_task": BackgroundToolSpec("required", "hyper3d:create"),
-        "hitem3d_create_task": BackgroundToolSpec("required", "hitem3d:create"),
-        "omnihuman_create_task": BackgroundToolSpec("required", "omnihuman:create"),
-        "vod_enhance_video": BackgroundToolSpec("required", "vod:enhance"),
-        "vod_transcode_video": BackgroundToolSpec("required", "vod:transcode"),
-        "vod_separate_audio": BackgroundToolSpec("required", "vod:extract"),
-        "vod_add_subtitles": BackgroundToolSpec("required", "vod:subtitle:add"),
-        "vod_remove_subtitles": BackgroundToolSpec("required", "vod:subtitle:remove"),
-        "seedance_get_task": BackgroundToolSpec("optional", "seedance:read"),
-        "seedance_get_tasks": BackgroundToolSpec("optional", "seedance:read"),
-        "seed_media_persist_url": BackgroundToolSpec("optional", "media:upload"),
-        "hyper3d_get_task": BackgroundToolSpec("optional", "hyper3d:read"),
-        "hitem3d_get_task": BackgroundToolSpec("optional", "hitem3d:read"),
-        "omnihuman_get_task": BackgroundToolSpec("optional", "omnihuman:read"),
-        "vod_get_enhancement_task": BackgroundToolSpec("optional", "vod:read"),
-        "vod_get_transcode_task": BackgroundToolSpec("optional", "vod:read"),
-        "vod_get_audio_separation": BackgroundToolSpec("optional", "vod:read"),
-        "vod_get_subtitle_addition_task": BackgroundToolSpec("optional", "vod:read"),
-        "vod_get_subtitle_removal_task": BackgroundToolSpec("optional", "vod:read"),
-        "ark_asset_create": BackgroundToolSpec("optional", "assets:write"),
-        "ark_asset_verification_result": BackgroundToolSpec("optional", "assets:verify"),
-    }
+    _background_specs_from_catalog()
 )
 
 

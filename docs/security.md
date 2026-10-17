@@ -91,16 +91,24 @@ A frozen Pydantic model (`security/auth_context.py`):
 
 `component_auth(settings, *scopes)` returns `None` in `LOCAL` mode, or
 `require_scopes(*scopes)` (a FastMCP `AuthCheck`) in JWT mode. The
-tool → scope mapping is wired in `server.py::register_tools`:
+tool → scope mapping is the `scope` column of the static tool catalog
+(`tools/_catalog.py`), applied by `server.py::register_tools`:
 
 | Scope | Protects |
 |---|---|
 | `seed:audio:generate` | `seed_audio_generate`, `seed_audio_generate_variations` |
-| `seedream:generate` | `seedream_generate_image`, `seedream_generate_image_variations` |
-| `seedance:create` | `seedance_create_task`, `seedance_create_task_variations` |
+| `seedream:generate` | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` |
+| `seedance:create` | `seedance_create_task`, `seedance_create_task_variations`, and the Seedance 2.5 and 2.5 Premium create tools |
 | `seedance:read` | `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks` |
 | `seedance:delete` | `seedance_cancel_or_delete_task` |
 | `seed:asr:transcribe` | `speech_to_text` |
+| `understanding:read` | `seed_understand`, `seed_audio_understand` |
+| `hyper3d:create` | `hyper3d_create_task` |
+| `hyper3d:read` | `hyper3d_get_task`, `hyper3d_list_tasks` |
+| `hyper3d:delete` | `hyper3d_cancel_or_delete_task` |
+| `hitem3d:create` | `hitem3d_create_task` |
+| `hitem3d:read` | `hitem3d_get_task`, `hitem3d_list_tasks` |
+| `hitem3d:delete` | `hitem3d_cancel_or_delete_task` |
 | `omnihuman:create` | `omnihuman_create_task` |
 | `omnihuman:read` | `omnihuman_get_task` |
 | `omnihuman:cancel` | `omnihuman_cancel_task` |
@@ -117,6 +125,10 @@ tool → scope mapping is wired in `server.py::register_tools`:
 | `assets:write` | `ark_asset_group_ensure`, `ark_asset_group_create`, `ark_asset_group_update`, `ark_asset_create`, `ark_asset_update` |
 | `assets:verify` | `ark_asset_verification_start`, `ark_asset_verification_result` |
 | `assets:delete` | `ark_asset_delete`, `ark_asset_group_delete` (registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
+
+`ark_job_*` and `ark_list_models` need an authenticated principal but no
+scope: job tools enforce the target tool's scope at submit time, and
+`ark_list_models` returns only configured model IDs and limits.
 
 The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
 routes are **not** scope-protected at the FastMCP layer. Seed Audio and

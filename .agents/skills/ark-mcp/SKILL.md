@@ -96,8 +96,15 @@ Do not assume a fixed tool count. Registration is conditional on environment
 variables. Tools for a product appear only when its API key is set; the server
 gracefully degrades to whatever is configured.
 
+**Call `ark_list_models` first.** It returns every configured model ID (the
+exact value `model` accepts), per-model limits (resolutions, duration range,
+reference counts, Draft support, task types, output formats), which model is
+the default, which tool takes it, and which optional services are disabled
+and why. It makes no provider calls and needs no scope.
+
 ### Always registered
 
+- `ark_list_models`
 - `seed_media_get_artifact`
 - `seed_media_export_artifact`
 - `seed_media_persist_url`
@@ -1944,6 +1951,7 @@ default model for that product is used.
 
 ### Standard Generation Workflow
 
+0. Call `ark_list_models` to pick an exact `model_id` and check its limits.
 1. Run a Seedream or Seed Audio generation tool in the background with
    `persist=true` (default), through `ark_job_submit` or, on a task-capable
    client, native task augmentation.

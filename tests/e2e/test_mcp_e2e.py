@@ -150,6 +150,7 @@ class TestToolDiscovery:
             tool_names = {t.name for t in tools}
             assert tool_names == {
                 "ark_job_cancel",
+                "ark_list_models",
                 "ark_job_capabilities",
                 "ark_job_get",
                 "ark_job_submit",

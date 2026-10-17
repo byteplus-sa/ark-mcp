@@ -7,6 +7,7 @@ surface.
 
 | # | Tool | Product | Type | Auth |
 |---|---|---|---|---|
+| 0 | `ark_list_models` | Discovery | Read-only | None |
 | 1 | `seed_audio_generate` | Seed Audio | Required background task | Seed Speech |
 | 2 | `seed_audio_generate_variations` | Seed Audio | Required background task | Seed Speech |
 | 3 | `seedream_generate_image` | Seedream | Required background task | ModelArk |

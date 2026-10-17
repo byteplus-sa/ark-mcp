@@ -41,7 +41,7 @@ Client workflows live in
 | Registry and FastMCP adapter | `src/ark_mcp/background_jobs.py` |
 | Public models | `src/ark_mcp/domain/background_jobs.py` |
 | Ownership and replay guard | `src/ark_mcp/security/tasks.py` |
-| Registration | `src/ark_mcp/server.py` (`register_tools`, `_task_config`, `_task_handler`) |
+| Registration | `src/ark_mcp/tools/_catalog.py` (static catalog), `src/ark_mcp/server.py` (`register_tools`, `_task_config`, `_task_handler`) |
 
 ## Lifecycle
 
@@ -183,13 +183,16 @@ inside `ark_job_submit` and `ark_job_capabilities`.
 
 ## Background-tool registry
 
-**`BACKGROUND_TOOL_SPECS` in `src/ark_mcp/background_jobs.py` is the single
-source of truth** for which tools run in the background. It is an immutable
-`MappingProxyType` of tool name → `BackgroundToolSpec(mode, required_scope)`.
-Every consumer reads it:
+**The static tool catalog (`src/ark_mcp/tools/_catalog.py`) is the single
+source of truth** for which tools exist, their scopes, and which run in the
+background. `BACKGROUND_TOOL_SPECS` in `src/ark_mcp/background_jobs.py` is
+derived from it at import time: an immutable `MappingProxyType` of tool name →
+`BackgroundToolSpec(mode, required_scope)` for every entry with a background
+mode. A background entry without a scope fails at import. Every consumer
+reads it:
 
 - `_task_config(name)` builds the native `TaskConfig` (poll interval 2 s).
-- `_tool_auth` takes the JWT scope from the spec.
+- `register_tools` takes the JWT scope from the catalog entry.
 - `_task_handler` wraps **required** targets with `guard_task_execution` and
   instruments every registered target.
 - `ark_job_capabilities` and `ark_job_submit` resolve targets from it.

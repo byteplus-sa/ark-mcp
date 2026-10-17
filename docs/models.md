@@ -218,3 +218,21 @@ missing required fields, and non-loopback HTTP without JWT.
 - It does **not** validate aspect ratios.
 - It does **not** call the provider — it is a local, pre-flight validation
   layer built entirely from configuration.
+
+## Checking capability drift
+
+The server validates requests against the static registry in
+`config/model_capabilities.py`, and `ark_list_models` reports the same data
+to clients. To compare the registry with BytePlus's ArkModels catalog:
+
+```bash
+make audit-capabilities CATALOG=path/to/arkmodels.json
+```
+
+The dump may be an ArkModels list or `arkcli models get <id> --format json`
+output. Each row reports `OK`, `DRIFT` or `UNKNOWN` for one parameter of one
+configured binding; `--strict` exits non-zero on drift. **The report is
+advisory.** The ArkModels catalog has known stale entries (for example,
+Seedance 2.5 Draft mode marked unsupported, which the official tutorial shows
+working), so review drift against the official docs before changing the
+registry.

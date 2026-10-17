@@ -141,6 +141,42 @@ everywhere:
 See [Security](security.md#local-output-paths) for the full output-root
 policy.
 
+## ark_list_models
+
+**Call this first.** Lists the models this server is configured to call, with
+the limits the server validates before submitting, and reports which optional
+services are enabled. Read-only, no provider calls, always registered, and
+needs no scope.
+
+### Input
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `kind` | `"video"` \| `"image"` \| `"3d"` \| `"understanding"` | No | Filter to one kind; omit for all |
+
+### Output
+
+- **`models`**: one entry per configured binding with `model_id` (the exact
+  value to pass as `model`), `family`, `kind`, `is_default`, `tool`, and a
+  kind-specific limits object:
+  - `video`: resolutions, `duration_seconds` (inclusive; `-1` auto is always
+    accepted), ratios, reference-count maxima, Draft support and final
+    resolution, audio-only input, `task_types`, `output_formats`.
+  - `image`: reference maximum, output formats, batch support, sizes,
+    transparent-background support.
+  - `3d`: text-to-3D support, reference maximum, file formats, seed support.
+  - `understanding`: accepted modalities, media-part maximum, thinking,
+    reasoning efforts, response formats. Both the default model for requests
+    with audio and the default for requests without audio are marked
+    `is_default`.
+- **`services`**: `modelark`, `seedance_2_5_premium`, `seed3d`, `seed_audio`,
+  `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`,
+  `asset_library` and `asset_delete`, each with `enabled` and, when disabled,
+  a `reason` naming the setting to change (never a secret value).
+
+Models are listed only when their service is enabled. The Seedance 2.5
+Premium binding exists only when its whitelist flag is on.
+
 ## Background-job tools
 
 `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, and `ark_job_cancel`
