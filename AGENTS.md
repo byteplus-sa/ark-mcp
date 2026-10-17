@@ -118,6 +118,8 @@ engineer or agent can execute it without re-deriving the design.
 - Naming convention: `PLAN_<FEATURE_OR_SCOPE>.md`.
 - Include frontmatter (`title`, `type: plan`, `status`, `created`, `updated`,
   `tags`, `source`, `related`) when the plan draws on external research.
+- `status` is one of `draft`, `proposed`, `accepted`, `in-progress`,
+  `shipped`, `superseded`, or `deprecated`.
 - A plan is a living document: update `status` and `updated` as work
   progresses. Once shipped, the durable decisions should move to `specs/` or
   `docs/` and the plan can be archived or marked `status: shipped`.

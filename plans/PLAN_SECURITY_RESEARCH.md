@@ -1,7 +1,7 @@
 ---
 title: Security Hardening Research for Ark Seed MCP
 type: plan
-status: active
+status: in-progress
 created: 2026-08-29
 updated: 2026-08-29
 tags:
@@ -26,7 +26,7 @@ source:
   - https://www.rfc-editor.org/rfc/rfc9700.html
   - https://www.rfc-editor.org/rfc/rfc9728
 related:
-  - plans/PLAN_CLOUD_READINESS_AND_HARDENING.md
+  - docs/deployment.md
   - docs/security.md
 ---
 

@@ -90,13 +90,36 @@ containers:
 Mount `/app/.artifacts` writable even with a read-only root filesystem. Load
 provider credentials from a Secret rather than literal manifest values.
 
+## State, artifacts, and shutdown
+
+- **HTTP is stateless.** `python -m ark_mcp` serves Streamable HTTP with
+  `stateless_http=True` (`__main__.py`); long-running work is tracked by job
+  IDs, not MCP sessions (see
+  [SPEC_BACKGROUND_JOBS.md](../specs/SPEC_BACKGROUND_JOBS.md)).
+- **Shutdown waits for in-flight requests** up to `BYTEPLUS_REQUEST_TIMEOUT_MS`
+  (uvicorn `timeout_graceful_shutdown`). Set the orchestrator's termination
+  grace period at least that long.
+- **SQLite is the only state backend.** `STATE_BACKEND=sqlite` is the only
+  accepted value, and startup logs `single_instance_state_backend` as a
+  reminder to run one replica (`runtime.py::build_state_stores`).
+- **Artifacts can live off the pod.** `ARTIFACT_BACKEND=object_storage` stores
+  durable artifacts in the configured TOS or S3 bucket; startup fails without
+  `TOS_*` or `S3_*` credentials. **The sweeper does not delete objects there**,
+  so configure a bucket lifecycle rule that matches `ARTIFACT_TTL_SECONDS`.
+- **A background sweeper** runs every `ARTIFACT_SWEEP_INTERVAL_SECONDS`
+  (default `3600`). It deletes expired filesystem artifacts and cache rows,
+  and prunes ownership, object-key and budget rows older than
+  `STATE_PRUNE_MAX_AGE_DAYS` (default `30`).
+
 ## Security checklist
 
 - Use HTTPS and JWT mode for every non-loopback bind.
 - Pin issuer, audience, and JWKS URI; issue least-privilege tool scopes.
 - Set explicit Host and Origin allowlists.
 - Set `RATE_LIMIT_RPM` to cap per-client-IP request frequency when exposed
-  to untrusted clients.
+  to untrusted clients. Behind a reverse proxy, set
+  `RATE_LIMIT_TRUST_PROXY_HEADERS=true` only if the proxy overwrites
+  `X-Forwarded-For`; otherwise every client shares the proxy's bucket.
 - Keep the HTTP body limit and provider URL SSRF checks enabled.
 - Mount the artifact directory with least privilege and protect backups.
 - Restrict operational endpoints at the proxy/network layer as appropriate.

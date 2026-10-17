@@ -1,7 +1,7 @@
 ---
 title: ModelArk MCP Codebase Gap Remediation Plan
 type: plan
-status: verification_pending
+status: in-progress
 created: 2026-07-23
 updated: 2026-07-23
 tags:

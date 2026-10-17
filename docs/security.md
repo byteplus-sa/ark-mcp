@@ -217,7 +217,20 @@ bucket is empty, the middleware returns `429 "Rate limit exceeded"` with a
 `Retry-After` header indicating the seconds until the next token is
 available, plus `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
 `X-RateLimit-Reset` headers so well-behaved clients can self-throttle. The
-bucket dict is protected by an `asyncio.Lock`.
+bucket dict is protected by an `asyncio.Lock`, and expired buckets are evicted
+once more than 10,000 keys are tracked.
+
+| Env var | Default | Notes |
+|---|---|---|
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | Key buckets on the first `X-Forwarded-For` entry instead of the socket peer IP |
+
+**Enable proxy headers only behind a proxy that overwrites
+`X-Forwarded-For`.** Otherwise a client can choose its own bucket key and
+evade the limit.
+
+Both ASGI middlewares are applied by `HardenedFastMCP.http_app`
+(`server.py`) whenever `MCP_TRANSPORT=http`, so they are active whether the
+server starts through `python -m ark_mcp` or `fastmcp run`.
 
 ## SSRF-safe downloader (`security/safe_downloader.py`)
 
