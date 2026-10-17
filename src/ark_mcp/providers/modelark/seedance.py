@@ -166,6 +166,7 @@ class SeedanceService:
         safety_identifier: str | None = None,
         omni_reference_task_type: str | None = None,
         draft: bool | None = None,
+        output_format: str | None = None,
     ) -> SeedanceCreateProviderRequest:
         """Build a provider request from domain-level parameters."""
         return SeedanceCreateProviderRequest(
@@ -182,6 +183,7 @@ class SeedanceService:
             safety_identifier=safety_identifier,
             omni_reference_task_type=omni_reference_task_type,
             draft=draft,
+            output_format=output_format,
         )
 
     async def close(self) -> None:

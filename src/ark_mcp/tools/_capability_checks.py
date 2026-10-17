@@ -17,18 +17,41 @@ from ark_mcp.config.model_capabilities import VideoCapabilities
 class VideoRequest(Protocol):
     """Fields of a Seedance create request that depend on the model."""
 
-    resolution: str | None
-    ratio: str | None
-    duration: int | None
-    priority: int | None
-    execution_expires_after: int | None
-    images: Sequence[object] | None
-    videos: Sequence[object] | None
-    audios: Sequence[object] | None
-    draft: bool | None
-    draft_task_id: str | None
-    omni_reference_task_type: str | None
-    output_format: str | None
+    @property
+    def resolution(self) -> str | None: ...
+
+    @property
+    def ratio(self) -> str | None: ...
+
+    @property
+    def duration(self) -> int | None: ...
+
+    @property
+    def priority(self) -> int | None: ...
+
+    @property
+    def execution_expires_after(self) -> int | None: ...
+
+    @property
+    def images(self) -> Sequence[object] | None: ...
+
+    @property
+    def videos(self) -> Sequence[object] | None: ...
+
+    @property
+    def audios(self) -> Sequence[object] | None: ...
+
+    @property
+    def draft(self) -> bool | None: ...
+
+    @property
+    def draft_task_id(self) -> str | None: ...
+
+    @property
+    def omni_reference_task_type(self) -> str | None: ...
+
+    @property
+    def output_format(self) -> str | None: ...
 
 
 def check_video_request(request: VideoRequest, caps: VideoCapabilities) -> list[str]:

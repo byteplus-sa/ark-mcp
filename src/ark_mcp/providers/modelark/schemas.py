@@ -101,6 +101,7 @@ class SeedanceCreateProviderRequest(BaseModel):
     safety_identifier: str | None = None
     callback_url: str | None = None
     draft: bool | None = None
+    output_format: str | None = None
 
 
 class SeedanceCreateProviderResponse(BaseModel):

@@ -152,7 +152,7 @@ async def main():
         )
         print("MCP submission task:", submission.task_id)
         created = await submission.result()
-        provider_id = created.structured_content["task_id"]
+        provider_id = created.structured_content["tasks"][0]["task_id"]
         directory = Path(".artifacts")
         directory.mkdir(exist_ok=True)
         with (directory / "provider_tasks.jsonl").open("a") as stream:
@@ -418,7 +418,7 @@ Both keys are required for all 9 tools to appear.
 | `BYTEPLUS_MODELARK_BASE_URL` | No | `https://ark.ap-southeast.bytepluses.com/api/v3` | ModelArk region endpoint |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | No | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech endpoint |
 | `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-0-pro-260628` | Seedream model ID |
-| `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-0-260128` | Seedance model ID |
+| `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-5-260628` | Default Seedance model ID for `seedance_create_task` (Seedance 2.5) |
 | `MCP_TRANSPORT` | No | `stdio` | `stdio` or `http` |
 | `MCP_HOST` | No | `127.0.0.1` | HTTP bind address |
 | `MCP_PORT` | No | `3000` | HTTP port |

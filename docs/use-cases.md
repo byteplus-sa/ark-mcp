@@ -183,9 +183,13 @@ Create an async video generation task.
 }
 ```
 
+Omitting `model` uses the configured default (Seedance 2.5); pass an exact ID
+from `ark_list_models(kind='video')` to pick another model. Add
+`"dry_run": true` to preview the request and estimated cost without billing.
+
 The background submission returns a local MCP task or Ark job ID. Read the
-provider task ID from its terminal result, then pass that provider ID to
-`gen_task_get`.
+provider task ID (`tasks[0].task_id`) from its terminal result, then pass that
+provider ID to `gen_task_get`.
 
 ## 10. Polling for Video Completion
 
@@ -234,9 +238,10 @@ Generate a video that starts with one image and ends with another.
 
 ## 12. Parallel Video Task Variations
 
-Create multiple video tasks with different prompts.
+Create multiple video tasks with different prompts in one call
+(`variations` 1-5; each variation is a separate billed task).
 
-**Tool:** `seedance_create_task_variations`
+**Tool:** `seedance_create_task`
 
 ```json
 {
@@ -259,8 +264,9 @@ Create multiple video tasks with different prompts.
 ```
 
 The background submission returns a local MCP task or Ark job ID. Read the
-per-variation provider task IDs from its terminal result, then pass all of
-them to one `gen_task_get` call.
+per-variation provider task IDs from `tasks` in its terminal result (a failed
+submission has `error` instead of `task_id`), then pass all of them to one
+`gen_task_get` call.
 
 ## 13. List Recent Video Tasks
 

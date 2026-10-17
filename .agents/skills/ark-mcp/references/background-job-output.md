@@ -49,9 +49,13 @@ reading it:
 
 ```bash
 python3 -c "import json,sys; d=json.load(open(sys.argv[1])); \
-t=next(t for t in d['targets'] if t['tool_name']=='seedance_2_5_create_task'); \
+t=next(t for t in d['targets'] if t['tool_name']=='seedance_create_task'); \
 print(json.dumps(t['input_schema'])[:6000])" <saved-result-file>
 ```
+
+The `seedance_create_task` schema is shared by every Seedance model, so it
+shows the widest allowed values; take per-model limits from
+`ark_list_models(kind='video')` instead (no provider call, small result).
 
 Record the fields you rely on in `projects/<project>/capabilities/<model>.json`
 with the verification time, and reuse that file for later requests in the same

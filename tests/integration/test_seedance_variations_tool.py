@@ -1,4 +1,4 @@
-"""Integration tests for the ``seedance_create_task_variations`` tool."""
+"""Integration tests for the ``seedance_create_task`` tool."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ import pytest
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.modelark.seedance import SeedanceService
-from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-from ark_mcp.tools.seedance_create_task_variations import (
-    SeedanceVariationsInput,
-    SeedanceVariationsOutput,
-    seedance_create_task_variations,
+from ark_mcp.tools.seedance_create_task import (
+    SeedanceCreateTaskInput,
+    SeedanceCreateTaskOutput,
+    SeedanceVideoInput,
+    seedance_create_task,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -43,7 +43,7 @@ def _patch_seedance_by_prompt(
 
 
 class TestSeedanceVariationsTool:
-    """Integration tests for seedance_create_task_variations."""
+    """Integration tests for seedance_create_task."""
 
     async def test_three_tasks_all_succeed(
         self,
@@ -60,8 +60,8 @@ class TestSeedanceVariationsTool:
             },
         )
 
-        result = await seedance_create_task_variations(
-            SeedanceVariationsInput(
+        result = await seedance_create_task(
+            SeedanceCreateTaskInput(
                 variation_prompts=["a cat", "a dog", "a bird"],
                 variations=3,
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
@@ -69,13 +69,13 @@ class TestSeedanceVariationsTool:
             fake_ctx,
         )
 
-        assert isinstance(result, SeedanceVariationsOutput)
-        assert result.summary.total == 3
-        assert result.summary.succeeded == 3
-        assert result.summary.failed == 0
-        assert result.summary.variations[0].task_id == "task-1"
-        assert result.summary.variations[1].task_id == "task-2"
-        assert result.summary.variations[2].task_id == "task-3"
+        assert isinstance(result, SeedanceCreateTaskOutput)
+        assert len(result.tasks) == 3
+        assert result.submitted == 3
+        assert result.failed == 0
+        assert result.tasks[0].task_id == "task-1"
+        assert result.tasks[1].task_id == "task-2"
+        assert result.tasks[2].task_id == "task-3"
         assert result.recommended_poll_after_ms == 5000
 
     async def test_partial_failure(
@@ -101,8 +101,8 @@ class TestSeedanceVariationsTool:
             },
         )
 
-        result = await seedance_create_task_variations(
-            SeedanceVariationsInput(
+        result = await seedance_create_task(
+            SeedanceCreateTaskInput(
                 variation_prompts=["good", "bad", "good"],
                 variations=3,
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
@@ -110,29 +110,29 @@ class TestSeedanceVariationsTool:
             fake_ctx,
         )
 
-        assert result.summary.succeeded == 2
-        assert result.summary.failed == 1
-        assert result.summary.variations[1].error is not None
-        assert result.summary.variations[1].task_id is None
+        assert result.submitted == 2
+        assert result.failed == 1
+        assert result.tasks[1].error is not None
+        assert result.tasks[1].task_id is None
 
     async def test_no_prompt_raises(self) -> None:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="Either prompt or variation_prompts"):
-            SeedanceVariationsInput(
+            SeedanceCreateTaskInput(
                 variations=2,
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
     async def test_text_only_variations_succeeds(self) -> None:
-        inp = SeedanceVariationsInput(prompt="test", variations=1)
+        inp = SeedanceCreateTaskInput(prompt="test", variations=1)
         assert inp.prompt == "test"
         assert inp.images is None
         assert inp.videos is None
         assert inp.audios is None
 
     async def test_variation_prompts_only_no_media_valid(self) -> None:
-        inp = SeedanceVariationsInput(variation_prompts=["a cat playing"], variations=1)
+        inp = SeedanceCreateTaskInput(variation_prompts=["a cat playing"], variations=1)
         assert inp.prompt is None
         assert inp.variation_prompts == ["a cat playing"]
         assert inp.images is None
@@ -143,17 +143,17 @@ class TestSeedanceVariationsTool:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            SeedanceVariationsInput(
+            SeedanceCreateTaskInput(
                 prompt="test",
                 variations=6,
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
-    async def test_inherited_validators_fire(self) -> None:
-        """Verify that SeedanceCreateTaskInput validators are inherited."""
-        from pydantic import ValidationError
-
-        # Too many reference videos
+    async def test_per_model_reference_limit_is_checked_at_runtime(
+        self, test_env: None, fake_ctx: FakeContext
+    ) -> None:
         videos = [SeedanceVideoInput(url=f"https://example.com/v{i}.mp4") for i in range(4)]
-        with pytest.raises(ValidationError, match="Too many reference videos"):
-            SeedanceVariationsInput(prompt="test", variations=1, videos=videos)
+        with pytest.raises(ValueError, match="4 reference videos exceed the maximum of 3"):
+            await seedance_create_task(
+                SeedanceCreateTaskInput(prompt="test", variations=2, videos=videos), fake_ctx
+            )

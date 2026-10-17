@@ -30,10 +30,6 @@ def _modelark(settings: Settings) -> bool:
     return settings.has_modelark
 
 
-def _seedance_premium(settings: Settings) -> bool:
-    return settings.has_seedance_2_5_premium
-
-
 def _seed3d(settings: Settings) -> bool:
     return settings.has_seed3d
 
@@ -310,27 +306,6 @@ CATALOG: tuple[CatalogEntry, ...] = (
         gate=_modelark,
     ),
     _entry(
-        "seedance_create_task_variations",
-        "SeedanceVariationsOutput",
-        "seedance:create",
-        background="required",
-        gate=_modelark,
-    ),
-    _entry(
-        "seedance_2_5_create_task",
-        "Seedance25CreateTaskOutput",
-        "seedance:create",
-        background="required",
-        gate=_modelark,
-    ),
-    _entry(
-        "seedance_2_5_create_task_variations",
-        "Seedance25VariationsOutput",
-        "seedance:create",
-        background="required",
-        gate=_modelark,
-    ),
-    _entry(
         "gen_task_get",
         "GenTaskGetOutput",
         "gen:read",
@@ -357,20 +332,6 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "understanding:read",
         background="required",
         gate=_modelark,
-    ),
-    _entry(
-        "seedance_2_5_premium_create_task",
-        "Seedance25CreateTaskOutput",
-        "seedance:create",
-        background="required",
-        gate=_seedance_premium,
-    ),
-    _entry(
-        "seedance_2_5_premium_create_task_variations",
-        "Seedance25VariationsOutput",
-        "seedance:create",
-        background="required",
-        gate=_seedance_premium,
     ),
     _entry(
         "hyper3d_create_task",

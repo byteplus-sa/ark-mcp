@@ -68,8 +68,9 @@ Invoke this skill when the user wants to:
 
 - generate or edit an image;
 - generate audio, voice-clone from references, or request several variations;
-- create Seedance video tasks (Seedance 2.0 and 2.5), then poll, list, cancel,
-  or delete them with `gen_task_get`, `gen_task_list`, and `gen_task_cancel_or_delete`;
+- create Seedance video tasks (Seedance 2.0, 2.5, and 2.5 Premium) with
+  `seedance_create_task`, then poll, list, cancel, or delete them with
+  `gen_task_get`, `gen_task_list`, and `gen_task_cancel_or_delete`;
 - create Hyper3D and Hitem3d 3D generation tasks (requires the 3D feature flag),
   then manage them with the same `gen_task_*` tools;
 - understand images or videos (OCR, scene analysis, content review), or use a
@@ -144,22 +145,17 @@ and why. It makes no provider calls and needs no scope.
 - `seedream_generate_image`
 - `seedream_edit_image`
 - `seedream_generate_image_variations`
-- `seedance_create_task`
-- `seedance_create_task_variations`
-- `seedance_2_5_create_task`
-- `seedance_2_5_create_task_variations`
+- `seedance_create_task`            # every Seedance model, variations, Draft, dry run
 - `gen_task_get`                    # shared: checks 1-50 Seedance or 3D tasks
 - `gen_task_list`                   # shared: lists Seedance and 3D tasks
 - `gen_task_cancel_or_delete`       # shared: cancels or deletes any generation task
 - `seed_understand`
 - `seed_audio_understand`
 
-### Requires `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (and `BYTEPLUS_MODELARK_API_KEY`)
-
-Whitelist-only; disabled by default.
-
-- `seedance_2_5_premium_create_task`
-- `seedance_2_5_premium_create_task_variations`
+> **Seedance 2.5 Premium is a model, not a tool.** With
+> `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (whitelist-only;
+> disabled by default) the server binds `SEEDANCE_2_5_PREMIUM_MODEL` and
+> `seedance_create_task` accepts it as `model`. No extra tools are registered.
 
 ### Requires `BYTEPLUS_MODELARK_3D_ENABLED=true` (and `BYTEPLUS_MODELARK_API_KEY`)
 
@@ -237,11 +233,6 @@ is contacted:
 - `seedream_edit_image`
 - `seedream_generate_image_variations`
 - `seedance_create_task`
-- `seedance_create_task_variations`
-- `seedance_2_5_create_task`
-- `seedance_2_5_create_task_variations`
-- `seedance_2_5_premium_create_task` (when enabled)
-- `seedance_2_5_premium_create_task_variations` (when enabled)
 - `hyper3d_create_task`
 - `hitem3d_create_task`
 - `omnihuman_create_task` (when enabled)
@@ -957,10 +948,15 @@ This produces 4 images with seeds [100, 101, 102, 103].
 
 ### Seedance (Video) Tools
 
-Requires `BYTEPLUS_MODELARK_API_KEY`. Auth scope: `seedance:create` for the
-create tools; polling, listing, and cleanup use the shared
+Requires `BYTEPLUS_MODELARK_API_KEY`. Auth scope: `seedance:create`; polling,
+listing, and cleanup use the shared
 [generation task tools](#generation-task-tools-seedance--seed-3d) (`gen:read`,
 `gen:delete`).
+
+**One create tool for every Seedance model.** `seedance_create_task` covers
+Seedance 2.0 (Standard, Fast, Mini), 2.5, and 2.5 Premium, single tasks and
+variations, Draft mode, and dry runs. The `model` argument picks the family;
+there are no per-family or per-variation create tools.
 
 Video generation is **asynchronous**. You create a task, then poll for
 completion with `gen_task_get`. Tasks transition through states:
@@ -971,36 +967,124 @@ queued -> running -> succeeded | failed | cancelled | expired
 
 #### `seedance_create_task`
 
-Create an async video generation task. The background result contains the
-provider task ID for subsequent polling.
+Create one to five asynchronous video tasks for any configured Seedance model.
+**Required background execution:** run it through `ark_job_submit` (or native
+task augmentation); a dry run finishes on the first `ark_job_get`. The
+background result contains the provider task IDs to poll with `gen_task_get`.
+**Never resubmit to poll.**
+
+**Model selection.** Call `ark_list_models(kind='video')` and pass the exact
+`model_id` (every video model lists `seedance_create_task` as its tool). Omit
+`model` to use the configured default (`SEEDANCE_DEFAULT_MODEL`, default
+**`dreamina-seedance-2-5-260628`**, Seedance 2.5). The Premium model
+(`dreamina-seedance-2-5-premium-260915`) is just another model ID; it is bound
+only when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`.
 
 **Constraints:**
-- At least one of `prompt`, `images`, or `videos` is required.
-- Audio references cannot be the sole media input; at least one image or
-  video must accompany audio.
+- At least one of `prompt`, `images`, `videos`, or `audios` is required
+  (unless `draft_task_id` is set). `variation_prompts` can stand in for
+  `prompt`.
 - Text-only (prompt with no media) is supported for pure text-to-video.
+- **Audio-only input** works on Seedance 2.5 and Premium; Seedance 2.0 models
+  need an image or video alongside audio.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `prompt` | `str` | No | 1–32,000 characters. BytePlus recommends staying under 1,000 words for focus; that recommendation is not a hard API limit. |
-| `images` | `list[SeedanceImageInput]` | No | Up to 9 images with roles: `first_frame`, `last_frame`, `reference_image`. Each entry may be a plain URL string or `{"url": ...}` (coerced to `role=reference_image`) |
-| `videos` | `list[SeedanceVideoInput]` | No | Up to 3 videos with role: `reference_video`. Each entry may be a plain URL string or `{"url": ...}` |
-| `audios` | `list[SeedanceAudioInput]` | No | Up to 3 audios with role: `reference_audio`. Each entry may be a plain URL string or `{"url": ...}` |
-| `model` | `str` | No | Model ID. Default: `dreamina-seedance-2-0-260128` (Standard). Fast and Mini IDs are configured via `SEEDANCE_MODEL_BINDINGS`. |
-| `resolution` | `"480p"` \| `"720p"` \| `"1080p"` \| `"4k"` | No | |
-| `ratio` | `str` | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (default). For first/last-frame tasks the output follows the first image. |
-| `duration` | `int` | No | -1 (auto) or 4-15 seconds. |
-| `generate_audio` | `bool` | No | Generate audio track |
-| `watermark` | `bool` | No | Provider watermark |
-| `return_last_frame` | `bool` | No | Include last frame image in output |
-| `execution_expires_after` | `int` | No | 3600–259200 seconds |
-| `priority` | `int` | No | 0–9 |
-| `safety_identifier` | `str` | No | Max 64 characters |
+| `prompt` | `str` | No | 1–32,000 characters (ModelArk recommends at most about 1,000 English words; not a hard limit). Optional when media or `variation_prompts` are given. |
+| `images` | `list[SeedanceImageInput]` | No | Up to 30 in the schema; the model's maximum is checked at runtime. Roles: `first_frame`, `last_frame`, `reference_image`. Each entry may be a URL string, `asset://<asset_id>`, or `{"url": ...}` (defaults to `reference_image`). |
+| `videos` | `list[SeedanceVideoInput]` | No | Up to 10 (per-model maximum at runtime). URL string, `asset://<asset_id>`, or `{"url": ...}`. |
+| `audios` | `list[SeedanceAudioInput]` | No | Up to 10 (per-model maximum at runtime). URL string, `asset://<asset_id>`, or `{"url": ...}`. |
+| `model` | `str` | No | Exact configured ID from `ark_list_models(kind='video')`. Omit for the default. With `draft_task_id`, omit to reuse the Draft task's model (a different model is rejected). |
+| `resolution` | `"480p"` \| `"720p"` \| `"1080p"` \| `"4k"` | No | Supported set checked per model at runtime. `draft=true` allows only `480p` (the default); `draft_task_id` allows only the model's Draft final resolution (the default). |
+| `ratio` | `str` | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (provider default). On 2.5, edit, extend, first-frame and first/last-frame requests require it omitted or `adaptive`. |
+| `duration` | `int` | No | `-1` (auto) or 4 up to the model maximum (15 for 2.0, 30 for 2.5). `edit` requires `-1` or omitted. |
+| `omni_reference_task_type` | `str` | No | `auto`, `reference`, `edit`, or `extend` (2.5 models only). See [auto-locked parameters](#auto-locked-parameters-by-task-type). |
+| `output_format` | `"mp4"` \| `"mov"` | No | 2.5 models only. `mov` is H.264, YUV 4:4:4, PCM audio for post-production; some players cannot play it. |
+| `generate_audio` | `bool` | No | Generate an audio track. |
+| `watermark` | `bool` | No | AIGC watermark (default `false`). |
+| `return_last_frame` | `bool` | No | Return the last frame as a separate image. |
+| `execution_expires_after` | `int` | No | 3600–259200 seconds before an unfinished task expires. |
+| `priority` | `int` | No | 0–9; the model's range is checked at runtime. |
+| `safety_identifier` | `str` | No | Max 64 characters. |
+| `draft` | `bool` | No | Draft step 1 (2.5 models): a cheap 480p preview, billed as a normal 480p video. Mutually exclusive with `draft_task_id`. |
+| `draft_task_id` | `str` | No | Draft step 2: render a succeeded Draft task as the final video. See [Draft mode](#draft-mode-25-and-25-premium). |
+| `variations` | `int` | No | 1–5 (default 1). Each variation is a **separate billed task**; partial failures are reported per variation. |
+| `variation_prompts` | `list[str]` | No | Exactly `variations` entries (each 1–32,000 characters), overriding `prompt`. `variations > 1` needs `prompt` or `variation_prompts`. |
+| `dry_run` | `bool` | No | Default `false`. Validate and return the provider request bodies plus a cost estimate; **nothing is submitted or billed**. |
 
-Returns `SeedanceCreateTaskOutput` with `task_id`, `status="queued"`, and
-`recommended_poll_after_ms`.
+**Output — `SeedanceCreateTaskOutput`** (same shape for one task or several):
 
-**Example — text-to-video:**
+| Field | Meaning |
+|---|---|
+| `model`, `family` | Resolved model ID and family (e.g. `seedance_2_5`). |
+| `dry_run` | `true` when nothing was submitted; read `preview`. |
+| `tasks[]` | One `SeedanceTaskRef` per variation, in order (empty for a dry run): `index` (0-based; `0` for a single task), `task_id` (poll with `gen_task_get`; for `draft=true`, pass as `draft_task_id` once succeeded; `null` on failure), `request_id`, `error` (`code`, `message`, `request_id`, `retryable`, `ambiguous_completion`, `phase`; `null` when accepted). |
+| `submitted`, `failed` | Counts of accepted and failed submissions. |
+| `recommended_poll_after_ms` | Delay before the first `gen_task_get` poll; `null` for a dry run. |
+| `preview` | Dry run only: `requests` (provider bodies, one per variation; HTTPS media URLs reduced to scheme and host, inline Base64 to its size, `asset://` kept) and `estimated_cost_usd` (static estimate from the server price table, **not a provider quote**). |
+
+**Runtime validation.** Per-model limits (resolution, ratio, duration range,
+priority and expiry ranges, reference counts, Draft support, audio-only input,
+task types, `output_format`) are checked against the capability registry
+before anything is sent. **All violations come back in one error**:
+
+```text
+Request is not valid for model '<id>' (<family>):
+- ...
+Call ark_list_models(kind='video') for per-model limits.
+```
+
+`asset://` references are preflighted against the private asset library
+before submission, including on dry runs.
+
+**Model-family limits** (`ark_list_models(kind='video')` is authoritative for
+the configured models):
+
+| Family | Resolutions | Duration | Max images / videos / audios | Draft (final) | Audio-only | Task types | `output_format` |
+|---|---|---|---|---|---|---|---|
+| **Seedance 2.0** | 480p, 720p, 1080p, 4k | 4–15s | 9 / 3 / 3 | No | No | — | — |
+| **Seedance 2.0 Fast** | 480p, 720p | 4–15s | 9 / 3 / 3 | No | No | — | — |
+| **Seedance 2.0 Mini** | 480p, 720p | 4–15s | 9 / 3 / 3 | No | No | — | — |
+| **Seedance 2.5** (default) | 480p, 720p, 1080p | 4–30s | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| **Seedance 2.5 Premium** *(whitelist + flag)* | 480p, 720p, 1080p, 4k | 4–30s | 30 / 10 / 10 | Yes (4k) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+
+**Choosing a model:** 2.5 for longer single-pass video (up to 30s), richer
+references, structured editing, native extension, `mov` output, or Draft mode;
+Premium when you need **4K plus** the 2.5 feature set; 2.0 for 4K without
+Premium, Fast/Mini speed variants, or lower cost per generation.
+
+**Variations.** Set `variations` (up to 5) to create several tasks in
+parallel in one call, optionally with `variation_prompts`. Each one is billed.
+Read `tasks[]` for per-variation task IDs and errors, then pass every
+non-null `task_id` to **one** `gen_task_get` call.
+
+**Dry run.** Set `dry_run: true` to check a request against the model's limits,
+see the exact provider bodies, and get `estimated_cost_usd` before spending
+quota. Remove `dry_run` and submit again to create the tasks.
+
+#### Draft mode (2.5 and 2.5 Premium)
+
+1. Create the shot with `draft: true` (`resolution` omitted or `480p`). For
+   several candidates, combine it with `variations`.
+2. Poll with `gen_task_get` until it succeeds (`draft: true` in the result)
+   and review the preview.
+3. Call `seedance_create_task` again with `draft_task_id` (a succeeded Draft
+   task you own, at most 7 days old), `variations` left at 1, and no
+   `variation_prompts`.
+
+The provider reuses the Draft's **model, prompt, media, duration, ratio, seed,
+`generate_audio`, and `omni_reference_task_type`**, so those must be omitted
+(they are rejected even when they match). `resolution` must be omitted or the
+Draft final resolution (**1080p** on 2.5, **4k** on Premium; the Premium 4K
+rule is this server's policy, not stated in the public guide).
+`return_last_frame`, `watermark`, `execution_expires_after`, `priority`,
+`safety_identifier`, and `output_format` may be set again. Each step is billed
+separately: the Draft as a 480p video, the final at its final resolution.
+
+Examples show the tool's input fields (inside `arguments.input` when
+submitted through `ark_job_submit`).
+
+**Example — text-to-video on the default 2.5 model:**
 
 ```json
 {
@@ -1011,10 +1095,11 @@ Returns `SeedanceCreateTaskOutput` with `task_id`, `status="queued"`, and
 }
 ```
 
-**Example — image-to-video with first and last frame:**
+**Example — first and last frame on Seedance 2.0:**
 
 ```json
 {
+  "model": "dreamina-seedance-2-0-260128",
   "prompt": "Smooth transition between the two scenes",
   "images": [
     { "role": "first_frame", "kind": "url", "url": "https://cdn.example.com/start.png" },
@@ -1022,6 +1107,29 @@ Returns `SeedanceCreateTaskOutput` with `task_id`, `status="queued"`, and
   ],
   "resolution": "720p",
   "duration": 5
+}
+```
+
+**Example — three Draft candidates, then the final render of the chosen one:**
+
+```json
+{ "prompt": "A cinematic 20-second chase through a night market", "duration": 20, "draft": true, "variations": 3 }
+```
+
+```json
+{ "draft_task_id": "<succeeded draft task_id>" }
+```
+
+**Example — dry run of a 4K Premium request:**
+
+```json
+{
+  "model": "dreamina-seedance-2-5-premium-260915",
+  "prompt": "A 4K aerial shot over a coastline at golden hour",
+  "resolution": "4k",
+  "ratio": "16:9",
+  "duration": 15,
+  "dry_run": true
 }
 ```
 
@@ -1039,139 +1147,17 @@ overridden:
 | First/last-frame generation | Locked to first image's ratio | Set freely |
 | Text-to-video / standard reference | Set freely | Set freely (or `-1` for auto) |
 
-On Seedance 2.5, set `omni_reference_task_type` to `auto`, `reference`,
+On Seedance 2.5 models, set `omni_reference_task_type` to `auto`, `reference`,
 `edit`, or `extend` to force a task type when auto-detection is ambiguous.
 `edit` and `extend` require at least one reference video and `ratio` omitted
 or `adaptive`; `edit` also requires `duration` omitted or `-1`. The server
 rejects other combinations before submission instead of letting the provider
-fail them with `InvalidParameter.TaskTypeConstraint`. Seedance 2.0 does not
-accept the field.
-
-#### `seedance_create_task_variations`
-
-Create 1–5 video generation tasks in parallel. Each variation creates a
-separate task.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| Same as `seedance_create_task` | — | — | — |
-| `variations` | `int` | Yes | 1–5 |
-| `variation_prompts` | `list[str]` | No | Per-variation prompts |
-
-Returns `SeedanceVariationsOutput` with per-variation provider task IDs and
-`recommended_poll_after_ms` values. The variation result is returned by the
-background job; retrieve its terminal result, then pass every provider task ID
-to one `gen_task_get` call.
-
----
-
-### Seedance 2.5 (Video) Tools
-
-Requires `BYTEPLUS_MODELARK_API_KEY`. Same auth scopes as 2.0.
-
-Seedance 2.5 (`dreamina-seedance-2-5-260628`) is the newer, higher-capability model. Key differences from 2.0:
-
-| Capability | Seedance 2.0 | Seedance 2.5 |
-|---|---|---|
-| Max duration | 15s | 30s |
-| Max images | 9 | 30 |
-| Max videos | 3 | 10 |
-| Max audios | 3 | 10 |
-| Resolution | 480p, 720p, 1080p, 4K | 480p, 720p, 1080p |
-| Fast/Mini variants | Yes | No |
-| Structured editing | No | Subject replacement, background replacement, audio editing |
-| Forward/backward extension | No (manual `return_last_frame` chaining) | Yes (native) |
-| Keyframe sequences | No | Yes |
-
-**When to choose 2.5:** longer single-pass videos (up to 30s), richer multimodal references (30/10/10), structured editing, native extension, 1080p output.
-
-**When to choose 2.0:** 4K output resolution, Fast/Mini speed variants, lower cost per generation.
-
-#### `seedance_2_5_create_task`
-
-Create an asynchronous Seedance 2.5 video generation task.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `prompt` | `str` | No | Text prompt (up to 32,000 chars). Optional when media inputs are provided. |
-| `images` | `list[SeedanceImageInput]` | No | Up to 30 images with roles: `first_frame`, `last_frame`, `reference_image`. Each entry may be a plain URL string or `{"url": ...}` |
-| `videos` | `list[SeedanceVideoInput]` | No | Up to 10 videos with role: `reference_video`. Each entry may be a plain URL string or `{"url": ...}` |
-| `audios` | `list[SeedanceAudioInput]` | No | Up to 10 audios with role: `reference_audio`. Audio-only input is supported (unique to 2.5). Each entry may be a plain URL string or `{"url": ...}` |
-| `model` | `str` | No | Default: `dreamina-seedance-2-5-260628`. No Fast/Mini variants. |
-| `resolution` | `"480p"` \| `"720p"` \| `"1080p"` | No | 2.5 supports 480p, 720p, and 1080p. 4k is not supported. |
-| `ratio` | `str` | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (default). `edit`, `extend`, first-frame and first/last-frame requests require it omitted or `adaptive`; other values are rejected before submission. |
-| `duration` | `int` | No | -1 (auto) or 4-30 seconds. `edit` requires -1 or omitted. |
-| `omni_reference_task_type` | `str` | No | `auto` (default), `reference`, `edit`, or `extend` (Seedance 2.5 only). `edit`/`extend` need at least one reference video and `ratio` omitted or `adaptive`; `edit` also needs `duration` omitted or `-1`. |
-| `generate_audio` | `bool` | No | Whether to generate an audio track. |
-| `watermark` | `bool` | No | Apply AIGC watermark. |
-| `return_last_frame` | `bool` | No | Return the last frame as a separate image. |
-| `execution_expires_after` | `int` | No | Max execution time in seconds (3600–259200). |
-| `priority` | `int` | No | Task priority (0–9). |
-| `safety_identifier` | `str` | No | Content safety tracking ID (max 64 chars). |
-| `draft` | `bool` | No | Draft mode step 1: a cheap 480p preview. `resolution` must be omitted (becomes `480p`) or `480p`. Mutually exclusive with `draft_task_id`. |
-| `draft_task_id` | `str` | No | Draft mode step 2: render a **succeeded** Draft task (at most 7 days old) as the final video (1080p; 4k on Premium). Omit `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, `omni_reference_task_type`, and `draft`; `model` must be omitted or equal the Draft's model; `resolution` may only be omitted or the final resolution (`1080p`, or `4k` on Premium). |
-
-Returns `Seedance25CreateTaskOutput` with `task_id`, `status="queued"`, and `recommended_poll_after_ms`.
-
-> **Draft mode (2.5 and 2.5 Premium only):** to check a shot cheaply first,
-> create it with `draft: true`, poll it with `gen_task_get` until it
-> succeeds (`draft: true` in the result), and review the preview. If it is
-> right, call the **same family's** create tool with only `draft_task_id` (plus
-> optional `return_last_frame`, `watermark`, `priority`,
-> `execution_expires_after`, `safety_identifier`). The provider reuses the
-> Draft's prompt, media, seed, duration, ratio, and audio settings, and
-> rejects them if you send them again. Each step is billed separately: the
-> Draft as a 480p video, the final at 1080p (4k on Premium). For several candidates, run the
-> variations tool with `draft: true`, then render the chosen task ID.
-
-> **Audio-only input:** Unlike Seedance 2.0, 2.5 supports audio as the sole
-> media input — a single BGM, voice, or sound-effect track can drive visual
-> pacing, beat matching, and lip-sync without any image or video reference.
-
-**Example — 30s text-to-video with native audio:**
-
-```json
-{
-  "prompt": "A cinematic 30-second scene...",
-  "model": "dreamina-seedance-2-5-260628",
-  "resolution": "720p",
-  "ratio": "16:9",
-  "duration": 30,
-  "generate_audio": true
-}
-```
-
-#### `seedance_2_5_create_task_variations`
-
-Create multiple Seedance 2.5 video tasks in parallel. Inherits all parameters from `seedance_2_5_create_task` except `draft_task_id`, and adds `variations` (1–5) and `variation_prompts`. `draft: true` creates every variation as a 480p Draft.
-
-#### `seedance_2_5_premium_create_task` / `seedance_2_5_premium_create_task_variations`
-
-Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) is a separate,
-**whitelist-only** model that adds **4K** output to the Seedance 2.5 feature
-set. The tools appear only when the operator sets
-`BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`. Inputs are identical to
-the 2.5 tools except `resolution` also accepts `4k` and `model` defaults to the
-Premium binding. Use Premium when the user needs 4K together with 2.5
-capabilities (30s, 30/10/10 references, editing, extension); otherwise use the
-regular 2.5 tool. Premium model IDs are rejected by the 2.0 and 2.5 tools.
-Draft mode works the same way on Premium, but a Draft is always 480p and the
-final render from a Draft is 4K (the default; 1080p is rejected). This 4K rule is this server's policy for Premium, not stated in the public guide; revisit it if the provider differs. Render a Premium Draft with
-`seedance_2_5_premium_create_task`.
-
-```json
-{
-  "prompt": "A 4K aerial shot over a coastline at golden hour",
-  "resolution": "4k",
-  "ratio": "16:9",
-  "duration": 15
-}
-```
+fail them with `InvalidParameter.TaskTypeConstraint`. Seedance 2.0 models do
+not accept the field.
 
 > **Shared lifecycle tools:** `gen_task_get`, `gen_task_list`, and
-> `gen_task_cancel_or_delete` work with 2.0, 2.5, and 2.5 Premium task IDs (and
-> 3D task IDs). Use them the same way regardless of which create tool produced
-> the task.
+> `gen_task_cancel_or_delete` work with every Seedance task ID (2.0, 2.5, and
+> 2.5 Premium) and with 3D task IDs.
 
 ---
 
@@ -2004,9 +1990,9 @@ quota. Twelve model families, with these default model IDs:
 | **Seedream Pro** | `dola-seedream-5-0-pro-260628` | 10 refs, no batch, PNG/JPEG |
 | **Seedream Lite** | *(configured via `SEEDREAM_MODEL_BINDINGS`)* | 14 refs, batch, streaming, PNG/JPEG |
 | **Seedream 4.x** | *(configured via `SEEDREAM_MODEL_BINDINGS`)* | 14 refs, batch, streaming, JPEG only |
-| **Seedance 2.5 Premium** *(whitelist, flag-gated)* | `dreamina-seedance-2-5-premium-260915` | Same as 2.5 plus 4K; tools registered only when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` |
-| **Seedance 2.5** | `dreamina-seedance-2-5-260628` | 30 imgs / 10 vids / 10 audios, 480p / 720p / 1080p, up to 30s, structured editing + extension |
-| **Seedance 2 Standard** | `dreamina-seedance-2-0-260128` | 9 imgs / 3 vids / 3 audios, 480p–4K, 0–15s |
+| **Seedance 2.5 Premium** *(whitelist, flag-gated)* | `dreamina-seedance-2-5-premium-260915` | Same as 2.5 plus 4K; bound (and accepted by `seedance_create_task`) only when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` |
+| **Seedance 2.5** (Seedance default) | `dreamina-seedance-2-5-260628` | 30 imgs / 10 vids / 10 audios, 480p / 720p / 1080p, up to 30s, structured editing + extension |
+| **Seedance 2 Standard** | `dreamina-seedance-2-0-260128` | 9 imgs / 3 vids / 3 audios, 480p–4K, 4–15s |
 | **Seedance 2 Fast** | *(configured via `SEEDANCE_MODEL_BINDINGS`)* | 480p, 720p only |
 | **Seedance 2 Mini** | *(configured via `SEEDANCE_MODEL_BINDINGS`)* | 480p, 720p only |
 | **Seed 2.1 Turbo** | `dola-seed-2-1-turbo-260628` (default) | 256K context, images + videos, deep-thinking |
@@ -2043,10 +2029,15 @@ default model for that product is used.
 
 ### Seedance Async Workflow
 
-1. Run `seedance_create_task` (2.0) or `seedance_2_5_create_task` (2.5) in the
-   background.
-2. Poll the local job and retrieve its result to obtain the ModelArk `task_id`.
-3. Immediately persist that provider `task_id`, the local MCP task or Ark job
+0. Call `ark_list_models(kind='video')` to pick the exact `model` and check
+   its limits. Optionally run `seedance_create_task` with `dry_run: true` first
+   to validate the request and see `estimated_cost_usd` without billing.
+1. Run `seedance_create_task` in the background (one call covers 1–5
+   `variations`).
+2. Poll the local job and retrieve its result; read the ModelArk task IDs from
+   `tasks[].task_id` (check `tasks[].error` and `failed` for rejected
+   variations).
+3. Immediately persist each provider `task_id`, the local MCP task or Ark job
    ID, request parameters, prompt hash, and intended output path to the shot
    manifest before provider polling.
 4. Poll `gen_task_get` in the foreground (pass every task ID in one call,
@@ -2069,13 +2060,14 @@ default model for that product is used.
 7. Optionally call `gen_task_list` to browse recent tasks.
 8. Call `gen_task_cancel_or_delete` only when cleanup is explicitly wanted.
 
-> **Choosing 2.0 vs 2.5:** Use `seedance_2_5_create_task` when you need
-> 30-second generation, 50 multimodal references, structured editing,
-> native extension, or Draft mode (a 480p preview before the paid final
-> render). Use `seedance_create_task` for 4K or lower
-> cost per task. The lifecycle tools are shared — `gen_task_get`,
-> `gen_task_list`, and `gen_task_cancel_or_delete` work with task IDs from
-> either version.
+> **Choosing a model:** the same `seedance_create_task` serves every family;
+> only `model` changes. Use 2.5 (the default) for 30-second generation,
+> 30/10/10 references, structured editing, native extension, `mov` output, or
+> Draft mode (a 480p preview before the paid final render; see
+> [Draft mode](#draft-mode-25-and-25-premium)). Use Premium for 4K with the
+> 2.5 feature set, and 2.0 for 4K without Premium or lower cost per task. The
+> lifecycle tools are shared — `gen_task_get`, `gen_task_list`, and
+> `gen_task_cancel_or_delete` work with task IDs from every family.
 
 ### Seed 3D Async Workflow
 
@@ -2148,8 +2140,8 @@ the subject is absent.
 
 1. If the user has Base64 video or a local video file, run `media_upload` in the
    background.
-2. Pass the returned presigned HTTPS URL into `seedance_create_task` or
-   `seedance_2_5_create_task` as a video reference.
+2. Pass the returned presigned HTTPS URL into `seedance_create_task` as a
+   video reference.
 
 ### Speech-to-Text Transcription
 
@@ -2218,11 +2210,14 @@ Use variation tools when you want to give the user multiple options:
 
 - `seedream_generate_image_variations` — up to 10 distinct images in one call.
 - `seed_audio_generate_variations` — up to 5 audio clips in one call.
-- `seedance_create_task_variations` (2.0) / `seedance_2_5_create_task_variations` (2.5) — up to 5 parallel video tasks.
+- `seedance_create_task` with `variations` (1–5) — up to 5 parallel video
+  tasks, any Seedance model; per-variation results are in `tasks[]`.
 
 Each variation is independent. Partial failures are captured — if 4 of 5
-succeed, the tool returns 4 results and 1 error. The `VariationSummary` reports
-`total`, `succeeded`, and `failed` counts. There is no per-variation timeout
+succeed, the tool returns 4 results and 1 error. The image and audio
+`VariationSummary` reports `total`, `succeeded`, and `failed` counts;
+`seedance_create_task` reports `submitted` and `failed` plus one `tasks[]`
+entry (with `task_id` or `error`) per variation. There is no per-variation timeout
 (queue wait never counts); one batch deadline bounds the call. A deadline or
 storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry),
 `generating` (may have completed — do not retry blindly), or `persisting`
@@ -2319,7 +2314,8 @@ Set to `0` (default) for record-only mode with no enforcement.
 | `speech_to_text` error code `20000003` | Silent audio — no speech detected, or a format mismatch (e.g. non-16 kHz/16-bit/mono WAV) decoded to silence | Verify the audio contains speech and matches the declared `audio_format`; re-submit with corrected audio |
 | `media_upload` / `media_presign` / `media_presign_batch` not available | Missing TOS/S3 credentials | Set `TOS_*` or `S3_*` env vars and `OBJECT_STORAGE_BACKEND` |
 | Presigned URL expired | TTL elapsed (default 30 min) | Call `media_presign` (single key) or `media_presign_batch` (many keys) with the `object_key` to generate a fresh URL |
-| Seedance 2.5 Premium tools not appearing | `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` not set or ModelArk key missing | The model is whitelist-only; once the account is whitelisted, set the flag to `true` with `BYTEPLUS_MODELARK_API_KEY` configured |
+| Seedance 2.5 Premium model missing from `ark_list_models(kind='video')` or rejected by `seedance_create_task` | `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` not set or ModelArk key missing | The model is whitelist-only; once the account is whitelisted, set the flag to `true` with `BYTEPLUS_MODELARK_API_KEY` configured. There are no separate Premium tools |
+| `seedance_create_task` returns `Request is not valid for model ...` | The request breaks that model's limits (every violation is listed) | Fix each listed item, or pick another model from `ark_list_models(kind='video')`; use `dry_run: true` to re-check without billing |
 | 3D tools not appearing | `BYTEPLUS_MODELARK_3D_ENABLED` not set or ModelArk key missing | Set `BYTEPLUS_MODELARK_3D_ENABLED=true` and ensure `BYTEPLUS_MODELARK_API_KEY` is configured |
 | OmniHuman tools not appearing | `BYTEPLUS_OMNIHUMAN_ENABLED` not true or `BYTEPLUS_CV_API_KEY` missing | Set both; the Vision AI key is separate from the ModelArk key |
 | `omnihuman_create_task` rejects a `seed-media://` input | Filesystem artifact backend cannot mint provider-readable URLs | Use `ARTIFACT_BACKEND=object_storage`, or `media_upload` and pass the presigned URL |
@@ -2349,8 +2345,9 @@ Set to `0` (default) for record-only mode with no enforcement.
    create a duplicate.
 
 4. **Use variation tools for choice.** When the user needs options (e.g., "show
-   me a few versions"), use a variation tool rather than calling the single
-   generate tool multiple times. Variations run in parallel and handle partial
+   me a few versions"), use a variation tool (or `variations` on
+   `seedance_create_task`) rather than calling the single generate tool
+   multiple times. Variations run in parallel and handle partial
    failures gracefully.
 
 5. **Set seeds for reproducibility.** When the user wants consistent or
@@ -2381,8 +2378,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 12. **Use `media_upload` for URL-only workflows.** Seedance video references
     are URL-only. When starting with a local or Base64 video, upload it first as
-    a background job and pass the presigned URL into
-    `seedance_create_task` (2.0) or `seedance_2_5_create_task` (2.5).
+    a background job and pass the presigned URL into `seedance_create_task`.
 
 13. **Reuse references with `media_presign` — do not re-upload.** Presigned URLs
     expire after 30 minutes by default, but the underlying object persists in TOS/S3.
@@ -2407,10 +2403,14 @@ Set to `0` (default) for record-only mode with no enforcement.
     `seed_audio_understand` (transcription, translation, analysis, Q&A) or
     `speech_to_text` when you need word-level timings.
 
-16. **Choose the right Seedance model.** Use 2.0 (`seedance_create_task`)
-    for 4K or lower cost. Use 2.5 (`seedance_2_5_create_task`) for
-    30-second generation, 50 references, timestamp editing, 1080p output, or
-    multi-round extension. The `gen_task_*` lifecycle tools are shared.
+16. **Choose the right Seedance model, then validate before paying.** Every
+    family goes through `seedance_create_task`; pick `model` from
+    `ark_list_models(kind='video')`. Use 2.5 (the default) for 30-second
+    generation, 30/10/10 references, editing, extension, or Draft mode;
+    Premium for 4K with 2.5 features; 2.0 for 4K without Premium or lower
+    cost. Use `dry_run: true` to check limits and `estimated_cost_usd`, and
+    Draft mode to review a 480p preview before the final render. The
+    `gen_task_*` lifecycle tools are shared.
 
 17. **Treat MediaKit persistence separately from the provider result.** Keep the
     returned `source_url` whenever a MediaKit video task reports success.
@@ -2495,7 +2495,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 
 ### Seedance 2.5 Premium
 
-- `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` — feature flag for the whitelist-only Premium (4K) tools (default `false`; reuses ModelArk key)
+- `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` — binds the whitelist-only Premium (4K) model so `seedance_create_task` accepts it (default `false`; reuses ModelArk key; registers no extra tools)
 - `SEEDANCE_2_5_PREMIUM_MODEL` — Premium model ID bound when the flag is on (default `dreamina-seedance-2-5-premium-260915`)
 
 ### OmniHuman 2.0
@@ -2515,7 +2515,7 @@ Set to `0` (default) for record-only mode with no enforcement.
 ### Model Selection
 
 - `SEEDREAM_DEFAULT_MODEL`
-- `SEEDANCE_DEFAULT_MODEL`
+- `SEEDANCE_DEFAULT_MODEL` — default `dreamina-seedance-2-5-260628` (Seedance 2.5). If `SEEDANCE_MODEL_BINDINGS` lists only a 2.0 model, set this to that ID or startup fails with "Seedance default model ... is missing from its bindings"
 - `SEEDREAM_MODEL_FAMILY`
 - `SEEDANCE_MODEL_FAMILY`
 - `SEEDREAM_MODEL_BINDINGS`

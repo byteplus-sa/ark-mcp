@@ -140,9 +140,6 @@ class TestToolDiscovery:
             "seedream_generate_image",
             "seedream_generate_image_variations",
             "seedance_create_task",
-            "seedance_create_task_variations",
-            "seedance_2_5_create_task",
-            "seedance_2_5_create_task_variations",
             "gen_task_get",
             "gen_task_list",
             "gen_task_cancel_or_delete",
@@ -239,9 +236,6 @@ class TestToolDiscovery:
             "seedream_edit_image",
             "seedream_generate_image_variations",
             "seedance_create_task",
-            "seedance_create_task_variations",
-            "seedance_2_5_create_task",
-            "seedance_2_5_create_task_variations",
             "vod_enhance_video",
             "vod_transcode_video",
             "vod_separate_audio",
@@ -302,23 +296,22 @@ class TestToolDiscovery:
             mcp_tool = tool.to_mcp_tool()
             assert mcp_tool.execution is None
 
-    async def test_seedance_premium_tools_gated_by_flag(
+    async def test_seedance_premium_is_a_model_not_a_tool(
         self,
         configured_server: None,
         seedance_premium_server: None,
     ) -> None:
-        premium_names = {
-            "seedance_2_5_premium_create_task",
-            "seedance_2_5_premium_create_task_variations",
-        }
         default_names = {tool.name for tool in await configured_server.mcp.list_tools()}
-        assert not premium_names & default_names
-
-        tools_by_name = {tool.name: tool for tool in await seedance_premium_server.mcp.list_tools()}
-        for name in premium_names:
-            tool = tools_by_name[name]
-            assert tool.task_config.mode == "required"
-            assert '"4k"' in json.dumps(tool.parameters)
+        premium_names = {tool.name for tool in await seedance_premium_server.mcp.list_tools()}
+        assert default_names == premium_names
+        assert not {name for name in premium_names if "premium" in name}
+        tool = next(
+            t
+            for t in await seedance_premium_server.mcp.list_tools()
+            if t.name == "seedance_create_task"
+        )
+        assert tool.task_config.mode == "required"
+        assert '"4k"' in json.dumps(tool.parameters)
 
     async def test_seed3d_create_and_retrieval_task_modes(self, seed3d_server: None) -> None:
         tools = await seed3d_server.mcp.list_tools()
@@ -624,12 +617,13 @@ class TestOutputSchemas:
         assert "model" in schema["properties"]
 
     async def test_seedance_create_output_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
+        tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "seedance_create_task")
         schema = tool.output_schema
         assert schema is not None
-        assert "task_id" in schema["properties"]
+        assert {"model", "family", "tasks", "submitted", "failed", "preview"} <= schema[
+            "properties"
+        ].keys()
 
 
 class TestVariationToolAnnotations:
@@ -652,13 +646,10 @@ class TestVariationToolAnnotations:
         assert tool.annotations.read_only_hint is False
         assert tool.annotations.open_world_hint is True
 
-    async def test_seedance_variations_annotations(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seedance_create_task_variations")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False
-        assert tool.annotations.open_world_hint is True
+    async def test_seedance_variations_are_part_of_create(self, configured_server: None) -> None:
+        names = {tool.name for tool in await configured_server.mcp.list_tools()}
+        assert "seedance_create_task" in names
+        assert "seedance_create_task_variations" not in names
 
 
 class TestVariationInputSchemas:
@@ -686,14 +677,10 @@ class TestVariationInputSchemas:
         assert "variations" in input_props
 
     async def test_seedance_variations_input_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seedance_create_task_variations")
-        schema = tool.parameters
-        assert schema is not None
-        input_props = schema["properties"]["input"]["properties"]
-        assert "variations" in input_props
-        assert "variation_prompts" in input_props
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seedance_create_task")
+        input_props = tool.parameters["properties"]["input"]["properties"]
+        assert {"variations", "variation_prompts", "dry_run", "draft_task_id"} <= input_props.keys()
 
 
 class TestVariationOutputSchemas:
@@ -716,12 +703,11 @@ class TestVariationOutputSchemas:
         assert "summary" in schema["properties"]
 
     async def test_seedance_variations_output_schema(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seedance_create_task_variations")
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seedance_create_task")
         schema = tool.output_schema
         assert schema is not None
-        assert "summary" in schema["properties"]
+        assert "tasks" in schema["properties"]
         assert "recommended_poll_after_ms" in schema["properties"]
 
 

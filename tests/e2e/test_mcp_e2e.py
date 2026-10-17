@@ -164,9 +164,6 @@ class TestToolDiscovery:
                 "seedream_generate_image",
                 "seedream_generate_image_variations",
                 "seedance_create_task",
-                "seedance_create_task_variations",
-                "seedance_2_5_create_task",
-                "seedance_2_5_create_task_variations",
                 "gen_task_get",
                 "gen_task_list",
                 "gen_task_cancel_or_delete",
@@ -1022,9 +1019,9 @@ class TestSeedanceLifecycleE2E:
             )
 
         assert not created.is_error
-        assert created.structured_content["task_id"] == task.id
+        assert created.structured_content["tasks"][0]["task_id"] == task.id
         assert compatibility_job_id != task.id
-        assert compatibility_created["structured_content"]["task_id"] == task.id
+        assert compatibility_created["structured_content"]["tasks"][0]["task_id"] == task.id
         assert fetched.structured_content["tasks"][0]["status"] == "queued"
         assert background_fetched.structured_content["tasks"][0]["status"] == "queued"
         assert compatibility_fetched["structured_content"]["tasks"][0]["status"] == "queued"
@@ -1128,7 +1125,7 @@ class TestVariationToolsE2E:
         async with Client(mcp) as client:
             result = await _call_background_tool(
                 client,
-                "seedance_create_task_variations",
+                "seedance_create_task",
                 {
                     "input": {
                         "variation_prompts": ["scene 1", "scene 2"],
@@ -1148,7 +1145,6 @@ class TestVariationToolsE2E:
             )
 
         assert not result.is_error
-        summary = result.structured_content["summary"]
-        assert summary["total"] == 2
-        assert summary["succeeded"] == 2
-        assert {item["task_id"] for item in summary["variations"]} == {"task-1", "task-2"}
+        payload = result.structured_content
+        assert (payload["submitted"], payload["failed"]) == (2, 0)
+        assert {item["task_id"] for item in payload["tasks"]} == {"task-1", "task-2"}

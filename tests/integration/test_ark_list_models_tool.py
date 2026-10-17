@@ -42,7 +42,7 @@ async def test_lists_every_configured_kind(configured: None) -> None:
     models = _by_id(await _list_models({}))
     assert {model["kind"] for model in models.values()} == {"video", "image", "understanding"}
     seedance_2_5 = models["dreamina-seedance-2-5-260628"]
-    assert seedance_2_5["tool"] == "seedance_2_5_create_task"
+    assert seedance_2_5["tool"] == "seedance_create_task"
     assert seedance_2_5["video"]["duration_seconds"] == [4, 30]
     assert seedance_2_5["video"]["supports_draft"] is True
     assert seedance_2_5["video"]["task_types"] == ["auto", "reference", "edit", "extend"]

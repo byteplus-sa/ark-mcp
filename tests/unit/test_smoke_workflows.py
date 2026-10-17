@@ -75,16 +75,10 @@ async def test_video_workflows_persist_after_status_and_never_resubmit(
             return SimpleNamespace(artifacts=[artifact])
         if name == "seedance_create_task":
             return SimpleNamespace(
-                task_id="provider-123", status="queued", recommended_poll_after_ms=1
-            )
-        if name == "seedance_create_task_variations":
-            return SimpleNamespace(
-                summary=SimpleNamespace(
-                    total=1,
-                    succeeded=1,
-                    failed=0,
-                    variations=[SimpleNamespace(task_id="provider-123", index=0)],
-                )
+                tasks=[SimpleNamespace(task_id="provider-123", index=0, error=None)],
+                submitted=1,
+                failed=0,
+                recommended_poll_after_ms=1,
             )
         assert "provider-123" in (tmp_path / "smoke_provider_tasks.jsonl").read_text()
         if name == "gen_task_list":
@@ -152,7 +146,7 @@ async def test_smoke_session_persists_video_through_real_server(tmp_path, monkey
         task_contexts.append(get_context().task_id)
         task = GenerationTaskResponse(
             id="provider-123",
-            model="dreamina-seedance-2-0-260128",
+            model="dreamina-seedance-2-5-260628",
             status="succeeded",
             created_at=1721400000,
             updated_at=1721400000,

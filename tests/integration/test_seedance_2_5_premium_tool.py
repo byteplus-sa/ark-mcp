@@ -10,27 +10,10 @@ import pytest
 from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
 from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
-from ark_mcp.tools.seedance_2_5_create_task import (
-    Seedance25CreateTaskInput,
-    Seedance25CreateTaskOutput,
-    seedance_2_5_create_task,
-)
-from ark_mcp.tools.seedance_2_5_premium_create_task import (
-    Seedance25PremiumCreateTaskInput,
-    seedance_2_5_premium_create_task,
-)
-from ark_mcp.tools.seedance_2_5_premium_create_task_variations import (
-    Seedance25PremiumVariationsInput,
-    Seedance25VariationsOutput,
-    seedance_2_5_premium_create_task_variations,
-)
 from ark_mcp.tools.seedance_create_task import (
     SeedanceCreateTaskInput,
+    SeedanceCreateTaskOutput,
     seedance_create_task,
-)
-from ark_mcp.tools.seedance_create_task_variations import (
-    SeedanceVariationsInput,
-    seedance_create_task_variations,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -74,62 +57,84 @@ async def premium_ctx(premium_env: None) -> AsyncIterator[FakeContext]:
         await close_runtime_services(runtime)
 
 
-class TestSeedance25PremiumCreateTaskTool:
-    async def test_create_task_4k_uses_premium_model(
+def _capture_creates(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
+    captured: list[Any] = []
+
+    async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+        captured.append(request)
+        return f"task-{len(captured)}", None
+
+    monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+    monkeypatch.setattr(SeedanceService, "close", _mock_close)
+    return captured
+
+
+class TestSeedance25PremiumCreateTask:
+    async def test_4k_with_premium_model_id(
         self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
-            assert request.model == PREMIUM_MODEL
-            assert request.resolution == "4k"
-            return "task-premium", "req-premium"
-
-        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
-        monkeypatch.setattr(SeedanceService, "close", _mock_close)
-
-        result = await seedance_2_5_premium_create_task(
-            Seedance25PremiumCreateTaskInput(prompt="a 4k aerial shot", resolution="4k"),
+        captured = _capture_creates(monkeypatch)
+        result = await seedance_create_task(
+            SeedanceCreateTaskInput(
+                prompt="a 4k aerial shot", model=PREMIUM_MODEL, resolution="4k"
+            ),
             premium_ctx,
         )
+        assert isinstance(result, SeedanceCreateTaskOutput)
+        assert (result.model, result.family) == (PREMIUM_MODEL, "seedance_2_5_premium")
+        assert (captured[0].model, captured[0].resolution) == (PREMIUM_MODEL, "4k")
 
-        assert isinstance(result, Seedance25CreateTaskOutput)
-        assert result.task_id == "task-premium"
-
-    async def test_regular_2_5_model_rejected(self, premium_ctx: FakeContext) -> None:
-        with pytest.raises(ValueError, match=r"not a Seedance 2\.5 Premium model"):
-            await seedance_2_5_premium_create_task(
-                Seedance25PremiumCreateTaskInput(prompt="test", model=REGULAR_MODEL),
-                premium_ctx,
-            )
-
-    async def test_regular_2_5_tool_rejects_premium_model(self, premium_ctx: FakeContext) -> None:
-        with pytest.raises(ValueError, match="seedance_2_5_premium_create_task"):
-            await seedance_2_5_create_task(
-                Seedance25CreateTaskInput(prompt="test", model=PREMIUM_MODEL),
-                premium_ctx,
-            )
-
-    async def test_regular_2_5_tool_default_is_not_premium(
+    async def test_regular_2_5_rejects_4k_and_points_to_discovery(
         self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
-            assert request.model == REGULAR_MODEL
-            return "task-regular", "req-regular"
-
-        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
-        monkeypatch.setattr(SeedanceService, "close", _mock_close)
-
-        result = await seedance_2_5_create_task(
-            Seedance25CreateTaskInput(prompt="test"), premium_ctx
-        )
-        assert isinstance(result, Seedance25CreateTaskOutput)
-        assert result.task_id == "task-regular"
-
-    async def test_flag_off_rejects_call(self, test_env: None, fake_ctx: FakeContext) -> None:
-        with pytest.raises(ValueError, match="whitelist-only and disabled"):
-            await seedance_2_5_premium_create_task(
-                Seedance25PremiumCreateTaskInput(prompt="test", resolution="4k"),
-                fake_ctx,
+        captured = _capture_creates(monkeypatch)
+        with pytest.raises(ValueError) as excinfo:
+            await seedance_create_task(
+                SeedanceCreateTaskInput(prompt="x", model=REGULAR_MODEL, resolution="4k"),
+                premium_ctx,
             )
+        message = str(excinfo.value)
+        assert "resolution '4k' is not supported" in message
+        assert "ark_list_models(kind='video')" in message
+        assert captured == []
+
+    async def test_flag_off_leaves_premium_unconfigured(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured = _capture_creates(monkeypatch)
+        with pytest.raises(ValueError, match="is not configured"):
+            await seedance_create_task(
+                SeedanceCreateTaskInput(prompt="x", model=PREMIUM_MODEL), fake_ctx
+            )
+        assert captured == []
+
+    async def test_premium_draft_sends_480p(
+        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured = _capture_creates(monkeypatch)
+        await seedance_create_task(
+            SeedanceCreateTaskInput(prompt="a 4k aerial shot", model=PREMIUM_MODEL, draft=True),
+            premium_ctx,
+        )
+        assert (captured[0].model, captured[0].draft, captured[0].resolution) == (
+            PREMIUM_MODEL,
+            True,
+            "480p",
+        )
+
+    async def test_premium_variations(
+        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        captured = _capture_creates(monkeypatch)
+        result = await seedance_create_task(
+            SeedanceCreateTaskInput(
+                model=PREMIUM_MODEL, variations=2, variation_prompts=["a", "b"], resolution="4k"
+            ),
+            premium_ctx,
+        )
+        assert isinstance(result, SeedanceCreateTaskOutput)
+        assert result.submitted == 2
+        assert {request.model for request in captured} == {PREMIUM_MODEL}
 
 
 class TestSeedance25PremiumDraftMode:
@@ -153,121 +158,12 @@ class TestSeedance25PremiumDraftMode:
         monkeypatch.setattr(SeedanceService, "create_task", mock_create)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
-        result = await seedance_2_5_premium_create_task(
-            Seedance25PremiumCreateTaskInput(draft_task_id="cgt-premium-draft"), premium_ctx
+        result = await seedance_create_task(
+            SeedanceCreateTaskInput(draft_task_id="cgt-premium-draft"), premium_ctx
         )
 
-        assert isinstance(result, Seedance25CreateTaskOutput)
+        assert isinstance(result, SeedanceCreateTaskOutput)
         assert captured[0].model == PREMIUM_MODEL
         assert captured[0].content[0].draft_task == {"id": "cgt-premium-draft"}
         assert captured[0].draft is None
         assert captured[0].resolution == "4k"
-
-    async def test_regular_tool_rejects_premium_draft(
-        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
-            return GenerationTaskResponse(
-                id=task_id, model=PREMIUM_MODEL, status="succeeded", draft=True
-            ), None
-
-        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
-
-        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
-        monkeypatch.setattr(SeedanceService, "close", _mock_close)
-
-        with pytest.raises(ValueError, match="seedance_2_5_premium_create_task"):
-            await seedance_2_5_create_task(
-                Seedance25CreateTaskInput(draft_task_id="cgt-premium-draft"), premium_ctx
-            )
-
-    async def test_premium_draft_sends_480p(
-        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        captured: list[Any] = []
-
-        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
-            captured.append(request)
-            return "cgt-premium-draft", None
-
-        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
-        monkeypatch.setattr(SeedanceService, "close", _mock_close)
-
-        await seedance_2_5_premium_create_task(
-            Seedance25PremiumCreateTaskInput(prompt="a 4k aerial shot", draft=True), premium_ctx
-        )
-
-        assert captured[0].model == PREMIUM_MODEL
-        assert captured[0].draft is True
-        assert captured[0].resolution == "480p"
-
-
-class TestSeedance25PremiumVariationsTool:
-    async def test_variations_success(
-        self, premium_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        calls = 0
-
-        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
-            nonlocal calls
-            calls += 1
-            assert request.model == PREMIUM_MODEL
-            assert request.resolution == "4k"
-            return f"task-{calls}", f"req-{calls}"
-
-        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
-        monkeypatch.setattr(SeedanceService, "close", _mock_close)
-
-        result = await seedance_2_5_premium_create_task_variations(
-            Seedance25PremiumVariationsInput(variations=2, prompt="4k variations", resolution="4k"),
-            premium_ctx,
-        )
-
-        assert isinstance(result, Seedance25VariationsOutput)
-        assert result.summary.succeeded == 2
-
-    async def test_regular_2_5_model_hint_names_variations_tool(
-        self, premium_ctx: FakeContext
-    ) -> None:
-        with pytest.raises(
-            ValueError,
-            match=r"Use seedance_2_5_create_task_variations for Seedance 2\.5 models",
-        ):
-            await seedance_2_5_premium_create_task_variations(
-                Seedance25PremiumVariationsInput(variations=1, prompt="test", model=REGULAR_MODEL),
-                premium_ctx,
-            )
-
-    async def test_flag_off_rejects_call(self, test_env: None, fake_ctx: FakeContext) -> None:
-        with pytest.raises(ValueError, match="whitelist-only and disabled"):
-            await seedance_2_5_premium_create_task_variations(
-                Seedance25PremiumVariationsInput(variations=1, prompt="test"),
-                fake_ctx,
-            )
-
-
-class TestSeedance20ToolsRejectPremium:
-    async def test_create_task_hint_names_premium_tool(self, premium_ctx: FakeContext) -> None:
-        with pytest.raises(
-            ValueError,
-            match=r"Use seedance_2_5_premium_create_task for Seedance 2\.5 Premium models",
-        ):
-            await seedance_create_task(
-                SeedanceCreateTaskInput(prompt="test", model=PREMIUM_MODEL),
-                premium_ctx,
-            )
-
-    async def test_variations_hint_names_premium_variations_tool(
-        self, premium_ctx: FakeContext
-    ) -> None:
-        with pytest.raises(
-            ValueError,
-            match=(
-                r"Use seedance_2_5_premium_create_task_variations for "
-                r"Seedance 2\.5 Premium models"
-            ),
-        ):
-            await seedance_create_task_variations(
-                SeedanceVariationsInput(variations=1, prompt="test", model=PREMIUM_MODEL),
-                premium_ctx,
-            )

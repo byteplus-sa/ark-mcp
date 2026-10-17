@@ -47,9 +47,7 @@ per-variation control like distinct prompts, seeds, or media inputs), the
 |---|---|---|---|
 | `seedream_generate_image_variations` | Seedream | No (always parallel calls) | `run_variation_batch` |
 | `seed_audio_generate_variations` | Seed Audio | No | `run_variation_batch` |
-| `seedance_create_task_variations` | Seedance | No | `run_variation_batch` |
-| `seedance_2_5_create_task_variations` | Seedance 2.5 | No | `run_variation_batch` |
-| `seedance_2_5_premium_create_task_variations` | Seedance 2.5 Premium (flag-gated) | No | `run_variation_batch` |
+| `seedance_create_task` with `variations` 2-5 | Seedance (every configured model) | No | `run_variation_batch` |
 
 ### How it works
 
@@ -122,14 +120,17 @@ write every persisted variation to a local directory as
 ### Seedance variations
 
 Seedance variations are fundamentally different from Seedream/Seed Audio
-because each variation creates a **separate provider task**. The client first
-retrieves the variation summary from the background result, then polls the
-provider task IDs to retrieve results. Poll them all at once with
+because each variation creates a **separate provider task**. They are not a
+separate tool: call `seedance_create_task` with `variations` (1-5) and
+optionally `variation_prompts` (exactly one per variation). The background
+result lists every variation in `tasks` (`index`, `task_id` or `error`) with
+`submitted` and `failed` counts. Poll all task IDs at once with
 `gen_task_get` (1-50 task IDs, one provider list call per page of 20;
 `all_terminal` tells you when to stop, and `output_dir` writes finished videos
-locally). **Never resubmit the variations tool to poll**: that starts new
-billed tasks. The actual video generation runs asynchronously on the provider
-side.
+locally). **Never resubmit `seedance_create_task` to poll**: that starts new
+billed tasks. Use `dry_run=true` first to check the request bodies and
+estimated cost of every variation without billing. `draft=true` works with
+variations; `draft_task_id` requires `variations=1`.
 
 ### Cost
 
@@ -146,6 +147,6 @@ usage fields.
 | Multiple images, Pro model | `seedream_generate_image_variations` |
 | Per-variation prompts, seeds, or reference images | `*_variations` tool |
 | Multiple audio outputs | `seed_audio_generate_variations` |
-| Multiple video tasks | `seedance_create_task_variations` (or `seedance_2_5_create_task_variations`), then `gen_task_get` |
+| Multiple video tasks | `seedance_create_task` with `variations` (1-5), then `gen_task_get` |
 
 [`run_variation_batch`]: ../src/ark_mcp/tools/_parallel.py

@@ -20,13 +20,7 @@ from ark_mcp.config.model_capabilities import (
 ModelKind = Literal["video", "image", "3d", "understanding"]
 UnderstandingModality = Literal["image", "video", "audio"]
 
-VIDEO_TOOLS: dict[ModelFamily, str] = {
-    ModelFamily.SEEDANCE_2: "seedance_create_task",
-    ModelFamily.SEEDANCE_2_FAST: "seedance_create_task",
-    ModelFamily.SEEDANCE_2_MINI: "seedance_create_task",
-    ModelFamily.SEEDANCE_2_5: "seedance_2_5_create_task",
-    ModelFamily.SEEDANCE_2_5_PREMIUM: "seedance_2_5_premium_create_task",
-}
+VIDEO_TOOL = "seedance_create_task"
 SEED3D_TOOLS: dict[ModelFamily, str] = {
     ModelFamily.SEED3D_HYPER3D: "hyper3d_create_task",
     ModelFamily.SEED3D_HITEM3D: "hitem3d_create_task",
@@ -196,7 +190,7 @@ def _video_info(caps: VideoCapabilities, settings: Settings) -> ModelInfo:
         family=caps.family.value,
         kind="video",
         is_default=caps.model_id == settings.seedance_default_model,
-        tool=VIDEO_TOOLS[caps.family],
+        tool=VIDEO_TOOL,
         video=VideoModelLimits(
             resolutions=list(caps.supported_resolutions),
             duration_seconds=caps.duration_range,

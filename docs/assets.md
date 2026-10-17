@@ -75,8 +75,8 @@ of creating a possibly duplicate group.
 3. `ark_asset_create` with `subject: "Teal Hero"` and the sources. All files
    land in the same AIGC group.
 4. When `all_active` is true, pass the returned `asset_uri` values to
-   `seedance_2_5_create_task`, for example `images: ["asset://asset-…"]`, and
-   refer to them in the prompt as "Image 1", "Image 2" by position, never by ID.
+   `seedance_create_task` (on a Seedance 2.5 model, the default), for example
+   `images: ["asset://asset-…"]`, and refer to them in the prompt as "Image 1", "Image 2" by position, never by ID.
 
 ### Verified real person → Seedance
 

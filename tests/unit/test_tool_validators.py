@@ -10,10 +10,7 @@ from ark_mcp.tools.gen_task_cancel_or_delete import (
     GenTaskCancelOrDeleteInput,
 )
 from ark_mcp.tools.seed_audio_generate import SeedAudioGenerateInput
-from ark_mcp.tools.seedance_2_5_create_task import Seedance25CreateTaskInput
-from ark_mcp.tools.seedance_2_5_create_task_variations import Seedance25VariationsInput
 from ark_mcp.tools.seedance_create_task import SeedanceCreateTaskInput
-from ark_mcp.tools.seedance_create_task_variations import SeedanceVariationsInput
 from ark_mcp.tools.seedream_edit_image import (
     EditCoordinate,
     SeedreamEditInput,
@@ -114,44 +111,11 @@ class TestSeedanceCreateTaskInput:
         assert len(inp.videos or []) == 1
         assert len(inp.audios or []) == 1
 
-    def test_audio_only_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceAudioInput
-
-        with pytest.raises(ValidationError, match="cannot be the sole media input"):
-            SeedanceCreateTaskInput(
-                audios=[SeedanceAudioInput(kind="url", url="https://example.com/a.wav")]
-            )
-
     def test_audio_input_rejects_image_mime(self) -> None:
         from ark_mcp.tools.seedance_create_task import SeedanceAudioInput
 
         with pytest.raises(ValidationError, match="Audio MIME type"):
             SeedanceAudioInput(kind="base64", data="aGVsbG8=", mime_type="image/png")
-
-    def test_too_many_images_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceImageInput
-
-        images = [
-            SeedanceImageInput(kind="url", url=f"https://example.com/img{i}.png") for i in range(10)
-        ]
-        with pytest.raises(ValidationError, match="Too many reference images"):
-            SeedanceCreateTaskInput(images=images)
-
-    def test_too_many_videos_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        videos = [SeedanceVideoInput(url=f"https://example.com/v{i}.mp4") for i in range(4)]
-        with pytest.raises(ValidationError, match="Too many reference videos"):
-            SeedanceCreateTaskInput(videos=videos)
-
-    def test_duration_out_of_range_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        with pytest.raises(ValidationError):
-            SeedanceCreateTaskInput(
-                videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-                duration=20,
-            )
 
     def test_empty_prompt_raises(self) -> None:
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
@@ -180,10 +144,6 @@ class TestSeedanceCreateTaskInput:
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
-    def test_omni_reference_task_type_not_in_2_0_schema(self) -> None:
-        """The task type hint is Seedance 2.5-only, so 2.0 does not advertise it."""
-        assert "omni_reference_task_type" not in SeedanceCreateTaskInput.model_fields
-
     def test_ratio_preserved_for_auto_task_type(self) -> None:
         """Ratio is not stripped when omni_reference_task_type is omitted."""
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
@@ -194,6 +154,14 @@ class TestSeedanceCreateTaskInput:
             ratio="16:9",
         )
         assert inp.ratio == "16:9"
+
+    def test_outer_bounds_still_enforced_statically(self) -> None:
+        with pytest.raises(ValidationError):
+            SeedanceCreateTaskInput(prompt="x", duration=31)
+        with pytest.raises(ValidationError):
+            SeedanceCreateTaskInput(
+                prompt="x", images=[f"https://example.com/{i}.png" for i in range(31)]
+            )
 
 
 class TestGenTaskCancelOrDeleteInput:
@@ -228,7 +196,7 @@ class TestSeedanceVariationsInput:
     def test_variation_prompt_at_max_length_valid(self) -> None:
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
 
-        inp = SeedanceVariationsInput(
+        inp = SeedanceCreateTaskInput(
             variation_prompts=["x" * 32000],
             variations=1,
             videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
@@ -239,54 +207,51 @@ class TestSeedanceVariationsInput:
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
 
         with pytest.raises(ValidationError):
-            SeedanceVariationsInput(
+            SeedanceCreateTaskInput(
                 variation_prompts=["x" * 32001],
                 variations=1,
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
     def test_prompt_at_max_length_valid(self) -> None:
-        inp = SeedanceVariationsInput(prompt="x" * 32000, variations=1)
+        inp = SeedanceCreateTaskInput(prompt="x" * 32000, variations=1)
         assert len(inp.prompt or "") == 32000
 
     def test_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedanceVariationsInput(prompt="x" * 32001, variations=1)
-
-    def test_omni_reference_task_type_not_in_2_0_variations_schema(self) -> None:
-        assert "omni_reference_task_type" not in SeedanceVariationsInput.model_fields
+            SeedanceCreateTaskInput(prompt="x" * 32001, variations=1)
 
 
 class TestSeedance25CreateTaskInput:
     """Tests for Seedance 2.5 create task prompt-length validation."""
 
     def test_prompt_at_max_length_valid(self) -> None:
-        inp = Seedance25CreateTaskInput(prompt="x" * 32000)
+        inp = SeedanceCreateTaskInput(prompt="x" * 32000)
         assert len(inp.prompt or "") == 32000
 
     def test_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            Seedance25CreateTaskInput(prompt="x" * 32001)
+            SeedanceCreateTaskInput(prompt="x" * 32001)
 
 
 class TestSeedance25VariationsInput:
     """Tests for Seedance 2.5 variations prompt-length validation."""
 
     def test_prompt_at_max_length_valid(self) -> None:
-        inp = Seedance25VariationsInput(prompt="x" * 32000, variations=1)
+        inp = SeedanceCreateTaskInput(prompt="x" * 32000, variations=1)
         assert len(inp.prompt or "") == 32000
 
     def test_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            Seedance25VariationsInput(prompt="x" * 32001, variations=1)
+            SeedanceCreateTaskInput(prompt="x" * 32001, variations=1)
 
     def test_variation_prompt_at_max_length_valid(self) -> None:
-        inp = Seedance25VariationsInput(variation_prompts=["x" * 32000], variations=1)
+        inp = SeedanceCreateTaskInput(variation_prompts=["x" * 32000], variations=1)
         assert len(inp.variation_prompts[0]) == 32000
 
     def test_variation_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            Seedance25VariationsInput(variation_prompts=["x" * 32001], variations=1)
+            SeedanceCreateTaskInput(variation_prompts=["x" * 32001], variations=1)
 
 
 class TestSeedreamPromptLength:

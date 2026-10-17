@@ -90,7 +90,7 @@ class TestCapabilityRegistry:
     @pytest.mark.parametrize("duration", [0, 1, 3])
     def test_validate_duration_below_four_seconds_raises(self, duration: int) -> None:
         registry = get_capability_registry()
-        with pytest.raises(ValueError, match=r"outside the supported range \[4, 15\]"):
+        with pytest.raises(ValueError, match=r"outside the supported range \[4, \d+\]"):
             registry.validate_duration(None, duration)
 
     def test_validate_duration_minimum_four_seconds(self) -> None:
@@ -373,7 +373,7 @@ class TestExactModelResolution:
 
     def test_omitted_model_uses_configured_default(self, two_seedance_bindings: None) -> None:
         caps = get_capability_registry().resolve_video_model(None)
-        assert caps.model_id == "dreamina-seedance-2-0-260128"
+        assert caps.model_id == "dreamina-seedance-2-5-260628"
 
     def test_family_name_is_rejected_with_suggestion(self, two_seedance_bindings: None) -> None:
         with pytest.raises(ValueError) as excinfo:

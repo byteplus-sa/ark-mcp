@@ -317,7 +317,7 @@ class Settings(BaseSettings):
         validation_alias="SEEDREAM_DEFAULT_MODEL",
     )
     seedance_default_model: str = Field(
-        default="dreamina-seedance-2-0-260128",
+        default="dreamina-seedance-2-5-260628",
         validation_alias="SEEDANCE_DEFAULT_MODEL",
     )
     seedream_model_family: str = Field(
@@ -938,7 +938,8 @@ class Settings(BaseSettings):
                 raise ValueError(f"{label} model bindings contain duplicate IDs.")
             if default_model not in ids:
                 raise ValueError(
-                    f"{label} default model '{default_model}' is missing from its bindings."
+                    f"{label} default model '{default_model}' is missing from its bindings. "
+                    f"Set the default model env var to one of the bound IDs: {ids}."
                 )
         if self.artifact_ttl_seconds <= 0:
             raise ValueError("ARTIFACT_TTL_SECONDS must be positive")

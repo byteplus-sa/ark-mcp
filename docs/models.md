@@ -69,7 +69,7 @@ The binding enums (`config/env.py`):
 The three Seedance 2.0 families share: `max_reference_images=9`,
 `max_reference_videos=3`, `max_reference_audios=3`, `supports_seed=False`,
 `supports_camera_fixed=False`, `supports_frames=False`,
-`supports_service_tier_flex=False`, `duration_range=(-1, 15)`,
+`supports_service_tier_flex=False`, `duration_range=(4, 15)`,
 `priority_range=(0, 9)`, `execution_expires_after_range=(3600, 259200)`.
 
 Only `supported_resolutions` differs:
@@ -83,28 +83,30 @@ Only `supported_resolutions` differs:
 | `STANDARD` | `("480p", "720p", "1080p", "4k")` |
 
 > Seedance 2.5 differs from the 2.0 families in duration
-> (`duration_range=(-1, 30)`) and reference counts
-> (`max_reference_images=30`, `max_reference_videos=10`,
-> `max_reference_audios=10`); `4k` is not supported on 2.5.
+> (`duration_range=(4, 30)` versus `(4, 15)`; `-1` for auto is accepted
+> separately) and reference counts (`max_reference_images=30`,
+> `max_reference_videos=10`, `max_reference_audios=10`); `4k` is not
+> supported on 2.5. Only the 2.5 families set `supports_draft=True`,
+> `supports_audio_only_input=True`,
+> `supported_task_types=("auto", "reference", "edit", "extend")`, and
+> `supported_output_formats=("mp4", "mov")`.
 >
 > Seedance 2.5 Premium (`seedance_2_5_premium`) is a separate, whitelist-only
 > family with the same 2.5 limits plus `4k`. Its binding exists only when
 > `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`, which adds
 > `SEEDANCE_2_5_PREMIUM_MODEL` (default `dreamina-seedance-2-5-premium-260915`)
 > unless `SEEDANCE_MODEL_BINDINGS` already has a Premium binding. A Premium
-> binding with the flag off fails startup validation. Premium models are
-> accepted only by the `seedance_2_5_premium_*` tools; the regular 2.5 and 2.0
-> tools reject them.
+> binding with the flag off fails startup validation.
 >
-> Draft mode (`draft` / `draft_task_id`) is available only on the 2.5 and 2.5
-> Premium create tools. It is not a capability field: the tool input
-> validators apply its resolution rules: Drafts are always `480p`, and a final
-> rendered from a Draft is `1080p` on `seedance_2_5` and `4k` on
-> `seedance_2_5_premium` (the input model's `DRAFT_FINAL_RESOLUTION`).
+> Draft mode is described by `supports_draft` and `draft_final_resolution`:
+> Drafts are always `480p`, and a final rendered from a Draft is `1080p` on
+> `seedance_2_5` and `4k` on `seedance_2_5_premium`.
 
-> There is also **no aspect-ratio field** on video capabilities — the
-> `ratio` field exists only on `SeedanceTaskSettings` and the tool input
-> layer; the registry does not validate ratios.
+**Every Seedance model is called through one tool, `seedance_create_task`.**
+Its input schema advertises the widest limits; at runtime the tool checks the
+request against the selected model's `VideoCapabilities` (including
+`supported_ratios`) and reports every violation in one error that points to
+`ark_list_models(kind='video')`, which exposes these limits to clients.
 
 ## Seed Speech ASR (Speech-to-Text)
 
@@ -130,7 +132,7 @@ are tunable via `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` and
 | Field | Env var | Default | Implied family |
 |---|---|---|---|
 | `seedream_default_model` | `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-0-pro-260628` | `PRO` |
-| `seedance_default_model` | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-0-260128` | `STANDARD` |
+| `seedance_default_model` | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-5-260628` | `SEEDANCE_2_5` |
 | `seed_understanding_default_model` | `SEED_UNDERSTANDING_DEFAULT_MODEL` | `dola-seed-2-1-turbo-260628` | `TURBO` |
 | `seed_audio_understanding_model` | `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | — (single model, no family registry) |
 

@@ -38,10 +38,10 @@ from ark_mcp.tools.seed_audio_generate_variations import (  # noqa: E402
     SeedAudioVariationsInput,
     SeedAudioVariationsOutput,
 )
-from ark_mcp.tools.seedance_create_task import SeedanceImageInput  # noqa: E402
-from ark_mcp.tools.seedance_create_task_variations import (  # noqa: E402
-    SeedanceVariationsInput,
-    SeedanceVariationsOutput,
+from ark_mcp.tools.seedance_create_task import (  # noqa: E402
+    SeedanceCreateTaskInput,
+    SeedanceCreateTaskOutput,
+    SeedanceImageInput,
 )
 from ark_mcp.tools.seedream_generate_image_variations import (  # noqa: E402
     SeedreamVariationsInput,
@@ -141,8 +141,8 @@ async def test_seedance_variations(
 
     result = require_tool_success(
         await ctx.call(
-            "seedance_create_task_variations",
-            SeedanceVariationsInput(
+            "seedance_create_task",
+            SeedanceCreateTaskInput(
                 variation_prompts=[
                     "A cat walks forward slowly through a garden",
                     "A cat looks around curiously, then jumps playfully",
@@ -159,16 +159,16 @@ async def test_seedance_variations(
                 resolution="480p",
                 duration=5,
             ),
-            SeedanceVariationsOutput,
+            SeedanceCreateTaskOutput,
         )
     )
 
-    print(f"  Total: {result.summary.total}")
-    print(f"  Succeeded: {result.summary.succeeded}")
-    print(f"  Failed: {result.summary.failed}")
-    all_verified = result.summary.failed == 0
+    print(f"  Total: {len(result.tasks)}")
+    print(f"  Submitted: {result.submitted}")
+    print(f"  Failed: {result.failed}")
+    all_verified = result.failed == 0
     task_ids: list[str] = []
-    for v in result.summary.variations:
+    for v in result.tasks:
         if v.task_id:
             print(f"  [{v.index}] task_id={v.task_id}")
             task_ids.append(v.task_id)

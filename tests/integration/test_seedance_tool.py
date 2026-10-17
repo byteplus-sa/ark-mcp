@@ -56,8 +56,8 @@ class TestSeedanceCreateTaskTool:
         )
 
         assert isinstance(result, SeedanceCreateTaskOutput)
-        assert result.task_id == "task-abc-123"
-        assert result.status == "queued"
+        assert result.tasks[0].task_id == "task-abc-123"
+        assert result.submitted == 1
         assert result.recommended_poll_after_ms == 5000
 
     async def test_text_only_create_task_succeeds(
@@ -81,8 +81,8 @@ class TestSeedanceCreateTaskTool:
         )
 
         assert isinstance(result, SeedanceCreateTaskOutput)
-        assert result.task_id == "task-text-001"
-        assert result.status == "queued"
+        assert result.tasks[0].task_id == "task-text-001"
+        assert result.submitted == 1
         assert result.recommended_poll_after_ms == 5000
 
         assert len(captured_content) == 1
@@ -114,8 +114,8 @@ class TestSeedanceCreateTaskTool:
         )
 
         assert isinstance(result, SeedanceCreateTaskOutput)
-        assert result.task_id == "task-mix-001"
-        assert result.status == "queued"
+        assert result.tasks[0].task_id == "task-mix-001"
+        assert result.submitted == 1
 
         content_types = [item.type for item in captured_content]
         assert "text" in content_types

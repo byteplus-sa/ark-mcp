@@ -216,14 +216,14 @@ async def test_video_generation_with_image(
         )
     )
 
-    ctx.save_provider_ids(ARTIFACTS_DIR, [create_result.task_id])
-    print(f"\n  Task ID: {create_result.task_id}")
-    print(f"  Status: {create_result.status}")
+    task_id = create_result.tasks[0].task_id
+    ctx.save_provider_ids(ARTIFACTS_DIR, [task_id])
+    print(f"\n  Task ID: {task_id}")
+    print(f"  Submitted: {create_result.submitted}")
     print(f"  Poll after: {create_result.recommended_poll_after_ms}ms")
 
     # Step 3: Poll until terminal.
     print("\nStep 3: Polling for completion...")
-    task_id = create_result.task_id
     max_wait_seconds = 300  # 5 minutes max
     poll_interval = 10  # seconds
     start_time = time.time()
