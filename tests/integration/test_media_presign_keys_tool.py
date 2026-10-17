@@ -1,4 +1,4 @@
-"""Integration tests for the ``media_presign_batch`` tool.
+"""Integration tests for the ``media_presign`` tool.
 
 Uses the shared ``test_env`` / ``fake_ctx`` fixtures so the runtime is real,
 with the object-storage gateway mocked via ``patch``.
@@ -11,10 +11,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
-from ark_mcp.tools.media_presign_batch import (
-    MediaPresignBatchInput,
-    MediaPresignBatchOutput,
-    media_presign_batch,
+from ark_mcp.tools.media_presign import (
+    MediaPresignInput,
+    MediaPresignOutput,
+    media_presign,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -38,15 +38,15 @@ class TestMediaPresignBatchSuccess:
         mock_gw = _mock_gateway(["https://s3.example.com/url-1", "https://s3.example.com/url-2"])
 
         with patch(
-            "ark_mcp.tools.media_presign_batch.make_object_storage_gateway",
+            "ark_mcp.tools.media_presign.make_object_storage_gateway",
             return_value=mock_gw,
         ):
-            result = await media_presign_batch(
-                MediaPresignBatchInput(object_keys=[_VALID_KEY, _VALID_KEY_2]),
+            result = await media_presign(
+                MediaPresignInput(object_keys=[_VALID_KEY, _VALID_KEY_2]),
                 fake_ctx,
             )
 
-        assert isinstance(result, MediaPresignBatchOutput)
+        assert isinstance(result, MediaPresignOutput)
         assert result.succeeded == 2
         assert result.failed == 0
         assert result.items[0].object_key == _VALID_KEY
@@ -62,15 +62,15 @@ class TestMediaPresignBatchSuccess:
         mock_gw = _mock_gateway()
 
         with patch(
-            "ark_mcp.tools.media_presign_batch.make_object_storage_gateway",
+            "ark_mcp.tools.media_presign.make_object_storage_gateway",
             return_value=mock_gw,
         ):
-            result = await media_presign_batch(
-                MediaPresignBatchInput(object_keys=[_VALID_KEY], expires_in_seconds=3600),
+            result = await media_presign(
+                MediaPresignInput(object_keys=[_VALID_KEY], expires_in_seconds=3600),
                 fake_ctx,
             )
 
-        assert isinstance(result, MediaPresignBatchOutput)
+        assert isinstance(result, MediaPresignOutput)
         mock_gw.presign_get.assert_called_once_with(key=_VALID_KEY, expires=3600)
 
 
@@ -81,15 +81,15 @@ class TestMediaPresignBatchPartialFailure:
         mock_gw = _mock_gateway()
 
         with patch(
-            "ark_mcp.tools.media_presign_batch.make_object_storage_gateway",
+            "ark_mcp.tools.media_presign.make_object_storage_gateway",
             return_value=mock_gw,
         ):
-            result = await media_presign_batch(
-                MediaPresignBatchInput(object_keys=["../bad/key", _VALID_KEY]),
+            result = await media_presign(
+                MediaPresignInput(object_keys=["../bad/key", _VALID_KEY]),
                 fake_ctx,
             )
 
-        assert isinstance(result, MediaPresignBatchOutput)
+        assert isinstance(result, MediaPresignOutput)
         assert result.succeeded == 1
         assert result.failed == 1
         assert result.items[0].url is None
@@ -120,15 +120,15 @@ class TestMediaPresignBatchPartialFailure:
         mock_gw.presign_get = _fail_then_succeed
 
         with patch(
-            "ark_mcp.tools.media_presign_batch.make_object_storage_gateway",
+            "ark_mcp.tools.media_presign.make_object_storage_gateway",
             return_value=mock_gw,
         ):
-            result = await media_presign_batch(
-                MediaPresignBatchInput(object_keys=[_VALID_KEY, _VALID_KEY_2]),
+            result = await media_presign(
+                MediaPresignInput(object_keys=[_VALID_KEY, _VALID_KEY_2]),
                 fake_ctx,
             )
 
-        assert isinstance(result, MediaPresignBatchOutput)
+        assert isinstance(result, MediaPresignOutput)
         assert result.succeeded == 1
         assert result.failed == 1
         assert result.items[0].url is None
@@ -147,15 +147,15 @@ class TestMediaPresignBatchPartialFailure:
         mock_gw.presign_get = _boom
 
         with patch(
-            "ark_mcp.tools.media_presign_batch.make_object_storage_gateway",
+            "ark_mcp.tools.media_presign.make_object_storage_gateway",
             return_value=mock_gw,
         ):
-            result = await media_presign_batch(
-                MediaPresignBatchInput(object_keys=[_VALID_KEY, _VALID_KEY_2]),
+            result = await media_presign(
+                MediaPresignInput(object_keys=[_VALID_KEY, _VALID_KEY_2]),
                 fake_ctx,
             )
 
-        assert isinstance(result, MediaPresignBatchOutput)
+        assert isinstance(result, MediaPresignOutput)
         assert result.succeeded == 0
         assert result.failed == 2
         assert all(item.code == "INTERNAL" for item in result.items)
@@ -168,21 +168,21 @@ class TestMediaPresignBatchOwnership:
         from ark_mcp.security.auth_context import AuthContext
 
         monkeypatch.setattr(
-            "ark_mcp.tools.media_presign_batch.get_principal",
+            "ark_mcp.tools.media_presign.get_principal",
             lambda _ctx: AuthContext(principal_id="alice", tenant_id="tenant-a", transport="http"),
         )
         mock_gw = _mock_gateway()
 
         with patch(
-            "ark_mcp.tools.media_presign_batch.make_object_storage_gateway",
+            "ark_mcp.tools.media_presign.make_object_storage_gateway",
             return_value=mock_gw,
         ):
-            result = await media_presign_batch(
-                MediaPresignBatchInput(object_keys=[_VALID_KEY]),
+            result = await media_presign(
+                MediaPresignInput(object_keys=[_VALID_KEY]),
                 fake_ctx,
             )
 
-        assert isinstance(result, MediaPresignBatchOutput)
+        assert isinstance(result, MediaPresignOutput)
         assert result.succeeded == 0
         assert result.failed == 1
         assert result.items[0].code == "NOT_OWNED"
@@ -206,18 +206,18 @@ class TestMediaPresignBatchErrors:
                 "s3_bucket": "",
             }
         )
-        monkeypatch.setattr("ark_mcp.tools.media_presign_batch.get_settings", lambda: no_storage)
+        monkeypatch.setattr("ark_mcp.tools.media_presign.get_settings", lambda: no_storage)
 
         with pytest.raises(ValueError, match="Object storage is not configured"):
-            await media_presign_batch(
-                MediaPresignBatchInput(object_keys=[_VALID_KEY]),
+            await media_presign(
+                MediaPresignInput(object_keys=[_VALID_KEY]),
                 fake_ctx,
             )
 
     async def test_empty_object_keys_rejected(self, test_env: None) -> None:
         with pytest.raises(ValueError):
-            MediaPresignBatchInput(object_keys=[])
+            MediaPresignInput(object_keys=[])
 
     async def test_too_many_object_keys_rejected(self, test_env: None) -> None:
         with pytest.raises(ValueError):
-            MediaPresignBatchInput(object_keys=[_VALID_KEY] * 101)
+            MediaPresignInput(object_keys=[_VALID_KEY] * 101)

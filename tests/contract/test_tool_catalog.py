@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -15,29 +14,6 @@ from ark_mcp.server import SERVER_INSTRUCTIONS, create_server
 from ark_mcp.tools._catalog import CATALOG, catalog_entry, resolve_tool_definition
 
 SECURITY_DOC = Path(__file__).resolve().parents[2] / "docs" / "security.md"
-
-
-@pytest.fixture
-def all_services_enabled(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    for name, value in {
-        "BYTEPLUS_MODELARK_API_KEY": "sk-test",  # pragma: allowlist secret
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "sk-test",  # pragma: allowlist secret
-        "BYTEPLUS_VOD_MEDIAKIT_API_KEY": "test-mediakit-key",  # pragma: allowlist secret
-        "BYTEPLUS_CV_API_KEY": "test-cv-key",  # pragma: allowlist secret
-        "BYTEPLUS_OMNIHUMAN_ENABLED": "true",
-        "BYTEPLUS_MODELARK_3D_ENABLED": "true",
-        "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED": "true",
-        "BYTEPLUS_MODELARK_ACCESS_KEY": "AKLTtestopenapi",
-        "BYTEPLUS_MODELARK_SECRET_KEY": "test-openapi-secret",  # pragma: allowlist secret
-        "BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE": "true",
-        "TOS_ACCESS_KEY": "ak-test-tos",  # pragma: allowlist secret
-        "TOS_SECRET_KEY": "sk-test-tos",  # pragma: allowlist secret
-        "TOS_BUCKET": "test-bucket",
-    }.items():
-        monkeypatch.setenv(name, value)
-    get_settings.cache_clear()
-    yield
-    get_settings.cache_clear()
 
 
 def _undescribed_fields(model: type[BaseModel], seen: set[type[BaseModel]]) -> list[str]:

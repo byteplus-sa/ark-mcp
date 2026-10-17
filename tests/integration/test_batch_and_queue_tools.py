@@ -1,4 +1,4 @@
-"""media_upload_batch and derived Seedance queue info.
+"""media_upload and derived Seedance queue info.
 
 Batch task polling is covered in ``test_gen_task_tools.py``.
 """
@@ -17,10 +17,10 @@ from ark_mcp.config.env import get_settings
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.modelark.seedance_queue import queue_info
-from ark_mcp.tools.media_upload_batch import (
-    MediaUploadBatchInput,
-    MediaUploadBatchOutput,
-    media_upload_batch,
+from ark_mcp.tools.media_upload import (
+    MediaUploadInput,
+    MediaUploadOutput,
+    media_upload,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -49,7 +49,7 @@ def _gateway(fail_keys: tuple[str, ...] = ()) -> AsyncMock:
     return gw
 
 
-# --- media_upload_batch --------------------------------------------------------
+# --- media_upload --------------------------------------------------------
 
 
 async def test_batch_uploads_items_and_reports_failures_per_item(
@@ -58,9 +58,9 @@ async def test_batch_uploads_items_and_reports_failures_per_item(
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"video-bytes")
     gw = _gateway(fail_keys=("webp",))
-    with patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw):
-        result = await media_upload_batch(
-            MediaUploadBatchInput(
+    with patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw):
+        result = await media_upload(
+            MediaUploadInput(
                 items=[
                     {"media_type": "video", "file_path": str(clip)},
                     {
@@ -78,7 +78,7 @@ async def test_batch_uploads_items_and_reports_failures_per_item(
             ),
             fake_ctx,
         )
-    assert isinstance(result, MediaUploadBatchOutput)
+    assert isinstance(result, MediaUploadOutput)
     assert (result.succeeded, result.failed) == (2, 2)
     first, second, third, fourth = result.items
     assert first.mime_type == "video/mp4"  # inferred from the extension
@@ -96,11 +96,11 @@ async def test_batch_rejects_total_above_cap_before_uploading(
     get_settings.cache_clear()
     gw = _gateway()
     with (
-        patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw),
+        patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw),
         pytest.raises(ValueError, match="MEDIA_UPLOAD_BATCH_MAX_BYTES"),
     ):
-        await media_upload_batch(
-            MediaUploadBatchInput(
+        await media_upload(
+            MediaUploadInput(
                 items=[
                     {
                         "media_type": "image",
@@ -166,9 +166,9 @@ async def test_batch_unknown_extension_is_a_per_item_error(
     odd = tmp_path / "clip.unknownext"
     odd.write_bytes(b"x")
     gw = _gateway()
-    with patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw):
-        result = await media_upload_batch(
-            MediaUploadBatchInput(
+    with patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw):
+        result = await media_upload(
+            MediaUploadInput(
                 items=[
                     {"media_type": "video", "file_path": str(odd)},
                     {
@@ -180,7 +180,7 @@ async def test_batch_unknown_extension_is_a_per_item_error(
             ),
             fake_ctx,
         )
-    assert isinstance(result, MediaUploadBatchOutput)
+    assert isinstance(result, MediaUploadOutput)
     assert result.items[0].error is not None and "infer mime_type" in result.items[0].error
     assert result.succeeded == 1
 
@@ -194,11 +194,11 @@ async def test_batch_cap_rejects_before_decoding_every_item(
     payload = base64.b64encode(b"0123456789").decode()
     gw = _gateway()
     with (
-        patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw),
+        patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw),
         pytest.raises(ValueError, match="at item 0"),
     ):
-        await media_upload_batch(
-            MediaUploadBatchInput(
+        await media_upload(
+            MediaUploadInput(
                 items=[
                     {"media_type": "image", "mime_type": "image/png", "data": payload},
                     {"media_type": "image", "mime_type": "image/png", "data": payload},

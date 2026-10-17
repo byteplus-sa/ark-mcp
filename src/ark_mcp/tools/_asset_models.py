@@ -5,9 +5,16 @@ All fields carry descriptions because these models are MCP tool schemas.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 from ark_mcp.domain.assets import Asset, AssetGroup, validate_asset_id
 from ark_mcp.tools.media_presign import validate_object_key
@@ -17,28 +24,32 @@ _PROJECT_DESCRIPTION = (
     "only work with inference endpoints in the same project; keep one project throughout."
 )
 _GROUP_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+MAX_LOOKUP_IDS = 20
 
 
 def project_name_field() -> Any:
     return Field(None, min_length=1, max_length=64, description=_PROJECT_DESCRIPTION)
 
 
+def _strip_asset_scheme(value: object) -> object:
+    if isinstance(value, str) and value.lower().startswith("asset://"):
+        return value[len("asset://") :]
+    return value
+
+
+GroupId = Annotated[str, StringConstraints(pattern=_GROUP_ID_PATTERN)]
+AssetId = Annotated[str, BeforeValidator(_strip_asset_scheme), AfterValidator(validate_asset_id)]
+
+
+class AssetLookupError(BaseModel):
+    """An asset or group ID that could not be read."""
+
+    id: str = Field(..., description="The asset or group ID that failed.")
+    code: str = Field(..., description="Provider error code (e.g. NotFound.Asset).")
+    message: str = Field(..., description="Human-readable reason.")
+
+
 # --- Groups --------------------------------------------------------------------
-
-
-class AssetGroupCreateInput(BaseModel):
-    """Input for ``ark_asset_group_create``."""
-
-    name: str = Field(
-        ...,
-        min_length=1,
-        max_length=64,
-        description="Group name, typically the subject (character or product) it holds.",
-    )
-    description: str | None = Field(
-        None, max_length=300, description="Optional free-text description of the subject."
-    )
-    project_name: str | None = project_name_field()
 
 
 class AssetGroupEnsureInput(BaseModel):
@@ -69,30 +80,32 @@ class AssetGroupResult(BaseModel):
     )
 
 
-class AssetGroupGetInput(BaseModel):
-    """Input for ``ark_asset_group_get``."""
-
-    group_id: str = Field(..., pattern=_GROUP_ID_PATTERN, description="Asset group ID.")
-    project_name: str | None = project_name_field()
-
-
 class AssetGroupListInput(BaseModel):
     """Input for ``ark_asset_group_list``."""
 
+    group_ids: list[GroupId] | None = Field(
+        None,
+        min_length=1,
+        max_length=MAX_LOOKUP_IDS,
+        description=(
+            "Read exactly these groups (1-20 IDs, any group type) instead of listing. "
+            "Mutually exclusive with name, next_token and sort_order; unreadable IDs are "
+            "reported in errors."
+        ),
+    )
     name: str | None = Field(
         None, max_length=64, description="Fuzzy name filter (substring match by the provider)."
-    )
-    group_ids: list[str] | None = Field(
-        None, max_length=100, description="Only return these group IDs."
     )
     group_type: Literal["AIGC", "LivenessFace"] = Field(
         "AIGC",
         description=(
             "Group type to list (the provider requires one): 'AIGC' (virtual portrait, "
-            "default) or 'LivenessFace' (verified real person)."
+            "default) or 'LivenessFace' (verified real person). Ignored with group_ids."
         ),
     )
-    max_results: int = Field(20, ge=1, le=100, description="Page size (1-100).")
+    max_results: int = Field(
+        20, ge=1, le=100, description="Page size (1-100). Ignored with group_ids."
+    )
     next_token: str | None = Field(
         None, max_length=4096, description="Pagination token from a previous call's next_token."
     )
@@ -100,6 +113,12 @@ class AssetGroupListInput(BaseModel):
         None, description="Sort by creation time: 'Asc' or 'Desc'. Provider default when omitted."
     )
     project_name: str | None = project_name_field()
+
+    @model_validator(mode="after")
+    def _ids_or_filters(self) -> AssetGroupListInput:
+        if self.group_ids and (self.name or self.next_token or self.sort_order):
+            raise ValueError("group_ids cannot be combined with name, next_token or sort_order.")
+        return self
 
 
 class AssetGroupPage(BaseModel):
@@ -109,34 +128,9 @@ class AssetGroupPage(BaseModel):
     next_token: str | None = Field(
         None, description="Pass to the next call to fetch more; null when there are no more."
     )
-
-
-class AssetGroupUpdateInput(BaseModel):
-    """Input for ``ark_asset_group_update``."""
-
-    group_id: str = Field(..., pattern=_GROUP_ID_PATTERN, description="Asset group ID.")
-    name: str | None = Field(None, min_length=1, max_length=64, description="New group name.")
-    description: str | None = Field(None, max_length=300, description="New group description.")
-    project_name: str | None = project_name_field()
-
-    @model_validator(mode="after")
-    def _require_change(self) -> AssetGroupUpdateInput:
-        if self.name is None and self.description is None:
-            raise ValueError("Provide name and/or description to update.")
-        return self
-
-
-class AssetGroupDeleteInput(BaseModel):
-    """Input for ``ark_asset_group_delete``."""
-
-    group_id: str = Field(..., pattern=_GROUP_ID_PATTERN, description="Asset group ID to delete.")
-    confirm: Literal[True] = Field(
-        ...,
-        description=(
-            "Must be true. Deleting a group is irreversible and removes its assets from use."
-        ),
+    errors: list[AssetLookupError] = Field(
+        default_factory=list, description="group_ids that could not be read; empty when listing."
     )
-    project_name: str | None = project_name_field()
 
 
 # --- Assets --------------------------------------------------------------------
@@ -257,53 +251,46 @@ class AssetCreateOutput(BaseModel):
     group_created: bool = Field(
         False, description="True when the subject's group was created by this call."
     )
+    group_created_empty: bool = Field(
+        False,
+        description=(
+            "True when this call created the subject's group but every source failed, leaving "
+            "it empty; delete it with ark_asset_delete(group_id=...) if it is not needed."
+        ),
+    )
     items: list[AssetCreateItem] = Field(..., description="One result per source, in order.")
     all_active: bool = Field(..., description="True when every source ended Active.")
-
-
-class AssetGetInput(BaseModel):
-    """Input for ``ark_asset_get``."""
-
-    asset_id: str = Field(..., description="Asset ID, or its 'asset://<asset_id>' reference.")
-    project_name: str | None = project_name_field()
-
-    @field_validator("asset_id", mode="before")
-    @classmethod
-    def _strip_scheme(cls, value: object) -> object:
-        if isinstance(value, str) and value.lower().startswith("asset://"):
-            return value[len("asset://") :]
-        return value
-
-    @field_validator("asset_id")
-    @classmethod
-    def _validate_id(cls, value: str) -> str:
-        return validate_asset_id(value)
-
-
-class AssetResult(BaseModel):
-    """Output for tools that return one asset."""
-
-    asset: Asset = Field(..., description="The asset.")
 
 
 class AssetListInput(BaseModel):
     """Input for ``ark_asset_list``."""
 
-    group_ids: list[str] | None = Field(
+    asset_ids: list[AssetId] | None = Field(
+        None,
+        min_length=1,
+        max_length=MAX_LOOKUP_IDS,
+        description=(
+            "Read exactly these assets (1-20 IDs or 'asset://<id>' references) instead of "
+            "listing. Mutually exclusive with the filters; unreadable IDs are reported in errors."
+        ),
+    )
+    group_ids: list[GroupId] | None = Field(
         None, max_length=100, description="Only assets in these groups."
     )
     group_type: Literal["AIGC", "LivenessFace"] = Field(
         "AIGC",
         description=(
             "Only assets in groups of this type (the provider requires one): 'AIGC' "
-            "(default) or 'LivenessFace'."
+            "(default) or 'LivenessFace'. Ignored with asset_ids."
         ),
     )
     statuses: list[Literal["Processing", "Active", "Failed"]] | None = Field(
         None, description="Only assets with these statuses."
     )
     name: str | None = Field(None, max_length=64, description="Fuzzy asset-name filter.")
-    max_results: int = Field(20, ge=1, le=100, description="Page size (1-100).")
+    max_results: int = Field(
+        20, ge=1, le=100, description="Page size (1-100). Ignored with asset_ids."
+    )
     next_token: str | None = Field(
         None, max_length=4096, description="Pagination token from a previous call's next_token."
     )
@@ -311,6 +298,16 @@ class AssetListInput(BaseModel):
         None, description="Sort by creation time: 'Asc' or 'Desc'. Provider default when omitted."
     )
     project_name: str | None = project_name_field()
+
+    @model_validator(mode="after")
+    def _ids_or_filters(self) -> AssetListInput:
+        filters = (self.group_ids, self.statuses, self.name, self.next_token, self.sort_order)
+        if self.asset_ids and any(filters):
+            raise ValueError(
+                "asset_ids cannot be combined with group_ids, statuses, name, next_token or "
+                "sort_order."
+            )
+        return self
 
 
 class AssetPage(BaseModel):
@@ -320,26 +317,76 @@ class AssetPage(BaseModel):
     next_token: str | None = Field(
         None, description="Pass to the next call to fetch more; null when there are no more."
     )
-
-
-class AssetUpdateInput(AssetGetInput):
-    """Input for ``ark_asset_update``."""
-
-    name: str = Field(..., min_length=1, max_length=64, description="New asset name.")
-
-
-class AssetDeleteInput(AssetGetInput):
-    """Input for ``ark_asset_delete``."""
-
-    confirm: Literal[True] = Field(
-        ..., description="Must be true. Deleting an asset is irreversible."
+    errors: list[AssetLookupError] = Field(
+        default_factory=list, description="asset_ids that could not be read; empty when listing."
     )
 
 
-class DeleteOutput(BaseModel):
-    """Output for the delete tools."""
+class _AssetOrGroupTarget(BaseModel):
+    asset_id: AssetId | None = Field(
+        None,
+        description="Asset ID or 'asset://<id>' reference. Exactly one of asset_id or group_id.",
+    )
+    group_id: GroupId | None = Field(
+        None, description="Asset group ID. Exactly one of asset_id or group_id."
+    )
+    project_name: str | None = project_name_field()
+
+    @model_validator(mode="after")
+    def _one_target(self) -> _AssetOrGroupTarget:
+        if bool(self.asset_id) == bool(self.group_id):
+            raise ValueError("Provide exactly one of asset_id or group_id.")
+        return self
+
+
+class AssetUpdateInput(_AssetOrGroupTarget):
+    """Input for ``ark_asset_update``."""
+
+    name: str | None = Field(
+        None, min_length=1, max_length=64, description="New asset or group name."
+    )
+    description: str | None = Field(
+        None, max_length=300, description="New group description (group_id only)."
+    )
+
+    @model_validator(mode="after")
+    def _require_change(self) -> AssetUpdateInput:
+        if self.description is not None and self.asset_id:
+            raise ValueError("description can only be updated on a group (group_id).")
+        if self.name is None and self.description is None:
+            raise ValueError("Provide name and/or description to update.")
+        return self
+
+
+class AssetUpdateResult(BaseModel):
+    """Output for ``ark_asset_update``."""
+
+    asset: Asset | None = Field(None, description="The updated asset, when asset_id was given.")
+    group: AssetGroup | None = Field(
+        None, description="The updated group, when group_id was given."
+    )
+
+
+class AssetDeleteInput(_AssetOrGroupTarget):
+    """Input for ``ark_asset_delete``."""
+
+    confirm: Literal[True] = Field(
+        ..., description="Must be true. Deleting an asset or group is irreversible."
+    )
+    cascade: bool = Field(
+        False,
+        description=(
+            "Group deletes only: also delete the group's assets. A non-empty group is refused "
+            "unless this is true."
+        ),
+    )
+
+
+class AssetDeleteResult(BaseModel):
+    """Output for ``ark_asset_delete``."""
 
     id: str = Field(..., description="ID of the deleted asset or group.")
+    kind: Literal["asset", "group"] = Field(..., description="Whether an asset or a group.")
     deleted: bool = Field(..., description="True when the provider accepted the delete.")
 
 

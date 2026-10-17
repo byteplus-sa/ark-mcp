@@ -131,6 +131,7 @@ async def ark_asset_create(input: AssetCreateInput, ctx: Context) -> AssetCreate
         return AssetCreateOutput(
             group_id=group_id,
             group_created=group_created,
+            group_created_empty=group_created and not created_ids,
             items=items,
             all_active=bool(items) and all(item.status == "Active" for item in items),
         )

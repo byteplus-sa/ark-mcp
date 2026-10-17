@@ -45,6 +45,6 @@ async def ark_asset_group_ensure(
 TOOL_ANNOTATIONS = {
     "readOnlyHint": False,
     "destructiveHint": False,
-    "idempotentHint": False,
+    "idempotentHint": True,
     "openWorldHint": True,
 }

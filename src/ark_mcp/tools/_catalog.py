@@ -157,20 +157,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         background="required",
         gate=_object_storage,
     ),
-    _entry(
-        "media_upload_batch",
-        "MediaUploadBatchOutput",
-        "media:upload",
-        background="required",
-        gate=_object_storage,
-    ),
     _entry("media_presign", "MediaPresignOutput", "media:presign", gate=_object_storage),
-    _entry(
-        "media_presign_batch",
-        "MediaPresignBatchOutput",
-        "media:presign",
-        gate=_object_storage,
-    ),
     _entry(
         "speech_to_text",
         "SpeechToTextOutput",
@@ -221,10 +208,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         gate=_vod,
     ),
     _entry("ark_asset_group_ensure", "AssetGroupResult", "assets:write", gate=_assets),
-    _entry("ark_asset_group_create", "AssetGroupResult", "assets:write", gate=_assets),
-    _entry("ark_asset_group_get", "AssetGroupResult", "assets:read", gate=_assets),
     _entry("ark_asset_group_list", "AssetGroupPage", "assets:read", gate=_assets),
-    _entry("ark_asset_group_update", "AssetGroupResult", "assets:write", gate=_assets),
     _entry(
         "ark_asset_create",
         "AssetCreateOutput",
@@ -232,9 +216,8 @@ CATALOG: tuple[CatalogEntry, ...] = (
         background="optional",
         gate=_assets,
     ),
-    _entry("ark_asset_get", "AssetResult", "assets:read", gate=_assets),
     _entry("ark_asset_list", "AssetPage", "assets:read", gate=_assets),
-    _entry("ark_asset_update", "AssetResult", "assets:write", gate=_assets),
+    _entry("ark_asset_update", "AssetUpdateResult", "assets:write", gate=_assets),
     _entry(
         "ark_asset_verification_start",
         "VerificationStartOutput",
@@ -248,8 +231,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         background="optional",
         gate=_assets,
     ),
-    _entry("ark_asset_delete", "DeleteOutput", "assets:delete", gate=_asset_delete),
-    _entry("ark_asset_group_delete", "DeleteOutput", "assets:delete", gate=_asset_delete),
+    _entry("ark_asset_delete", "AssetDeleteResult", "assets:delete", gate=_asset_delete),
     _entry(
         "omnihuman_create_task",
         "OmniHumanCreateTaskOutput",

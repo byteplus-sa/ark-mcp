@@ -144,9 +144,7 @@ class TestToolDiscovery:
             "seed_audio_understand",
             "speech_to_text",
             "media_upload",
-            "media_upload_batch",
             "media_presign",
-            "media_presign_batch",
             "vod_enhance_video",
             "vod_transcode_video",
             "vod_separate_audio",
@@ -154,12 +152,8 @@ class TestToolDiscovery:
             "vod_remove_subtitles",
             "vod_get_task",
             "ark_asset_group_ensure",
-            "ark_asset_group_create",
-            "ark_asset_group_get",
             "ark_asset_group_list",
-            "ark_asset_group_update",
             "ark_asset_create",
-            "ark_asset_get",
             "ark_asset_list",
             "ark_asset_update",
             "ark_asset_verification_start",
@@ -211,10 +205,11 @@ class TestToolDiscovery:
             tools = {tool.name: tool for tool in await create_server(get_settings()).list_tools()}
         finally:
             get_settings.cache_clear()
-        for name in ("ark_asset_delete", "ark_asset_group_delete"):
-            assert name not in disabled_names
-            assert tools[name].annotations is not None
-            assert tools[name].annotations.destructive_hint is True
+        assert "ark_asset_delete" not in disabled_names
+        assert "ark_asset_group_delete" not in tools
+        annotations = tools["ark_asset_delete"].annotations
+        assert annotations is not None
+        assert annotations.destructive_hint is True
 
     async def test_long_running_tools_require_background_execution(
         self, configured_server: None
@@ -278,7 +273,6 @@ class TestToolDiscovery:
             "seed_media_export_artifact",
             "seed_media_get_artifact",
             "media_presign",
-            "media_presign_batch",
             "gen_task_list",
             "gen_task_cancel_or_delete",
         }

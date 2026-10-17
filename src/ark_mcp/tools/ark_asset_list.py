@@ -1,4 +1,4 @@
-"""``ark_asset_list`` tool — list assets with filters and pagination."""
+"""``ark_asset_list`` tool — list assets with filters, or read them by ID."""
 
 from __future__ import annotations
 
@@ -9,19 +9,30 @@ from ark_mcp.domain.assets import Asset
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.providers.modelark.assets import AssetService
 from ark_mcp.tools._asset_models import AssetListInput, AssetPage
-from ark_mcp.tools._asset_shared import asset_call, retrying
+from ark_mcp.tools._asset_shared import asset_call, lookup_each, retrying
 from ark_mcp.tools._errors import provider_error_result
 
 
 async def ark_asset_list(input: AssetListInput, ctx: Context) -> AssetPage | ToolResult:
-    """List private assets filtered by group IDs, group type, status, or fuzzy name.
+    """List private assets by group IDs, group type, status, or fuzzy name, or read them by ID.
 
-    Returns each asset's asset:// URI and status. Pass next_token to page.
-    Requires BytePlus AK/SK.
+    Returns each asset's asset:// URI and status (Processing/Active/Failed);
+    only Active assets can be used in generation. Pass next_token to page.
+    With asset_ids (up to 20 IDs or asset:// references), each asset is read
+    directly and unreadable IDs are reported in errors. preview_url is a
+    temporary (~12 h) link for viewing only; always pass asset_uri to Seedance.
+    Assets authorized from another account are not visible here but can still
+    be used by ID. Requires BytePlus AK/SK.
     """
+    asset_ids = input.asset_ids
 
-    async def _list(service: AssetService) -> tuple[list[Asset], str | None]:
-        return await retrying(
+    async def _list(service: AssetService) -> AssetPage:
+        if asset_ids:
+            assets, errors = await lookup_each(
+                asset_ids, lambda asset_id: service.get_asset(asset_id, input.project_name)
+            )
+            return AssetPage(assets=assets, errors=errors)
+        assets_page: tuple[list[Asset], str | None] = await retrying(
             lambda: service.list_assets(
                 group_ids=input.group_ids,
                 group_type=input.group_type,
@@ -33,12 +44,12 @@ async def ark_asset_list(input: AssetListInput, ctx: Context) -> AssetPage | Too
                 project_name=input.project_name,
             )
         )
+        return AssetPage(assets=assets_page[0], next_token=assets_page[1])
 
     try:
-        assets, next_token = await asset_call(ctx, _list)
+        return await asset_call(ctx, _list)
     except ProviderError as exc:
         return provider_error_result(exc)
-    return AssetPage(assets=assets, next_token=next_token)
 
 
 TOOL_ANNOTATIONS = {
