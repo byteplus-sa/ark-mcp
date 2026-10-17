@@ -22,7 +22,6 @@ from ark_mcp.domain.media import (
     validate_reference_url,
 )
 from ark_mcp.observability.logger import info as log_info
-from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.modelark.seedance import SeedanceService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
@@ -133,29 +132,59 @@ class SeedanceAudioInput(MediaSource):
         return data
 
 
-_EXTENSION_TASK_TYPE = "extend_video"
+OmniReferenceTaskType = Literal["auto", "reference", "edit", "extend"]
+
+OMNI_REFERENCE_TASK_TYPE_DESCRIPTION = (
+    "Seedance 2.5 task type hint: 'auto' (provider default, inferred from the prompt and "
+    "media), 'reference' (new video from references), 'edit' (edit a reference video), or "
+    "'extend' (extend a reference video forward or backward). 'edit' needs at least one "
+    "reference video, ratio omitted or 'adaptive', and duration omitted or -1. 'extend' needs "
+    "at least one reference video and ratio omitted or 'adaptive'. Write the prompt to match "
+    "the task type, otherwise the provider fails the task with TaskTypeMismatch."
+)
+
+_ADAPTIVE_RATIO = "adaptive"
+_FRAME_ROLES = frozenset({"first_frame", "last_frame"})
 
 
-def strip_ratio_for_video_extension(
-    omni_reference_task_type: str | None, ratio: str | None
-) -> str | None:
-    """Strip ``ratio`` for video extension tasks.
+def task_type_constraint_violations(
+    *,
+    task_type: OmniReferenceTaskType | None,
+    ratio: str | None,
+    duration: int | None,
+    has_videos: bool,
+    image_roles: list[str | None],
+) -> list[str]:
+    """Return every documented Seedance 2.5 task-type constraint the request breaks.
 
-    Video extension tasks auto-lock ratio to the source video. The provider
-    rejects any explicit ratio with ``InvalidParameter.TaskTypeConstraint``,
-    so we strip it to prevent the failure.
+    The provider rejects these combinations with
+    ``InvalidParameter.TaskTypeConstraint`` after billing a submission slot, so
+    they are rejected locally with the fix spelled out instead.
     """
-    if omni_reference_task_type == _EXTENSION_TASK_TYPE and ratio is not None:
-        log_warning(
-            "seedance_ratio_stripped_for_extension",
-            task_type=_EXTENSION_TASK_TYPE,
-            reason=(
-                "ratio auto-locks to source for extend_video; "
-                "setting it fails with InvalidParameter.TaskTypeConstraint"
-            ),
+    violations: list[str] = []
+    ratio_is_fixed = ratio is not None and ratio != _ADAPTIVE_RATIO
+    if task_type in ("edit", "extend"):
+        if not has_videos:
+            violations.append(
+                f"omni_reference_task_type '{task_type}' requires at least one reference video."
+            )
+        if ratio_is_fixed:
+            violations.append(
+                f"omni_reference_task_type '{task_type}' requires ratio omitted or "
+                f"'{_ADAPTIVE_RATIO}'; got '{ratio}'."
+            )
+    if task_type == "edit" and duration not in (None, -1):
+        violations.append(
+            "omni_reference_task_type 'edit' requires duration omitted or -1 (the output "
+            f"follows the source video); got {duration}."
         )
-        return None
-    return ratio
+    has_frame_image = any(role in _FRAME_ROLES for role in image_roles)
+    if ratio_is_fixed and task_type not in ("edit", "extend") and has_frame_image:
+        violations.append(
+            "First-frame and first/last-frame requests require ratio omitted or "
+            f"'{_ADAPTIVE_RATIO}' (the output follows the first frame); got '{ratio}'."
+        )
+    return violations
 
 
 async def execute_seedance_create(

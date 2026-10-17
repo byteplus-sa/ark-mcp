@@ -87,6 +87,16 @@ class TestCapabilityRegistry:
         with pytest.raises(ValueError, match="outside the supported range"):
             registry.validate_duration(None, 100)
 
+    @pytest.mark.parametrize("duration", [0, 1, 3])
+    def test_validate_duration_below_four_seconds_raises(self, duration: int) -> None:
+        registry = get_capability_registry()
+        with pytest.raises(ValueError, match=r"outside the supported range \[4, 15\]"):
+            registry.validate_duration(None, duration)
+
+    def test_validate_duration_minimum_four_seconds(self) -> None:
+        registry = get_capability_registry()
+        assert registry.validate_duration(None, 4) == 4
+
     def test_list_image_models(self) -> None:
         registry = get_capability_registry()
         models = registry.list_image_models()
@@ -202,7 +212,7 @@ class TestSeedance25Capabilities:
 
             caps = registry.get_video_capabilities("dreamina-seedance-2-5-260628")
             assert caps.family is ModelFamily.SEEDANCE_2_5
-            assert caps.duration_range == (-1, 30)
+            assert caps.duration_range == (4, 30)
             assert caps.max_reference_images == 30
             assert caps.max_reference_videos == 10
             assert caps.max_reference_audios == 10
@@ -232,6 +242,8 @@ class TestSeedance25Capabilities:
             assert registry.validate_duration("dreamina-seedance-2-5-260628", -1) == -1
             with pytest.raises(ValueError, match="outside the supported range"):
                 registry.validate_duration("dreamina-seedance-2-5-260628", 31)
+            with pytest.raises(ValueError, match="outside the supported range"):
+                registry.validate_duration("dreamina-seedance-2-5-260628", 3)
         finally:
             os.environ["SEEDANCE_DEFAULT_MODEL"] = old_default
             refresh_settings()
@@ -320,7 +332,7 @@ class TestSeedance25PremiumCapabilities:
         caps = registry.get_video_capabilities("dreamina-seedance-2-5-premium-260915")
         assert caps.family is ModelFamily.SEEDANCE_2_5_PREMIUM
         assert caps.supported_resolutions == ("480p", "720p", "1080p", "4k")
-        assert caps.duration_range == (-1, 30)
+        assert caps.duration_range == (4, 30)
         assert caps.max_reference_images == 30
         assert caps.max_reference_videos == 10
         assert caps.max_reference_audios == 10

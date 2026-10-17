@@ -195,7 +195,7 @@ class SeedanceTaskSettings(BaseModel):
     duration: int | str | None = Field(None, description="Video duration in seconds, or 'auto'.")
     omni_reference_task_type: str | None = Field(
         None,
-        description="Provider task type hint (e.g. auto, edit_video, extend_video).",
+        description="Provider task type hint echoed by Seedance 2.5: auto, reference, edit, or extend.",
     )
     generate_audio: bool | None = Field(None, description="Whether an audio track was generated.")
     return_last_frame: bool | None = Field(

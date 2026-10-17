@@ -86,9 +86,9 @@ class TestSeedanceContentBuilding:
         request = SeedanceService.build_request(
             model="dreamina-seedance-2-5-260628",
             content=content,
-            omni_reference_task_type="edit_video",
+            omni_reference_task_type="edit",
         )
-        assert request.omni_reference_task_type == "edit_video"
+        assert request.omni_reference_task_type == "edit"
 
     def test_build_request_omni_reference_task_type_defaults_none(self) -> None:
         content = SeedanceService.build_content(prompt="generate a video")

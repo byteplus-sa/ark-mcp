@@ -109,33 +109,6 @@ class TestSeedanceCreateTaskTool:
         assert captured_content[0].type == "text"
         assert captured_content[0].text == "just text"
 
-    async def test_create_task_passes_omni_reference_task_type(
-        self,
-        test_env: None,
-        fake_ctx: FakeContext,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        captured_request: list[Any] = []
-
-        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
-            captured_request.append(request)
-            return "task-edit-001", "req-edit"
-
-        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
-        monkeypatch.setattr(SeedanceService, "close", _mock_close)
-
-        result = await seedance_create_task(
-            SeedanceCreateTaskInput(
-                prompt="edit the background of this video",
-                videos=[SeedanceVideoInput(url="https://example.com/source.mp4")],
-                omni_reference_task_type="edit_video",
-            ),
-            fake_ctx,
-        )
-
-        assert isinstance(result, SeedanceCreateTaskOutput)
-        assert captured_request[0].omni_reference_task_type == "edit_video"
-
     async def test_create_task_prompt_with_video_and_audio_succeeds(
         self,
         test_env: None,

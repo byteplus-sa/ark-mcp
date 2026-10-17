@@ -928,9 +928,8 @@ provider task ID for subsequent polling.
 | `audios` | `list[SeedanceAudioInput]` | No | Up to 3 audios with role: `reference_audio`. Each entry may be a plain URL string or `{"url": ...}` |
 | `model` | `str` | No | Model ID. Default: `dreamina-seedance-2-0-260128` (Standard). Fast and Mini IDs are configured via `SEEDANCE_MODEL_BINDINGS`. |
 | `resolution` | `"480p"` \| `"720p"` \| `"1080p"` \| `"4k"` | No | |
-| `ratio` | `str` | No | Aspect ratio. For `extend_video`, stripped (auto-locks to source) to prevent `InvalidParameter.TaskTypeConstraint`. For `edit_video`, auto-derived from input video. For first/last-frame, locks to first image. |
-| `duration` | `int` | No | -1 (auto) to 15 seconds. Ignored for edit tasks (auto-derived from input video) |
-| `omni_reference_task_type` | `str` | No | Task type hint (e.g. `edit_video`, `extend_video`). Default: `auto`. Note: 2.0 `edit_video` output caps at ~5s in practice. |
+| `ratio` | `str` | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (default). For first/last-frame tasks the output follows the first image. |
+| `duration` | `int` | No | -1 (auto) or 4-15 seconds. |
 | `generate_audio` | `bool` | No | Generate audio track |
 | `watermark` | `bool` | No | Provider watermark |
 | `return_last_frame` | `bool` | No | Include last frame image in output |
@@ -980,14 +979,13 @@ overridden:
 | First/last-frame generation | Locked to first image's ratio | Set freely |
 | Text-to-video / standard reference | Set freely | Set freely (or `-1` for auto) |
 
-For `extend_video`, any explicit `ratio` is client-stripped (logged as
-`seedance_ratio_stripped_for_extension`) to prevent the provider from
-rejecting the task with `InvalidParameter.TaskTypeConstraint`.
-
-Use `omni_reference_task_type` to force a specific task type when
-auto-detection is ambiguous (e.g. set to `"edit_video"` or
-`"extend_video"`). When omitted, the provider defaults to `"auto"` which
-infers the task type from the prompt and media inputs.
+On Seedance 2.5, set `omni_reference_task_type` to `auto`, `reference`,
+`edit`, or `extend` to force a task type when auto-detection is ambiguous.
+`edit` and `extend` require at least one reference video and `ratio` omitted
+or `adaptive`; `edit` also requires `duration` omitted or `-1`. The server
+rejects other combinations before submission instead of letting the provider
+fail them with `InvalidParameter.TaskTypeConstraint`. Seedance 2.0 does not
+accept the field.
 
 #### `seedance_create_task_variations`
 
@@ -1130,9 +1128,9 @@ Create an asynchronous Seedance 2.5 video generation task.
 | `audios` | `list[SeedanceAudioInput]` | No | Up to 10 audios with role: `reference_audio`. Audio-only input is supported (unique to 2.5). Each entry may be a plain URL string or `{"url": ...}` |
 | `model` | `str` | No | Default: `dreamina-seedance-2-5-260628`. No Fast/Mini variants. |
 | `resolution` | `"480p"` \| `"720p"` \| `"1080p"` | No | 2.5 supports 480p, 720p, and 1080p. 4k is not supported. |
-| `ratio` | `str` | No | Aspect ratio (e.g. `16:9`, `9:16`). For `extend_video`, stripped (auto-locks to source) to prevent `InvalidParameter.TaskTypeConstraint`. For `edit_video`, auto-derived from input video. For first/last-frame, locks to first image. |
-| `duration` | `int` | No | -1 (auto) to 30 seconds. Ignored for `edit_video` tasks (auto-derived from input video). |
-| `omni_reference_task_type` | `str` | No | Task type hint passed through to the provider. Common values: `auto` (default, provider auto-detects), `edit_video`, `extend_video`. The server does not restrict or validate this to a fixed enum for either 2.0 or 2.5; for `extend_video`, `ratio` is stripped client-side to prevent `InvalidParameter.TaskTypeConstraint`. |
+| `ratio` | `str` | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (default). `edit`, `extend`, first-frame and first/last-frame requests require it omitted or `adaptive`; other values are rejected before submission. |
+| `duration` | `int` | No | -1 (auto) or 4-30 seconds. `edit` requires -1 or omitted. |
+| `omni_reference_task_type` | `str` | No | `auto` (default), `reference`, `edit`, or `extend` (Seedance 2.5 only). `edit`/`extend` need at least one reference video and `ratio` omitted or `adaptive`; `edit` also needs `duration` omitted or `-1`. |
 | `generate_audio` | `bool` | No | Whether to generate an audio track. |
 | `watermark` | `bool` | No | Apply AIGC watermark. |
 | `return_last_frame` | `bool` | No | Return the last frame as a separate image. |

@@ -180,29 +180,9 @@ class TestSeedanceCreateTaskInput:
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
-    def test_ratio_stripped_for_extend_video(self) -> None:
-        """Ratio is stripped for extend_video to prevent InvalidParameter.TaskTypeConstraint."""
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        inp = SeedanceCreateTaskInput(
-            prompt="extend this video",
-            videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-            omni_reference_task_type="extend_video",
-            ratio="16:9",
-        )
-        assert inp.ratio is None
-
-    def test_ratio_preserved_for_edit_video(self) -> None:
-        """Ratio is not stripped for edit_video."""
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        inp = SeedanceCreateTaskInput(
-            prompt="edit this video",
-            videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-            omni_reference_task_type="edit_video",
-            ratio="16:9",
-        )
-        assert inp.ratio == "16:9"
+    def test_omni_reference_task_type_not_in_2_0_schema(self) -> None:
+        """The task type hint is Seedance 2.5-only, so 2.0 does not advertise it."""
+        assert "omni_reference_task_type" not in SeedanceCreateTaskInput.model_fields
 
     def test_ratio_preserved_for_auto_task_type(self) -> None:
         """Ratio is not stripped when omni_reference_task_type is omitted."""
@@ -273,18 +253,8 @@ class TestSeedanceVariationsInput:
         with pytest.raises(ValidationError):
             SeedanceVariationsInput(prompt="x" * 32001, variations=1)
 
-    def test_inherits_ratio_stripping_for_extend_video(self) -> None:
-        """Variations input inherits ratio stripping from base model."""
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        inp = SeedanceVariationsInput(
-            variations=2,
-            variation_prompts=["extend clip a", "extend clip b"],
-            videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-            omni_reference_task_type="extend_video",
-            ratio="9:16",
-        )
-        assert inp.ratio is None
+    def test_omni_reference_task_type_not_in_2_0_variations_schema(self) -> None:
+        assert "omni_reference_task_type" not in SeedanceVariationsInput.model_fields
 
 
 class TestSeedance25CreateTaskInput:

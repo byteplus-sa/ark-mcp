@@ -85,7 +85,7 @@ class VideoCapabilities:
     supports_camera_fixed: bool
     supports_frames: bool
     supports_service_tier_flex: bool
-    duration_range: tuple[int, int]  # inclusive bounds, -1 means auto
+    duration_range: tuple[int, int]  # inclusive bounds; -1 (auto) is accepted separately
     priority_range: tuple[int, int]
     execution_expires_after_range: tuple[int, int]
     supports_generate_audio: bool = True
@@ -197,7 +197,7 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
                 supports_camera_fixed=False,
                 supports_frames=False,
                 supports_service_tier_flex=False,
-                duration_range=(-1, 30),
+                duration_range=(4, 30),
                 priority_range=(0, 9),
                 execution_expires_after_range=(3600, 259200),
             )
@@ -213,7 +213,7 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
                 supports_camera_fixed=False,
                 supports_frames=False,
                 supports_service_tier_flex=False,
-                duration_range=(-1, 15),
+                duration_range=(4, 15),
                 priority_range=(0, 9),
                 execution_expires_after_range=(3600, 259200),
             )

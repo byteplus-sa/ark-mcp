@@ -109,47 +109,113 @@ class TestSeedance25CreateTaskInput:
         with pytest.raises(ValidationError, match="At least one"):
             Seedance25CreateTaskInput()
 
-    def test_omni_reference_task_type_accepted(self) -> None:
+    @pytest.mark.parametrize("task_type", ["auto", "reference", "edit", "extend"])
+    def test_documented_task_types_accepted(self, task_type: str) -> None:
         inp = Seedance25CreateTaskInput(
-            prompt="edit this video",
-            omni_reference_task_type="edit_video",
+            prompt="work with the reference video",
+            videos=["https://example.com/v.mp4"],
+            omni_reference_task_type=task_type,
         )
-        assert inp.omni_reference_task_type == "edit_video"
+        assert inp.omni_reference_task_type == task_type
+
+    @pytest.mark.parametrize("task_type", ["edit_video", "extend_video", "EDIT", ""])
+    def test_undocumented_task_types_rejected(self, task_type: str) -> None:
+        with pytest.raises(ValidationError, match="omni_reference_task_type"):
+            Seedance25CreateTaskInput(
+                prompt="edit",
+                videos=["https://example.com/v.mp4"],
+                omni_reference_task_type=task_type,
+            )
 
     def test_omni_reference_task_type_none_default(self) -> None:
         inp = Seedance25CreateTaskInput(prompt="test")
         assert inp.omni_reference_task_type is None
 
-    def test_ratio_stripped_for_extend_video(self) -> None:
-        """Ratio is stripped for extend_video to prevent InvalidParameter.TaskTypeConstraint."""
-        inp = Seedance25CreateTaskInput(
-            prompt="extend this video",
-            omni_reference_task_type="extend_video",
-            ratio="16:9",
-        )
-        assert inp.ratio is None
+    @pytest.mark.parametrize("task_type", ["edit", "extend"])
+    def test_edit_and_extend_require_a_reference_video(self, task_type: str) -> None:
+        with pytest.raises(ValidationError, match="requires at least one reference video"):
+            Seedance25CreateTaskInput(prompt="change it", omni_reference_task_type=task_type)
 
-    def test_ratio_preserved_for_edit_video(self) -> None:
-        """Ratio is not stripped for edit_video (only extension auto-locks ratio)."""
+    @pytest.mark.parametrize("task_type", ["edit", "extend"])
+    def test_edit_and_extend_reject_fixed_ratio(self, task_type: str) -> None:
+        with pytest.raises(ValidationError, match="ratio omitted or 'adaptive'; got '16:9'"):
+            Seedance25CreateTaskInput(
+                prompt="change it",
+                videos=["https://example.com/v.mp4"],
+                omni_reference_task_type=task_type,
+                ratio="16:9",
+            )
+
+    @pytest.mark.parametrize("task_type", ["edit", "extend"])
+    def test_edit_and_extend_accept_adaptive_ratio(self, task_type: str) -> None:
         inp = Seedance25CreateTaskInput(
-            prompt="edit this video",
-            omni_reference_task_type="edit_video",
+            prompt="change it",
+            videos=["https://example.com/v.mp4"],
+            omni_reference_task_type=task_type,
+            ratio="adaptive",
+        )
+        assert inp.ratio == "adaptive"
+
+    def test_edit_rejects_explicit_duration(self) -> None:
+        with pytest.raises(ValidationError, match=r"requires duration omitted or -1 .*got 10"):
+            Seedance25CreateTaskInput(
+                prompt="replace the background",
+                videos=["https://example.com/v.mp4"],
+                omni_reference_task_type="edit",
+                duration=10,
+            )
+
+    def test_edit_accepts_auto_duration(self) -> None:
+        inp = Seedance25CreateTaskInput(
+            prompt="replace the background",
+            videos=["https://example.com/v.mp4"],
+            omni_reference_task_type="edit",
+            duration=-1,
+        )
+        assert inp.duration == -1
+
+    def test_extend_accepts_explicit_duration(self) -> None:
+        inp = Seedance25CreateTaskInput(
+            prompt="extend forward",
+            videos=["https://example.com/v.mp4"],
+            omni_reference_task_type="extend",
+            duration=10,
+        )
+        assert inp.duration == 10
+
+    def test_violations_are_reported_together(self) -> None:
+        with pytest.raises(ValidationError) as excinfo:
+            Seedance25CreateTaskInput(
+                prompt="edit",
+                omni_reference_task_type="edit",
+                ratio="9:16",
+                duration=8,
+            )
+        message = str(excinfo.value)
+        assert "reference video" in message
+        assert "ratio omitted" in message
+        assert "duration omitted" in message
+
+    @pytest.mark.parametrize("role", ["first_frame", "last_frame"])
+    def test_frame_roles_reject_fixed_ratio(self, role: str) -> None:
+        with pytest.raises(ValidationError, match="First-frame"):
+            Seedance25CreateTaskInput(
+                prompt="animate",
+                images=[{"url": "https://example.com/a.png", "role": role}],
+                ratio="16:9",
+            )
+
+    def test_reference_images_keep_fixed_ratio(self) -> None:
+        inp = Seedance25CreateTaskInput(
+            prompt="animate",
+            images=["https://example.com/a.png"],
             ratio="16:9",
         )
         assert inp.ratio == "16:9"
 
-    def test_ratio_preserved_for_auto_task_type(self) -> None:
-        """Ratio is not stripped when omni_reference_task_type is omitted (auto)."""
+    def test_ratio_preserved_without_task_type(self) -> None:
         inp = Seedance25CreateTaskInput(prompt="generate a video", ratio="16:9")
         assert inp.ratio == "16:9"
-
-    def test_ratio_none_for_extend_video_stays_none(self) -> None:
-        """No stripping when ratio is already None."""
-        inp = Seedance25CreateTaskInput(
-            prompt="extend this video",
-            omni_reference_task_type="extend_video",
-        )
-        assert inp.ratio is None
 
 
 class TestSeedance25VariationsInput:
@@ -188,15 +254,15 @@ class TestSeedance25VariationsInput:
         with pytest.raises(ValidationError):
             Seedance25VariationsInput(prompt="test", variations=1, duration=31)
 
-    def test_inherits_ratio_stripping_for_extend_video(self) -> None:
-        """Variations input inherits ratio stripping from base model."""
-        inp = Seedance25VariationsInput(
-            variations=2,
-            variation_prompts=["extend clip a", "extend clip b"],
-            omni_reference_task_type="extend_video",
-            ratio="9:16",
-        )
-        assert inp.ratio is None
+    def test_inherits_task_type_constraints(self) -> None:
+        with pytest.raises(ValidationError, match="ratio omitted or 'adaptive'"):
+            Seedance25VariationsInput(
+                variations=2,
+                variation_prompts=["extend clip a", "extend clip b"],
+                videos=["https://example.com/v.mp4"],
+                omni_reference_task_type="extend",
+                ratio="9:16",
+            )
 
 
 class TestSeedance25DraftModeInput:

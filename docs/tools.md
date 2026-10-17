@@ -773,9 +773,8 @@ Create an asynchronous Seedance video generation task.
 | `audios` | list[SeedanceAudioInput] | No | Reference audio (max 3). Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` |
 | `model` | string | No | Override configured model ID |
 | `resolution` | "480p" \| "720p" \| "1080p" \| "4k" | No | Output resolution |
-| `ratio` | string | No | Aspect ratio. For `extend_video`, stripped (auto-locks to source) to prevent `InvalidParameter.TaskTypeConstraint`. For `edit_video`, auto-derived from input video. For first/last-frame, locks to first image. |
-| `duration` | integer | No | Duration in seconds (-1 for auto, 4-15). Ignored for edit tasks (auto-derived) |
-| `omni_reference_task_type` | string | No | Task type hint (e.g. `edit_video`, `extend_video`). Default: `auto` |
+| `ratio` | string | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (default). For first/last-frame tasks the output follows the first image. |
+| `duration` | integer | No | Duration in seconds (-1 for auto, 4-15) |
 | `generate_audio` | boolean | No | Generate audio for the video |
 | `watermark` | boolean | No | AIGC watermark |
 | `return_last_frame` | boolean | No | Return last frame as image |
@@ -829,9 +828,9 @@ Create an asynchronous Seedance 2.5 video generation task. Supports up to
 | `audios` | list[SeedanceAudioInput] | No | Reference audio (max 10; audio-only input is supported). Each entry may be a plain URL string, `asset://<asset_id>`, or `{"url": ...}` |
 | `model` | string | No | Model ID (defaults to `dreamina-seedance-2-5-260628`) |
 | `resolution` | "480p" \| "720p" \| "1080p" | No | Output resolution (4k not supported) |
-| `ratio` | string | No | Aspect ratio. Stripped for `extend_video`; auto-derived for `edit_video`/first-frame |
-| `duration` | integer | No | Duration in seconds (-1 for auto, max 30). Ignored for edit tasks |
-| `omni_reference_task_type` | string | No | Task type hint (e.g. `edit_video`, `extend_video`). Default: `auto` |
+| `ratio` | string | No | `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, or `adaptive` (default). `edit`, `extend`, first-frame and first/last-frame requests require it omitted or `adaptive`; other values are rejected before submission. |
+| `duration` | integer | No | Duration in seconds (-1 for auto, 4-30). `edit` requires -1 or omitted |
+| `omni_reference_task_type` | string | No | `auto` (default), `reference`, `edit`, or `extend` (Seedance 2.5 only). `edit`/`extend` need at least one reference video and `ratio` omitted or `adaptive`; `edit` also needs `duration` omitted or `-1`. |
 | `generate_audio` | boolean | No | Generate an audio track for the video |
 | `watermark` | boolean | No | AIGC watermark (default: false) |
 | `return_last_frame` | boolean | No | Return last frame as a separate image |

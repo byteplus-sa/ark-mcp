@@ -28,11 +28,13 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._seedance_shared import (
+    OMNI_REFERENCE_TASK_TYPE_DESCRIPTION,
+    OmniReferenceTaskType,
     SeedanceAudioInput,
     SeedanceImageInput,
     SeedanceVideoInput,
     execute_seedance_create,
-    strip_ratio_for_video_extension,
+    task_type_constraint_violations,
 )
 from ark_mcp.tools._task_execution import context_log
 
@@ -108,11 +110,9 @@ class Seedance25CreateTaskInput(BaseModel):
     ratio: str | None = Field(
         None,
         description=(
-            "Output aspect ratio (e.g. '16:9', '9:16'). Must be supported by the selected model. "
-            "Video extension (extend_video): ratio must be omitted — it auto-locks to the source "
-            "video; any value is stripped to prevent InvalidParameter.TaskTypeConstraint. "
-            "Video editing (edit_video): ratio is auto-derived from the input video. "
-            "For first/last-frame tasks, the ratio locks to the first image."
+            "Output aspect ratio: '16:9', '4:3', '1:1', '3:4', '9:16', '21:9', or 'adaptive' "
+            "(the provider default). Edit, extend, first-frame, and first/last-frame requests "
+            "require ratio omitted or 'adaptive'; other values are rejected."
         ),
     )
     duration: int | None = Field(
@@ -120,21 +120,13 @@ class Seedance25CreateTaskInput(BaseModel):
         ge=-1,
         le=30,
         description=(
-            "Video duration in seconds (-1 for auto). Max 30 for Seedance 2.5. "
-            "Ignored for video editing tasks — the duration is auto-derived from the "
-            "input video (within ~0.3s)."
+            "Video duration in seconds: -1 for auto, or 4-30 for Seedance 2.5. "
+            "omni_reference_task_type 'edit' requires -1 or omitted; the output follows the "
+            "source video's duration."
         ),
     )
-    omni_reference_task_type: str | None = Field(
-        None,
-        description=(
-            "Task type hint for the provider. The provider defaults to 'auto' which "
-            "auto-detects from the prompt and media. Set explicitly to force a specific "
-            "task type (e.g. 'edit_video', 'extend_video') when auto-detection is "
-            "ambiguous. When set, ratio and duration may be auto-derived from input "
-            "media depending on the task type. For extend_video, ratio is stripped "
-            "(auto-locks to source) to prevent InvalidParameter.TaskTypeConstraint."
-        ),
+    omni_reference_task_type: OmniReferenceTaskType | None = Field(
+        None, description=OMNI_REFERENCE_TASK_TYPE_DESCRIPTION
     )
     generate_audio: bool | None = Field(
         None, description="Whether to generate an audio track for the video."
@@ -257,9 +249,17 @@ class Seedance25CreateTaskInput(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def validate_ratio_for_extension(self) -> Seedance25CreateTaskInput:
-        """Strip ratio for video extension tasks to prevent InvalidParameter.TaskTypeConstraint."""
-        self.ratio = strip_ratio_for_video_extension(self.omni_reference_task_type, self.ratio)
+    def validate_task_type_constraints(self) -> Seedance25CreateTaskInput:
+        """Reject task-type combinations the provider fails with TaskTypeConstraint."""
+        violations = task_type_constraint_violations(
+            task_type=self.omni_reference_task_type,
+            ratio=self.ratio,
+            duration=self.duration,
+            has_videos=bool(self.videos),
+            image_roles=[image.role for image in self.images or []],
+        )
+        if violations:
+            raise ValueError(" ".join(violations))
         return self
 
 

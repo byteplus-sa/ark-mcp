@@ -222,13 +222,13 @@ class TestSeedance25CreateTaskTool:
             Seedance25CreateTaskInput(
                 prompt="extend the video with a sunset scene",
                 videos=[SeedanceVideoInput(url="https://example.com/source.mp4")],
-                omni_reference_task_type="extend_video",
+                omni_reference_task_type="extend",
             ),
             seedance_2_5_ctx,
         )
 
         assert isinstance(result, Seedance25CreateTaskOutput)
-        assert captured_request[0].omni_reference_task_type == "extend_video"
+        assert captured_request[0].omni_reference_task_type == "extend"
 
 
 class TestSeedance25CreateTaskVariationsTool:

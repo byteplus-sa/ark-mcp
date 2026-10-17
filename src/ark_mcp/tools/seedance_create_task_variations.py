@@ -177,7 +177,6 @@ async def seedance_create_task_variations(
                 execution_expires_after=input.execution_expires_after,
                 priority=input.priority,
                 safety_identifier=input.safety_identifier,
-                omni_reference_task_type=input.omni_reference_task_type,
             )
 
             async with billed_provider_slot(
