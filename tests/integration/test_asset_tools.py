@@ -66,6 +66,7 @@ class FakeAssetApi:
         self.fail_urls: set[str] = set()
         self.ambiguous_urls: set[str] = set()
         self.verification_group: str | None = None
+        self.verification_token_unknown = False
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         action = request.url.params["Action"]
@@ -190,6 +191,10 @@ class FakeAssetApi:
         )
 
     def _GetVisualValidateResult(self, body: dict[str, Any]) -> httpx.Response:
+        if self.verification_token_unknown:
+            return self._error(
+                404, "NotFound", "The specified token Visual Face token is not found."
+            )
         return self._ok({"GroupId": self.verification_group} if self.verification_group else {})
 
 
@@ -599,6 +604,20 @@ async def test_verification_flow(asset_api: FakeAssetApi, fake_ctx: FakeContext)
     assert isinstance(verified, VerificationResultOutput)
     assert verified.status == "verified"
     assert verified.group_id == "group-live-1"
+
+
+async def test_verification_result_reads_unknown_token_as_pending(
+    asset_api: FakeAssetApi, fake_ctx: FakeContext
+) -> None:
+    asset_api.verification_token_unknown = True
+
+    result = await ark_asset_verification_result(
+        VerificationResultInput(verification_token="token-123456789"), fake_ctx
+    )
+
+    assert isinstance(result, VerificationResultOutput)
+    assert result.status == "pending" and result.group_id is None
+    assert "not found" in result.message
 
 
 async def test_verification_start_requires_https_callback(

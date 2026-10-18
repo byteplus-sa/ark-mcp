@@ -347,15 +347,8 @@ class CapabilityRegistry:
         default_model: str | None = None,
     ) -> Seed3DCapabilities:
         """Return 3D generation capabilities for the given model or the family default."""
-        settings = get_settings()
-        if model_id is None:
-            model_id = default_model or settings.hyper3d_default_model
-        if model_id not in self._seed3d_caps:
-            raise ValueError(
-                f"Model '{model_id}' is not in the configured Seed3D capability "
-                f"registry. Allowed: {list(self._seed3d_caps.keys())}"
-            )
-        return self._seed3d_caps[model_id]
+        default = default_model or get_settings().hyper3d_default_model
+        return _resolve_exact(self._seed3d_caps, model_id, default, kind="3d")
 
     def list_seed3d_models(self) -> list[str]:
         """Return all configured 3D generation model IDs."""

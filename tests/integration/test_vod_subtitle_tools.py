@@ -167,8 +167,14 @@ async def test_poll_addition_persists_once_across_concurrent_calls(
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
     results = await asyncio.gather(
-        vod_get_task(VodGetTaskInput(task_id=task_id, operation="add_subtitles"), fake_ctx),
-        vod_get_task(VodGetTaskInput(task_id=task_id, operation="add_subtitles"), fake_ctx),
+        vod_get_task(
+            VodGetTaskInput(task_id=task_id, operation="add_subtitles", persist_output=True),
+            fake_ctx,
+        ),
+        vod_get_task(
+            VodGetTaskInput(task_id=task_id, operation="add_subtitles", persist_output=True),
+            fake_ctx,
+        ),
     )
 
     assert all(isinstance(result, VodTaskOutput) for result in results)
@@ -206,10 +212,12 @@ async def test_poll_removal_processing_and_failed(
     monkeypatch.setattr(VodMediaKitSubtitleRemovalService, "close", _close)
 
     processing = await vod_get_task(
-        VodGetTaskInput(task_id=task_id, operation="remove_subtitles"), fake_ctx
+        VodGetTaskInput(task_id=task_id, operation="remove_subtitles", persist_output=True),
+        fake_ctx,
     )
     failed = await vod_get_task(
-        VodGetTaskInput(task_id=task_id, operation="remove_subtitles"), fake_ctx
+        VodGetTaskInput(task_id=task_id, operation="remove_subtitles", persist_output=True),
+        fake_ctx,
     )
 
     assert isinstance(processing, VodTaskOutput)
@@ -249,7 +257,7 @@ async def test_poll_persistence_failure_preserves_provider_success(
     )
 
     result = await vod_get_task(
-        VodGetTaskInput(task_id=task_id, operation="add_subtitles"), fake_ctx
+        VodGetTaskInput(task_id=task_id, operation="add_subtitles", persist_output=True), fake_ctx
     )
 
     assert isinstance(result, VodTaskOutput)

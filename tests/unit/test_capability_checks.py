@@ -8,10 +8,15 @@ import pytest
 
 from ark_mcp.config.model_capabilities import (
     SEEDANCE_2_5_TASK_TYPES,
+    ImageCapabilities,
     ModelFamily,
     VideoCapabilities,
 )
-from ark_mcp.tools._capability_checks import check_video_request, raise_on_violations
+from ark_mcp.tools._capability_checks import (
+    check_image_request,
+    check_video_request,
+    raise_on_violations,
+)
 
 SEEDANCE_2 = VideoCapabilities(
     family=ModelFamily.SEEDANCE_2,
@@ -174,3 +179,64 @@ def test_raise_on_violations_lists_each_problem_and_points_to_discovery() -> Non
 
 def test_raise_on_violations_is_silent_without_violations() -> None:
     raise_on_violations([], model_id="m", family="f", kind="video")
+
+
+SEEDREAM_PRO = ImageCapabilities(
+    family=ModelFamily.SEEDREAM_PRO,
+    model_id="dola-seedream-5-0-pro-260628",
+    max_references=10,
+    supports_batch=False,
+    supports_streaming=False,
+    supported_output_formats=("png", "jpeg"),
+    supports_transparent_background=True,
+)
+
+
+@dataclass
+class ImageRequest:
+    images: list[object] | None = None
+    size: str | None = None
+    output_format: str | None = None
+    max_images: int | None = None
+    background: str | None = None
+    prompt_optimization: str | None = None
+
+
+@dataclass
+class Image:
+    kind: str
+    mime_type: str | None = None
+
+
+@pytest.mark.parametrize(
+    ("image", "valid"),
+    [
+        (Image(kind="base64", mime_type="image/png"), True),
+        (Image(kind="url"), True),
+        (Image(kind="base64", mime_type="image/jpeg"), False),
+    ],
+)
+def test_transparent_background_needs_png_input(image: Image, valid: bool) -> None:
+    violations = check_image_request(
+        ImageRequest(images=[image], background="transparent"), SEEDREAM_PRO
+    )
+    assert (not any("PNG input" in violation for violation in violations)) is valid
+
+
+SEEDANCE_2_5_PREMIUM = replace(
+    SEEDANCE_2_5,
+    family=ModelFamily.SEEDANCE_2_5_PREMIUM,
+    model_id="dreamina-seedance-2-5-premium-260915",
+    supported_resolutions=("4k",),
+    draft_final_resolution="4k",
+)
+
+
+@pytest.mark.parametrize("resolution", ["480p", "720p", "1080p"])
+def test_premium_rejects_resolutions_below_4k(resolution: str) -> None:
+    violations = check_video_request(Request(resolution=resolution), SEEDANCE_2_5_PREMIUM)
+    assert any("resolution" in violation for violation in violations)
+
+
+def test_draft_resolution_is_not_checked_against_final_resolutions() -> None:
+    assert check_video_request(Request(resolution="480p", draft=True), SEEDANCE_2_5_PREMIUM) == []

@@ -128,8 +128,9 @@ class SeedreamGenerateInput(BaseModel):
     background: Literal["opaque", "transparent"] | None = Field(
         None,
         description=(
-            "Background mode on models that support it (Seedream 5.0 Pro). 'transparent' needs "
-            "exactly one input image with an alpha channel and png output."
+            "Background mode on models that support it (Seedream 5.0 Pro). 'transparent' edits "
+            "exactly one PNG input image that already has transparent pixels and keeps the "
+            "transparency (png output); it does not remove the background of an opaque image."
         ),
     )
     variations: int = Field(
@@ -255,8 +256,10 @@ async def seedream_generate_image(
     Pass images to edit or use them as references; add point or bbox to
     target one spot of the first image. Set variations (up to 10) for
     independent parallel generations, or max_images for one provider batch on
-    models that support it. background='transparent' cuts out the subject of
-    one RGBA input image on Seedream 5.0 Pro. Call ark_list_models(kind='image')
+    models that support it. background='transparent' edits one PNG input
+    that already has transparent pixels and keeps its transparency (Seedream
+    5.0 Pro); it does not cut a subject out of an opaque image. Call
+    ark_list_models(kind='image')
     for configured models and their limits; requests outside them are
     rejected with every problem listed. dry_run=true returns the request
     bodies and a cost estimate without billing. Run this tool through

@@ -36,7 +36,7 @@ def _submission() -> TranscodeSubmission:
 
 
 def _poll_input(**kwargs: object) -> VodGetTaskInput:
-    return VodGetTaskInput(operation="transcode", **kwargs)  # type: ignore[arg-type]
+    return VodGetTaskInput(operation="transcode", **{"persist_output": True, **kwargs})  # type: ignore[arg-type]
 
 
 def _succeeded_task() -> TranscodeTask:

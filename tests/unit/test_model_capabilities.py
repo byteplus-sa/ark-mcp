@@ -302,8 +302,13 @@ class TestSeed3DCapabilities:
 
     def test_unknown_seed3d_model_raises(self) -> None:
         registry = get_capability_registry()
-        with pytest.raises(ValueError, match="not in the configured Seed3D"):
+        with pytest.raises(ValueError, match=r"not configured.*ark_list_models\(kind='3d'\)"):
             registry.get_seed3d_capabilities("not-a-real-model")
+
+    def test_seed3d_typo_suggests_the_configured_model(self) -> None:
+        registry = get_capability_registry()
+        with pytest.raises(ValueError, match="Did you mean 'hyper3d-gen2-260112'"):
+            registry.get_seed3d_capabilities("hyper3d-gen2")
 
 
 class TestSeedance25PremiumCapabilities:

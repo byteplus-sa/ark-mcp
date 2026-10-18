@@ -259,7 +259,9 @@ async def test_foreground_persistence_is_rejected_without_provider_call(
     gets = _stub_services(monkeypatch)
     fake_ctx.task_id = None
 
-    result = await vod_get_task(VodGetTaskInput(task_id=TASK_ID, operation="transcode"), fake_ctx)
+    result = await vod_get_task(
+        VodGetTaskInput(task_id=TASK_ID, operation="transcode", persist_output=True), fake_ctx
+    )
 
     assert isinstance(result, ToolResult)
     assert result.is_error is True
@@ -273,9 +275,7 @@ async def test_foreground_status_check_without_persistence_succeeds(
     _stub_services(monkeypatch)
     fake_ctx.task_id = None
 
-    result = await vod_get_task(
-        VodGetTaskInput(task_id=TASK_ID, operation="transcode", persist_output=False), fake_ctx
-    )
+    result = await vod_get_task(VodGetTaskInput(task_id=TASK_ID, operation="transcode"), fake_ctx)
 
     assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
@@ -302,7 +302,12 @@ async def test_separate_audio_output_path_writes_every_track(
     target = root / "tracks"
 
     result = await vod_get_task(
-        VodGetTaskInput(task_id=TASK_ID, operation="separate_audio", output_path=f"{target}/"),
+        VodGetTaskInput(
+            task_id=TASK_ID,
+            operation="separate_audio",
+            output_path=f"{target}/",
+            persist_output=True,
+        ),
         fake_ctx,
     )
 
@@ -336,7 +341,9 @@ async def test_video_output_path_writes_the_file(
     target = root / "subtitled.mp4"
 
     result = await vod_get_task(
-        VodGetTaskInput(task_id=TASK_ID, operation="add_subtitles", output_path=str(target)),
+        VodGetTaskInput(
+            task_id=TASK_ID, operation="add_subtitles", output_path=str(target), persist_output=True
+        ),
         fake_ctx,
     )
 
@@ -355,7 +362,10 @@ async def test_separate_audio_rejects_a_file_output_path_before_provider_call(
     with pytest.raises(OutputPathError, match="directory"):
         await vod_get_task(
             VodGetTaskInput(
-                task_id=TASK_ID, operation="separate_audio", output_path=str(root / "voice.wav")
+                task_id=TASK_ID,
+                operation="separate_audio",
+                output_path=str(root / "voice.wav"),
+                persist_output=True,
             ),
             fake_ctx,
         )
@@ -393,7 +403,7 @@ async def test_processing_task_does_not_touch_the_artifact_store(
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
     result = await vod_get_task(
-        VodGetTaskInput(task_id=TASK_ID, operation="separate_audio"), fake_ctx
+        VodGetTaskInput(task_id=TASK_ID, operation="separate_audio", persist_output=True), fake_ctx
     )
 
     assert isinstance(result, VodTaskOutput)
@@ -414,7 +424,7 @@ async def test_partially_cached_tracks_only_copy_the_missing_ones(
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
     result = await vod_get_task(
-        VodGetTaskInput(task_id=TASK_ID, operation="separate_audio"), fake_ctx
+        VodGetTaskInput(task_id=TASK_ID, operation="separate_audio", persist_output=True), fake_ctx
     )
 
     assert isinstance(result, VodTaskOutput)
@@ -427,11 +437,11 @@ async def test_partially_cached_tracks_only_copy_the_missing_ones(
 
 def test_input_rejects_unknown_operation_and_unsafe_task_id() -> None:
     with pytest.raises(ValidationError):
-        VodGetTaskInput(task_id=TASK_ID, operation="enhance_video")  # type: ignore[arg-type]
+        VodGetTaskInput(task_id=TASK_ID, operation="enhance_video", persist_output=True)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
-        VodGetTaskInput(task_id="../tasks/other", operation="enhance")
+        VodGetTaskInput(task_id="../tasks/other", operation="enhance", persist_output=True)
     with pytest.raises(ValidationError):
-        VodGetTaskInput(task_id="", operation="enhance")
+        VodGetTaskInput(task_id="", operation="enhance", persist_output=True)
 
 
 def _output(**overrides: Any) -> TaskOutputFile:

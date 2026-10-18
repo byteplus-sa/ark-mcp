@@ -43,7 +43,7 @@ def _submission() -> SeparateVoiceSubmission:
 
 
 def _poll_input(**kwargs: object) -> VodGetTaskInput:
-    return VodGetTaskInput(operation="separate_audio", **kwargs)  # type: ignore[arg-type]
+    return VodGetTaskInput(operation="separate_audio", **{"persist_output": True, **kwargs})  # type: ignore[arg-type]
 
 
 def _tracks(result: VodTaskOutput) -> dict[str, TaskOutputFile]:

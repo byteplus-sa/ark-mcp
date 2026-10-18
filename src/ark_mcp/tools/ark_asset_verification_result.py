@@ -56,7 +56,10 @@ async def ark_asset_verification_result(
             group_id=group_id,
             message="Verification passed. Upload this person's media with ark_asset_create.",
         )
-    if error is not None and (input.wait_seconds == 0 or error.error.http_status in {401, 403}):
+    if error is not None and (
+        error.error.http_status in {401, 403}
+        or (input.wait_seconds == 0 and error.error.http_status != 404)
+    ):
         return provider_error_result(error)
     detail = f" Last provider response: {error.error.message}" if error is not None else ""
     return VerificationResultOutput(

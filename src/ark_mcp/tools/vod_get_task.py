@@ -46,11 +46,11 @@ class VodGetTaskInput(BaseModel):
         ),
     )
     persist_output: bool = Field(
-        True,
+        False,
         description=(
             "Persist finished outputs as durable artifacts, once per task. Requires background "
-            "execution (ark_job_submit or native task augmentation); use false for a foreground "
-            "status check."
+            "execution (ark_job_submit or native task augmentation); leave false for a "
+            "foreground status poll."
         ),
     )
     output_path: str | None = output_path_field(
