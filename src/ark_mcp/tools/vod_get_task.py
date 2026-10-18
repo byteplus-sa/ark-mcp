@@ -36,26 +36,21 @@ class VodGetTaskInput(BaseModel):
         min_length=1,
         max_length=256,
         pattern=r"^[A-Za-z0-9._:-]+$",
-        description="MediaKit task ID returned by a vod_* create tool.",
+        description="Task ID returned by a vod_* create tool.",
     )
     operation: VodOperation = Field(
         ...,
-        description=(
-            "Operation that created the task; echoed as `operation` by every vod_* create tool "
-            "(enhance, transcode, separate_audio, add_subtitles, remove_subtitles)."
-        ),
+        description="Operation returned by the vod_* create tool that made the task.",
     )
     persist_output: bool = Field(
         False,
         description=(
-            "Persist finished outputs as durable artifacts, once per task. Requires background "
-            "execution (ark_job_submit or native task augmentation); leave false for a "
-            "foreground status poll."
+            "Persist finished outputs as durable artifacts (once per task). Requires background "
+            "execution (ark_job_submit); leave false for a foreground poll."
         ),
     )
     output_path: str | None = output_path_field(
-        "the output (a directory ending in '/' is required for separate_audio, which writes "
-        "every track); requires persist_output=true"
+        "the output (needs persist_output=true; separate_audio requires a '/' directory)"
     )
     overwrite: bool = overwrite_field()
 
@@ -64,50 +59,36 @@ class VodTaskOutput(BaseModel):
     """Normalized status and outputs of a VOD AI MediaKit task."""
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
-        "byteplus-vod-mediakit", description="Provider surface that processed the task."
+        "byteplus-vod-mediakit", description="Provider surface."
     )
-    task_id: str = Field(..., description="MediaKit task ID.")
+    task_id: str = Field(..., description="Task ID.")
     operation: VodOperation = Field(..., description="Operation that created the task.")
     status: VodTaskStatus = Field(
         ...,
-        description=(
-            "Normalized task status: processing (queued or running; poll again), succeeded, or "
-            "failed."
-        ),
+        description="processing (poll again), succeeded, or failed.",
     )
-    provider_status: str | None = Field(
-        None, description="Raw provider status label, when returned."
-    )
-    request_id: str | None = Field(
-        None, description="Provider diagnostic request ID, when returned."
-    )
-    created_at: str | None = Field(None, description="ISO-8601 task creation time.")
-    finished_at: str | None = Field(None, description="ISO-8601 terminal time.")
+    provider_status: str | None = Field(None, description="Raw provider status, when returned.")
+    request_id: str | None = Field(None, description="Provider request ID, when returned.")
+    created_at: str | None = Field(None, description="ISO-8601 creation time.")
+    finished_at: str | None = Field(None, description="ISO-8601 completion time.")
     duration_seconds: float | None = Field(
         None,
         ge=0,
-        description="Output (or, for separate_audio, input) duration in seconds, when reported.",
+        description="Output duration in seconds (input duration for separate_audio).",
     )
     resolution: str | None = Field(
         None,
-        description="Output resolution label, when reported (enhance, transcode, subtitles).",
+        description="Output resolution label, when reported (video operations).",
     )
-    fps: float | None = Field(
-        None, gt=0, description="Output frame rate in frames per second, when reported (enhance)."
-    )
-    video_codec: str | None = Field(
-        None, description="Output video codec, when reported (transcode)."
-    )
-    tool_version: str | None = Field(None, description="Enhancement tier, when reported (enhance).")
+    fps: float | None = Field(None, gt=0, description="Output frames per second (enhance only).")
+    video_codec: str | None = Field(None, description="Output video codec (transcode only).")
+    tool_version: str | None = Field(None, description="Enhancement tier (enhance only).")
     outputs: list[TaskOutputFile] = Field(
         ...,
-        description=(
-            "Finished outputs (role video, or voice/background/music/sfx for separate_audio); "
-            "empty until succeeded."
-        ),
+        description="Finished outputs (role video, or voice/background/music/sfx for separate_audio); empty until succeeded.",
     )
     error: TaskError | None = Field(
-        None, description="Provider failure code and safe message when status is failed."
+        None, description="Failure code and safe message when status is failed."
     )
 
     @model_validator(mode="after")
@@ -203,17 +184,12 @@ def _build_output(
 
 
 async def vod_get_task(input: VodGetTaskInput, ctx: Context) -> VodTaskOutput | ToolResult:
-    """Poll the status and outputs of any BytePlus VOD AI MediaKit task.
+    """Poll any VOD MediaKit task (enhance, transcode, separate_audio, add_subtitles, remove_subtitles).
 
-    Call it with the task_id and the operation returned by the vod_* create
-    tool (vod_enhance_video, vod_transcode_video, vod_separate_audio,
-    vod_add_subtitles, or vod_remove_subtitles). A queued or processing task
-    is not a failure: poll again later and never resubmit the create tool.
-    With persist_output=true (the default, which needs background execution
-    through ark_job_submit or native task augmentation), the first successful
-    poll copies each expiring output into durable artifact storage once per
-    task; use persist_output=false for a foreground status check. Outputs keep
-    their expiring source_url even when persistence is skipped or fails.
+    Pass the task_id and operation returned by the vod_* create tool. A processing task is not a
+    failure: poll again, do not resubmit. persist_output=true (default false) copies outputs into
+    durable storage once and requires background execution (ark_job_submit); outputs always keep
+    their expiring source_url.
     """
     runtime = get_runtime(ctx)
     target = await _prepare_export(input, ctx, runtime)

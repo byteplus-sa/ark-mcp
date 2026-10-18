@@ -38,41 +38,38 @@ class Hitem3dCreateTaskInput(BaseModel):
         ...,
         min_length=1,
         max_length=4,
-        description="Reference images for image-to-3D. 1-4 images required.",
+        description="Reference images (1-4).",
     )
     model: str | None = Field(
         None,
-        description="Model ID. Omit to use the configured Hitem3d default.",
+        description="Hitem3d model ID from ark_list_models(kind='3d'). Omit for the default.",
     )
     callback_url: str | None = Field(
         None,
-        description="Optional callback URL notified when the task status changes.",
+        description="Callback URL notified on task status changes.",
     )
     resolution: Literal["1536", "1536pro"] | None = Field(
         None,
-        description="Model resolution. 1536 (default) or 1536pro.",
+        description="Resolution. Default 1536.",
     )
     face: int | None = Field(
         None,
         ge=100000,
         le=2000000,
-        description="Custom model face count (100000-2000000).",
+        description="Face count.",
     )
     file_format: Literal["obj", "glb", "stl", "fbx", "usdz"] | None = Field(
         None,
-        description="Output 3D file format. Defaults to obj (provider default).",
+        description="Output format. Default obj.",
     )
     request_type: Literal[1, 3] | None = Field(
         None,
-        description="Request type. 1 = geometry only, 3 = geometry + texture (default).",
+        description="1 = geometry only, 3 = geometry + texture (default).",
     )
     multi_images_bit: str | None = Field(
         None,
         max_length=4,
-        description=(
-            "Bitmap marking which views are present, in order front/back/left/right "
-            "(e.g. '1010' = front + left)."
-        ),
+        description="Bitmap of views present, order front/back/left/right ('1010' = front + left).",
     )
 
     @model_validator(mode="after")
@@ -97,12 +94,9 @@ class Hitem3dCreateTaskInput(BaseModel):
 async def hitem3d_create_task(
     input: Hitem3dCreateTaskInput, ctx: Context
 ) -> Seed3DCreateTaskOutput | ToolResult:
-    """Create an asynchronous Hitem3d 3D generation task.
+    """Create a Hitem3d image-to-3D generation task (1-4 images).
 
-    Hitem3d is image-to-3D only. The task runs asynchronously: poll the
-    returned task_id with gen_task_get until it finishes. Run this tool through
-    ark_job_submit (or native task augmentation); it does not run in the
-    foreground.
+    Poll the returned task_id with gen_task_get. Requires background execution (ark_job_submit).
     """
     await context_log(ctx, "info", "Creating Hitem3d 3D generation task")
     settings = get_settings()

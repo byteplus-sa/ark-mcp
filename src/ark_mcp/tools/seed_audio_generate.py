@@ -125,19 +125,17 @@ class SeedAudioGenerateInput(BaseModel):
         ge=1,
         le=MAX_VARIATIONS,
         description=(
-            "Independent generations to run in parallel (1-5). Seed Audio has no seed, so "
-            "variations differ by the model's sampling; partial failures are reported per variation."
+            "Parallel generations (1-5). Audio has no seed, so results differ by sampling; "
+            "failures are reported per variation."
         ),
     )
     variation_prompts: list[Annotated[str, Field(min_length=1, max_length=3000)]] | None = Field(
         None,
         description="One prompt per variation, overriding text_prompt. Must have exactly `variations` entries.",
     )
-    persist: bool = Field(
-        True, description="Whether to persist the generated audio as a durable MCP resource."
-    )
+    persist: bool = Field(True, description="Persist the audio as a durable MCP resource.")
     output_path: str | None = output_path_field(
-        "the generated audio; use a directory ending in '/' when variations > 1"
+        "the generated audio", directory_needed="when variations > 1"
     )
     overwrite: bool = overwrite_field()
 
@@ -234,15 +232,10 @@ def _parse_duration_hint(text_prompt: str, *, default: float = 15.0) -> float:
 async def seed_audio_generate(
     input: SeedAudioGenerateInput, ctx: Context
 ) -> SeedAudioGenerateOutput | ToolResult:
-    """Generate full-scene audio through Seed Speech.
+    """Generate full-scene audio with Seed Speech (text prompt, optional voice-cloning audio or image reference).
 
-    Accepts a text prompt (up to 3,000 characters) and optional audio or
-    image references for voice cloning and scene control. Returns a durable
-    artifact reference that survives the 2-hour provider URL expiry. Set
-    variations (up to 5) for independent parallel generations, returned in
-    summary. Run this tool through ark_job_submit (or native task
-    augmentation); generation and persistence can exceed foreground client
-    deadlines.
+    Returns a durable artifact (provider URLs expire after 2 hours). variations (up to 5)
+    run in parallel and return a summary. Run through ark_job_submit.
     """
     await context_log(ctx, "info", "Starting Seed Audio generation")
     await ctx.report_progress(progress=10, total=100)

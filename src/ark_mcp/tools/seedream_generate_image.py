@@ -63,40 +63,36 @@ class SeedreamGenerateInput(BaseModel):
         min_length=1,
         max_length=MAX_PROMPT_CHARACTERS,
         description=(
-            "What to generate, or the edit instruction when images are given (1-4,000 "
-            "characters, including any point/bbox markup). Required unless variation_prompts "
-            "is set."
+            "Prompt or edit instruction (1-4,000 characters including point/bbox markup). "
+            "Required unless variation_prompts is set."
         ),
     )
     images: list[ReferenceImageInput] | None = Field(
         None,
         description=(
-            "Reference or source images for image-to-image and editing. The model's maximum is "
-            "checked at runtime (see ark_list_models(kind='image'))."
+            "Reference or source images (per-model max in ark_list_models(kind='image'))."
         ),
     )
     point: EditCoordinate | None = Field(
         None,
-        description="Edit mode: a point (0-999 normalized) on the first image to edit. Requires images.",
+        description="Edit: normalized (0-999) point on the first image. Requires images.",
     )
     bbox: EditBbox | None = Field(
         None,
-        description="Edit mode: a box (0-999 normalized) on the first image to edit. Requires images.",
+        description="Edit: normalized (0-999) box on the first image. Requires images.",
     )
     model: str | None = Field(
         None,
-        description="Exact configured Seedream model ID from ark_list_models(kind='image'). Omit to use the default.",
+        description="Exact model ID from ark_list_models(kind='image'); the default if omitted.",
     )
-    size: str | None = Field(
-        None, description="Output image size (e.g. '2048x2048'); validated against the model."
-    )
+    size: str | None = Field(None, description="Output size, e.g. '2048x2048'.")
     seed: int | None = Field(
         None,
         ge=-1,
         le=2147483647,
         description=(
-            "Random seed. With variations > 1: N gives variation i seed N + i, -1 picks a random "
-            "recorded seed per variation, and omitted lets the provider randomize each one."
+            "Random seed. With variations > 1: N gives variation i seed N + i; -1 picks a "
+            "random seed per variation; omitted lets the provider randomize."
         ),
     )
     max_images: int | None = Field(
@@ -104,56 +100,51 @@ class SeedreamGenerateInput(BaseModel):
         ge=1,
         le=15,
         description=(
-            "Images from one provider call (1-15), for models that support batches. Use "
-            "variations instead when the model does not. Cannot be combined with variations > 1."
+            "Images from one provider call (1-15), on models that support batches. Not "
+            "combinable with variations > 1."
         ),
     )
     output_format: Literal["png", "jpeg"] | None = Field(
-        None, description="Output image format; the model's supported set is checked at runtime."
+        None, description="Output image format (per-model set in ark_list_models)."
     )
     response_format: Literal["url", "b64_json"] | None = Field(
-        None, description="Provider response format for generated images: URL or Base64 JSON."
+        None, description="Provider response format: URL or Base64 JSON."
     )
-    watermark: bool | None = Field(
-        None, description="Whether to apply an AIGC watermark to generated images."
-    )
+    watermark: bool | None = Field(None, description="Apply an AIGC watermark.")
     prompt_optimization: Literal["standard", "fast"] | None = Field(
         None,
         description=(
-            "Prompt optimization mode: standard (higher quality) or fast (lower latency). When "
-            "omitted, Seedream 5.0 Pro uses SEEDREAM_PROMPT_OPTIMIZATION_MODE (standard unless "
-            "the operator changes it); other models use the provider default."
+            "standard (quality) or fast (latency). Default: SEEDREAM_PROMPT_OPTIMIZATION_MODE "
+            "on 5.0 Pro, the provider's on other models."
         ),
     )
     background: Literal["opaque", "transparent"] | None = Field(
         None,
         description=(
-            "Background mode on models that support it (Seedream 5.0 Pro). 'transparent' edits "
-            "exactly one PNG input image that already has transparent pixels and keeps the "
-            "transparency (png output); it does not remove the background of an opaque image."
+            "Seedream 5.0 Pro only. 'transparent' edits exactly one PNG input that already has "
+            "transparent pixels and keeps them (png output); it does not cut out an opaque "
+            "background."
         ),
     )
     variations: int = Field(
         1,
         ge=1,
         le=MAX_VARIATIONS,
-        description="Independent generations to run in parallel (1-10); partial failures are reported per variation.",
+        description="Parallel generations (1-10); failures are reported per variation.",
     )
     variation_prompts: (
         list[Annotated[str, Field(min_length=1, max_length=MAX_PROMPT_CHARACTERS)]] | None
     ) = Field(
         None,
-        description="One prompt per variation, overriding prompt. Must have exactly `variations` entries.",
+        description="One prompt per variation, overriding prompt; exactly `variations` entries.",
     )
-    persist: bool = Field(
-        True, description="Whether to persist generated images as durable MCP resources."
-    )
+    persist: bool = Field(True, description="Persist images as durable MCP resources.")
     dry_run: bool = Field(
         False,
-        description="Validate and return the provider request bodies and a cost estimate without generating or billing.",
+        description="Validate and return the request bodies and a cost estimate; nothing is generated or billed.",
     )
     output_path: str | None = output_path_field(
-        "the generated image(s); use a directory ending in '/' when several images are produced"
+        "the generated images", directory_needed="when several images are produced"
     )
     overwrite: bool = overwrite_field()
 
@@ -253,17 +244,12 @@ async def seedream_generate_image(
 ) -> SeedreamGenerateOutput | ToolResult:
     """Generate or edit images with Seedream (text-to-image, image-to-image, point/box edits).
 
-    Pass images to edit or use them as references; add point or bbox to
-    target one spot of the first image. Set variations (up to 10) for
-    independent parallel generations, or max_images for one provider batch on
-    models that support it. background='transparent' edits one PNG input
-    that already has transparent pixels and keeps its transparency (Seedream
-    5.0 Pro); it does not cut a subject out of an opaque image. Call
-    ark_list_models(kind='image')
-    for configured models and their limits; requests outside them are
-    rejected with every problem listed. dry_run=true returns the request
-    bodies and a cost estimate without billing. Run this tool through
-    ark_job_submit (or native task augmentation).
+    Pass images to edit or use as references; point or bbox targets a spot on the first
+    image. variations (up to 10) run in parallel; max_images is one provider batch on models
+    that support it. background='transparent' edits a PNG that already has transparent
+    pixels (5.0 Pro). Model limits: ark_list_models(kind='image'); requests outside them
+    are rejected with every problem listed. dry_run=true returns request bodies and a cost
+    estimate. Run through ark_job_submit.
     """
     settings = get_settings()
     if not settings.has_modelark:

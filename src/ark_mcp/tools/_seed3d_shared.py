@@ -37,14 +37,14 @@ class Seed3DCreateTaskOutput(BaseModel):
 
     task_id: str = Field(
         ...,
-        description="Provider task ID; pass it to gen_task_get to poll and gen_task_cancel_or_delete to manage.",
+        description="Pass to gen_task_get to poll or gen_task_cancel_or_delete to cancel.",
     )
     status: Literal["queued"] = Field(
         "queued",
-        description="Initial task status. Poll with gen_task_get until the task finishes.",
+        description="Initial task status.",
     )
     recommended_poll_after_ms: int = Field(
-        ..., description="Suggested delay in milliseconds before first poll."
+        ..., description="Suggested delay in milliseconds before the first poll."
     )
 
 

@@ -38,25 +38,19 @@ class GenTaskCancelOrDeleteInput(BaseModel):
 
     task_id: str = Field(
         ...,
-        description=(
-            "ModelArk generation task ID (Seedance, Hyper3D, or Hitem3d) to cancel or delete."
-        ),
+        description="Generation task ID (Seedance, Hyper3D or Hitem3d).",
     )
     mode: Literal["cancel", "delete"] = Field(
         ...,
-        description="Action to perform: 'cancel' stops a queued task; 'delete' removes the record of a terminal task.",
+        description="'cancel' stops a queued task; 'delete' removes a terminal task's record.",
     )
     expected_status: Literal["queued", "succeeded", "failed", "expired"] = Field(
         ...,
-        description=(
-            "The caller's expected current status. The handler verifies "
-            "this matches the actual status before issuing DELETE, "
-            "preventing accidental cancellation or deletion."
-        ),
+        description="Status you expect the task to be in; the call is refused if it differs.",
     )
     confirm: Literal[True] = Field(
         True,
-        description="Must be True to confirm the destructive action. This is a safety guard.",
+        description="Must be true to confirm this destructive action.",
     )
 
     @model_validator(mode="after")
@@ -93,22 +87,10 @@ class GenTaskCancelOrDeleteOutput(BaseModel):
 async def gen_task_cancel_or_delete(
     input: GenTaskCancelOrDeleteInput, ctx: Context
 ) -> GenTaskCancelOrDeleteOutput | ToolResult:
-    """Cancel (queued) or delete (terminal) a ModelArk generation task (Seedance or 3D).
+    """Cancel a queued task or delete a finished one (Seedance or 3D). Destructive.
 
-    .. warning::
-
-        This is a destructive operation.
-
-        - **cancel**: Stops a queued task. The task transitions to
-          ``cancelled`` and cannot be resumed.
-        - **delete**: Permanently removes the task record for a completed,
-          failed, or expired task. Its outputs are no longer retrievable
-          through gen_task_get.
-
-    The handler first fetches the current task state and rejects the
-    operation if the actual status does not match ``expected_status``.
-    This prevents accidental cancellation of a running task or deletion
-    of a task that is still queued.
+    Cancelled tasks cannot be resumed; deleted tasks' outputs are no longer retrievable.
+    The call is refused unless expected_status matches the task's actual status.
     """
     await context_log(
         ctx,

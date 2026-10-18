@@ -29,57 +29,57 @@ class VodRemoveSubtitlesInput(BaseModel):
     """Input for a MediaKit precision-erasure task."""
 
     video_url: HttpsUrl = Field(
-        description="Public HTTPS source-video URL that MediaKit can fetch; private and link-local destinations are rejected."
+        description="Public HTTPS source-video URL; private and link-local hosts are rejected."
     )
     mode: Literal["subtitle", "text"] = Field(
         default="subtitle",
-        description="subtitle removes recognized dialogue subtitles; text removes recognized on-screen text across the frame and can also affect titles, labels, and watermarks.",
+        description="subtitle: erase recognized dialogue subtitles. text: erase all recognized on-screen text, including titles, labels, and watermarks.",
     )
     output_encode_mode: Literal["quality", "size"] = Field(
         default="quality",
-        description="Output encoding priority: quality uses higher bitrate; size stays closer to the source bitrate.",
+        description="quality: higher bitrate. size: stay near the source bitrate.",
     )
     erase_ratio_location: list[VodMediaKitEraseLocation] | None = Field(
         default=None,
         min_length=1,
         max_length=20,
-        description="Optional one-to-twenty normalized rectangular regions limiting where text is erased.",
+        description="Normalized rectangular regions (1-20) limiting where text is erased.",
     )
     time_segment_filter: VodMediaKitTimeSegmentFilter | None = Field(
         default=None,
-        description="Optional selected or skipped time segments controlling when erasure runs.",
+        description="Time segments to erase or skip.",
     )
     subtitle_filter: VodMediaKitSubtitleFilter | None = Field(
         default=None,
-        description="Optional OCR subtitle-size and horizontal-centering thresholds; applies only in subtitle mode.",
+        description="OCR size and centering thresholds; subtitle mode only.",
     )
     client_token: str | None = Field(
         default=None,
         pattern=r"^[\x20-\x7E]{1,64}$",
-        description="Optional case-sensitive idempotency token of at most 64 printable ASCII characters. Reuse it when reconciling an ambiguous submission.",
+        description="Idempotency token (1-64 printable ASCII chars); reuse it to reconcile a timed-out submission.",
     )
     callback_args: str | None = Field(
         default=None,
-        description="Optional callback payload returned unchanged by MediaKit; maximum 512 UTF-8 bytes.",
+        description="Callback payload echoed by MediaKit; max 512 UTF-8 bytes.",
     )
     callback_url: HttpsUrl | None = Field(
         default=None,
-        description="Optional public HTTPS task-specific event callback URL; overrides the console callback.",
+        description="Public HTTPS task callback URL; overrides the console callback.",
     )
     queue_id: str | None = Field(
         default=None,
         min_length=1,
-        description="Optional MediaKit queue ID; omission uses the default queue for the API key's project.",
+        description="MediaKit queue ID; omit for the project's default queue.",
     )
     model_version: Literal["v4", "v5"] | None = Field(
         default=None,
-        description="Optional legacy precision-erasure model version accepted by the convenience endpoint.",
+        description="Legacy precision-erasure model version.",
     )
     project: str | None = Field(
         default=None,
         min_length=1,
         max_length=128,
-        description="Optional legacy MediaKit project label serialized upstream as case-sensitive Project; omit for the API key's configured project.",
+        description="Legacy MediaKit project label (case-sensitive); omit for the API key's project.",
     )
 
     @model_validator(mode="after")
@@ -94,39 +94,33 @@ class VodRemoveSubtitlesOutput(BaseModel):
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
         default="byteplus-vod-mediakit",
-        description="Provider surface that accepted the request.",
+        description="Provider surface.",
     )
-    status: Literal["accepted"] = Field(
-        description="Always accepted because precision erasure runs asynchronously."
-    )
-    request_id: str | None = Field(
-        default=None, description="Provider diagnostic request ID, when returned."
-    )
+    status: Literal["accepted"] = Field(description="Always accepted; the task is asynchronous.")
+    request_id: str | None = Field(default=None, description="Provider request ID, when returned.")
     provider_log_id: str | None = Field(
-        default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
+        default=None, description="Provider x-tt-logid, when returned."
     )
     task_id: str = Field(
-        description="Provider task ID to pass to vod_get_task (operation 'remove_subtitles')."
+        description="Task ID to poll with vod_get_task (operation 'remove_subtitles')."
     )
     operation: VodOperation = Field(
         default="remove_subtitles", description=VOD_OPERATION_DESCRIPTION
     )
     recommended_poll_after_ms: int = Field(
-        description="Suggested initial polling delay in milliseconds; a heuristic, not a provider guarantee."
+        description="Suggested delay before the first vod_get_task poll, in milliseconds."
     )
 
 
 async def vod_remove_subtitles(
     input: VodRemoveSubtitlesInput, ctx: Context
 ) -> VodRemoveSubtitlesOutput | ToolResult:
-    """Remove hardcoded subtitles or recognized on-screen text with MediaKit.
+    """Remove hardcoded subtitles or on-screen text from a video with MediaKit.
 
-    The text mode has a broader visual effect than subtitle mode and may erase
-    titles, labels, or watermarks. Returns a task ID; poll it with
-    vod_get_task using the returned task_id and operation ('remove_subtitles').
-    The request is not automatically retried after ambiguous failures; reuse
-    client_token when reconciling a timeout. Long-running work runs through
-    ark_job_submit (or native MCP task augmentation).
+    Mode 'text' also erases titles, labels, and watermarks. Returns a task_id;
+    poll it with vod_get_task (operation 'remove_subtitles'). Not retried
+    automatically; reuse client_token to reconcile a timeout. Requires
+    background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     if not runtime.settings.has_vod_mediakit:

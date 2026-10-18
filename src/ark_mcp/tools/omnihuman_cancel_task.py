@@ -26,14 +26,11 @@ class OmniHumanCancelTaskOutput(BaseModel):
     """Outcome of an OmniHuman 2.0 cancel request."""
 
     provider: Literal["byteplus-vision-cv"] = Field(
-        default="byteplus-vision-cv", description="Provider surface that handled the request."
+        default="byteplus-vision-cv", description="Provider surface."
     )
-    task_id: str = Field(description="Task ID the cancel request targeted.")
+    task_id: str = Field(description="Task ID targeted.")
     canceled: bool = Field(
-        description=(
-            "True when the task was canceled. False when it could not be canceled because "
-            "it had already started or finished; see message."
-        )
+        description="True when canceled; false when it already started or finished (see message)."
     )
     request_id: str | None = Field(
         default=None, description="Provider diagnostic request ID, when returned."
@@ -46,12 +43,10 @@ class OmniHumanCancelTaskOutput(BaseModel):
 async def omnihuman_cancel_task(
     input: OmniHumanCancelTaskInput, ctx: Context
 ) -> OmniHumanCancelTaskOutput | ToolResult:
-    """Cancel an OmniHuman 2.0 task that is still waiting in the queue.
+    """Cancel an OmniHuman 2.0 task that is still queued.
 
-    Only queued tasks can be canceled. A task that already started generating
-    returns canceled=false with an explanation rather than an error. Right after
-    omnihuman_create_task the provider may not know the task yet and rejects the
-    ID as invalid; wait a few seconds and retry.
+    A task that already started returns canceled=false, not an error. Right after
+    omnihuman_create_task the provider may reject the ID as invalid; wait a few seconds and retry.
     """
     runtime = get_runtime(ctx)
     owner = get_principal(ctx)

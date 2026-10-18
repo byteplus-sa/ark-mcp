@@ -528,7 +528,7 @@ class TestInputSchemas:
         tools = await configured_server.mcp.list_tools()
         tool = next(t for t in tools if t.name == "vod_enhance_video")
         assert tool.description is not None
-        assert "accepted response contains a task ID without an output URL" in tool.description
+        assert "accepted result carries a task_id" in tool.description
         assert "vod_get_task" in tool.description
         assert "always returned" not in tool.description
         input_schema = tool.parameters["properties"]["input"]

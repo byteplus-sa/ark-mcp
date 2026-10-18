@@ -64,58 +64,51 @@ class SeedanceCreateTaskInput(BaseModel):
         min_length=1,
         max_length=32000,
         description=(
-            "Text prompt for the video (1-32,000 characters; ModelArk recommends at most about "
-            "1,000 English words). Optional when media inputs or variation_prompts are given."
+            "Video prompt (1-32,000 characters). Optional when media inputs or "
+            "variation_prompts are given."
         ),
     )
     images: list[SeedanceImageInput] | None = Field(
         None,
         max_length=30,
         description=(
-            "Reference images with optional roles (first_frame, last_frame, reference_image). "
-            "Up to 30; the model's own maximum is checked at runtime (see ark_list_models). "
-            'Each entry may be a URL string, "asset://<asset_id>", or {"url": "https://..."}; '
-            "these default to role=reference_image."
+            "Reference images (max 30; per-model limit in ark_list_models). Each entry is a URL "
+            'string, "asset://<id>", or {"url", "role"} with role first_frame, last_frame or '
+            "reference_image (default)."
         ),
     )
     videos: list[SeedanceVideoInput] | None = Field(
         None,
         max_length=10,
-        description=(
-            "Reference videos (up to 10; per-model maximum checked at runtime). Each entry may "
-            'be a URL string, "asset://<asset_id>", or {"url": "https://..."}.'
-        ),
+        description="Reference videos (max 10; per-model limit in ark_list_models). Entry forms as for images.",
     )
     audios: list[SeedanceAudioInput] | None = Field(
         None,
         max_length=10,
         description=(
-            "Reference audio (up to 10; per-model maximum checked at runtime). Seedance 2.5 "
-            "models accept audio as the only media input; Seedance 2.0 models need an image "
-            'or video as well. Each entry may be a URL string, "asset://<asset_id>", or '
-            '{"url": "https://..."}.'
+            "Reference audio (max 10). Entry forms as for images. Seedance 2.5 accepts audio "
+            "alone; 2.0 also needs an image or video."
         ),
     )
     model: str | None = Field(
         None,
         description=(
-            "Exact configured Seedance model ID from ark_list_models(kind='video'). Omit to use "
-            "the configured default. With draft_task_id, omit it to reuse the Draft task's model."
+            "Exact model ID from ark_list_models(kind='video'); the default if omitted. With "
+            "draft_task_id, omit to reuse the Draft's model."
         ),
     )
     resolution: Literal["480p", "720p", "1080p", "4k"] | None = Field(
         None,
         description=(
-            "Output resolution; the model's supported set is checked at runtime. draft=true "
-            "allows only 480p (the default); draft_task_id allows only the model's Draft final "
-            "resolution (the default)."
+            "Output resolution (per-model set in ark_list_models). draft=true allows only 480p; "
+            "draft_task_id only the model's Draft final resolution; each defaults to it."
         ),
     )
     ratio: SeedanceRatio | None = Field(
         None,
         description=(
-            "Output aspect ratio; 'adaptive' is the provider default. Edit, extend, first-frame "
-            "and first/last-frame requests on Seedance 2.5 require it omitted or 'adaptive'."
+            "Aspect ratio; 'adaptive' is the provider default. Seedance 2.5 edit, extend and "
+            "first/last-frame requests require it omitted or 'adaptive'."
         ),
     )
     duration: int | None = Field(
@@ -123,8 +116,8 @@ class SeedanceCreateTaskInput(BaseModel):
         ge=-1,
         le=30,
         description=(
-            "Duration in seconds: -1 for auto, or 4 up to the model's maximum (15 for Seedance "
-            "2.0, 30 for 2.5). omni_reference_task_type 'edit' requires -1 or omitted."
+            "Seconds: -1 for auto, or 4 up to the model maximum (2.0: 15, 2.5: 30). Task type "
+            "'edit' requires -1 or omitted."
         ),
     )
     omni_reference_task_type: OmniReferenceTaskType | None = Field(
@@ -133,8 +126,8 @@ class SeedanceCreateTaskInput(BaseModel):
     output_format: Literal["mp4", "mov"] | None = Field(
         None,
         description=(
-            "Container for the output video; Seedance 2.5 models only. 'mov' uses H.264, "
-            "YUV 4:4:4 and PCM audio for post-production, and some players cannot play it."
+            "Container (Seedance 2.5 only). 'mov' is H.264 4:4:4 with PCM audio for "
+            "post-production; some players cannot play it."
         ),
     )
     generate_audio: bool | None = Field(
@@ -150,38 +143,34 @@ class SeedanceCreateTaskInput(BaseModel):
         None,
         ge=3600,
         le=259200,
-        description="Seconds before an unfinished task expires (3600-259200, i.e. 1 hour to 3 days).",
+        description="Seconds before an unfinished task expires (3600-259200).",
     )
     priority: int | None = Field(
         None,
         ge=0,
         le=9,
-        description="Task priority (0-9); the model's range is checked at runtime.",
+        description="Task priority (0-9).",
     )
     safety_identifier: str | None = Field(
         None,
         max_length=64,
-        description="Optional identifier for content safety tracking (max 64 characters).",
+        description="Content-safety tracking identifier (max 64 characters).",
     )
     draft: bool | None = Field(
         None,
         description=(
-            "Draft mode step 1 (Seedance 2.5 models): when true, generates a low-cost 480p "
-            "preview billed as a normal 480p video. Once it succeeds, pass its task_id as "
-            "draft_task_id to render the final video. Mutually exclusive with draft_task_id."
+            "Draft step 1 (Seedance 2.5): create a 480p preview billed as a normal 480p "
+            "video, then pass its task_id as draft_task_id. Exclusive with draft_task_id."
         ),
     )
     draft_task_id: str | None = Field(
         None,
         min_length=1,
         description=(
-            "Draft mode step 2: task ID of a succeeded Draft task (created with draft=true, at "
-            "most 7 days ago) to render as the final video. The provider reuses the Draft's "
-            "model, prompt, media, duration, ratio, seed, generate_audio and "
-            "omni_reference_task_type, so those must be omitted. resolution must be omitted or "
-            "the model's Draft final resolution (1080p for Seedance 2.5, 4k for Premium). "
-            "return_last_frame, watermark, execution_expires_after, priority, safety_identifier "
-            "and output_format may be set again. Requires variations=1."
+            "Draft step 2: ID of a succeeded Draft task (at most 7 days old) to render as the "
+            "final video. Omit prompt, media, duration, ratio, generate_audio and "
+            "omni_reference_task_type (the provider reuses the Draft's); resolution must be "
+            "omitted or the Draft final resolution. Requires variations=1."
         ),
     )
     variations: int = Field(
@@ -189,22 +178,19 @@ class SeedanceCreateTaskInput(BaseModel):
         ge=1,
         le=MAX_VARIATIONS,
         description=(
-            "Number of tasks to create in parallel (1-5). Each variation is a separate billed "
-            "task; partial failures are reported per variation."
+            "Parallel tasks (1-5). Each is a separate billed task; failures are reported "
+            "per variation."
         ),
     )
     variation_prompts: list[Annotated[str, Field(min_length=1, max_length=32000)]] | None = Field(
         None,
-        description=(
-            "One prompt per variation (each 1-32,000 characters), overriding prompt. Must have "
-            "exactly `variations` entries."
-        ),
+        description=("One prompt per variation, overriding prompt; exactly `variations` entries."),
     )
     dry_run: bool = Field(
         False,
         description=(
-            "Validate the request and return the provider request bodies and a cost estimate "
-            "without submitting or billing anything."
+            "Validate and return the request bodies and a cost estimate; nothing is "
+            "submitted or billed."
         ),
     )
 
@@ -352,18 +338,13 @@ TOOL_ANNOTATIONS = {
 async def seedance_create_task(
     input: SeedanceCreateTaskInput, ctx: Context
 ) -> SeedanceCreateTaskOutput | ToolResult:
-    """Create asynchronous Seedance video tasks for any configured Seedance model.
+    """Create asynchronous Seedance video tasks (any configured model).
 
-    Call ark_list_models(kind='video') for the configured model IDs and each
-    model's limits (resolutions, duration range, reference counts, Draft
-    support, task types, output formats); requests outside a model's limits
-    are rejected with every problem listed. Set variations (up to 5) to
-    create several tasks in parallel. Draft mode (Seedance 2.5): draft=true
-    makes a cheap 480p preview, then draft_task_id renders it as the final
-    video. dry_run=true validates and returns the request bodies and a cost
-    estimate without billing. Run this tool through ark_job_submit (or native
-    task augmentation); a dry run finishes on the first ark_job_get. Poll the
-    returned task IDs with gen_task_get and never resubmit to poll.
+    Model IDs and per-model limits come from ark_list_models(kind='video'); requests
+    outside them are rejected with every problem listed. variations creates several
+    tasks; draft=true then draft_task_id previews cheaply before the final render
+    (2.5); dry_run=true returns the request bodies and a cost estimate. Run through
+    ark_job_submit, then poll the task IDs with gen_task_get (never resubmit to poll).
     """
     settings = get_settings()
     if not settings.has_modelark:

@@ -150,12 +150,10 @@ class SeedanceAudioInput(MediaSource):
 OmniReferenceTaskType = Literal["auto", "reference", "edit", "extend"]
 
 OMNI_REFERENCE_TASK_TYPE_DESCRIPTION = (
-    "Seedance 2.5 task type hint: 'auto' (provider default, inferred from the prompt and "
-    "media), 'reference' (new video from references), 'edit' (edit a reference video), or "
-    "'extend' (extend a reference video forward or backward). 'edit' needs at least one "
-    "reference video, ratio omitted or 'adaptive', and duration omitted or -1. 'extend' needs "
-    "at least one reference video and ratio omitted or 'adaptive'. Write the prompt to match "
-    "the task type, otherwise the provider fails the task with TaskTypeMismatch."
+    "Seedance 2.5 task type: 'auto' (inferred, default), 'reference', 'edit' or 'extend'. "
+    "'edit' and 'extend' need a reference video and ratio omitted or 'adaptive'; 'edit' also "
+    "needs duration omitted or -1. Write the prompt to match the type or the task fails "
+    "with TaskTypeMismatch."
 )
 
 _ADAPTIVE_RATIO = "adaptive"

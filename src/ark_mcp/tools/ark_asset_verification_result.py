@@ -24,11 +24,9 @@ async def ark_asset_verification_result(
 ) -> VerificationResultOutput | ToolResult:
     """Get the LivenessFace asset group created by a finished real-person verification.
 
-    Returns status 'verified' with group_id once the person has passed, or
-    'pending' when no group exists yet. wait_seconds keeps polling (up to 600 s).
-    The token expires about 30 minutes after ark_asset_verification_start. Upload
-    only that person's media to the group with ark_asset_create(group_id=...).
-    Requires BytePlus AK/SK.
+    Returns 'verified' with group_id once the person has passed, else 'pending'. The token
+    expires about 30 minutes after ark_asset_verification_start. Upload only that person's media
+    to the group with ark_asset_create(group_id=...). Requires AK/SK.
     """
     deadline = time.monotonic() + input.wait_seconds
 

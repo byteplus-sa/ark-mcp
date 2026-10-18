@@ -14,15 +14,11 @@ from ark_mcp.tools._errors import provider_error_result
 
 
 async def ark_asset_list(input: AssetListInput, ctx: Context) -> AssetPage | ToolResult:
-    """List private assets by group IDs, group type, status, or fuzzy name, or read them by ID.
+    """List private assets by group, type, status or name, or read up to 20 by asset_ids.
 
-    Returns each asset's asset:// URI and status (Processing/Active/Failed);
-    only Active assets can be used in generation. Pass next_token to page.
-    With asset_ids (up to 20 IDs or asset:// references), each asset is read
-    directly and unreadable IDs are reported in errors. preview_url is a
-    temporary (~12 h) link for viewing only; always pass asset_uri to Seedance.
-    Assets authorized from another account are not visible here but can still
-    be used by ID. Requires BytePlus AK/SK.
+    Returns each asset's asset:// URI and status; only Active assets can be used in generation.
+    preview_url is a temporary (~12 h) viewing link; pass asset_uri to Seedance. Assets
+    authorized from another account are not listed but usable by ID. Requires AK/SK.
     """
     asset_ids = input.asset_ids
 

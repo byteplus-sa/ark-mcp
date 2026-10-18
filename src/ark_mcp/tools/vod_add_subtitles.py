@@ -38,58 +38,58 @@ class VodAddSubtitlesInput(BaseModel):
     """Input for a subtitle burn-in task."""
 
     video_url: HttpsUrl = Field(
-        description="Public HTTPS video URL that MediaKit can fetch; private and link-local destinations are rejected."
+        description="Public HTTPS video URL; private and link-local hosts are rejected."
     )
     subtitle_url: HttpsUrl | None = Field(
         default=None,
-        description="Optional public HTTPS SRT, VTT, or ASS subtitle-file URL. At least one of subtitle_url or subtitles is required; subtitle_url takes priority when both are supplied.",
+        description="Public HTTPS SRT, VTT, or ASS file URL. One of subtitle_url or subtitles is required; wins if both are set.",
     )
     subtitles: list[VodMediaKitSubtitleCue] | None = Field(
         default=None,
         min_length=1,
-        description="Optional non-empty inline subtitle cue list. At least one of subtitle_url or subtitles is required.",
+        description="Inline subtitle cues. One of subtitle_url or subtitles is required.",
     )
     subtitle_pos_preset: Literal["bottom_center", "top_center", "center", "lower_third"] = Field(
         default="bottom_center",
-        description="Subtitle position preset: bottom_center, top_center, center, or lower_third.",
+        description="Subtitle position preset.",
     )
     subtitle_font_size: int = Field(
         default=50,
         gt=0,
-        description="Positive subtitle font size in pixels; MediaKit defaults to 50.",
+        description="Subtitle font size in pixels.",
     )
     subtitle_font_color: str = Field(
         default="#FFFFFFFF",
         pattern=r"^#[0-9A-Fa-f]{8}$",
-        description="Subtitle color and opacity as #RRGGBBAA; defaults to opaque white.",
+        description="Subtitle color and opacity as #RRGGBBAA (default opaque white).",
     )
     subtitle_font_type: SubtitleFont = Field(
         default="inter",
-        description="MediaKit font identifier. Current documented values include inter, montserrat, oppo_sans, roboto, source_han_serif, sy_black, pm_zhengdao, and zhanku_kuaile.",
+        description="MediaKit font identifier.",
     )
     client_token: str | None = Field(
         default=None,
         pattern=r"^[\x20-\x7E]{1,64}$",
-        description="Optional case-sensitive idempotency token of at most 64 printable ASCII characters. Reuse it when reconciling an ambiguous submission.",
+        description="Idempotency token (1-64 printable ASCII chars); reuse it to reconcile a timed-out submission.",
     )
     callback_args: str | None = Field(
         default=None,
-        description="Optional callback payload returned unchanged by MediaKit; maximum 512 UTF-8 bytes.",
+        description="Callback payload echoed by MediaKit; max 512 UTF-8 bytes.",
     )
     callback_url: HttpsUrl | None = Field(
         default=None,
-        description="Optional public HTTPS task-specific event callback URL; overrides the console callback.",
+        description="Public HTTPS task callback URL; overrides the console callback.",
     )
     queue_id: str | None = Field(
         default=None,
         min_length=1,
-        description="Optional MediaKit queue ID; omission uses the default queue for the API key's project.",
+        description="MediaKit queue ID; omit for the project's default queue.",
     )
     project: str | None = Field(
         default=None,
         min_length=1,
         max_length=128,
-        description="Optional legacy MediaKit project label serialized upstream as case-sensitive Project; omit for the API key's configured project.",
+        description="Legacy MediaKit project label (case-sensitive); omit for the API key's project.",
     )
 
     @model_validator(mode="after")
@@ -106,23 +106,19 @@ class VodAddSubtitlesOutput(BaseModel):
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
         default="byteplus-vod-mediakit",
-        description="Provider surface that accepted the request.",
+        description="Provider surface.",
     )
-    status: Literal["accepted"] = Field(
-        description="Always accepted because subtitle burn-in runs asynchronously."
-    )
-    request_id: str | None = Field(
-        default=None, description="Provider diagnostic request ID, when returned."
-    )
+    status: Literal["accepted"] = Field(description="Always accepted; the task is asynchronous.")
+    request_id: str | None = Field(default=None, description="Provider request ID, when returned.")
     provider_log_id: str | None = Field(
-        default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
+        default=None, description="Provider x-tt-logid, when returned."
     )
     task_id: str = Field(
-        description="Provider task ID to pass to vod_get_task (operation 'add_subtitles')."
+        description="Task ID to poll with vod_get_task (operation 'add_subtitles')."
     )
     operation: VodOperation = Field(default="add_subtitles", description=VOD_OPERATION_DESCRIPTION)
     recommended_poll_after_ms: int = Field(
-        description="Suggested initial polling delay in milliseconds; a heuristic, not a provider guarantee."
+        description="Suggested delay before the first vod_get_task poll, in milliseconds."
     )
 
 
@@ -139,12 +135,9 @@ async def vod_add_subtitles(
 ) -> VodAddSubtitlesOutput | ToolResult:
     """Burn subtitle cues or an SRT/VTT/ASS file into a video with MediaKit.
 
-    Returns an asynchronous task ID; poll it with vod_get_task using the
-    returned task_id and operation ('add_subtitles'). When both subtitle_url
-    and subtitles are supplied, MediaKit uses subtitle_url. The request is not
-    automatically retried after ambiguous failures; supply and reuse
-    client_token when reconciling a timed-out submission. Long-running work
-    runs through ark_job_submit (or native MCP task augmentation).
+    Returns a task_id; poll it with vod_get_task (operation 'add_subtitles').
+    Not retried automatically; reuse client_token to reconcile a timeout.
+    Requires background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     if not runtime.settings.has_vod_mediakit:

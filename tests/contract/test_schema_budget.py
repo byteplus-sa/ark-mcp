@@ -13,8 +13,8 @@ from ark_mcp.config.env import get_settings
 from ark_mcp.server import create_server
 
 MAX_TOOLS = 38
-MAX_MODEL_FACING_CHARS = 106_000
-MAX_OUTPUT_SCHEMA_CHARS = 137_000
+MAX_MODEL_FACING_CHARS = 88_000
+MAX_OUTPUT_SCHEMA_CHARS = 127_000
 
 
 async def test_tool_schemas_stay_within_budget(all_services_enabled: None) -> None:

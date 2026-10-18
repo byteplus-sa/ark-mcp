@@ -28,28 +28,26 @@ class VodSeparateAudioInput(BaseModel):
     audio_url: HttpsUrl | None = Field(
         default=None,
         description=(
-            "Public HTTPS audio URL that BytePlus can fetch. Set exactly one of audio_url or "
-            "video_url. Supported formats: mp3, m4a, wav."
+            "Public HTTPS audio URL (mp3, m4a, wav). Set exactly one of audio_url or video_url."
         ),
     )
     video_url: HttpsUrl | None = Field(
         default=None,
         description=(
-            "Public HTTPS video URL that BytePlus can fetch. Set exactly one of audio_url or "
-            "video_url. Supported formats: mp4, flv, ts, avi, mov, wmv, mkv."
+            "Public HTTPS video URL (mp4, flv, ts, avi, mov, wmv, mkv). Set exactly one of "
+            "audio_url or video_url."
         ),
     )
     scene: Literal["Audio", "Music", "Drama", "Narrate"] = Field(
         default="Audio",
         description=(
-            "Separation scene. Audio (default) and Music produce a 2-track split "
-            "(voice + background); Drama and Narrate produce a 3-track split "
-            "(voice + music + sound effects)."
+            "Audio and Music give voice + background tracks; Drama and Narrate give voice + "
+            "music + sfx tracks."
         ),
     )
     output_format: Literal["aac", "mp3", "wav", "m4a", "flac"] = Field(
         default="aac",
-        description="Output audio format. Default: aac.",
+        description="Output audio format.",
     )
 
     @model_validator(mode="after")
@@ -63,39 +61,29 @@ class VodSeparateAudioOutput(BaseModel):
     """Accepted asynchronous voice and background audio separation submission."""
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
-        default="byteplus-vod-mediakit", description="Provider surface that processed the request."
+        default="byteplus-vod-mediakit", description="Provider surface."
     )
-    status: Literal["accepted"] = Field(
-        description="Always 'accepted': the separation task is asynchronous."
-    )
-    request_id: str | None = Field(
-        default=None, description="Provider diagnostic request ID, when returned."
-    )
+    status: Literal["accepted"] = Field(description="Always accepted; the task is asynchronous.")
+    request_id: str | None = Field(default=None, description="Provider request ID, when returned.")
     provider_log_id: str | None = Field(
-        default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
+        default=None, description="Provider x-tt-logid, when returned."
     )
     task_id: str = Field(
-        description="Provider task ID to pass to vod_get_task (operation 'separate_audio') for polling."
+        description="Task ID to poll with vod_get_task (operation 'separate_audio')."
     )
     operation: VodOperation = Field(default="separate_audio", description=VOD_OPERATION_DESCRIPTION)
     recommended_poll_after_ms: int = Field(
-        description="Server-side suggested poll delay; a heuristic, not a provider guarantee."
+        description="Suggested delay before the first vod_get_task poll, in milliseconds."
     )
 
 
 async def vod_separate_audio(
     input: VodSeparateAudioInput, ctx: Context
 ) -> VodSeparateAudioOutput | ToolResult:
-    """Submit an asynchronous BytePlus VOD AI MediaKit voice and background audio separation task.
+    """Split a public audio or video URL into voice and background tracks (plus music and sfx for Drama/Narrate scenes) with MediaKit.
 
-    Accepts a public HTTPS audio or video URL and submits a separate-voice task
-    that splits the media into a clean vocal track and a background track
-    (plus music and sound-effects tracks for the Drama and Narrate scenes).
-    Returns an accepted task ID; poll it with vod_get_task using the returned
-    task_id and operation ('separate_audio'). The mutation is never retried
-    automatically because completion can be ambiguous after a timeout.
-    Long-running work runs through ark_job_submit (or native MCP task
-    augmentation).
+    Returns a task_id; poll it with vod_get_task (operation 'separate_audio').
+    Not retried automatically. Requires background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

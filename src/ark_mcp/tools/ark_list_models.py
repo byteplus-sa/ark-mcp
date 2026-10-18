@@ -155,14 +155,12 @@ TOOL_ANNOTATIONS = {
 
 
 async def ark_list_models(input: ArkListModelsInput, ctx: Context) -> ArkListModelsOutput:
-    """List the models this server is configured to call, with per-model limits.
+    """List configured models with their per-model limits. Makes no provider calls.
 
-    Call this before any generation or understanding tool. The `model` argument
-    of those tools accepts only the exact `model_id` values listed here, and
-    each entry states the limits (resolutions, durations, reference counts,
-    formats, Draft support) the server validates before submitting. `services`
-    reports which optional services are enabled and, when one is disabled,
-    which setting enables it. Makes no provider calls.
+    Call before generation or understanding tools: their `model` argument accepts only the
+    exact `model_id` values listed, and the server validates requests against these limits.
+    `services` shows which optional services are enabled and the setting that enables a
+    disabled one.
     """
     settings = get_settings()
     models = [model for model in describe_models(settings) if input.kind in (None, model.kind)]

@@ -20,8 +20,8 @@ from ark_mcp.domain.assets import Asset, AssetGroup, validate_asset_id
 from ark_mcp.tools.media_presign import validate_object_key
 
 _PROJECT_DESCRIPTION = (
-    "ModelArk project name. Defaults to BYTEPLUS_MODELARK_PROJECT_NAME ('default'). Assets "
-    "only work with inference endpoints in the same project; keep one project throughout."
+    "ModelArk project name; defaults to BYTEPLUS_MODELARK_PROJECT_NAME. Assets only work "
+    "within one project, so keep it consistent."
 )
 _GROUP_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
 MAX_LOOKUP_IDS = 20
@@ -59,14 +59,10 @@ class AssetGroupEnsureInput(BaseModel):
         ...,
         min_length=1,
         max_length=64,
-        description=(
-            "Exact subject name. Reuses the single AIGC group with exactly this name, or "
-            "creates it within one server event loop. Separate servers should use a pre-created "
-            "group ID to avoid concurrent duplicate creation."
-        ),
+        description="Exact subject name; reuses the single AIGC group with this name or creates it.",
     )
     description: str | None = Field(
-        None, max_length=300, description="Description used only when a new group is created."
+        None, max_length=300, description="Used only when a new group is created."
     )
     project_name: str | None = project_name_field()
 
@@ -88,29 +84,26 @@ class AssetGroupListInput(BaseModel):
         min_length=1,
         max_length=MAX_LOOKUP_IDS,
         description=(
-            "Read exactly these groups (1-20 IDs, any group type) instead of listing. "
-            "Mutually exclusive with name, next_token and sort_order; unreadable IDs are "
-            "reported in errors."
+            "Read these groups (1-20 IDs, any type) instead of listing. Exclusive with name, "
+            "next_token, sort_order."
         ),
     )
-    name: str | None = Field(
-        None, max_length=64, description="Fuzzy name filter (substring match by the provider)."
-    )
+    name: str | None = Field(None, max_length=64, description="Fuzzy group-name filter.")
     group_type: Literal["AIGC", "LivenessFace"] = Field(
         "AIGC",
         description=(
-            "Group type to list (the provider requires one): 'AIGC' (virtual portrait, "
-            "default) or 'LivenessFace' (verified real person). Ignored with group_ids."
+            "'AIGC' (virtual portrait) or 'LivenessFace' (verified real person). Ignored with "
+            "group_ids."
         ),
     )
     max_results: int = Field(
         20, ge=1, le=100, description="Page size (1-100). Ignored with group_ids."
     )
     next_token: str | None = Field(
-        None, max_length=4096, description="Pagination token from a previous call's next_token."
+        None, max_length=4096, description="next_token from the previous page."
     )
     sort_order: Literal["Asc", "Desc"] | None = Field(
-        None, description="Sort by creation time: 'Asc' or 'Desc'. Provider default when omitted."
+        None, description="Creation-time order; provider default when omitted."
     )
     project_name: str | None = project_name_field()
 
@@ -126,10 +119,10 @@ class AssetGroupPage(BaseModel):
 
     groups: list[AssetGroup] = Field(..., description="Asset groups on this page.")
     next_token: str | None = Field(
-        None, description="Pass to the next call to fetch more; null when there are no more."
+        None, description="Pass as next_token for the next page; null on the last page."
     )
     errors: list[AssetLookupError] = Field(
-        default_factory=list, description="group_ids that could not be read; empty when listing."
+        default_factory=list, description="group_ids that could not be read."
     )
 
 
@@ -141,30 +134,23 @@ class AssetSource(BaseModel):
 
     url: str | None = Field(
         None,
-        description=(
-            "Publicly reachable HTTPS URL of the file (the provider downloads it). Mutually "
-            "exclusive with object_key."
-        ),
+        description="Public HTTPS URL the provider downloads. Exactly one of url or object_key.",
     )
     object_key: str | None = Field(
         None,
-        description=(
-            "Object key from media_upload; a presigned URL is minted automatically. Mutually "
-            "exclusive with url."
-        ),
+        description="media_upload object_key (presigned automatically). Exactly one of url or object_key.",
     )
     asset_type: Literal["Image", "Video", "Audio"] | None = Field(
         None,
         description=(
-            "Asset type. Inferred from the file extension or object key when omitted. "
-            "Image: jpeg/png/webp/bmp/tiff/gif/heic, 300-6000 px, W/H 0.4-2.5, < 30 MB. "
-            "Video: mp4/mov, 2-30 s, 24-60 fps, <= 200 MB. Audio: wav/mp3, 2-30 s, <= 15 MB."
+            "Inferred from the extension or object key when omitted. Image: 300-6000 px, "
+            "<30 MB. Video: mp4/mov, 2-30 s, <=200 MB. Audio: wav/mp3, 2-30 s, <=15 MB."
         ),
     )
     name: str | None = Field(
         None,
         max_length=64,
-        description="Asset name for search in ark_asset_list. The model never sees it.",
+        description="Search label for ark_asset_list; the model never sees it.",
     )
 
     @model_validator(mode="after")
@@ -183,17 +169,14 @@ class AssetCreateInput(BaseModel):
         ...,
         min_length=1,
         max_length=20,
-        description=(
-            "Files of ONE subject to add to one group (1-20). Different people or characters "
-            "belong in different groups."
-        ),
+        description="Files (1-20) of ONE subject; use separate calls for different people or characters.",
     )
     group_id: str | None = Field(
         None,
         pattern=_GROUP_ID_PATTERN,
         description=(
-            "Target group ID (AIGC or LivenessFace). Mutually exclusive with subject. Real "
-            "people must use the group_id returned by ark_asset_verification_result."
+            "Target group ID. Exactly one of group_id or subject. Real people: use the "
+            "group_id from ark_asset_verification_result."
         ),
     )
     subject: str | None = Field(
@@ -201,24 +184,23 @@ class AssetCreateInput(BaseModel):
         min_length=1,
         max_length=64,
         description=(
-            "AIGC subject name: reuse the single AIGC group with this exact name, or create "
-            "it within one server event loop. Mutually exclusive with group_id; use group_id "
-            "across separate servers to avoid concurrent duplicate creation."
+            "AIGC subject name: reuses or creates the group with this exact name. Exactly one "
+            "of group_id or subject."
         ),
     )
     skip_moderation: bool = Field(
         False,
         description=(
-            "Skip most non-baseline content pre-filter checks (Moderation.Strategy=Skip). "
-            "Works only after content pre-filter is turned off in the ModelArk console."
+            "Skip non-baseline content pre-filter checks; works only after the pre-filter is "
+            "turned off in the ModelArk console."
         ),
     )
     wait_until_active: bool = Field(
         True,
-        description="Poll GetAsset until each asset is Active or Failed (bounded by wait_timeout_seconds).",
+        description="Wait until each asset is Active or Failed, up to wait_timeout_seconds.",
     )
     wait_timeout_seconds: int = Field(
-        120, ge=5, le=900, description="Maximum seconds to wait when wait_until_active is true."
+        120, ge=5, le=900, description="Max seconds to wait when wait_until_active is true."
     )
     project_name: str | None = project_name_field()
 
@@ -233,13 +215,12 @@ class AssetCreateItem(BaseModel):
     """Per-source result of ``ark_asset_create``."""
 
     index: int = Field(..., description="Zero-based position of the source in the request.")
-    asset_id: str | None = Field(None, description="Created asset ID, when accepted.")
+    asset_id: str | None = Field(None, description="Created asset ID; null if not created.")
     asset_uri: str | None = Field(
-        None, description="'asset://<asset_id>' reference for Seedance, when accepted."
+        None, description="'asset://<asset_id>' reference for Seedance; null if not created."
     )
     status: str | None = Field(
-        None,
-        description="Last observed status: Processing, Active, or Failed (null if not created).",
+        None, description="Last status: Processing, Active, or Failed; null if not created."
     )
     error: str | None = Field(None, description="Why this source failed, if it did.")
 
@@ -248,14 +229,12 @@ class AssetCreateOutput(BaseModel):
     """Output for ``ark_asset_create``."""
 
     group_id: str = Field(..., description="Group the assets were added to.")
-    group_created: bool = Field(
-        False, description="True when the subject's group was created by this call."
-    )
+    group_created: bool = Field(False, description="True when this call created the group.")
     group_created_empty: bool = Field(
         False,
         description=(
-            "True when this call created the subject's group but every source failed, leaving "
-            "it empty; delete it with ark_asset_delete(group_id=...) if it is not needed."
+            "True when this call created the group but every source failed; delete the empty "
+            "group with ark_asset_delete (when registered) if unneeded."
         ),
     )
     items: list[AssetCreateItem] = Field(..., description="One result per source, in order.")
@@ -270,8 +249,8 @@ class AssetListInput(BaseModel):
         min_length=1,
         max_length=MAX_LOOKUP_IDS,
         description=(
-            "Read exactly these assets (1-20 IDs or 'asset://<id>' references) instead of "
-            "listing. Mutually exclusive with the filters; unreadable IDs are reported in errors."
+            "Read these assets (1-20 IDs or asset:// references) instead of listing. Exclusive "
+            "with the filters."
         ),
     )
     group_ids: list[GroupId] | None = Field(
@@ -279,10 +258,7 @@ class AssetListInput(BaseModel):
     )
     group_type: Literal["AIGC", "LivenessFace"] = Field(
         "AIGC",
-        description=(
-            "Only assets in groups of this type (the provider requires one): 'AIGC' "
-            "(default) or 'LivenessFace'. Ignored with asset_ids."
-        ),
+        description="Only assets in groups of this type. Ignored with asset_ids.",
     )
     statuses: list[Literal["Processing", "Active", "Failed"]] | None = Field(
         None, description="Only assets with these statuses."
@@ -292,10 +268,10 @@ class AssetListInput(BaseModel):
         20, ge=1, le=100, description="Page size (1-100). Ignored with asset_ids."
     )
     next_token: str | None = Field(
-        None, max_length=4096, description="Pagination token from a previous call's next_token."
+        None, max_length=4096, description="next_token from the previous page."
     )
     sort_order: Literal["Asc", "Desc"] | None = Field(
-        None, description="Sort by creation time: 'Asc' or 'Desc'. Provider default when omitted."
+        None, description="Creation-time order; provider default when omitted."
     )
     project_name: str | None = project_name_field()
 
@@ -315,17 +291,17 @@ class AssetPage(BaseModel):
 
     assets: list[Asset] = Field(..., description="Assets on this page.")
     next_token: str | None = Field(
-        None, description="Pass to the next call to fetch more; null when there are no more."
+        None, description="Pass as next_token for the next page; null on the last page."
     )
     errors: list[AssetLookupError] = Field(
-        default_factory=list, description="asset_ids that could not be read; empty when listing."
+        default_factory=list, description="asset_ids that could not be read."
     )
 
 
 class _AssetOrGroupTarget(BaseModel):
     asset_id: AssetId | None = Field(
         None,
-        description="Asset ID or 'asset://<id>' reference. Exactly one of asset_id or group_id.",
+        description="Asset ID or asset:// reference. Exactly one of asset_id or group_id.",
     )
     group_id: GroupId | None = Field(
         None, description="Asset group ID. Exactly one of asset_id or group_id."
@@ -370,15 +346,10 @@ class AssetUpdateResult(BaseModel):
 class AssetDeleteInput(_AssetOrGroupTarget):
     """Input for ``ark_asset_delete``."""
 
-    confirm: Literal[True] = Field(
-        ..., description="Must be true. Deleting an asset or group is irreversible."
-    )
+    confirm: Literal[True] = Field(..., description="Must be true; deletion is irreversible.")
     cascade: bool = Field(
         False,
-        description=(
-            "Group deletes only: also delete the group's assets. A non-empty group is refused "
-            "unless this is true."
-        ),
+        description="Group deletes only: also delete its assets. Non-empty groups are refused without it.",
     )
 
 
@@ -399,9 +370,8 @@ class VerificationStartInput(BaseModel):
     callback_url: str | None = Field(
         None,
         description=(
-            "HTTPS page the person is sent to after verification; the provider appends "
-            "bytedToken and resultCode (10000 = success). Defaults to "
-            "BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL."
+            "HTTPS redirect page after verification (receives bytedToken and resultCode; "
+            "10000 = success). Defaults to BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL."
         ),
     )
     language: Literal["en", "zh", "zh-Hant"] = Field(
@@ -416,13 +386,12 @@ class VerificationStartOutput(BaseModel):
     h5_link: str = Field(
         ...,
         description=(
-            "Verification page link. Contains temporary credentials: share it only with the "
-            "person being verified. It becomes invalid after a failed attempt."
+            "Verification page link with temporary credentials: share only with the person "
+            "being verified. Invalid after a failed attempt."
         ),
     )
     verification_token: str = Field(
-        ...,
-        description="Token for ark_asset_verification_result. Valid for about 30 minutes.",
+        ..., description="Token for ark_asset_verification_result; valid about 30 minutes."
     )
     expires_at: str = Field(..., description="Approximate token expiry (ISO-8601, UTC).")
     next_step: str = Field(..., description="What to do next.")
@@ -435,13 +404,13 @@ class VerificationResultInput(BaseModel):
         ...,
         min_length=8,
         max_length=512,
-        description="verification_token from ark_asset_verification_start (bytedToken).",
+        description="verification_token from ark_asset_verification_start.",
     )
     wait_seconds: int = Field(
         0,
         ge=0,
         le=600,
-        description="Keep polling up to this many seconds for the person to finish (0 = one check).",
+        description="Seconds to keep polling for completion (0 = single check).",
     )
     project_name: str | None = project_name_field()
 
@@ -450,13 +419,10 @@ class VerificationResultOutput(BaseModel):
     """Output for ``ark_asset_verification_result``."""
 
     status: Literal["verified", "pending"] = Field(
-        ..., description="'verified' once a group exists; 'pending' when not finished yet."
+        ..., description="'verified' once the group exists; otherwise 'pending'."
     )
     group_id: str | None = Field(
         None,
-        description=(
-            "The verified person's LivenessFace group ID. Upload only that person's media to "
-            "it with ark_asset_create(group_id=...)."
-        ),
+        description="Verified person's LivenessFace group ID, for ark_asset_create(group_id=...).",
     )
     message: str = Field(..., description="Human-readable status detail.")

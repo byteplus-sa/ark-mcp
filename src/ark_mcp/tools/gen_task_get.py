@@ -61,7 +61,7 @@ class GenTaskGetInput(BaseModel):
             "false for a foreground status poll."
         ),
     )
-    output_dir: str | None = output_dir_field("each succeeded task's outputs")
+    output_dir: str | None = output_dir_field("succeeded tasks' outputs")
     overwrite: bool = overwrite_field()
 
 
@@ -92,16 +92,13 @@ TOOL_ANNOTATIONS = {
 
 
 async def gen_task_get(input: GenTaskGetInput, ctx: Context) -> GenTaskGetOutput | ToolResult:
-    """Check the status and outputs of ModelArk generation tasks (Seedance video and 3D).
+    """Check status and outputs of ModelArk generation tasks (Seedance video, 3D).
 
-    Pass every task ID you are waiting on in one call. queued or running is not
-    a failure: poll again after recommended_poll_after_ms, and never resubmit
-    the create tool to retry polling, because that creates a second billed
-    task. Succeeded tasks list their outputs with expiring provider URLs (about
-    24 hours). Once all_terminal is true, call again through ark_job_submit with
-    persist_output=true (optionally with output_dir) to keep the outputs as
-    durable artifacts. Task IDs not created by the caller are reported in
-    errors instead of failing the call.
+    Pass every task ID in one call. queued or running is not a failure: poll again after
+    recommended_poll_after_ms, never resubmit the create tool (that bills a second task).
+    Provider output URLs expire in about 24 hours; once all_terminal is true, call again
+    through ark_job_submit with persist_output=true to keep durable artifacts. IDs the
+    caller does not own are listed in errors.
     """
     task_error = persistence_requires_task(ctx, input.persist_output)
     if task_error is not None:

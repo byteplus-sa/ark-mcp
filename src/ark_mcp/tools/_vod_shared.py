@@ -10,9 +10,7 @@ VodOperation = Literal[
     "enhance", "transcode", "separate_audio", "add_subtitles", "remove_subtitles"
 ]
 
-VOD_OPERATION_DESCRIPTION = (
-    "MediaKit operation that created the task. Pass it to vod_get_task together with task_id."
-)
+VOD_OPERATION_DESCRIPTION = "Operation name; pass it to vod_get_task with task_id."
 
 
 class VodArtifactPersistenceIssue(ArtifactPersistenceIssue):

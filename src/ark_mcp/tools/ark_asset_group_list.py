@@ -16,13 +16,10 @@ from ark_mcp.tools._errors import provider_error_result
 async def ark_asset_group_list(
     input: AssetGroupListInput, ctx: Context
 ) -> AssetGroupPage | ToolResult:
-    """List private asset groups by fuzzy name and type, or read up to 20 groups by ID.
+    """List private asset groups by fuzzy name and type, or read up to 20 by group_ids.
 
-    group_type 'AIGC' = virtual portraits (Virtual Portrait tab), 'LivenessFace'
-    = verified real people (Real-human tab). Pass next_token to page. With
-    group_ids, each group is read directly (any type) and unreadable IDs are
-    reported in errors. Only groups owned by this BytePlus account are visible.
-    Requires BytePlus AK/SK.
+    group_type 'AIGC' = virtual portraits, 'LivenessFace' = verified real people. Only groups
+    owned by this account are visible. Requires AK/SK.
     """
     group_ids = input.group_ids
 

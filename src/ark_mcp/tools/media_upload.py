@@ -215,27 +215,21 @@ class MediaUploadItem(BaseModel):
     """One file to upload."""
 
     media_type: Literal["image", "audio", "video"] = Field(
-        ..., description="Logical media type: image, audio, or video."
+        ..., description="Media category used for validation."
     )
     mime_type: str | None = Field(
         None,
-        description=(
-            "MIME type (e.g. image/png, video/mp4). Optional for file_path items: inferred from "
-            "the file extension when omitted. Required for data items."
-        ),
+        description="MIME type (e.g. image/png). Inferred from file_path when omitted; required with data.",
     )
     data: str | None = Field(
-        None, description="Base64-encoded media bytes. Mutually exclusive with file_path."
+        None, description="Base64-encoded bytes. Exactly one of data or file_path."
     )
     file_path: str | None = Field(
-        None,
-        description="Absolute path to a local file. stdio transport only. Mutually exclusive with data.",
+        None, description="Absolute local file path (stdio only). Exactly one of data or file_path."
     )
     key_prefix: str | None = Field(
         None,
-        description=(
-            "Optional object key prefix (default 'references'). Alphanumeric, '-', '_', '/' only."
-        ),
+        description="Object key prefix, default 'references'. Only alphanumerics, '-', '_', '/'.",
     )
 
     @model_validator(mode="after")
@@ -258,32 +252,28 @@ class MediaUploadInput(BaseModel):
         ge=60,
         le=604800,
         description=(
-            "Presigned URL validity in seconds (60-604800) applied to every item. Defaults to the "
-            "configured presign TTL. Use a long TTL (e.g. 3600) for URLs destined for vod_* tools."
+            "Presigned URL validity in seconds for every item; defaults to the server presign "
+            "TTL. Use >= 3600 for URLs destined for vod_* tools, which fetch asynchronously."
         ),
     )
-    max_concurrent: int = Field(
-        4, ge=1, le=8, description="Maximum uploads running at the same time (1-8)."
-    )
+    max_concurrent: int = Field(4, ge=1, le=8, description="Concurrent uploads.")
 
 
 class MediaUploadItemResult(BaseModel):
     """Per-item upload result."""
 
-    index: int = Field(..., description="0-based position of this item in the request.")
-    file_path: str | None = Field(
-        None, description="The item's file_path as given, to match results to inputs."
-    )
-    url: str | None = Field(None, description="Presigned HTTPS GET URL (None if this item failed).")
+    index: int = Field(..., description="0-based position in the request.")
+    file_path: str | None = Field(None, description="The item's file_path as given.")
+    url: str | None = Field(None, description="Presigned HTTPS GET URL; null if the item failed.")
     object_key: str | None = Field(
-        None, description="Object key of the uploaded media, reusable with media_presign."
+        None, description="Object key, reusable with media_presign and ark_asset_create."
     )
-    expires_at: str | None = Field(None, description="ISO-8601 timestamp when url expires.")
+    expires_at: str | None = Field(None, description="ISO-8601 expiry of url.")
     mime_type: str | None = Field(None, description="MIME type used for the upload.")
     bytes: int | None = Field(None, description="Uploaded byte count.")
-    error: str | None = Field(None, description="Why this item failed (None on success).")
+    error: str | None = Field(None, description="Failure reason; null on success.")
     retryable: bool | None = Field(
-        None, description="Whether a failed item may succeed if uploaded again (None on success)."
+        None, description="Whether retrying the upload may succeed; null on success."
     )
 
 
@@ -294,22 +284,16 @@ class MediaUploadOutput(BaseModel):
         ..., description="Per-item results in request order."
     )
     succeeded: int = Field(..., description="Number of items uploaded.")
-    failed: int = Field(
-        ..., description="Number of items that failed; check items[].error when non-zero."
-    )
+    failed: int = Field(..., description="Number of items that failed; see items[].error.")
     total_bytes: int = Field(..., description="Total bytes uploaded across successful items.")
 
 
 async def media_upload(input: MediaUploadInput, ctx: Context) -> MediaUploadOutput:
-    """Upload media to object storage (TOS or S3) and return a presigned HTTPS GET URL per file.
+    """Upload 1-50 files (Base64 or local file_path, stdio only) to object storage and return presigned URLs.
 
-    Pass 1-50 items, each Base64 data or a local file_path (stdio only). The
-    URLs can be passed to tools that accept media URLs, such as
-    seedance_create_task video references, which are URL-only. Items fail
-    independently: check failed and items[].error. The total decoded size is
-    capped by MEDIA_UPLOAD_BATCH_MAX_BYTES and checked before any upload.
-    Run this tool through ark_job_submit (or native task augmentation);
-    uploads can contain up to 200 MiB of video per item.
+    Use the URLs wherever a tool needs a media URL (e.g. Seedance video references, which are
+    URL-only). Items fail independently: check failed and items[].error. Requires background
+    execution (ark_job_submit).
     """
     await context_log(ctx, "info", f"Starting upload of {len(input.items)} items")
     settings = get_settings()

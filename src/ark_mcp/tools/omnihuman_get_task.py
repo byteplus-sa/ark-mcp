@@ -45,10 +45,8 @@ class OmniHumanGetTaskInput(BaseModel):
     persist_output: bool = Field(
         default=True,
         description=(
-            "Whether to copy a completed video into durable artifact storage on the first "
-            "successful poll. The default true requires task-augmented execution; use false for "
-            "a foreground status check. The provider documents a one-hour validity for the video "
-            "URL, so persist promptly."
+            "Copy a completed video into artifact storage. true requires background execution "
+            "(ark_job_submit); use false for a foreground status check."
         ),
     )
     output_path: str | None = output_path_field("the generated video")
@@ -59,22 +57,21 @@ class OmniHumanTaskFailure(BaseModel):
     """Provider failure detail for a failed OmniHuman task."""
 
     code: str | None = Field(default=None, description="Provider failure code, when returned.")
-    message: str = Field(description="Safe provider failure explanation without URLs.")
+    message: str = Field(description="Provider failure explanation.")
 
 
 class OmniHumanTaskOutput(BaseModel):
     """Normalized status and output of an OmniHuman 2.0 task."""
 
     provider: Literal["byteplus-vision-cv"] = Field(
-        default="byteplus-vision-cv", description="Provider surface that processed the task."
+        default="byteplus-vision-cv", description="Provider surface."
     )
     task_id: str = Field(description="Task ID.")
     status: OmniHumanTaskStatus = Field(
         description=(
-            "queued: waiting to start. running: generating. succeeded: video ready. "
-            "failed: generation failed (see error). canceled: canceled by request. "
-            "expired: the provider no longer holds the task; resubmit. not_found: unknown "
-            "or older than 12 hours."
+            "queued, running, succeeded (video ready), failed (see error), canceled, "
+            "expired (provider dropped the task; resubmit), or not_found (unknown or older "
+            "than 12 h)."
         )
     )
     request_id: str | None = Field(
@@ -82,25 +79,20 @@ class OmniHumanTaskOutput(BaseModel):
     )
     video: ArtifactRef | None = Field(
         default=None,
-        description="Durable generated-video artifact when persistence succeeds.",
+        description="Durable video artifact when persistence succeeded.",
     )
     source_url: str | None = Field(
         default=None,
-        description=(
-            "Provider video URL for a succeeded task; preserved even when durable persistence "
-            "is skipped or fails. The provider documents a one-hour validity; persist promptly."
-        ),
+        description="Provider video URL for a succeeded task; valid about one hour.",
     )
     source_expires_at: str | None = Field(
         default=None,
-        description="ISO-8601 conservative estimate (first poll time plus one hour) of when source_url expires; the provider does not return an exact expiry.",
+        description="ISO-8601 estimate of when source_url expires (first poll plus one hour).",
     )
-    persistence: Persistence = Field(
-        description="Outcome of durable artifact persistence, independent of provider success."
-    )
+    persistence: Persistence = Field(description="Artifact persistence outcome.")
     persistence_issue: ArtifactPersistenceIssue | None = Field(
         default=None,
-        description="Safe explanation when a succeeded video could not be persisted durably.",
+        description="Why a succeeded video could not be persisted.",
     )
     error: OmniHumanTaskFailure | None = Field(
         default=None, description="Provider failure detail for a failed task."
@@ -205,10 +197,9 @@ async def omnihuman_get_task(
 ) -> OmniHumanTaskOutput | ToolResult:
     """Poll an OmniHuman 2.0 task and retrieve the generated video.
 
-    On the first successful poll with ``persist_output=True``, copies the
-    provider's one-hour video URL into durable artifact storage; later polls
-    return the cached artifact. Keep polling while status is queued or running.
-    Supports optional MCP task-augmented execution for completed-output persistence.
+    Keep polling while status is queued or running. With persist_output=true the
+    finished video is copied to a durable artifact on the first successful poll
+    (background execution, ark_job_submit); later polls return the cached artifact.
     """
     task_error = persistence_requires_task(ctx, input.persist_output)
     if task_error is not None:

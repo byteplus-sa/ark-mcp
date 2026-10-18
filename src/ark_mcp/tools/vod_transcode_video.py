@@ -21,30 +21,30 @@ from ark_mcp.tools._vod_shared import VOD_OPERATION_DESCRIPTION, VodOperation
 
 
 class VodTranscodeVideoOptions(BaseModel):
-    """Transcode ``video`` object; fields and enums verified from official docs."""
+    """Output video options for transcoding."""
 
     codec: Literal["h264", "h265"] = Field(
         default="h264", description="Output video codec: h264 or h265."
     )
     scale_type: Literal[0, 1, 2] = Field(
         default=2,
-        description="Scaling mode: 0 = follow source (no scaling), 1 = long/short-side limit, 2 = width/height limit.",
+        description="0 = keep source size, 1 = long/short-side limit, 2 = width/height limit.",
     )
     scale_mode: Literal[0, 1, 2] = Field(
         default=2,
-        description="Aspect-ratio handling when scale_type is 1 or 2: 0 = no upsampling (shrink only), 1 = stretch to target, 2 = letterbox with black-bar padding.",
+        description="For scale_type 1 or 2: 0 = shrink only, 1 = stretch to target, 2 = letterbox with black bars.",
     )
     scale_width: int | None = Field(
         default=None,
         ge=0,
         le=4320,
-        description="Target output width in pixels; only when scale_type=2. If only width or height is given, the other scales proportionally. Defaults to the verified 720 profile.",
+        description="Target width in pixels; scale_type=2 only. If only one of width/height is set, the other scales proportionally. Defaults to 720.",
     )
     scale_height: int | None = Field(
         default=None,
         ge=0,
         le=4320,
-        description="Target output height in pixels; only when scale_type=2. Defaults to the verified 720 profile.",
+        description="Target height in pixels; scale_type=2 only. Defaults to 720.",
     )
     scale_short: int | None = Field(
         default=None,
@@ -60,29 +60,29 @@ class VodTranscodeVideoOptions(BaseModel):
     )
     bitrate_mode: Literal["crf", "abr", "cbr"] = Field(
         default="crf",
-        description="Bitrate control: crf (quality), abr (average bitrate), cbr (constant bitrate).",
+        description="crf (quality), abr (average bitrate), or cbr (constant bitrate).",
     )
     bitrate_crf: int = Field(
         default=25,
         ge=0,
         le=51,
-        description="CRF quality level [0,51]; 0 is lossless; only used when bitrate_mode=crf.",
+        description="CRF level (0 is lossless); bitrate_mode=crf only.",
     )
     bitrate_kbps: int = Field(
         default=2000,
         ge=10,
         le=50000,
-        description="Bitrate in kbps [10,50000]; crf = max limit, abr = average target, cbr = constant target.",
+        description="Bitrate in kbps: max limit for crf, average target for abr, constant for cbr.",
     )
     fps_mode: Literal["vfr", "cfr"] = Field(
         default="vfr",
-        description="Frame-rate mode; only takes effect after fps is set: vfr (max limit), cfr (forced constant).",
+        description="vfr (fps is a max) or cfr (forced constant); only used when fps is set.",
     )
     fps: int | None = Field(
         default=None,
         ge=1,
         le=240,
-        description="Target frame rate [1,240]; if unset the source frame rate is kept.",
+        description="Target frame rate; unset keeps the source rate.",
     )
     is_hdr_to_sdr: bool = Field(
         default=True, description="Convert HDR input to SDR; false keeps HDR."
@@ -107,14 +107,14 @@ class VodTranscodeVideoInput(BaseModel):
     """Input for the BytePlus VOD AI MediaKit video transcoding task."""
 
     video_url: HttpsUrl = Field(
-        description="Public HTTPS source-video URL that BytePlus can fetch. Private and link-local destinations are rejected."
+        description="Public HTTPS source-video URL; private and link-local hosts are rejected."
     )
     container_format: Literal["MP4", "FLV", "MPEGTS"] = Field(
-        default="MP4", description="Output container format: MP4 (default), FLV, or MPEGTS."
+        default="MP4", description="Output container format."
     )
     video: VodTranscodeVideoOptions = Field(
         default_factory=VodTranscodeVideoOptions,
-        description="Transcoding options for the output video (codec, scaling, bitrate, frame rate, HDR). Defaults reproduce the verified portrait-to-720x720 letterbox profile.",
+        description="Output video options. Defaults letterbox to 720x720 (h264, CRF 25).",
     )
 
 
@@ -122,38 +122,28 @@ class VodTranscodeVideoOutput(BaseModel):
     """Accepted asynchronous transcode submission."""
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
-        default="byteplus-vod-mediakit", description="Provider surface that processed the request."
+        default="byteplus-vod-mediakit", description="Provider surface."
     )
-    status: Literal["accepted"] = Field(
-        description="Always 'accepted': the transcode task is asynchronous."
-    )
-    request_id: str | None = Field(
-        default=None, description="Provider diagnostic request ID, when returned."
-    )
+    status: Literal["accepted"] = Field(description="Always accepted; the task is asynchronous.")
+    request_id: str | None = Field(default=None, description="Provider request ID, when returned.")
     provider_log_id: str | None = Field(
-        default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
+        default=None, description="Provider x-tt-logid, when returned."
     )
-    task_id: str = Field(
-        description="Provider task ID to pass to vod_get_task (operation 'transcode') for polling."
-    )
+    task_id: str = Field(description="Task ID to poll with vod_get_task (operation 'transcode').")
     operation: VodOperation = Field(default="transcode", description=VOD_OPERATION_DESCRIPTION)
     recommended_poll_after_ms: int = Field(
-        description="Server-side suggested poll delay; a heuristic, not a provider guarantee."
+        description="Suggested delay before the first vod_get_task poll, in milliseconds."
     )
 
 
 async def vod_transcode_video(
     input: VodTranscodeVideoInput, ctx: Context
 ) -> VodTranscodeVideoOutput | ToolResult:
-    """Submit an asynchronous BytePlus VOD AI MediaKit video transcoding task.
+    """Transcode a public video (codec, container, scaling, bitrate, fps, HDR) with MediaKit.
 
-    Accepts a public HTTPS source URL and transcoding options (codec, container
-    format, scaling, bitrate, frame rate, HDR). The default options reproduce
-    the verified portrait-to-720x720 letterbox profile. Returns an accepted
-    task ID; poll it with vod_get_task using the returned task_id and operation
-    ('transcode'). The mutation is never retried automatically because
-    completion can be ambiguous after a timeout. Long-running work runs through
-    ark_job_submit (or native MCP task augmentation).
+    Default options letterbox to 720x720. Returns a task_id; poll it with
+    vod_get_task (operation 'transcode'). Not retried automatically. Requires
+    background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

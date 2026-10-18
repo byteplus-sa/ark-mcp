@@ -95,11 +95,10 @@ class SeedAudioUnderstandInput(UnderstandingOptions):
         min_length=1,
         max_length=_MAX_AUDIOS,
         description=(
-            f"Audio clips to understand (1-{_MAX_AUDIOS}), sent to the model in order. "
-            "Use kind='url' with an HTTPS URL (any format the model can decode), or "
-            "kind='base64' with raw Base64 data (no data: prefix, at most 10 MB decoded) and "
-            "mime_type one of audio/wav, audio/mpeg, audio/flac, audio/aac, or audio/mp4 (m4a). "
-            "For local files, upload via media_upload first."
+            f"Audio clips (1-{_MAX_AUDIOS}), sent in order. kind='url' (HTTPS) or kind='base64' "
+            "(raw data without data: prefix, max 10 MB decoded) with mime_type audio/wav, "
+            "audio/mpeg, audio/flac, audio/aac, or audio/mp4. Upload local files with "
+            "media_upload first."
         ),
     )
 
@@ -111,22 +110,12 @@ class SeedAudioUnderstandOutput(SeedUnderstandOutput):
 async def seed_audio_understand(
     input: SeedAudioUnderstandInput, ctx: Context
 ) -> SeedAudioUnderstandOutput | ToolResult:
-    """Understand, transcribe, or reason about audio clips through a Seed multimodal model.
+    """Understand or reason about audio (transcribe, translate, analyze, answer questions).
 
-    Accepts a natural-language prompt plus one or more audio clips (speech,
-    music, or sound) and returns only the model's final answer. Use it for
-    transcription, translation, speaker or emotion analysis, summaries, meeting
-    minutes, or questions about what is heard. The model is set by the server's
-    SEED_AUDIO_UNDERSTANDING_MODEL (default 'seed-2-0-lite-260428'). Deep
-    thinking is always on (depth set by reasoning_effort) and its trace is never
-    returned. Use response_format with 'json_schema' for reliably structured
-    output (parsed result in choices[].parsed); 'json_object' is not enforced by
-    the default audio model, so use 'json_schema' (optionally with json_retry)
-    when JSON is required. Use save_to to write the answer to a local file. For
-    local audio files, upload them first with media_upload to obtain an HTTPS
-    URL, or pass small wav/mp3/flac/aac/m4a clips as raw Base64. For
-    plain long-form transcription with word timings, speech_to_text is the
-    dedicated ASR tool. Requires task-augmented execution (or ark_job_submit).
+    Returns only the final answer; the server fixes the model (see ark_list_models).
+    For structured output use response_format 'json_schema' ('json_object' is not
+    enforced by the default model). For plain transcription with word timings use
+    speech_to_text. Requires background execution (ark_job_submit).
     """
     await context_log(ctx, "info", "Starting Seed audio understanding")
     await ctx.report_progress(progress=10, total=100)

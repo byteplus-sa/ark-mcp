@@ -16,10 +16,8 @@ from ark_mcp.tools._errors import provider_error_result
 async def ark_asset_delete(input: AssetDeleteInput, ctx: Context) -> AssetDeleteResult | ToolResult:
     """Permanently delete one asset (asset_id) or one asset group (group_id). Irreversible.
 
-    Requires confirm=true. Deleting a group also deletes its assets, so a
-    non-empty group is refused unless cascade=true. Check last_inference_time
-    (ark_asset_list) and your own records before deleting. Only registered when
-    BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true.
+    Requires confirm=true. A non-empty group is refused unless cascade=true, which also deletes
+    its assets. Only registered when BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true.
     """
     asset_id, group_id = input.asset_id, input.group_id
 

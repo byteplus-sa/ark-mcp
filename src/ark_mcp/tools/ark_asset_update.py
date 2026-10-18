@@ -15,10 +15,8 @@ from ark_mcp.tools._errors import provider_error_result
 async def ark_asset_update(input: AssetUpdateInput, ctx: Context) -> AssetUpdateResult | ToolResult:
     """Rename an asset (asset_id), or update a group's name and/or description (group_id).
 
-    Pass exactly one of asset_id or group_id. Asset names are for search only;
-    the model never sees them. Returns the updated asset or group. Only
-    resources owned by this BytePlus account can be updated. Requires BytePlus
-    AK/SK.
+    Pass exactly one of asset_id or group_id. Only resources owned by this account can be
+    updated. Requires AK/SK.
     """
     asset_id, group_id = input.asset_id, input.group_id
 

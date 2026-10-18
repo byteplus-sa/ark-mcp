@@ -54,19 +54,15 @@ class MediaPresignInput(BaseModel):
         ...,
         min_length=1,
         max_length=100,
-        description=(
-            "Object keys returned by prior media_upload calls (e.g. "
-            "'references/video/<uuid>'). 1-100 keys; a fresh presigned URL is returned for each."
-        ),
+        description="object_key values from media_upload (1-100), e.g. 'references/video/<uuid>'.",
     )
     expires_in_seconds: int | None = Field(
         None,
         ge=60,
         le=604800,
         description=(
-            "Presigned URL validity in seconds (60-604800) applied to every key. Defaults to the "
-            "configured presign TTL. VOD tools fetch source URLs asynchronously, so use a long TTL "
-            "(e.g. 3600) when the URLs are destined for vod_* tools."
+            "Presigned URL validity in seconds for every key; defaults to the server presign "
+            "TTL. Use >= 3600 for URLs destined for vod_* tools, which fetch asynchronously."
         ),
     )
 
@@ -74,48 +70,30 @@ class MediaPresignInput(BaseModel):
 class MediaPresignItem(BaseModel):
     """Per-key presign result."""
 
-    object_key: str = Field(..., description="Object key this entry corresponds to.")
-    url: str | None = Field(
-        None, description="Fresh presigned HTTPS GET URL (None if this key failed)."
-    )
-    expires_at: str | None = Field(
-        None, description="ISO-8601 timestamp when the URL expires (None if this key failed)."
-    )
+    object_key: str = Field(..., description="The requested object key.")
+    url: str | None = Field(None, description="Fresh presigned HTTPS GET URL; null if failed.")
+    expires_at: str | None = Field(None, description="ISO-8601 expiry of url; null if failed.")
     code: str | None = Field(
         None,
-        description=(
-            "Machine-readable error code when this key failed "
-            "(INVALID_KEY, NOT_OWNED, INTERNAL, or a provider error code)."
-        ),
+        description="Error code if failed: INVALID_KEY, NOT_OWNED, INTERNAL, or a provider code.",
     )
-    error: str | None = Field(
-        None, description="Human-readable error message when this key failed."
-    )
-    request_id: str | None = Field(
-        None, description="Provider request ID for this key's presign call, if available."
-    )
+    error: str | None = Field(None, description="Error message if failed.")
+    request_id: str | None = Field(None, description="Provider request ID, if available.")
 
 
 class MediaPresignOutput(BaseModel):
     """Output model for ``media_presign``."""
 
-    items: list[MediaPresignItem] = Field(
-        ..., description="Per-key results, in the same order as the input object_keys."
-    )
-    succeeded: int = Field(..., description="Number of keys that produced a presigned URL.")
-    failed: int = Field(
-        ..., description="Number of keys that failed; check items[].error when non-zero."
-    )
+    items: list[MediaPresignItem] = Field(..., description="Per-key results in request order.")
+    succeeded: int = Field(..., description="Number of keys that produced a URL.")
+    failed: int = Field(..., description="Number of keys that failed; see items[].error.")
 
 
 async def media_presign(input: MediaPresignInput, ctx: Context) -> MediaPresignOutput:
-    """Generate fresh presigned HTTPS GET URLs for existing objects in storage.
+    """Mint fresh presigned HTTPS GET URLs for 1-100 object keys from earlier media_upload calls.
 
-    Use this when a previously uploaded reference's presigned URL has expired
-    or is about to expire. Pass 1-100 object keys from prior media_upload
-    calls; no data is transferred, only new URLs are minted. A malformed,
-    unowned, or provider-failing key is reported in items[].error while the
-    other keys succeed, so check failed.
+    Use when an uploaded file's URL has expired or is about to; nothing is re-uploaded. Only keys
+    you uploaded work. Keys fail independently: check failed and items[].error.
     """
     await context_log(
         ctx, "info", f"Generating presigned URLs for {len(input.object_keys)} object keys"

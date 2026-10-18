@@ -28,32 +28,25 @@ class OmniHumanCreateTaskInput(BaseModel):
 
     image: str = Field(
         description=(
-            "Portrait image of the person to animate: a public HTTPS URL or a "
-            "seed-media://artifacts/<id> artifact (needs object-storage artifacts; otherwise "
-            "upload with media_upload and pass the presigned URL). jpeg, png, webp, bmp, tiff, "
-            "gif, heic or heif; under 30 MB; aspect ratio (width/height) between 0.4 and 2.5; "
-            "each side 300-6000 px."
+            "Portrait of the person to animate: public HTTPS URL or seed-media:// artifact "
+            "(else media_upload and pass the presigned URL). jpeg/png/webp/bmp/tiff/gif/heic/heif, "
+            "under 30 MB, width/height 0.4-2.5, each side 300-6000 px."
         )
     )
     audio: str = Field(
         description=(
-            "Speech or audio that drives the performance: a public HTTPS URL or a "
-            "seed-media://artifacts/<id> artifact. wav or mp3; under 15 MB; 4-300 seconds. "
-            "The video length follows the audio length."
+            "Driving audio: public HTTPS URL or seed-media:// artifact. wav or mp3, under 15 MB, "
+            "4-300 s; video length follows the audio."
         )
     )
     prompt: str | None = Field(
         default=None,
         max_length=PROMPT_MAX_LENGTH,
-        description=(
-            "Optional text that steers the scene, movements and camera. Chinese, English, "
-            f"Japanese, Korean, Mexican Spanish and Indonesian are supported. Up to "
-            f"{PROMPT_MAX_LENGTH} characters."
-        ),
+        description="Optional text steering the scene, movements and camera (zh, en, ja, ko, es-MX, id).",
     )
     watermark: bool = Field(
         default=True,
-        description="Whether the provider adds its watermark to the video. Defaults to true.",
+        description="Whether the provider watermarks the video.",
     )
 
 
@@ -61,33 +54,26 @@ class OmniHumanCreateTaskOutput(BaseModel):
     """Accepted OmniHuman 2.0 task."""
 
     provider: Literal["byteplus-vision-cv"] = Field(
-        default="byteplus-vision-cv", description="Provider surface that accepted the task."
+        default="byteplus-vision-cv", description="Provider surface."
     )
-    status: Literal["accepted"] = Field(
-        default="accepted", description="The task was accepted and is queued for generation."
-    )
-    task_id: str = Field(
-        description="Task ID to pass to omnihuman_get_task or omnihuman_cancel_task."
-    )
+    status: Literal["accepted"] = Field(default="accepted", description="Task accepted and queued.")
+    task_id: str = Field(description="Pass to omnihuman_get_task or omnihuman_cancel_task.")
     request_id: str | None = Field(
         default=None, description="Provider diagnostic request ID, when returned."
     )
     recommended_poll_after_ms: int = Field(
-        description="Suggested delay before polling omnihuman_get_task, in milliseconds; a heuristic."
+        description="Suggested delay before polling omnihuman_get_task, in milliseconds."
     )
 
 
 async def omnihuman_create_task(
     input: OmniHumanCreateTaskInput, ctx: Context
 ) -> OmniHumanCreateTaskOutput | ToolResult:
-    """Generate a talking or performing video of a person from one image and one audio clip.
+    """Generate a talking or performing video of a person from one image and one audio clip (OmniHuman 2.0).
 
-    Uses BytePlus OmniHuman 2.0. Returns a task ID immediately; poll it with
-    omnihuman_get_task, which persists the finished video as a durable artifact
-    (the provider's video URL expires after one hour). The submission is never
-    retried automatically because completion can be ambiguous after a timeout.
-    Image and audio accept public HTTPS URLs or seed-media artifacts. Requires
-    MCP task-augmented execution (use ark_job_submit when the client lacks it).
+    Returns a task_id; poll omnihuman_get_task, which persists the finished video
+    (the provider URL expires after one hour). Submission is never retried
+    automatically. Requires background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

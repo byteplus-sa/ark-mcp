@@ -70,24 +70,21 @@ class TaskOutputFile(BaseModel):
     role: TaskOutputRole = Field(
         ...,
         description=(
-            "What this output is: video or last_frame (Seedance), model_file (3D), video "
-            "(VOD enhance, transcode, subtitles), or voice, background, music or sfx (VOD "
-            "audio separation)."
+            "Output kind: video, last_frame (Seedance), model_file (3D), or voice, background, "
+            "music, sfx (VOD audio separation)."
         ),
     )
     artifact: ArtifactRef | None = Field(
         None,
-        description="Durable artifact when persisted; local_path is set when it was also exported.",
+        description="Durable artifact when persisted.",
     )
     source_url: HttpsUrl | None = Field(
         None,
-        description="Expiring provider URL; kept even when persistence is skipped or fails.",
+        description="Expiring provider URL (kept when persistence is skipped or fails).",
     )
-    source_expires_at: str | None = Field(
-        None, description="ISO-8601 time when source_url is expected to expire."
-    )
+    source_expires_at: str | None = Field(None, description="ISO-8601 expiry of source_url.")
     persistence: Literal["not_requested", "persisted", "failed"] = Field(
-        ..., description="Durable persistence outcome, independent of task success."
+        ..., description="Persistence outcome, independent of task success."
     )
     persistence_issue: ArtifactPersistenceIssue | None = Field(
         None, description="Safe explanation when persistence failed."
@@ -200,9 +197,8 @@ class VariationError(BaseModel):
     phase: Literal["queued", "generating", "persisting"] | None = Field(
         None,
         description=(
-            "Stage the variation was in when it failed: 'queued' (never started, safe to "
-            "retry), 'generating' (provider call in flight, may have completed), or "
-            "'persisting' (output generated, storing it failed). None when not applicable."
+            "Stage at failure: 'queued' (never started, safe to retry), 'generating' (may have "
+            "completed), or 'persisting' (generated, storing failed)."
         ),
     )
 
@@ -235,13 +231,10 @@ class VariationResult(BaseModel):
     artifact: ArtifactRef | None = Field(None, description="Generated artifact (None if failed).")
     task_id: str | None = Field(
         None,
-        description=(
-            "Provider task ID for Seedance polling, obtained from the enclosing "
-            "MCP task's terminal tasks/get result."
-        ),
+        description="Provider task ID, when the variation created a task.",
     )
     error: VariationError | None = Field(None, description="Error if this variation failed.")
-    request_id: str | None = Field(None, description="Client request ID for this variation.")
+    request_id: str | None = Field(None, description="Request ID for this variation.")
     provider_log_id: str | None = Field(
         None, description="Provider-side log ID for troubleshooting."
     )
