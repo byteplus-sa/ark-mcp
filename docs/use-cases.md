@@ -380,20 +380,29 @@ a video reference for Seedance. Requires TOS or S3 credentials.
 
 ```json
 {
-  "media_type": "video",
-  "mime_type": "video/mp4",
-  "data": "base64-encoded-video-bytes"
+  "items": [
+    {"media_type": "video", "mime_type": "video/mp4", "data": "base64-encoded-video-bytes"}
+  ]
 }
 ```
 
-Returns:
+Returns (check `failed`; a failed item carries `error` instead of `url`):
 
 ```json
 {
-  "url": "https://bucket.tos-ap-southeast-1.bytepluses.com/references/video/abc?...",
-  "expires_at": "2026-07-24T07:30:00+00:00",
-  "object_key": "references/video/abc",
-  "bytes": 5242880
+  "items": [
+    {
+      "index": 0,
+      "url": "https://bucket.tos-ap-southeast-1.bytepluses.com/references/video/abc?...",
+      "expires_at": "2026-07-24T07:30:00+00:00",
+      "object_key": "references/video/abc",
+      "mime_type": "video/mp4",
+      "bytes": 5242880
+    }
+  ],
+  "succeeded": 1,
+  "failed": 0,
+  "total_bytes": 5242880
 }
 ```
 
@@ -417,8 +426,7 @@ Returns:
 
 The presigned URL is valid for 30 minutes by default (configurable via
 `TOS_PRESIGN_TTL_SECONDS` or `S3_PRESIGN_TTL_SECONDS` depending on the
-selected backend). When the URL expires, use `media_presign` with the
-`object_key` from the original upload to generate a fresh URL without
-re-uploading. To renew many references at once, use `media_presign_batch`
-with a list of `object_keys`. The bucket remains private; the presigned URL is
-the only way for BytePlus to read the object.
+selected backend). When the URL expires, call `media_presign` with
+`object_keys` set to the `object_key` values from the original upload (up to
+100 at once) to generate fresh URLs without re-uploading. The bucket remains
+private; the presigned URL is the only way for BytePlus to read the object.

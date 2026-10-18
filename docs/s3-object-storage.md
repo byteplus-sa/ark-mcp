@@ -129,10 +129,9 @@ defaults to 30 minutes (`TOS_PRESIGN_TTL_SECONDS`); both backends use the same d
 When the same reference media is used across multiple generation calls spread
 over time (e.g. several Seedance tasks throughout a day), re-uploading the
 same file each time is wasteful. The `media_presign` tool generates a fresh
-presigned URL for an existing object without re-uploading. When many
-references must be presigned at once (e.g. a Seedance 2.5 shot with 30
-reference images), use `media_presign_batch` to presign all object keys in a
-single call.
+presigned URL for existing objects without re-uploading. It takes a list of
+1-100 `object_keys`, so a Seedance 2.5 shot with 30 reference images is
+renewed in a single call; failures are reported per key.
 
 ```mermaid
 sequenceDiagram
@@ -165,16 +164,18 @@ sequenceDiagram
 
     Note over C,S3: ...later, URL expires or is about to...
 
-    C->>P: media_presign(object_key)
+    C->>P: media_presign(object_keys=[object_key])
     P->>G: presign_get(key)
     G-->>P: fresh presigned URL (T=N, valid 30min)
-    P-->>C: { url, object_key, expires_at }
+    P-->>C: { items: [{ url, object_key, expires_at }], succeeded, failed }
 ```
 
-The tool accepts the `object_key` returned by a prior `media_upload` call,
-validates it against a strict pattern: alphanumeric characters, `-`, `_`, and
+The tool accepts 1-100 `object_keys` returned by prior `media_upload` calls,
+validates each against a strict pattern: alphanumeric characters, `-`, `_`, and
 `/`, with the first character required to be alphanumeric (preventing path
-traversal, leading slashes, and leading dashes), and calls the same `presign_get` gateway method. No data is
+traversal, leading slashes, and leading dashes), checks the caller owns it, and calls the same `presign_get` gateway method.
+A key that fails returns `code` (`INVALID_KEY`, `NOT_OWNED`, `INTERNAL`, or a
+provider code) and `error` in its own item while the others succeed. No data is
 transferred — only a new URL is minted. This works with both the TOS and S3
 backends through the shared `ObjectStorageGateway` protocol.
 
@@ -257,7 +258,10 @@ aws s3api put-public-access-block \
 
 ### Upload validation
 
-The `media_upload` tool validates input **before** uploading:
+The `media_upload` tool validates every item **before** uploading. A failed
+item is reported in `items[].error` (with `retryable`) without failing the
+others, so check `failed`; only a request whose total decoded size exceeds
+`MEDIA_UPLOAD_BATCH_MAX_BYTES` fails as a whole:
 
 | Check | Enforcement | Code |
 |---|---|---|
@@ -301,7 +305,7 @@ if input.file_path is not None:
 ### JWT scope
 
 In JWT auth mode, `media_upload` requires the `media:upload` scope and
-`media_presign` / `media_presign_batch` require the `media:presign` scope. See
+`media_presign` requires the `media:presign` scope. See
 [security.md](security.md#scope-taxonomy).
 
 ## Setup guide
@@ -407,14 +411,14 @@ Call `media_upload` with a small test image:
 
 ```json
 {
-  "media_type": "image",
-  "mime_type": "image/png",
-  "data": "<base64-encoded-png>"
+  "items": [
+    {"media_type": "image", "mime_type": "image/png", "data": "<base64-encoded-png>"}
+  ]
 }
 ```
 
-The response should include a presigned URL, expiry timestamp, object key,
-and byte count. Verify the URL resolves by opening it in a browser or
+The response should report `succeeded: 1`, and `items[0]` should include a
+presigned URL, expiry timestamp, object key, and byte count. Verify the URL resolves by opening it in a browser or
 fetching it with `curl`.
 
 ## S3-compatible storage setup
@@ -544,9 +548,8 @@ credentials are configured). They work identically with either backend.
 
 | Tool | Scope | Description |
 |---|---|---|
-| `media_upload` | `media:upload` | Upload media (Base64 or file), return presigned URL + object key |
-| `media_presign` | `media:presign` | Generate a fresh presigned URL for an existing object key |
-| `media_presign_batch` | `media:presign` | Generate fresh presigned URLs for many object keys in one call |
+| `media_upload` | `media:upload` | Upload 1-50 files (Base64 or file path); return a presigned URL and object key per item, with per-item errors |
+| `media_presign` | `media:presign` | Generate fresh presigned URLs for 1-100 existing object keys, with per-key errors |
 
 ## Where to read more
 

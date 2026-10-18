@@ -3,9 +3,8 @@
 The server exposes a conditional set of typed tools. `seed_media_get_artifact`,
 `seed_media_export_artifact`, and `seed_media_persist_url` are always
 available, provider tools are registered only when their credentials
-are configured, and `media_upload`, `media_upload_batch`, `media_presign`, and
-`media_presign_batch` are registered when object storage credentials (TOS or
-S3) are present. Each
+are configured, and `media_upload` and `media_presign` are registered when
+object storage credentials (TOS or S3) are present. Each
 tool accepts a Pydantic input model and returns a Pydantic output model as
 structured content. All tools accept a `ctx: Context` parameter for progress
 reporting and logging.
@@ -48,8 +47,7 @@ The following tools require background execution. Their direct contracts
 advertise `execution.taskSupport="required"` with a two-second recommended poll
 interval:
 
-- `media_upload`
-- `media_upload_batch`
+- `media_upload` (1-50 files per call)
 - `seed_audio_generate` (single clip or variations)
 - `speech_to_text`
 - `seedream_generate_image` (generation, editing, variations, and dry runs)
@@ -469,9 +467,9 @@ poller for every `vod_*` create tool. Pass the `task_id` and the `operation`
 that the create tool returned. This tool is registered when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the `vod:read` JWT scope.
 
-**Execution:** Optional background job; background execution is required when
-`persist_output=true` (the default). Use `persist_output=false` for a quick
-foreground status check.
+**Execution:** Optional background job. `persist_output` defaults to
+`false`, so a plain foreground call is a quick status poll; background
+execution is required only when `persist_output=true`.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=True`, `openWorldHint=False`
@@ -482,7 +480,7 @@ foreground status check.
 |---|---|---|---|
 | `task_id` | string | Yes | MediaKit task ID returned by a `vod_*` create tool (1-256 chars, `[A-Za-z0-9._:-]`) |
 | `operation` | `"enhance"` \| `"transcode"` \| `"separate_audio"` \| `"add_subtitles"` \| `"remove_subtitles"` | Yes | Operation that created the task, echoed as `operation` by every `vod_*` create tool |
-| `persist_output` | boolean | No | Copy finished outputs into durable artifact storage, once per task (default: **true**; background execution required when true) |
+| `persist_output` | boolean | No | Copy finished outputs into durable artifact storage, once per task (default: **false**; background execution required when true) |
 | `output_path` | string | No | Local file (or directory ending with `/`) for the output; **a directory is required for `separate_audio`**, which writes every track. stdio only, inside an output root, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
 | `overwrite` | boolean | No | Allow `output_path` to replace an existing file with different content (default: false) |
 
@@ -529,10 +527,10 @@ and poll timeouts or connection failures (a poll creates no provider state).
 
 ### Example
 
-Foreground status check:
+Foreground status poll (the default):
 
 ```json
-{"task_id": "<task_id from vod_separate_audio>", "operation": "separate_audio", "persist_output": false}
+{"task_id": "<task_id from vod_separate_audio>", "operation": "separate_audio"}
 ```
 
 Once `status` is `succeeded`, submit through `ark_job_submit` to persist and
@@ -553,9 +551,10 @@ export every track:
 ```
 
 **Polling workflow:** submit the create tool through `ark_job_submit`, read
-`task_id` and `operation` from the job result, then poll `vod_get_task` with
-`persist_output=false` until `status` is not `processing`. **Never resubmit the
-create tool to poll.**
+`task_id` and `operation` from the job result, poll `vod_get_task` in the
+foreground (the default) until `status` is not `processing`, then run it once
+through `ark_job_submit` with `persist_output=true` to keep the outputs.
+**Never resubmit the create tool to poll.**
 
 ## omnihuman_create_task / omnihuman_get_task / omnihuman_cancel_task
 
@@ -626,15 +625,17 @@ Dreamina Seedance Advanced Creation Rights. Full guide, workflows and limits:
 
 | Tool | Purpose |
 |---|---|
-| `ark_asset_group_ensure` | Reuse or create the AIGC group named exactly `subject`; concurrent calls are serialized within one server event loop |
-| `ark_asset_group_create` | Create a new AIGC (virtual portrait) group |
-| `ark_asset_group_get` / `ark_asset_group_list` | Read groups (`group_type` `AIGC` default or `LivenessFace`) |
-| `ark_asset_group_update` | Rename or re-describe a group |
-| `ark_asset_create` | Add 1–20 files of one subject to one group; waits for `Active` (background-job capable) |
-| `ark_asset_get` / `ark_asset_list` | Asset status, type, group and `asset_uri` |
-| `ark_asset_update` | Rename an asset |
+| `ark_asset_group_ensure` | Reuse or create the AIGC group named exactly `subject` (idempotent); concurrent calls are serialized within one server event loop |
+| `ark_asset_group_list` | List groups (`group_type` `AIGC` default or `LivenessFace`), or read 1-20 groups of any type by `group_ids`; unreadable IDs come back in `errors` |
+| `ark_asset_create` | Add 1–20 files of one subject to one group; waits for `Active` (background-job capable). `group_created_empty` flags a new subject group whose sources all failed |
+| `ark_asset_list` | List assets with filters, or read 1-20 assets by `asset_ids` (IDs or `asset://` references); returns status, type, group and `asset_uri`, with unreadable IDs in `errors` |
+| `ark_asset_update` | Rename an asset (`asset_id`), or rename / re-describe a group (`group_id`); exactly one target |
 | `ark_asset_verification_start` / `ark_asset_verification_result` | Real-person liveness verification → `LivenessFace` group ID |
-| `ark_asset_delete` / `ark_asset_group_delete` | Irreversible; only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` and `confirm: true`. Deleting a nonempty AIGC group also deletes its assets. |
+| `ark_asset_delete` | Delete one asset (`asset_id`) or group (`group_id`). Irreversible; only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` and `confirm: true`. Deleting a group deletes its assets, so a non-empty group is refused unless `cascade: true` |
+
+Asset calls hold the shared `modelark-openapi` rate-limit slot only around
+each provider request, so processing waits and verification polling never
+block a Seedance asset preflight.
 
 Seedream and Seed Audio reject `asset://` unless
 `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental), which sends
@@ -708,7 +709,7 @@ Three takes written to a local directory:
 ## seedream_generate_image
 
 **The only Seedream tool**: text-to-image, image-to-image and reference
-editing, point or box edits, transparent cut-outs, provider batches
+editing, point or box edits, editing PNGs while keeping their transparency, provider batches
 (`max_images`), and parallel variations. Registered when
 `BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedream:generate` JWT scope.
 
@@ -751,7 +752,7 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 | `response_format` | `"url"` \| `"b64_json"` | No | Provider response format |
 | `watermark` | boolean | No | AIGC watermark |
 | `prompt_optimization` | `"standard"` \| `"fast"` | No | Prompt optimization mode; 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
-| `background` | `"opaque"` \| `"transparent"` | No | `transparent` cuts out the subject: needs a model that supports it (5.0 Pro), **exactly one input image** with an alpha channel, and `output_format` omitted or `png` |
+| `background` | `"opaque"` \| `"transparent"` | No | `transparent` edits an image and keeps its transparency. It needs a supported model (Seedream 5.0 Pro), **exactly one PNG input image that already has transparent pixels**, and `output_format` omitted or `png`. **It does not remove the background of an opaque image**: the provider rejects an input without transparent pixels (HTTP 400), and the server rejects a Base64 input whose `mime_type` is not `image/png` before calling the provider |
 | `variations` | integer | No | Independent generations to run in parallel (1-10, default 1); partial failures are reported per variation |
 | `variation_prompts` | list[string] | No | One prompt per variation, overriding `prompt`; must have exactly `variations` entries |
 | `persist` | boolean | No | Whether to persist output (default: true) |
@@ -803,12 +804,13 @@ Box edit of the first image:
 }
 ```
 
-Transparent cut-out on Seedream 5.0 Pro:
+Edit an image with transparency on Seedream 5.0 Pro (the input PNG must
+already have transparent pixels):
 
 ```json
 {
-  "prompt": "Keep only the product, remove the background",
-  "images": [{"kind": "url", "url": "https://cdn.example.com/product-rgba.png"}],
+  "prompt": "Turn the circle into a glossy ceramic button, keep the background transparent",
+  "images": [{"kind": "url", "url": "https://cdn.example.com/circle-transparent.png"}],
   "background": "transparent",
   "output_format": "png"
 }
@@ -1515,42 +1517,12 @@ optional `log_id`.
 
 ## media_upload
 
-Upload image, audio, or video media to object storage (TOS or S3) and receive
-a presigned HTTPS URL.
-
-**Execution:** Required background job because a video upload can contain up to
-200 MiB.
-
-**Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
-`idempotentHint=False`, `openWorldHint=True`
-
-### Input
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `media_type` | "image" \| "audio" \| "video" | Yes | Media category for validation |
-| `mime_type` | string | Yes | MIME type such as `video/mp4` or `image/png` |
-| `data` | string | No* | Base64-encoded media bytes |
-| `file_path` | string | No* | Absolute local path; intended for stdio transport |
-| `key_prefix` | string | No | Optional object key prefix |
-| `expires_in_seconds` | integer | No | Presigned URL validity (60–604800). Defaults to the configured TTL; use a long value (e.g. 3600) for VOD inputs that are fetched asynchronously |
-
-\* Provide exactly one of `data` or `file_path`.
-
-### Output
-
-Returns `MediaUploadOutput` with presigned `url`, `expires_at`, `object_key`,
-and uploaded `bytes`. For several files, use `media_upload_batch`.
-
-## media_upload_batch
-
-Upload 1-50 media files in one call and receive a presigned HTTPS URL for each,
-instead of N sequential `media_upload` calls. Each item follows the same rules
-as `media_upload` and fails independently. Registered with object storage and
+Upload 1-50 image, audio, or video files to object storage (TOS or S3) and
+receive a presigned HTTPS URL for each. Registered with object storage and
 uses the `media:upload` JWT scope.
 
-**Execution:** Required background job (use `ark_job_submit`), because batches
-can be large.
+**Execution:** Required background job (use `ark_job_submit`), because one
+item can hold up to 200 MiB of video.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -1559,38 +1531,64 @@ can be large.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `items` | list[MediaUploadBatchItemInput] | Yes | 1-50 files to upload |
-| `expires_in_seconds` | integer | No | Presigned URL validity (60–604800) applied to every item. Defaults to the configured TTL |
+| `items` | list[MediaUploadItem] | Yes | 1-50 files to upload |
+| `expires_in_seconds` | integer | No | Presigned URL validity (60–604800) applied to every item. Defaults to the configured TTL; use a long value (e.g. 3600) for VOD inputs that are fetched asynchronously |
 | `max_concurrent` | integer | No | Uploads running at the same time (1-8, default 4) |
 
-**MediaUploadBatchItemInput:**
+**MediaUploadItem:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `media_type` | "image" \| "audio" \| "video" | Yes | Media category for validation |
-| `mime_type` | string | No* | MIME type; optional for `file_path` items (inferred from the file extension), required for `data` items |
+| `media_type` | "image" \| "audio" \| "video" | Yes | Media category for MIME and size validation |
+| `mime_type` | string | No* | MIME type such as `video/mp4`; optional for `file_path` items (guessed from the file extension), required for `data` items |
 | `data` | string | No** | Base64-encoded media bytes |
 | `file_path` | string | No** | Absolute local path; stdio transport only |
-| `key_prefix` | string | No | Optional object key prefix (default `references`) |
+| `key_prefix` | string | No | Optional object key prefix (default `references`; letters, digits, `-`, `_`, `/`) |
 
-\* When the MIME type cannot be inferred from the extension, the request
-fails input validation and asks for `mime_type`. \*\* Provide exactly one of `data` or `file_path` per item.
+\* A `file_path` item whose MIME type cannot be guessed fails on its own and
+asks for `mime_type`. \*\* Provide exactly one of `data` or `file_path` per
+item.
 
 Every item is validated, and the total decoded size is checked against
-`MEDIA_UPLOAD_BATCH_MAX_BYTES` (default 500 MiB), before any upload starts. An
-oversized batch fails as a whole; split it into smaller batches.
+`MEDIA_UPLOAD_BATCH_MAX_BYTES` (default 500 MiB), before any upload starts.
+**An oversized request fails as a whole**; split it into smaller calls.
 
 ### Output
 
-Returns `MediaUploadBatchOutput` with `items` in request order (each with
-`index`, `file_path`, `url`, `object_key`, `expires_at`, `mime_type`, `bytes`,
-`error`, and `retryable`), plus `succeeded`, `failed`, and `total_bytes`.
+Returns `MediaUploadOutput`:
+
+| Field | Description |
+|---|---|
+| `items` | Per-item results in request order: `index`, `file_path` (as given), `url`, `object_key` (reusable with `media_presign`), `expires_at`, `mime_type`, `bytes`, and on failure `error` and `retryable` |
+| `succeeded`, `failed` | Number of items uploaded and failed |
+| `total_bytes` | Bytes uploaded across successful items |
+
+**Items fail independently** (validation, missing file, or provider error)
+without failing the call, so always check `failed` and `items[].error`.
+
+### Example
+
+```json
+{
+  "tool_name": "media_upload",
+  "arguments": {
+    "input": {
+      "items": [
+        {"media_type": "video", "file_path": "/Users/me/clips/reference.mp4"},
+        {"media_type": "image", "mime_type": "image/png", "data": "<base64>"}
+      ],
+      "expires_in_seconds": 3600
+    }
+  }
+}
+```
 
 ## media_presign
 
-Generate a fresh presigned HTTPS GET URL for an existing object in storage
-without re-uploading.  Use this when a previously uploaded reference's
-presigned URL has expired or is about to expire.
+Generate fresh presigned HTTPS GET URLs for 1-100 existing objects without
+re-uploading. Use it when a previously uploaded reference's URL has expired
+or is about to expire. Registered with object storage and uses the
+`media:presign` JWT scope.
 
 **Annotations:** `readOnlyHint=True`, `destructiveHint=False`,
 `idempotentHint=True`, `openWorldHint=False`
@@ -1599,36 +1597,16 @@ presigned URL has expired or is about to expire.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `object_key` | string | Yes | Object key returned by a prior `media_upload` call |
-| `expires_in_seconds` | integer | No | Presigned URL validity (60–604800). Defaults to the configured TTL; use a long value (e.g. 3600) for VOD inputs that are fetched asynchronously |
+| `object_keys` | list[string] | Yes | Object keys returned by prior `media_upload` calls (1–100) |
+| `expires_in_seconds` | integer | No | Presigned URL validity (60–604800) applied to every key. Defaults to the configured TTL; use a long value (e.g. 3600) for VOD inputs |
 
 ### Output
 
-Returns `MediaPresignOutput` with presigned `url`, `expires_at`, and
-`object_key`.
-
-## media_presign_batch
-
-Generate fresh presigned HTTPS GET URLs for many existing objects in storage
-in a single call, without re-uploading. Accepts a list of object keys from
-prior `media_upload` calls. Failures are reported per key — a malformed,
-unowned, or provider-failing key returns an inline error while the rest
-succeed.
-
-**Annotations:** `readOnlyHint=True`, `destructiveHint=False`,
-`idempotentHint=True`, `openWorldHint=False`
-
-### Input
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `object_keys` | list[string] | Yes | Object keys returned by prior `media_upload` calls (1–100 entries) |
-| `expires_in_seconds` | integer | No | Presigned URL validity (60–604800) applied to every key. Defaults to the configured TTL |
-
-### Output
-
-Returns `MediaPresignBatchOutput` with `items` (per-key `object_key`, `url`,
-`expires_at`, `code`, `error`, `request_id`), `succeeded`, and `failed`.
+Returns `MediaPresignOutput` with `items` in input order (each with
+`object_key`, `url`, `expires_at`, and on failure `code`, `error`, and
+`request_id`), plus `succeeded` and `failed`. **Failures are per key**:
+`INVALID_KEY` (malformed key), `NOT_OWNED` (not uploaded by the caller),
+`INTERNAL`, or a provider error code. Check `failed`.
 
 ## hyper3d_create_task / hitem3d_create_task
 

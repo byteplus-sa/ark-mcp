@@ -44,16 +44,14 @@ or authorized in the console.
 
 | Tool | Provider action | Notes |
 |---|---|---|
-| `ark_asset_group_ensure` | `ListAssetGroups` + `CreateAssetGroup` | Reuses the single AIGC group named exactly `subject`, or creates it. Fails with `ambiguous_asset_group` if several share the name. |
-| `ark_asset_group_create` | `CreateAssetGroup` | Always creates a new AIGC group. |
-| `ark_asset_group_get` / `ark_asset_group_list` | `GetAssetGroup` / `ListAssetGroups` | List filters by `group_type` (`AIGC` default, or `LivenessFace`), fuzzy `name`, `group_ids`. Paged with `next_token`. |
-| `ark_asset_group_update` | `UpdateAssetGroup` | Name and description. |
-| `ark_asset_create` | `CreateAsset` ×N, then `GetAsset` polling | Up to 20 files of **one** subject into one group (`group_id` or `subject`). Sources are public HTTPS `url`s or `media_upload` `object_key`s. Waits until Active/Failed by default. Per-file errors are reported inline. Background-job capable. |
-| `ark_asset_get` / `ark_asset_list` | `GetAsset` / `ListAssets` | Status, type, group, `asset_uri`, `last_inference_time`, and a temporary `preview_url`. |
-| `ark_asset_update` | `UpdateAsset` | Rename (search only; the model never sees names). |
+| `ark_asset_group_ensure` | `ListAssetGroups` + `CreateAssetGroup` | **The only way to create an AIGC group.** Reuses the single AIGC group named exactly `subject`, or creates it, so repeating the call is safe. Fails with `ambiguous_asset_group` if several share the name. |
+| `ark_asset_group_list` | `ListAssetGroups` / `GetAssetGroup` | Lists by `group_type` (`AIGC` default, or `LivenessFace`) and fuzzy `name`, paged with `next_token`. **With `group_ids` (1-20, any group type) it reads those groups by ID instead**; `group_ids` cannot be combined with `name`, `next_token` or `sort_order`, and unreadable IDs are returned in `errors` (`id`, `code`, `message`). |
+| `ark_asset_create` | `CreateAsset` ×N, then `GetAsset` polling | Up to 20 files of **one** subject into one group (`group_id` or `subject`). Sources are public HTTPS `url`s or `media_upload` `object_key`s. Waits until Active/Failed by default. Per-file errors are reported inline. `group_created_empty: true` means this call created the subject's group but every source failed; delete it with `ark_asset_delete` if you don't need it. Background-job capable. |
+| `ark_asset_list` | `ListAssets` / `GetAsset` | Status, type, group, `asset_uri`, `last_inference_time`, and a temporary `preview_url`. Filters by `group_ids`, `statuses` and `name`, paged with `next_token`. **With `asset_ids` (1-20 IDs or `asset://` references) it reads those assets instead**; `asset_ids` cannot be combined with the filters, and unreadable IDs are returned in `errors`. |
+| `ark_asset_update` | `UpdateAsset` / `UpdateAssetGroup` | Exactly one of `asset_id` or `group_id`, plus `name` and/or `description` (`description` only with `group_id`). Asset names are for search only; the model never sees them. Returns `asset` or `group`. |
 | `ark_asset_verification_start` | `CreateVisualValidateSession` | Returns an H5 liveness link for the person to open, plus a token valid for about 30 minutes. |
 | `ark_asset_verification_result` | `GetVisualValidateResult` | Returns the verified person's `LivenessFace` `group_id`; `wait_seconds` polls. Background-job capable. |
-| `ark_asset_delete` / `ark_asset_group_delete` | `DeleteAsset` / `DeleteAssetGroup` | **Irreversible.** Registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`; each call needs `confirm: true`. Deleting a nonempty AIGC group also removes its assets. |
+| `ark_asset_delete` | `DeleteAsset` / `DeleteAssetGroup` | **Irreversible.** Exactly one of `asset_id` or `group_id`, and `confirm: true`. Registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`. Deleting a group also removes its assets, so **a non-empty group is refused unless `cascade: true`**. Returns `id`, `kind` (`asset` or `group`), and `deleted`. |
 
 JWT scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
 Asset management acts on the whole BytePlus account, not per MCP principal, so
@@ -64,6 +62,11 @@ separate stdio servers or replicas may create the same subject concurrently,
 pre-create its group and pass `group_id` to `ark_asset_create`. A lookup that
 cannot exhaust its group pages fails with `asset_group_scan_incomplete` instead
 of creating a possibly duplicate group.
+
+Asset tools hold the shared `modelark-openapi` rate-limit slot only around
+each provider request. Processing waits (`wait_until_active`), `CreateAsset`
+spacing, and verification polling therefore never block a Seedance asset
+preflight running at the same time.
 
 ## Workflows
 
@@ -97,16 +100,23 @@ see them.
 
 **Deletion is opt-in and permanent.** Set
 `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` before starting the MCP server;
-the two delete tools then register. Inspect the target with `ark_asset_get` or
-`ark_asset_group_get`, and list a group's members with `ark_asset_list` before
-deleting it. Pass the exact ID and `confirm: true`:
+`ark_asset_delete` then registers. Inspect the target first with
+`ark_asset_list` (`asset_ids`) or `ark_asset_group_list` (`group_ids`), and
+list a group's members with `ark_asset_list` (`group_ids`). Pass the exact
+ID and `confirm: true`:
 
 ```json
 {"input":{"asset_id":"asset-EXAMPLE","confirm":true}}
 ```
 
-Use that input with `ark_asset_delete`. For `ark_asset_group_delete`, pass
-`{"input":{"group_id":"group-EXAMPLE","confirm":true}}`.
+To delete a group, pass `group_id` instead. A group that still holds assets
+is refused with `asset_group_not_empty`; delete its assets first, or add
+`"cascade": true` to delete the group and its assets together:
+
+```json
+{"input":{"group_id":"group-EXAMPLE","confirm":true,"cascade":true}}
+```
+
 The AIGC group deletion path was verified live with a remaining asset: both
 the group and that asset returned 404 afterward. If a delete call times out or
 returns 5xx, read the target again before any retry because the provider may

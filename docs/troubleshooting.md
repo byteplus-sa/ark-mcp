@@ -230,10 +230,12 @@ operations rather than keeping the original foreground request open.
 - On a task-capable client, you may instead invoke those tools with MCP task
   metadata, retain the returned MCP task ID, and poll `tasks/get` at the
   advertised interval until terminal.
-- For long video work, the background result contains the provider task ID.
-  Poll `gen_task_get` in the foreground with `persist_output=false` (the
-  default); run it in the background with `persist_output=true` when the
-  completed output needs persistence. Never resubmit the create tool to poll.
+- For long video and VOD work, the background result contains the provider
+  task ID. Poll `gen_task_get` (Seedance, 3D) or `vod_get_task` (VOD, with the
+  echoed `operation`) in the foreground; both default to
+  `persist_output=false`. Then run the poller once through `ark_job_submit`
+  with `persist_output=true` to keep the outputs. Never resubmit the create
+  tool to poll.
 - If a client disconnects after task acceptance, reconcile with the returned
   MCP task ID or provider task ID rather than resubmitting (see
   `ambiguous_completion`).

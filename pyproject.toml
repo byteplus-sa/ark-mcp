@@ -1,6 +1,6 @@
 [project]
 name = "ark-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python MCP server (FastMCP on uv) exposing BytePlus multimodal generation: Seed Audio, Seedream, and Seedance."
 readme = "README.md"
 license = { text = "MIT" }

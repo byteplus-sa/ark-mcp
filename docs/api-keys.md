@@ -11,8 +11,8 @@ tool set.
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | `X-Api-Key: <key>` | Seed Audio (speech generation), Speech-to-Text (ASR) |
 | VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `Authorization: Bearer <key>` | Enhancement, transcode, subtitle burn-in/removal, audio separation, and poll tools |
 | Vision AI (OmniHuman) | `BYTEPLUS_CV_API_KEY` | `Authorization: Bearer <key>` | `omnihuman_*` tools (also needs `BYTEPLUS_OMNIHUMAN_ENABLED=true`) |
-| TOS | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` | AK/SK signing | `media_upload`, `media_presign`, `media_presign_batch` |
-| S3 | `S3_ACCESS_KEY` + `S3_SECRET_KEY` + `S3_BUCKET` | AK/SK signing | `media_upload`, `media_presign`, `media_presign_batch` |
+| TOS | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
+| S3 | `S3_ACCESS_KEY` + `S3_SECRET_KEY` + `S3_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
 
 Copy `.env.example` to `.env` and fill in the keys you need.
 
@@ -153,8 +153,8 @@ path only.
 
 ## Object storage (TOS or S3)
 
-Object storage is **optional** but enables several workflows: the `media_upload`,
-`media_presign`, and `media_presign_batch` tools and Seedance video references
+Object storage is **optional** but enables several workflows: the `media_upload` and
+`media_presign` tools and Seedance video references
 (URL-only). It uses Access Key / Secret Key (AK/SK) signing, not a bearer
 token. Select the backend with `OBJECT_STORAGE_BACKEND` (`tos` default, or
 `s3`).
@@ -175,7 +175,7 @@ token. Select the backend with `OBJECT_STORAGE_BACKEND` (`tos` default, or
 
 `TOS_ACCESS_KEY` and `TOS_SECRET_KEY` must **both** be set or **both** be
 empty. All three of AK, SK, and bucket must be set to register the
-`media_upload`, `media_presign`, and `media_presign_batch` tools.
+`media_upload` and `media_presign` tools.
 
 **How to get the keys:**
 
@@ -220,7 +220,7 @@ TOS_ENDPOINT=tos-ap-southeast-1.bytepluses.com
 
 `S3_ACCESS_KEY` and `S3_SECRET_KEY` must **both** be set or **both** be
 empty. All three of AK, SK, and bucket must be set to register the
-`media_upload`, `media_presign`, and `media_presign_batch` tools with the S3
+`media_upload` and `media_presign` tools with the S3
 backend.
 
 When `S3_ENDPOINT` is set, path-style addressing is used automatically for

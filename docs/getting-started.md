@@ -3,6 +3,10 @@
 This guide covers installing, configuring, and running the Ark Seed
 Multimodal MCP Server.
 
+> **Upgrading from 0.1.x?** Tool names changed in 0.2.0. Read
+> [Migrating to 0.2.0](migration-0.2.md) before updating clients, prompts, or
+> dashboards.
+
 ## Prerequisites
 
 - Python 3.12+
@@ -126,5 +130,6 @@ make inspect
 ## Next Steps
 
 - [Configuration](configuration.md) — full environment variable reference
+- [Migrating to 0.2.0](migration-0.2.md) — removed 0.1.x tools and their replacements
 - [Tools](tools.md) — tool schemas and usage examples
 - [Transports](transports.md) — stdio vs HTTP deployment

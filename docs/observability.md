@@ -90,6 +90,20 @@ labels). All Histograms use the `prometheus_client` default buckets
 | `ark_mcp_budget_rejections_total` | Counter | `product` | requests rejected for exceeding daily budget | one inc per rejection |
 | `ark_mcp_retry_attempts_total` | Counter | `provider`, `operation` | retried provider attempts (excluding the initial attempt) | one inc per retry |
 
+> **Upgrading dashboards to 0.2.0.** The `tool` label on
+> `ark_mcp_tool_requests_total`, `ark_mcp_tool_duration_seconds`, and
+> `ark_mcp_tool_admission_duration_seconds` (and the `target` label on
+> `ark_mcp_background_job_submissions_total`) carries the 0.2.0 tool names.
+> Panels and alerts keyed on removed 0.1.x names (for example the per-family
+> Seedance create tools or the per-product task pollers) stop receiving data;
+> switch them to the replacements listed in
+> [Migrating to 0.2.0](migration-0.2.md).
+> The merged `seedance_create_task` no longer separates Seedance 2.0, 2.5, and
+> 2.5 Premium by label, and metrics carry no model label. To split by model,
+> use the `model` field in the structured logs: `seedance_task_created` (and
+> `seedance_create_task_complete`) for a single task, and
+> `seedance_variations_complete` for a variations call.
+
 VOD AI MediaKit mutation POSTs are intentionally not passed through the automatic
 retry helper because they are non-idempotent and a timeout may be ambiguous.
 Consequently, `ark_mcp_retry_attempts_total` should not increase for the

@@ -225,7 +225,7 @@ only the API key. See [assets.md](assets.md).
 | `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | ModelArk OpenAPI host (HTTPS) |
 | `BYTEPLUS_MODELARK_REGION` | `ap-southeast-1` | Signing region |
 | `BYTEPLUS_MODELARK_PROJECT_NAME` | `default` | Default project for groups and assets; must match the inference endpoint's project |
-| `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE` | `false` | Registers the irreversible `ark_asset_delete` / `ark_asset_group_delete` tools |
+| `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE` | `false` | Registers the irreversible `ark_asset_delete` tool (assets and groups) |
 | `BYTEPLUS_MODELARK_ASSET_CREATE_QPM` | `3` | Client-side `CreateAsset` pacing; set to your tier (3 Entry, 120 Advanced, 300 Premium) |
 | `BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL` | empty | Default HTTPS redirect for real-person verification |
 | `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE` | `off` | Seedream / Seed Audio `asset://` handling: `off` rejects, `resolve` swaps in the temporary asset URL (experimental; needs AK/SK) |
@@ -235,17 +235,16 @@ JWT tool scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`
 
 ## Object storage (TOS or S3, optional)
 
-The `media_upload`, `media_upload_batch`, `media_presign`, and
-`media_presign_batch` tools are registered when the selected object-storage
-backend is configured. `media_upload` uploads media to a **private** bucket and
-returns a presigned HTTPS GET URL; `media_upload_batch` does the same for 1-50
-files in one call; `media_presign` generates a fresh presigned URL for an
-existing object without re-uploading.
+The `media_upload` and `media_presign` tools are registered when the selected
+object-storage backend is configured. `media_upload` uploads 1-50 files to a
+**private** bucket and returns a presigned HTTPS GET URL per file;
+`media_presign` generates fresh presigned URLs for 1-100 existing objects
+without re-uploading.
 Use `OBJECT_STORAGE_BACKEND` to select `tos` (default) or `s3`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MEDIA_UPLOAD_BATCH_MAX_BYTES` | `524288000` (500 MiB) | Maximum total decoded bytes in one `media_upload_batch` call; checked before any upload starts |
+| `MEDIA_UPLOAD_BATCH_MAX_BYTES` | `524288000` (500 MiB) | Maximum total decoded bytes in one `media_upload` call (all items); checked before any upload starts, and an oversized call fails as a whole |
 
 ### TOS backend
 

@@ -114,13 +114,13 @@ tool → scope mapping is the `scope` column of the static tool catalog
 | `vod:subtitle:remove` | `vod_remove_subtitles` |
 | `vod:read` | All MediaKit task polling tools |
 | `vod:extract` | `vod_separate_audio` |
-| `media:upload` | `media_upload`, `media_upload_batch`, `seed_media_persist_url` |
-| `media:presign` | `media_presign`, `media_presign_batch` |
+| `media:upload` | `media_upload`, `seed_media_persist_url` |
+| `media:presign` | `media_presign` |
 | `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}`, `seed_media_get_artifact`, `seed_media_export_artifact` |
-| `assets:read` | `ark_asset_group_get`, `ark_asset_group_list`, `ark_asset_get`, `ark_asset_list` |
-| `assets:write` | `ark_asset_group_ensure`, `ark_asset_group_create`, `ark_asset_group_update`, `ark_asset_create`, `ark_asset_update` |
+| `assets:read` | `ark_asset_group_list`, `ark_asset_list` |
+| `assets:write` | `ark_asset_group_ensure`, `ark_asset_create`, `ark_asset_update` |
 | `assets:verify` | `ark_asset_verification_start`, `ark_asset_verification_result` |
-| `assets:delete` | `ark_asset_delete`, `ark_asset_group_delete` (registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
+| `assets:delete` | `ark_asset_delete` (assets and groups; registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
 
 **Create scopes are per product because that is where spend happens; read
 and delete scopes are shared** (`gen:read`, `gen:delete`) because the
@@ -136,9 +136,8 @@ speech-to-text tools are registered only when `BYTEPLUS_SEED_SPEECH_API_KEY`
 is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
 `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
 `vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload`,
-`media_upload_batch`, `media_presign`, and `media_presign_batch` tools are
-registered only when object storage credentials are set (TOS:
+`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload` and
+`media_presign` tools are registered only when object storage credentials are set (TOS:
 `TOS_ACCESS_KEY` / `TOS_SECRET_KEY` / `TOS_BUCKET`, or S3:
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` with
 `OBJECT_STORAGE_BACKEND=s3`).
@@ -169,8 +168,9 @@ and `/`. File-path input is restricted to the `stdio` transport to prevent
 remote file reads over HTTP.
 
 Uploaded object keys are recorded in the SQLite `object_key_ownership`
-ledger keyed by `(principal_id, tenant_id)`. `media_presign` and
-`media_presign_batch` verify the caller owns each key before minting a read
+ledger keyed by `(principal_id, tenant_id)`. `media_presign`
+verifies the caller owns each key (an unowned key returns `NOT_OWNED` for that
+key only) before minting a read
 URL; a remote principal cannot re-presign another tenant's object. In `LOCAL`
 mode, unrecorded keys remain presignable by the single local principal. A
 successful `record` or `require_owner` refreshes the row's `created_at`
