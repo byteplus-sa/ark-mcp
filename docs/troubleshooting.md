@@ -134,8 +134,9 @@ Check `persistence_error.code` and `retryable`: `output_too_large` and
 ### `output_path` rejected or `export_error` set
 
 - `... is disabled: no output roots are configured`: the client does not
-  advertise MCP roots and `OUTPUT_ROOTS` is empty. Set `OUTPUT_ROOTS` to one
-  or more absolute directories.
+  advertise MCP roots and `OUTPUT_ROOTS` is empty (a call inside
+  `ark_job_submit` never has MCP roots). Set `OUTPUT_ROOTS` to one or more
+  absolute directories.
 - `must be inside an allowed output root` / `must be an absolute path`: use an
   absolute path under a client root or an `OUTPUT_ROOTS` entry.
 - `only supported in stdio transport mode`: local paths are stdio-only.

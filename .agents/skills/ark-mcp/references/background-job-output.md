@@ -3,44 +3,16 @@
 Read this when a tool runs through `ark_job_submit` and the call writes local
 files, persists provider output, or returns a very large result.
 
-## Local-write options inside `ark_job_submit`
+## Local writes inside `ark_job_submit`
 
-`output_path`, `output_dir`, `save_to`, and `persist_output=true` need the
-client's MCP session to resolve output roots. A worker started by
-`ark_job_submit` may have no established session. The job then completes with
-an error result such as:
-
-```text
-Error calling tool '<name>': session is not available because the MCP session
-has not been established yet.
-```
-
-`output_path` and `save_to` are validated before any provider call, so this
-failure happens before billing. A retry without those options is a new, valid
-submission; record the failed Ark job ID beside the operation first.
-
-Observed on 2026-09-24 for the Seedance task poller (`persist_output=true`,
-`output_path`; now `gen_task_get` with `output_dir`), `seed_audio_generate` (`output_path`), and `seed_understand` /
-`seed_audio_understand` (`save_to`).
-
-Default route for background submissions:
-
-1. Omit `output_path`, `output_dir`, and `save_to`.
-2. Read the answer or provider URL from `ark_job_get.result.structured_content`.
-3. For Seedance, poll `gen_task_get` in the foreground (`persist_output`
-   omitted) until `all_terminal`, then download the `source_url` of the output
-   with `role="video"` (valid about 24 h) to the project path with an HTTPS
-   client.
-4. Record bytes, SHA-256, and `ffprobe` properties in the task registry and shot
-   manifest. Set the artifact `source` to the provider-URL download. There is no
-   durable MCP artifact ID in this case.
-5. For Seed Audio and Seedream, keep `persist=true` so the durable artifacts
-   are created server-side (with `variations > 1` they are in
-   `summary.variations[]`, not `artifact` / `artifacts`). If the result carries `persistence_error`, recover with
-   `seed_media_persist_url` before the 2 h audio URL expires.
-
-When a client has confirmed native task augmentation, the local-write options
-work as documented in `SKILL.md`.
+A background worker has no MCP session, so it has **no MCP roots**. Local
+writes (`output_path`, `output_dir`, `save_to`) are therefore allowed only
+inside the server's `OUTPUT_ROOTS` (comma-separated absolute directories).
+Without `OUTPUT_ROOTS` the call is rejected **before any provider call**, so
+nothing is billed; fix the setting or omit the option and resubmit.
+`persist_output=true` does not need roots and works inside jobs. When a job
+ends in an error, read the error from `ark_job_get.result`, and record the
+failed Ark job ID beside the operation before resubmitting.
 
 ## Large results
 
@@ -58,14 +30,10 @@ The `seedance_create_task` schema is shared by every Seedance model, so it
 shows the widest allowed values; take per-model limits from
 `ark_list_models(kind='video')` instead (no provider call, small result).
 
-Record the fields you rely on in `projects/<project>/capabilities/<model>.json`
-with the verification time, and reuse that file for later requests in the same
-project.
-
 ## Provider moderation versus transport failure
 
 An `ambiguous_completion=True` error that names an output audit
 (`decision_in_reject_list`, code `55001310`) is a terminal content rejection
 with no artifact and no provider task ID to reconcile. Mark the operation
-`terminal` with `provider_status: failed`. Diagnose before any revised
-submission; never repeat the identical request.
+failed and diagnose before any revised submission; never repeat the identical
+request.

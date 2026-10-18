@@ -109,7 +109,9 @@ everywhere:
 - **Absolute paths inside an allowed output root.** The roots are the client's
   MCP roots (`roots/list`) when the client provides them, otherwise
   `OUTPUT_ROOTS` (comma-separated absolute directories). With neither, path
-  writing is disabled and the field is rejected.
+  writing is disabled and the field is rejected. A background job
+  (`ark_job_submit`) has no MCP roots, so it always needs `OUTPUT_ROOTS`;
+  `persist_output=true` itself works without it.
 - **Validated before the provider call**, so a bad path never produces paid
   output that cannot be written.
 - **Needs a persisted artifact.** `output_path`/`output_dir` require

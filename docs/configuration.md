@@ -310,7 +310,10 @@ budget, cache, and limiter implementations before horizontal scaling is safe.
 
 The client's MCP roots (`roots/list`) take precedence when the client provides
 them; `OUTPUT_ROOTS` is the fallback. With neither, local path writing is
-disabled and those fields are rejected. Path writing is stdio-only. See
+disabled and those fields are rejected. **Background jobs
+(`ark_job_submit`) run in a worker with no MCP session and therefore no MCP
+roots, so local writes from a job always use `OUTPUT_ROOTS`; set it whenever
+jobs should write files.** Path writing is stdio-only. See
 [Security](security.md#local-output-paths).
 
 ## Timeouts and logging

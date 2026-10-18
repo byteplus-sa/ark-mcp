@@ -309,7 +309,9 @@ generation and get tools, `save_to` on `seed_understand` and
 - **Allowed roots.** The client's MCP roots (`roots/list`, `file://` URIs
   only, 2-second timeout) are used when available; otherwise `OUTPUT_ROOTS`
   (comma-separated absolute directories). With neither, path writing is
-  disabled and every such field is rejected.
+  disabled and every such field is rejected. A background worker has no MCP
+  session and so no MCP roots: local writes inside `ark_job_submit` are
+  checked against `OUTPUT_ROOTS` only.
 - **Containment.** The path must be absolute and resolve inside a root. A file
   target cannot be a directory or a root itself.
 - **Pre-flight.** Paths are validated before any billable provider call, so a

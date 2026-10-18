@@ -178,7 +178,7 @@ and `seed_audio_understand`; and `destination_path` on
 |---|---|
 | Transport | stdio only; rejected on HTTP |
 | Path form | Absolute. `output_path` names a file, or a directory when it ends with `/` (files named `<artifact_id>.<ext>`) |
-| Allowed roots | Client MCP roots (`roots/list`) first, otherwise `OUTPUT_ROOTS`; with neither, path writing is disabled |
+| Allowed roots | Client MCP roots (`roots/list`) first, otherwise `OUTPUT_ROOTS`; with neither, path writing is disabled. Inside `ark_job_submit` there are no MCP roots, so `OUTPUT_ROOTS` is required |
 | Timing | Validated before any provider call |
 | Preconditions | `persist=true` (generation tools) or `persist_output=true` (task pollers); a directory is required for `seedream_generate_image` with `variations > 1` or `max_images > 1`, `seed_audio_generate` with `variations > 1`, and `vod_get_task` with `operation="separate_audio"` |
 | Existing files | Replaced only with `overwrite=true`; identical content is success |
@@ -2278,7 +2278,7 @@ and `name` (≤64 chars, search only).
 |---|---|---|
 | `group_id` | string | Group the assets were added to |
 | `group_created` | boolean | True when the subject's group was created by this call |
-| `group_created_empty` | boolean | **True when this call created the group but every source failed**, leaving it empty; delete it with `ark_asset_delete(group_id=...)` if not needed |
+| `group_created_empty` | boolean | **True when this call created the group but every source failed**, leaving it empty; delete it with `ark_asset_delete(group_id=...)` if not needed (registered only when `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
 | `items` | list[AssetCreateItem] | One result per source: `index`, `asset_id`, `asset_uri`, `status`, `error` |
 | `all_active` | boolean | True when every source ended `Active` |
 
