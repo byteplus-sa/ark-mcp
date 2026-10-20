@@ -8,6 +8,11 @@ and the [Docker Compose kit](../deploy/compose/README.md). The kit includes
 TLS ingress, an authenticated internal Redis job backend, and hardened
 application settings. Its guide identifies remaining live-deployment checks.
 
+For a published build, use a versioned `ghcr.io/byteplus-sa/ark-mcp:vX.Y.Z`
+image or pin the digest from its GitHub Release. The registry's `latest`
+tracks releases, while `edge` tracks passing main builds. See
+[Versioning and releases](releases.md) for artifacts, approval, and rollback.
+
 ## Build the container
 
 ```bash

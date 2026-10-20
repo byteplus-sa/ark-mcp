@@ -5,12 +5,19 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact commit to validate for release publication
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref }}
   cancel-in-progress: true
 
 env:
@@ -24,6 +31,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Install pinned uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -36,6 +45,7 @@ jobs:
         run: |
           uv lock --check
           uv sync --locked
+          uv run python scripts/release_checks.py
 
       - name: Lint and format check
         run: |
@@ -68,6 +78,7 @@ jobs:
 
   container:
     name: Container build and health
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -75,6 +86,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
 
       - name: Build image
         run: docker build --tag ark-mcp:ci .
@@ -115,5 +128,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:edge
             ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
