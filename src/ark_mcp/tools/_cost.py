@@ -8,6 +8,7 @@ variation tool handler.
 from __future__ import annotations
 
 from ark_mcp.observability.logger import info as log_info
+from ark_mcp.providers.modelark.pricing import get_price_book
 
 # Provider cost estimates (USD per unit).
 COST_PER_IMAGE = 0.03
@@ -57,6 +58,38 @@ def _3d_cost_for_model(model_id: str | None, family: str | None = None) -> float
     return COST_PER_3D_TASK_HYPER3D
 
 
+def _live_cost_per_image(model_id: str | None) -> float | None:
+    pricing = get_price_book().lookup(model_id)
+    if pricing is None:
+        return None
+    item = pricing.charge_item("ToICompletion", "T2ICompletion", "I2ICompletion")
+    return item.price_per_piece if item is not None else None
+
+
+def _live_understanding_rates(model_id: str | None) -> tuple[float, float] | None:
+    pricing = get_price_book().lookup(model_id)
+    if pricing is None:
+        return None
+    prompt = pricing.charge_item("InferencePrompt")
+    completion = pricing.charge_item("InferenceCompletion")
+    if prompt is None or completion is None:
+        return None
+    input_rate = prompt.price_per_million_tokens
+    output_rate = completion.price_per_million_tokens
+    if input_rate is None or output_rate is None:
+        return None
+    return input_rate, output_rate
+
+
+def price_source(product: str, model_id: str | None) -> str:
+    """Identify whether the current estimate uses catalog or built-in rates."""
+    if product == "image" and _live_cost_per_image(model_id) is not None:
+        return "live"
+    if product == "understanding" and _live_understanding_rates(model_id) is not None:
+        return "live"
+    return "builtin"
+
+
 def estimate_cost(
     *,
     product: str,
@@ -76,7 +109,7 @@ def estimate_cost(
         duration_seconds: Expected output duration (audio only).
         prompt_tokens: Estimated input tokens (understanding only).
         max_tokens: Maximum output tokens (understanding only).
-        model_id: Model ID for model-specific pricing (video only).
+        model_id: Model ID for model-specific image, video, and understanding pricing.
         seed3d_family: Family for 3D pricing ("seed3d_hyper3d" or "seed3d_hitem3d").
         video_family: Registry family for video pricing (e.g. "seedance_2_5").
 
@@ -84,7 +117,8 @@ def estimate_cost(
         Estimated cost in USD.
     """
     if product == "image":
-        return round(variations * COST_PER_IMAGE, 2)
+        per_image = _live_cost_per_image(model_id)
+        return round(variations * (COST_PER_IMAGE if per_image is None else per_image), 4)
     if product == "audio":
         return round(variations * max(duration_seconds, 10) * COST_PER_AUDIO_SECOND, 2)
     if product == "video":
@@ -94,8 +128,12 @@ def estimate_cost(
     if product == "stt":
         return round(variations * max(duration_seconds, 10) * COST_PER_STT_SECOND, 2)
     if product == "understanding":
-        out = (max_tokens or 0) / 1_000_000 * COST_UNDERSTANDING_OUTPUT_PER_MTOK
-        inp = (prompt_tokens or 0) / 1_000_000 * COST_UNDERSTANDING_INPUT_PER_MTOK
+        input_rate, output_rate = _live_understanding_rates(model_id) or (
+            COST_UNDERSTANDING_INPUT_PER_MTOK,
+            COST_UNDERSTANDING_OUTPUT_PER_MTOK,
+        )
+        out = (max_tokens or 0) / 1_000_000 * output_rate
+        inp = (prompt_tokens or 0) / 1_000_000 * input_rate
         return round(variations * (inp + out), 4)
     return 0.0
 
@@ -127,5 +165,6 @@ def log_cost_estimate(
         product=product,
         variations=variations,
         estimated_cost_usd=cost,
+        price_source=price_source(product, model_id),
     )
     return cost

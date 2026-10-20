@@ -10,7 +10,9 @@ separate tools. The flow is discovery → create → poll:
 
 - **Discovery** — `ark_list_models` returns the bound models, their limits,
   and the tool that serves each one, from the static tool catalog
-  (`tools/_catalog.py`) and the capability registry.
+  (`tools/_catalog.py`) and the capability registry. Cached account pricing
+  comes from the optional AK/SK-authenticated background catalog refresher;
+  discovery itself makes no provider calls.
 - **Seed Audio** — full-scene audio generation through Seed Speech
   (`seed_audio_generate`, including parallel variations).
 - **Seedream** — image generation and editing through ModelArk with one
@@ -36,7 +38,9 @@ separate tools. The flow is discovery → create → poll:
   reasoning through ModelArk Chat Completions; supports deep-thinking mode.
 - **Seed Audio Understanding** — audio understanding and reasoning
   (transcription, translation, analysis, Q&A) through ModelArk Chat Completions
-  `input_audio`; model ID set by `SEED_AUDIO_UNDERSTANDING_MODEL`.
+  `input_audio`; model ID set by `SEED_AUDIO_UNDERSTANDING_MODEL`. URL inputs
+  can use the Files API for oversized audio and video soundtracks (up to
+  512 MB); uploaded files are deleted best-effort after processing.
 - **Speech-to-Text** — background audio transcription through Seed Speech ASR.
 - **VOD AI MediaKit** — asynchronous video enhancement, video transcoding,
   subtitle burn-in and precision subtitle/text erasure, and voice/background

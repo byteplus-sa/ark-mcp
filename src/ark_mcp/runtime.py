@@ -28,6 +28,7 @@ from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.observability.metrics import BUDGET_REJECTIONS
+from ark_mcp.providers.modelark.pricing import live_pricing_enabled, run_price_refresher
 from ark_mcp.security.auth_context import AuthContext, PrincipalContext
 from ark_mcp.security.safe_downloader import SafeDownloader
 
@@ -1069,12 +1070,19 @@ def build_lifespan(
         if state is not None:
             state.runtime = runtime
         sweeper = asyncio.create_task(_state_sweeper(runtime, settings))
+        price_refresher = (
+            asyncio.create_task(run_price_refresher(settings))
+            if live_pricing_enabled(settings)
+            else None
+        )
         try:
             yield {"runtime": runtime}
         finally:
-            sweeper.cancel()
-            with suppress(asyncio.CancelledError):
-                await sweeper
+            for background in (sweeper, price_refresher):
+                if background is not None:
+                    background.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await background
             if state is not None:
                 state.runtime = None
             await close_runtime_services(runtime)

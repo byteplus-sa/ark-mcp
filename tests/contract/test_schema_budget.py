@@ -2,7 +2,9 @@
 
 Measured with every service enabled, including the AK/SK asset library, so
 no tool escapes the count. Lower the budgets when the surface shrinks; raise
-them only with a deliberate, reviewed reason.
+them only with a deliberate, reviewed reason. Cached catalog pricing and
+Files API delivery metadata add 1,000 characters to the output allowance;
+the tool count and model-facing input budget are unchanged.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from ark_mcp.server import create_server
 
 MAX_TOOLS = 38
 MAX_MODEL_FACING_CHARS = 88_000
-MAX_OUTPUT_SCHEMA_CHARS = 127_000
+MAX_OUTPUT_SCHEMA_CHARS = 128_000
 
 
 async def test_tool_schemas_stay_within_budget(all_services_enabled: None) -> None:

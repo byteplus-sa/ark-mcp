@@ -295,7 +295,9 @@ async def _generate_single(
 ) -> SeedreamGenerateOutput | ToolResult:
     await ctx.report_progress(progress=30, total=100)
     request = build_seedream_request(input, caps, images, prompt=prompt, seed=input.seed)
-    estimated_cost = log_cost_estimate(product="image", variations=input.max_images or 1)
+    estimated_cost = log_cost_estimate(
+        product="image", variations=input.max_images or 1, model_id=caps.model_id
+    )
     service = SeedreamService()
     try:
         async with billed_provider_slot(
@@ -343,7 +345,9 @@ def _preview(
         )
         for prompt, seed in zip(prompts, seeds, strict=True)
     ]
-    cost = estimate_cost(product="image", variations=len(prompts) * (input.max_images or 1))
+    cost = estimate_cost(
+        product="image", variations=len(prompts) * (input.max_images or 1), model_id=caps.model_id
+    )
     return SeedreamGenerateOutput(
         model=caps.model_id,
         created_at=datetime.now(UTC).isoformat(),

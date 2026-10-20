@@ -40,6 +40,13 @@ Key features:
   tools serving them. Understanding modalities describe the named tool:
   `seed_understand` takes images/videos; `seed_audio_understand` takes audio
   only, with a server-configured model.
+- **Cached account pricing** - with AK/SK configured, discovery includes fresh
+  catalog prices without making a provider call. Image and understanding cost
+  estimates use recognized catalog rates, with built-in fallbacks.
+- **Large audio inputs** - audio understanding supports Files API delivery for
+  oversized URLs and video soundtracks, with temporary-upload cleanup.
+- **Organization self-hosting** - the [Compose kit](docs/self-hosting.md)
+  packages TLS ingress, JWT authentication, internal Redis, and spending controls.
 - **Durable artifacts** — generated media is persisted locally so MCP
   resources remain usable after known provider URL lifetimes (2h audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at

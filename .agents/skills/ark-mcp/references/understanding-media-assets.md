@@ -51,6 +51,17 @@ Do not pass `thinking` (ignored).
   prefix), at most 10 MB decoded, with `mime_type` one of `audio/wav`,
   `audio/mpeg`, `audio/flac`, `audio/aac`, `audio/mp4`. **Base64 Ogg/Opus/PCM is
   rejected: upload and pass a URL.**
+- **Large audio / video soundtracks:** `seed_audio_understand.delivery` is
+  `auto` (default), `direct`, or `files_api`. Automatic delivery retries one
+  audio-related 400 rejection through Files API; explicit delivery uploads
+  first. Files API supports up to 512 MB versus the default model's 25 MiB
+  direct URL limit. Base64 stays inline. Video uses its soundtrack plus
+  frames sampled at 0.2 fps, which also consume tokens. Outputs report
+  `audio_delivery` per input and `delivery_fallback_reason`. Uploads are
+  deleted best-effort after the call and otherwise expire after roughly a day.
+  Malformed upload successes return `INVALID_RESPONSE` with
+  `ambiguous_completion=true`, not a safe retry. Cleanup uses a recoverable,
+  validated file ID; without one, the upload must expire.
 
 ### Shaping and saving the answer
 

@@ -199,6 +199,7 @@ class TestLogCostEstimate:
                 product="image",
                 variations=1,
                 estimated_cost_usd=0.03,
+                price_source="builtin",
             )
 
 

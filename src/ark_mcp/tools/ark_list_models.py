@@ -16,6 +16,8 @@ from ark_mcp.config.model_capabilities import (
     VideoCapabilities,
     get_capability_registry,
 )
+from ark_mcp.domain.pricing import ModelPricing, PricingStatus
+from ark_mcp.providers.modelark.pricing import get_price_book, live_pricing_enabled
 from ark_mcp.tools.seed_audio_understand import MAX_AUDIO_INPUTS
 
 ModelKind = Literal["video", "image", "3d", "understanding"]
@@ -131,6 +133,9 @@ class ModelInfo(BaseModel):
     understanding: UnderstandingModelLimits | None = Field(
         None, description="Limits for understanding models."
     )
+    pricing: ModelPricing | None = Field(
+        None, description="Fresh account catalog prices, or null if not cached for this model."
+    )
 
 
 class ServiceStatus(BaseModel):
@@ -149,6 +154,12 @@ class ArkListModelsOutput(BaseModel):
 
     models: list[ModelInfo] = Field(..., description="Configured models matching the filter.")
     services: list[ServiceStatus] = Field(..., description="Enablement of each optional service.")
+    pricing_status: PricingStatus = Field(
+        "unavailable", description="live if a fresh catalog snapshot exists; otherwise unavailable."
+    )
+    pricing_note: str | None = Field(
+        None, description="Why cached prices are unavailable, without credential values."
+    )
 
 
 TOOL_ANNOTATIONS = {
@@ -160,7 +171,7 @@ TOOL_ANNOTATIONS = {
 
 
 async def ark_list_models(input: ArkListModelsInput, ctx: Context) -> ArkListModelsOutput:
-    """List configured models with their per-model limits. Makes no provider calls.
+    """List configured models, limits, and cached account prices. Makes no provider calls.
 
     Call before generation or understanding tools: their `model` argument accepts only the
     exact `model_id` values listed, and the server validates requests against these limits.
@@ -169,7 +180,25 @@ async def ark_list_models(input: ArkListModelsInput, ctx: Context) -> ArkListMod
     """
     settings = get_settings()
     models = [model for model in describe_models(settings) if input.kind in (None, model.kind)]
-    return ArkListModelsOutput(models=models, services=describe_services(settings))
+    book = get_price_book()
+    if live_pricing_enabled(settings) and book.is_fresh():
+        return ArkListModelsOutput(
+            models=[
+                model.model_copy(update={"pricing": book.lookup(model.model_id)})
+                for model in models
+            ],
+            services=describe_services(settings),
+            pricing_status="live",
+        )
+    if not settings.has_modelark_openapi:
+        note = "Live pricing needs BytePlus AK/SK credentials."
+    elif not live_pricing_enabled(settings):
+        note = "Live pricing is disabled (BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS=0)."
+    else:
+        note = "No fresh catalog snapshot; the background refresher will retry."
+    return ArkListModelsOutput(
+        models=models, services=describe_services(settings), pricing_note=note
+    )
 
 
 def describe_models(settings: Settings) -> list[ModelInfo]:

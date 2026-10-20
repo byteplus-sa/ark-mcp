@@ -38,6 +38,7 @@ from ark_mcp.background_jobs import (  # noqa: E402
     required_background_tool_names,
 )
 from ark_mcp.config.env import (  # noqa: E402
+    AuthMode,
     Settings,
     get_settings,
     resolve_env_file,
@@ -172,6 +173,17 @@ class HardenedFastMCP(FastMCP):
             asgi_middleware.extend(kwargs.get("middleware") or [])
             kwargs["middleware"] = asgi_middleware
         return super().http_app(*args, **kwargs)
+
+
+def _disabled_http_guardrails(settings: Settings) -> list[str]:
+    if settings.mcp_transport != "http" or settings.mcp_auth_mode is not AuthMode.JWT:
+        return []
+    disabled = []
+    if not settings.daily_budget_usd:
+        disabled.append("DAILY_BUDGET_USD")
+    if settings.rate_limit_rpm <= 0:
+        disabled.append("RATE_LIMIT_RPM")
+    return disabled
 
 
 def create_server(
@@ -393,6 +405,13 @@ def create_server(
             ),
             env_file=resolve_env_file(),
             cwd=str(Path.cwd()),
+        )
+    disabled_guardrails = _disabled_http_guardrails(resolved_settings)
+    if disabled_guardrails:
+        log_warning(
+            "http_guardrails_disabled",
+            disabled=disabled_guardrails,
+            detail="Set DAILY_BUDGET_USD and RATE_LIMIT_RPM for shared HTTP; see docs/self-hosting.md.",
         )
     log_info(
         "server_ready",

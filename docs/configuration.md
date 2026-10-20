@@ -222,6 +222,7 @@ only the API key. See [assets.md](assets.md).
 | `BYTEPLUS_MODELARK_ACCESS_KEY` | empty | BytePlus IAM access key (`AKLT…` long-term or `AKTP…` STS) for signed ModelArk OpenAPI calls |
 | `BYTEPLUS_MODELARK_SECRET_KEY` | empty | Matching secret key; must be set together with the access key |
 | `BYTEPLUS_MODELARK_SESSION_TOKEN` | empty | STS session token, required for `AKTP…` keys (sent as signed `X-Security-Token`) |
+| `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` | `86400` | Background account-price refresh interval when AK/SK exists; `0` disables. Values below 60 seconds are clamped to 60; snapshots expire after twice the effective interval |
 | `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | ModelArk OpenAPI host (HTTPS) |
 | `BYTEPLUS_MODELARK_REGION` | `ap-southeast-1` | Signing region |
 | `BYTEPLUS_MODELARK_PROJECT_NAME` | `default` | Default project for groups and assets; must match the inference endpoint's project |

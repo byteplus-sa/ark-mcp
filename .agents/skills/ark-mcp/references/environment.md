@@ -25,6 +25,9 @@ MCP_TRANSPORT=http uv run python -m ark_mcp    # Streamable HTTP, 127.0.0.1:3000
   `/ready`, `/metrics`.
 - Output-path arguments (`output_path`, `output_dir`, `save_to`) work on stdio
   only, inside MCP roots or `OUTPUT_ROOTS` ([polling-and-artifacts.md](polling-and-artifacts.md)).
+- For a single-organization deployment, use the Caddy/JWT/Redis Compose kit in
+  `deploy/compose/` and the repository's `docs/self-hosting.md` guide. Keep one
+  replica and configure both spend and rate limits.
 
 ## What enables what
 
@@ -62,6 +65,12 @@ Gotchas that follow from the gates:
   asset's temporary URL (experimental, needs AK/SK).
 - **`BYTEPLUS_MODELARK_ASSET_CREATE_QPM`** (default `3`) is a client-side
   `CreateAsset` pacing limit; match your tier: 3 Entry, 120 Advanced, 300 Premium.
+- **Cached account pricing** also uses ModelArk AK/SK. Refresh runs in the
+  background every `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` (86400 by
+  default; `0` disables, positive values have a 60-second minimum).
+  Discovery reads the cache only. Image and understanding estimates use
+  recognized fresh rates, otherwise built-in rates. Configuring these keys
+  also registers asset tools; restrict their scopes on shared HTTP.
 - A custom model ID must be bound (`SEEDREAM_MODEL_BINDINGS`,
   `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`,
   `SEED3D_MODEL_BINDINGS`); see [models-and-limits.md](models-and-limits.md).

@@ -62,6 +62,16 @@ def isolate_settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def empty_price_book() -> Iterator[None]:
+    """Keep the process-wide live price snapshot from leaking between tests."""
+    from ark_mcp.providers.modelark.pricing import get_price_book
+
+    get_price_book().clear()
+    yield
+    get_price_book().clear()
+
+
+@pytest.fixture(autouse=True)
 def deterministic_public_dns(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Resolve test hostnames without consulting external DNS."""
     monkeypatch.setattr(
