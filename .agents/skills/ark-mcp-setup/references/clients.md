@@ -8,12 +8,14 @@ when a version differs. Do not print existing configuration containing keys.
 ## Claude Code
 
 Prefer the CLI. Verify `claude mcp add --help`. For global registration:
+Place the server name before `--env`: Claude accepts multiple environment
+values after that option and can otherwise consume the name as a value.
 
 ```bash
-claude mcp add --transport stdio --scope user \
+claude mcp add ark-seed --transport stdio --scope user \
   --env "ARK_MCP_ENV_FILE=$ENV_FILE" \
   --env MCP_TRANSPORT=stdio --env MCP_AUTH_MODE=local \
-  ark-seed -- "$UV" --directory "$CHECKOUT" \
+  -- "$UV" --directory "$CHECKOUT" \
   run --locked --no-sync python -m ark_mcp
 ```
 
@@ -22,7 +24,7 @@ For PowerShell, resolve `$EnvFile`, `$Uv`, and `$Checkout` as absolute paths
 on the server host first, then use this equivalent without Bash continuations:
 
 ```powershell
-claude mcp add --transport stdio --scope user --env "ARK_MCP_ENV_FILE=$EnvFile" --env MCP_TRANSPORT=stdio --env MCP_AUTH_MODE=local ark-seed -- $Uv --directory $Checkout run --locked --no-sync python -m ark_mcp
+claude mcp add ark-seed --transport stdio --scope user --env "ARK_MCP_ENV_FILE=$EnvFile" --env MCP_TRANSPORT=stdio --env MCP_AUTH_MODE=local -- $Uv --directory $Checkout run --locked --no-sync python -m ark_mcp
 ```
 
 `user` is global; Claude's default `local` scope is private to the current
