@@ -59,10 +59,7 @@ class UnderstandingJsonSchema(BaseModel):
     schema_: dict[str, Any] = Field(
         ...,
         alias="schema",
-        description=(
-            "JSON Schema (draft 2020-12) the answer must satisfy, for example a "
-            "template-factory schema passed verbatim. At most 64 KB when serialized."
-        ),
+        description="JSON Schema (draft 2020-12) the answer must satisfy; at most 64 KB serialized.",
     )
     description: str | None = Field(
         None, max_length=2000, description="Optional description of the schema's purpose."
@@ -77,10 +74,7 @@ class UnderstandingResponseFormat(BaseModel):
 
     type: Literal["text", "json_object", "json_schema"] = Field(
         ...,
-        description=(
-            "'text' (default behavior), 'json_object' (any valid JSON object), or "
-            "'json_schema' (JSON that satisfies json_schema, enforced by the provider)."
-        ),
+        description="'text', 'json_object' (any JSON object), or 'json_schema' (JSON matching json_schema).",
     )
     json_schema: UnderstandingJsonSchema | None = Field(
         None, description="Required when type='json_schema'; must be omitted otherwise."
@@ -115,88 +109,71 @@ class UnderstandingOptions(BaseModel):
         ...,
         min_length=1,
         max_length=32000,
-        description="The question or task for the model to reason about.",
+        description="The question or task for the model.",
     )
     system: str | None = Field(
         None,
         max_length=32000,
-        description="Optional system instruction to guide the model's behavior.",
+        description="System instruction for the model.",
     )
     reasoning_effort: Literal["low", "medium", "high"] = Field(
         "medium",
-        description=(
-            "Depth of the model's deep thinking: 'low', 'medium' (default), or 'high'. "
-            "Thinking always happens; this controls how much, trading latency and token cost."
-        ),
+        description="Deep-thinking depth; thinking is always on. Higher costs more latency and tokens.",
     )
     response_format: UnderstandingResponseFormat | None = Field(
         None,
-        description=(
-            "Constrain the answer to JSON ('json_object') or to a JSON Schema ('json_schema', "
-            "enforced by the provider during generation). The parsed result is returned in "
-            "choices[].parsed."
-        ),
+        description="Force JSON output; the parsed result is returned in choices[].parsed.",
     )
     json_retry: int = Field(
         0,
         ge=0,
         le=2,
         description=(
-            "Extra attempts (0-2) when a JSON answer fails to parse or validate. Each retry is a "
-            "new billed completion. Never retried when the answer was cut off by max_tokens "
-            "(finish_reason='length'); raise max_tokens instead."
+            "Extra billed attempts when a JSON answer fails to parse or validate. Not retried "
+            "after finish_reason='length'; raise max_tokens instead."
         ),
     )
     save_to: str | None = Field(
         None,
         description=(
-            "Optional absolute file path (stdio transport only) where the final answer is written "
-            "atomically: pretty-printed JSON when the answer parsed as JSON, otherwise UTF-8 text. "
-            "Reasoning is never written. Must be inside an allowed output root (the client's MCP "
-            "roots, or OUTPUT_ROOTS). Validated before the model is called."
+            "Absolute file path (stdio only) to write the final answer to (JSON when parsed, "
+            "else UTF-8 text). Must be inside an allowed output root; checked before the model runs."
         ),
     )
     overwrite: bool = Field(
         False,
-        description=(
-            "Allow save_to to replace an existing file with different content. An existing "
-            "file with identical content is always accepted."
-        ),
+        description="Allow save_to to replace an existing file with different content.",
     )
     return_content: Literal["full", "summary", "none"] = Field(
         "full",
         description=(
-            "How much of the answer to inline in the result: 'full' (default), 'summary' (first "
-            "2,000 characters), or 'none' (metadata only; use with save_to). parsed is always "
-            "returned when available."
+            "Answer text to inline: 'full', 'summary' (first 2,000 characters), or 'none' "
+            "(use with save_to). parsed is always returned when available."
         ),
     )
     temperature: float | None = Field(
         None,
         ge=0.0,
         le=2.0,
-        description="Sampling temperature (0.0-2.0). Lower is more deterministic.",
+        description="Sampling temperature.",
     )
     max_tokens: int | None = Field(
         None,
         ge=1,
         le=32768,
-        description=(
-            "Maximum output tokens (1-32768), including deep-thinking tokens. Raise it if "
-            "answers end with finish_reason='length'."
-        ),
+        description="Maximum output tokens including thinking; raise it if finish_reason='length'.",
     )
     top_p: float | None = Field(
         None,
         ge=0.0,
         le=1.0,
-        description="Nucleus sampling probability (0.0-1.0).",
+        description="Nucleus sampling probability.",
     )
     repetition_penalty: float | None = Field(
         None,
         ge=0.0,
         le=2.0,
-        description="Repetition penalty (0.0-2.0). Ark-only parameter.",
+        description="Repetition penalty.",
     )
 
 
@@ -219,11 +196,7 @@ class SeedUnderstandOutput(BaseModel):
     )
     attempts: int = Field(
         1,
-        description=(
-            "Completions that produced an answer: 1 plus any json_retry attempts that were "
-            "used. A json_retry attempt that failed against the provider is not counted, and "
-            "the previous attempt's answer is returned."
-        ),
+        description="Completions that produced an answer: 1 plus json_retry attempts used.",
     )
     saved_path: str | None = Field(
         None, description="Absolute path the answer was written to when save_to was set."

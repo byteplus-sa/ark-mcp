@@ -239,7 +239,7 @@ class Settings(BaseSettings):
     modelark_assets_allow_delete: bool = Field(
         default=False,
         validation_alias="BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE",
-        description="Register the irreversible ark_asset_delete and ark_asset_group_delete tools.",
+        description="Register the irreversible ark_asset_delete tool (assets and groups).",
     )
     modelark_asset_create_qpm: int = Field(
         default=3,
@@ -317,7 +317,7 @@ class Settings(BaseSettings):
         validation_alias="SEEDREAM_DEFAULT_MODEL",
     )
     seedance_default_model: str = Field(
-        default="dreamina-seedance-2-0-260128",
+        default="dreamina-seedance-2-5-260628",
         validation_alias="SEEDANCE_DEFAULT_MODEL",
     )
     seedream_model_family: str = Field(
@@ -650,7 +650,7 @@ class Settings(BaseSettings):
         default=500 * 1024 * 1024,
         ge=1,
         validation_alias="MEDIA_UPLOAD_BATCH_MAX_BYTES",
-        description="Maximum total decoded bytes accepted by one media_upload_batch call.",
+        description="Maximum total decoded bytes accepted by one media_upload call.",
     )
 
     # --- Runtime policy -----------------------------------------------------
@@ -938,7 +938,8 @@ class Settings(BaseSettings):
                 raise ValueError(f"{label} model bindings contain duplicate IDs.")
             if default_model not in ids:
                 raise ValueError(
-                    f"{label} default model '{default_model}' is missing from its bindings."
+                    f"{label} default model '{default_model}' is missing from its bindings. "
+                    f"Set the default model env var to one of the bound IDs: {ids}."
                 )
         if self.artifact_ttl_seconds <= 0:
             raise ValueError("ARTIFACT_TTL_SECONDS must be positive")

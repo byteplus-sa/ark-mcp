@@ -64,7 +64,7 @@ Policy (per the module docstring): never log prompt text, full media URLs,
 Base64, subtitles, or credentials. Redaction is a safety net; call sites
 avoid passing these fields in the first place.
 
-`vod_enhance_video` and `vod_get_enhancement_task` log lifecycle and safe
+`vod_enhance_video` and `vod_get_task` log lifecycle and safe
 persistence messages only. Their
 source and output URLs and Bearer credential are not logged. A successful
 enhancement whose best-effort artifact copy fails remains a successful tool
@@ -89,6 +89,20 @@ labels). All Histograms use the `prometheus_client` default buckets
 | `ark_mcp_artifact_operations_total` | Counter | `operation`, `status`, `media_type` | artifact store put/get | `operation` = `put` / `get`; only `status="success"` is emitted in current call sites |
 | `ark_mcp_budget_rejections_total` | Counter | `product` | requests rejected for exceeding daily budget | one inc per rejection |
 | `ark_mcp_retry_attempts_total` | Counter | `provider`, `operation` | retried provider attempts (excluding the initial attempt) | one inc per retry |
+
+> **Upgrading dashboards to 0.2.0.** The `tool` label on
+> `ark_mcp_tool_requests_total`, `ark_mcp_tool_duration_seconds`, and
+> `ark_mcp_tool_admission_duration_seconds` (and the `target` label on
+> `ark_mcp_background_job_submissions_total`) carries the 0.2.0 tool names.
+> Panels and alerts keyed on removed 0.1.x names (for example the per-family
+> Seedance create tools or the per-product task pollers) stop receiving data;
+> switch them to the replacements listed in
+> [Migrating to 0.2.0](migration-0.2.md).
+> The merged `seedance_create_task` no longer separates Seedance 2.0, 2.5, and
+> 2.5 Premium by label, and metrics carry no model label. To split by model,
+> use the `model` field in the structured logs: `seedance_task_created` (and
+> `seedance_create_task_complete`) for a single task, and
+> `seedance_variations_complete` for a variations call.
 
 VOD AI MediaKit mutation POSTs are intentionally not passed through the automatic
 retry helper because they are non-idempotent and a timeout may be ambiguous.

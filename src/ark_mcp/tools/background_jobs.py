@@ -31,14 +31,11 @@ class BackgroundJobSubmitInput(BaseModel):
         ...,
         min_length=1,
         max_length=128,
-        description="Configured task-enabled Ark MCP tool to execute in the background.",
+        description="Tool to run in the background; must be listed by ark_job_capabilities.",
     )
     arguments: dict[str, JsonValue] = Field(
         ...,
-        description=(
-            "Complete arguments object accepted by the target tool. Most Ark tools expect an "
-            "input property containing their typed request."
-        ),
+        description="Full arguments object for the target tool, as in its input schema (usually {'input': {...}}).",
     )
 
 
@@ -50,10 +47,7 @@ class BackgroundJobIdInput(BaseModel):
         min_length=20,
         max_length=128,
         pattern=r"^[A-Za-z0-9_-]+$",
-        description=(
-            "Server-generated Ark background job ID returned by ark_job_submit. This is not a "
-            "Seedance, Seed 3D, or VOD provider task ID."
-        ),
+        description="job_id returned by ark_job_submit (not a provider task ID).",
     )
 
 
@@ -78,13 +72,9 @@ def _unavailable_message(is_local: bool) -> str:
 
 
 async def ark_job_capabilities(ctx: Context) -> BackgroundJobCapabilities:
-    """List the Ark tools that can be run as a background job.
+    """List the tools ark_job_submit can run in the background, with each one's input schema.
 
-    These are the targets accepted by ``ark_job_submit``, the default way to run
-    long-running work; it needs no MCP task augmentation and works on any MCP
-    client. The result includes only tools registered by the server configuration
-    and authorized for the caller. Use each target's input schema to build the
-    arguments object passed to ``ark_job_submit``.
+    Only tools enabled by the server configuration and authorized for the caller appear.
     """
     owner = get_principal(ctx)
     targets: list[BackgroundJobTarget] = []
@@ -111,13 +101,11 @@ async def ark_job_submit(
     input: BackgroundJobSubmitInput,
     ctx: Context,
 ) -> BackgroundJobAccepted:
-    """Run a long-running Ark tool as a background job.
+    """Run a long-running tool as a background job and return a job_id immediately.
 
-    This is the default submission path; it needs no MCP task augmentation and
-    works on any MCP client. It validates and durably enqueues the target tool, then
-    returns a job ID immediately. Poll ``ark_job_get`` for the original typed
-    tool result. Do not automatically retry a timeout or disconnect because
-    submission may already have succeeded.
+    Required for tools marked as requiring background execution (e.g. media_upload, vod_*); no MCP
+    task support needed. Poll ark_job_get for the tool's result. Do not auto-retry a timeout or
+    disconnect: the job may already be queued.
     """
     spec = BACKGROUND_TOOL_SPECS.get(input.tool_name)
     if spec is None:
@@ -172,11 +160,10 @@ async def ark_job_get(
     input: BackgroundJobIdInput,
     ctx: Context,
 ) -> BackgroundJobSnapshot:
-    """Return the current state and optional terminal result of a background job.
+    """Return a background job's status and, once finished, the target tool's full result.
 
-    Poll no faster than ``poll_after_ms``. A completed result preserves the
-    target tool's MCP content and structured content. Any provider task ID is
-    contained inside that structured result and remains distinct from job ID.
+    Poll no faster than poll_after_ms. Provider task IDs appear inside the result, distinct from
+    job_id.
     """
     try:
         await require_mcp_task_owner(ctx, input.job_id)
@@ -201,10 +188,10 @@ async def ark_job_cancel(
     input: BackgroundJobIdInput,
     ctx: Context,
 ) -> BackgroundJobCancelled:
-    """Cancel a background job owned by the current application principal.
+    """Cancel one of your background jobs.
 
-    Cancellation stops the local worker cooperatively. It does not claim that a
-    provider-side operation already accepted by BytePlus was also cancelled.
+    Stops the local worker only; a provider operation already accepted by BytePlus is not
+    cancelled.
     """
     try:
         await require_mcp_task_owner(ctx, input.job_id)

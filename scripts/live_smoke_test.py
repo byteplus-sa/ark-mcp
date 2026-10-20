@@ -31,6 +31,10 @@ truststore.inject_into_ssl()
 from _smoke_context import SmokeClient, require_tool_success, smoke_session  # noqa: E402
 
 from ark_mcp.config.env import get_settings  # noqa: E402
+from ark_mcp.tools.gen_task_get import (  # noqa: E402
+    GenTaskGetInput,
+    GenTaskGetOutput,
+)
 from ark_mcp.tools.seed_audio_generate import (  # noqa: E402
     SeedAudioGenerateInput,
     SeedAudioGenerateOutput,
@@ -39,10 +43,6 @@ from ark_mcp.tools.seedance_create_task import (  # noqa: E402
     SeedanceCreateTaskInput,
     SeedanceCreateTaskOutput,
     SeedanceImageInput,
-)
-from ark_mcp.tools.seedance_get_task import (  # noqa: E402
-    SeedanceGetTaskInput,
-    SeedanceTaskOutput,
 )
 from ark_mcp.tools.seedream_generate_image import (  # noqa: E402
     SeedreamGenerateInput,
@@ -87,7 +87,7 @@ async def test_image_generation(ctx: SmokeClient, store: ArtifactStore) -> dict[
     print(f"  Created: {result.created_at}")
     print(f"  Artifacts: {len(result.artifacts)}")
     print(f"  Item errors: {len(result.item_errors)}")
-    print(f"  Usage: {result.usage.model_dump()}")
+    print(f"  Usage: {result.usage.model_dump() if result.usage else None}")
 
     assert len(result.artifacts) >= 1, "Expected at least 1 artifact"
     artifact = result.artifacts[0]
@@ -216,14 +216,17 @@ async def test_video_generation_with_image(
         )
     )
 
-    ctx.save_provider_ids(ARTIFACTS_DIR, [create_result.task_id])
-    print(f"\n  Task ID: {create_result.task_id}")
-    print(f"  Status: {create_result.status}")
+    task_id = create_result.tasks[0].task_id
+    if task_id is None:
+        print(f"\n  Submission failed: {create_result.tasks[0].error}")
+        return {"video": "submission_failed"}
+    ctx.save_provider_ids(ARTIFACTS_DIR, [task_id])
+    print(f"\n  Task ID: {task_id}")
+    print(f"  Submitted: {create_result.submitted}")
     print(f"  Poll after: {create_result.recommended_poll_after_ms}ms")
 
     # Step 3: Poll until terminal.
     print("\nStep 3: Polling for completion...")
-    task_id = create_result.task_id
     max_wait_seconds = 300  # 5 minutes max
     poll_interval = 10  # seconds
     start_time = time.time()
@@ -235,12 +238,12 @@ async def test_video_generation_with_image(
 
         result = require_tool_success(
             await ctx.call(
-                "seedance_get_task",
-                SeedanceGetTaskInput(task_id=task_id, persist_output=False),
-                SeedanceTaskOutput,
+                "gen_task_get",
+                GenTaskGetInput(task_ids=[task_id]),
+                GenTaskGetOutput,
                 background=False,
             )
-        )
+        ).tasks[0]
 
         print(f"  [{elapsed}s] Status: {result.status}")
 
@@ -252,7 +255,7 @@ async def test_video_generation_with_image(
 
     if final_result is None:
         print(f"\n  TIMEOUT: Task did not complete within {max_wait_seconds}s")
-        print(f"  Task ID: {task_id} (check later with seedance_get_task)")
+        print(f"  Task ID: {task_id} (check later with gen_task_get)")
         return {"video": "timeout"}
 
     print(f"\n  Final status: {final_result.status}")
@@ -264,14 +267,18 @@ async def test_video_generation_with_image(
         print(f"  Error: {final_result.error}")
 
     if final_result.status == "succeeded":
-        final_result = await ctx.call(
-            "seedance_get_task",
-            SeedanceGetTaskInput(task_id=task_id, persist_output=True),
-            SeedanceTaskOutput,
-        )
+        final_result = (
+            await ctx.call(
+                "gen_task_get",
+                GenTaskGetInput(task_ids=[task_id], persist_output=True),
+                GenTaskGetOutput,
+            )
+        ).tasks[0]
 
-    if final_result.video:
-        artifact = final_result.video
+    artifact = next(
+        (output.artifact for output in final_result.outputs if output.role == "video"), None
+    )
+    if artifact:
         print(f"\n  Video artifact ID: {artifact.id}")
         print(f"  Video artifact URI: {artifact.uri}")
         print(f"  Media type: {artifact.media_type}")
@@ -290,8 +297,12 @@ async def test_video_generation_with_image(
 
         return {"video": artifact.id}
 
-    if final_result.last_frame:
-        artifact = final_result.last_frame
+    last_frame = next(
+        (output.artifact for output in final_result.outputs if output.role == "last_frame"),
+        None,
+    )
+    if last_frame:
+        artifact = last_frame
         print(f"\n  Last frame artifact ID: {artifact.id}")
         stored = await store.get(artifact.id)
         output_path = ARTIFACTS_DIR / "smoke_test_last_frame.jpg"

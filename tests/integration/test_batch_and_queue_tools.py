@@ -1,4 +1,7 @@
-"""media_upload_batch, seedance_get_tasks, and derived Seedance queue info."""
+"""media_upload and derived Seedance queue info.
+
+Batch task polling is covered in ``test_gen_task_tools.py``.
+"""
 
 from __future__ import annotations
 
@@ -12,20 +15,12 @@ import pytest
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
-from ark_mcp.providers.modelark.schemas import SeedanceTaskListResponse, SeedanceTaskResponse
-from ark_mcp.providers.modelark.seedance import SeedanceService
+from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.modelark.seedance_queue import queue_info
-from ark_mcp.security.auth_context import AuthContext
-from ark_mcp.security.safe_downloader import DownloadedMedia
-from ark_mcp.tools.media_upload_batch import (
-    MediaUploadBatchInput,
-    MediaUploadBatchOutput,
-    media_upload_batch,
-)
-from ark_mcp.tools.seedance_get_tasks import (
-    SeedanceGetTasksInput,
-    SeedanceGetTasksOutput,
-    seedance_get_tasks,
+from ark_mcp.tools.media_upload import (
+    MediaUploadInput,
+    MediaUploadOutput,
+    media_upload,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -54,7 +49,7 @@ def _gateway(fail_keys: tuple[str, ...] = ()) -> AsyncMock:
     return gw
 
 
-# --- media_upload_batch --------------------------------------------------------
+# --- media_upload --------------------------------------------------------
 
 
 async def test_batch_uploads_items_and_reports_failures_per_item(
@@ -63,9 +58,9 @@ async def test_batch_uploads_items_and_reports_failures_per_item(
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"video-bytes")
     gw = _gateway(fail_keys=("webp",))
-    with patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw):
-        result = await media_upload_batch(
-            MediaUploadBatchInput(
+    with patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw):
+        result = await media_upload(
+            MediaUploadInput(
                 items=[
                     {"media_type": "video", "file_path": str(clip)},
                     {
@@ -83,7 +78,7 @@ async def test_batch_uploads_items_and_reports_failures_per_item(
             ),
             fake_ctx,
         )
-    assert isinstance(result, MediaUploadBatchOutput)
+    assert isinstance(result, MediaUploadOutput)
     assert (result.succeeded, result.failed) == (2, 2)
     first, second, third, fourth = result.items
     assert first.mime_type == "video/mp4"  # inferred from the extension
@@ -101,11 +96,11 @@ async def test_batch_rejects_total_above_cap_before_uploading(
     get_settings.cache_clear()
     gw = _gateway()
     with (
-        patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw),
+        patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw),
         pytest.raises(ValueError, match="MEDIA_UPLOAD_BATCH_MAX_BYTES"),
     ):
-        await media_upload_batch(
-            MediaUploadBatchInput(
+        await media_upload(
+            MediaUploadInput(
                 items=[
                     {
                         "media_type": "image",
@@ -119,11 +114,11 @@ async def test_batch_rejects_total_above_cap_before_uploading(
     gw.upload_bytes.assert_not_called()
 
 
-# --- seedance_get_tasks --------------------------------------------------------
+# --- queue info helpers --------------------------------------------------------
 
 
-def _task(task_id: str, status: str, **extra: Any) -> SeedanceTaskResponse:
-    return SeedanceTaskResponse(
+def _task(task_id: str, status: str, **extra: Any) -> GenerationTaskResponse:
+    return GenerationTaskResponse(
         id=task_id,
         model="dreamina-seedance-2-0-260128",
         status=status,
@@ -131,106 +126,6 @@ def _task(task_id: str, status: str, **extra: Any) -> SeedanceTaskResponse:
         updated_at=1721400100,
         **extra,
     )
-
-
-async def _noop_close(self: SeedanceService) -> None:
-    return None
-
-
-async def test_get_tasks_uses_one_list_call_and_reports_counts(
-    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    listed = [
-        _task("t-queued", "queued", service_tier="flex"),
-        _task("t-running", "running"),
-        _task("t-failed", "failed"),
-    ]
-    list_calls: list[dict[str, Any]] = []
-
-    async def mock_list(self: SeedanceService, **kwargs: Any) -> Any:
-        list_calls.append(kwargs)
-        return SeedanceTaskListResponse(data=listed), "req"
-
-    async def mock_get(self: SeedanceService, task_id: str) -> Any:
-        raise AssertionError("get_task should not be needed")
-
-    monkeypatch.setattr(SeedanceService, "list_tasks", mock_list)
-    monkeypatch.setattr(SeedanceService, "get_task", mock_get)
-    monkeypatch.setattr(SeedanceService, "close", _noop_close)
-
-    result = await seedance_get_tasks(
-        SeedanceGetTasksInput(task_ids=["t-queued", "t-running", "t-failed", "t-queued"]),
-        fake_ctx,
-    )
-    assert isinstance(result, SeedanceGetTasksOutput)
-    assert len(list_calls) == 1
-    assert list_calls[0]["task_ids"] == ["t-queued", "t-running", "t-failed"]  # deduped
-    assert [t.task_id for t in result.tasks] == ["t-queued", "t-running", "t-failed"]
-    assert result.counts == {"queued": 1, "running": 1, "failed": 1}
-    assert result.active_tasks == 2
-    assert result.all_terminal is False
-    queued = result.tasks[0].queue
-    assert queued is not None
-    assert queued.service_tier == "flex"
-    assert queued.hint is not None and "flex" in queued.hint
-    assert result.tasks[2].queue is None
-
-
-async def test_get_tasks_refetches_and_persists_succeeded(
-    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    await fake_ctx.lifespan_context["runtime"].task_artifact_cache.clear()
-
-    async def mock_list(self: SeedanceService, **kwargs: Any) -> Any:
-        return SeedanceTaskListResponse(data=[_task("t-done", "succeeded")]), "req"
-
-    async def mock_get(self: SeedanceService, task_id: str) -> Any:
-        return _task(task_id, "succeeded", content={"video_url": VIDEO_URL}), "req"
-
-    monkeypatch.setattr(SeedanceService, "list_tasks", mock_list)
-    monkeypatch.setattr(SeedanceService, "get_task", mock_get)
-    monkeypatch.setattr(SeedanceService, "close", _noop_close)
-
-    download = AsyncMock(
-        return_value=DownloadedMedia(body=b"mp4", content_type="video/mp4", final_url=VIDEO_URL)
-    )
-    with patch("ark_mcp.security.safe_downloader.SafeDownloader.download", new=download):
-        fake_ctx.task_id = "task-1"
-        result = await seedance_get_tasks(
-            SeedanceGetTasksInput(task_ids=["t-done"], persist_output=True), fake_ctx
-        )
-        again = await seedance_get_tasks(
-            SeedanceGetTasksInput(task_ids=["t-done"], persist_output=True), fake_ctx
-        )
-    assert isinstance(result, SeedanceGetTasksOutput)
-    assert isinstance(again, SeedanceGetTasksOutput)
-    video = result.tasks[0].video
-    assert video is not None and video.uri.startswith("seed-media://")
-    assert again.tasks[0].video == video
-    assert download.await_count == 1  # cached, never downloaded twice
-    assert result.all_terminal is True
-    await fake_ctx.lifespan_context["runtime"].task_artifact_cache.clear()
-
-
-async def test_get_tasks_reports_unowned_ids(
-    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    runtime = fake_ctx.lifespan_context["runtime"]
-    await runtime.ownership_store.record(
-        "modelark", "t-other", AuthContext(principal_id="bob", tenant_id="t")
-    )
-
-    async def mock_list(self: SeedanceService, **kwargs: Any) -> Any:
-        return SeedanceTaskListResponse(data=[_task("t-mine", "queued")]), "req"
-
-    monkeypatch.setattr(SeedanceService, "list_tasks", mock_list)
-    monkeypatch.setattr(SeedanceService, "close", _noop_close)
-    result = await seedance_get_tasks(
-        SeedanceGetTasksInput(task_ids=["t-mine", "t-other"]), fake_ctx
-    )
-    assert isinstance(result, SeedanceGetTasksOutput)
-    assert [t.task_id for t in result.tasks] == ["t-mine"]
-    assert [(e.task_id, e.code) for e in result.errors] == [("t-other", "NOT_OWNED")]
 
 
 # --- queue info ----------------------------------------------------------------
@@ -271,9 +166,9 @@ async def test_batch_unknown_extension_is_a_per_item_error(
     odd = tmp_path / "clip.unknownext"
     odd.write_bytes(b"x")
     gw = _gateway()
-    with patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw):
-        result = await media_upload_batch(
-            MediaUploadBatchInput(
+    with patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw):
+        result = await media_upload(
+            MediaUploadInput(
                 items=[
                     {"media_type": "video", "file_path": str(odd)},
                     {
@@ -285,7 +180,7 @@ async def test_batch_unknown_extension_is_a_per_item_error(
             ),
             fake_ctx,
         )
-    assert isinstance(result, MediaUploadBatchOutput)
+    assert isinstance(result, MediaUploadOutput)
     assert result.items[0].error is not None and "infer mime_type" in result.items[0].error
     assert result.succeeded == 1
 
@@ -299,11 +194,11 @@ async def test_batch_cap_rejects_before_decoding_every_item(
     payload = base64.b64encode(b"0123456789").decode()
     gw = _gateway()
     with (
-        patch("ark_mcp.tools.media_upload_batch.make_object_storage_gateway", return_value=gw),
+        patch("ark_mcp.tools.media_upload.make_object_storage_gateway", return_value=gw),
         pytest.raises(ValueError, match="at item 0"),
     ):
-        await media_upload_batch(
-            MediaUploadBatchInput(
+        await media_upload(
+            MediaUploadInput(
                 items=[
                     {"media_type": "image", "mime_type": "image/png", "data": payload},
                     {"media_type": "image", "mime_type": "image/png", "data": payload},
@@ -311,25 +206,3 @@ async def test_batch_cap_rejects_before_decoding_every_item(
             ),
             fake_ctx,
         )
-
-
-async def test_get_tasks_pages_when_provider_caps_page_size(
-    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A provider page smaller than the batch must be paged, not silently truncated."""
-    ids = [f"t-{i}" for i in range(25)]
-    pages: list[int] = []
-
-    async def mock_list(self: SeedanceService, **kwargs: Any) -> Any:
-        page = kwargs["page"]
-        pages.append(page)
-        chunk = ids[(page - 1) * 20 : page * 20]
-        return SeedanceTaskListResponse(data=[_task(i, "queued") for i in chunk]), "req"
-
-    monkeypatch.setattr(SeedanceService, "list_tasks", mock_list)
-    monkeypatch.setattr(SeedanceService, "close", _noop_close)
-    result = await seedance_get_tasks(SeedanceGetTasksInput(task_ids=ids), fake_ctx)
-    assert isinstance(result, SeedanceGetTasksOutput)
-    assert pages == [1, 2]
-    assert len(result.tasks) == 25
-    assert result.errors == []

@@ -32,17 +32,12 @@ _SOURCE_URL_TTL_SECONDS = 6 * 3600
 
 
 async def ark_asset_create(input: AssetCreateInput, ctx: Context) -> AssetCreateOutput | ToolResult:
-    """Add files of ONE subject to a private asset group and return asset:// references.
+    """Add files of ONE subject to a private asset group and return asset:// URIs for Seedance.
 
-    Target either group_id (AIGC or a verified LivenessFace person) or subject
-    (reuses/creates the AIGC group with that exact name). Each source is a
-    public HTTPS url or a media_upload object_key. Real-person groups reject
-    faces that do not match the verified person. With wait_until_active (default)
-    the tool polls until each asset is Active or Failed. Use the returned
-    asset_uri values ('asset://...') as Seedance image/video/audio references
-    and refer to them in prompts as 'Image 1', 'Video 1', etc. Image references
-    were verified with Seedance 2.5; video/audio provider acceptance is untested.
-    Requires Dreamina Seedance Advanced Creation Rights and BytePlus AK/SK.
+    Target a group_id (AIGC, or a verified person's LivenessFace group) or a subject name.
+    Waits until each asset is Active or Failed by default. In prompts, refer to references as
+    'Image 1', 'Video 1'. Image references are verified with Seedance 2.5; video/audio untested. Requires
+    Advanced Creation Rights and AK/SK.
     """
     urls: list[str | None] = []
     types: list[AssetTypeName | None] = []
@@ -131,6 +126,7 @@ async def ark_asset_create(input: AssetCreateInput, ctx: Context) -> AssetCreate
         return AssetCreateOutput(
             group_id=group_id,
             group_created=group_created,
+            group_created_empty=group_created and not created_ids,
             items=items,
             all_active=bool(items) and all(item.status == "Active" for item in items),
         )

@@ -1,4 +1,4 @@
-"""Integration tests for the ``seedream_generate_image_variations`` tool."""
+"""Integration tests for the ``seedream_generate_image`` tool."""
 
 from __future__ import annotations
 
@@ -11,10 +11,10 @@ import pytest
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.modelark.schemas import SeedreamProviderResponse
 from ark_mcp.providers.modelark.seedream import SeedreamService
-from ark_mcp.tools.seedream_generate_image_variations import (
-    SeedreamVariationsInput,
-    SeedreamVariationsOutput,
-    seedream_generate_image_variations,
+from ark_mcp.tools.seedream_generate_image import (
+    SeedreamGenerateInput,
+    SeedreamGenerateOutput,
+    seedream_generate_image,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -42,7 +42,7 @@ def _patch_seedream_by_seed(
 
 
 class TestSeedreamVariationsTool:
-    """Integration tests for seedream_generate_image_variations."""
+    """Integration tests for seedream_generate_image."""
 
     async def test_prompt_optimization_defaults_to_standard(
         self,
@@ -68,8 +68,8 @@ class TestSeedreamVariationsTool:
 
         monkeypatch.setattr(SeedreamService, "close", mock_close)
 
-        await seedream_generate_image_variations(
-            SeedreamVariationsInput(prompt="a red circle", variations=2, base_seed=42),
+        await seedream_generate_image(
+            SeedreamGenerateInput(prompt="a red circle", variations=2, seed=42),
             fake_ctx,
         )
 
@@ -94,16 +94,16 @@ class TestSeedreamVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seedream_generate_image_variations(
-                SeedreamVariationsInput(
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(
                     prompt="a red circle",
                     variations=3,
-                    base_seed=42,
+                    seed=42,
                 ),
                 fake_ctx,
             )
 
-        assert isinstance(result, SeedreamVariationsOutput)
+        assert isinstance(result, SeedreamGenerateOutput)
         assert result.summary.total == 3
         assert result.summary.succeeded == 3
         assert result.summary.failed == 0
@@ -140,11 +140,11 @@ class TestSeedreamVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seedream_generate_image_variations(
-                SeedreamVariationsInput(
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(
                     prompt="test",
                     variations=3,
-                    base_seed=10,
+                    seed=10,
                 ),
                 fake_ctx,
             )
@@ -170,8 +170,8 @@ class TestSeedreamVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seedream_generate_image_variations(
-                SeedreamVariationsInput(
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(
                     variation_prompts=["prompt A", "prompt B"],
                     variations=2,
                 ),
@@ -188,7 +188,7 @@ class TestSeedreamVariationsTool:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="Either prompt or variation_prompts"):
-            SeedreamVariationsInput(variations=2)
+            SeedreamGenerateInput(variations=2)
 
     async def test_prompts_length_mismatch_raises(
         self,
@@ -198,7 +198,7 @@ class TestSeedreamVariationsTool:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="must have exactly 3"):
-            SeedreamVariationsInput(
+            SeedreamGenerateInput(
                 prompt="test",
                 variations=3,
                 variation_prompts=["only one"],
@@ -218,13 +218,13 @@ class TestSeedreamVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seedream_generate_image_variations(
-                SeedreamVariationsInput(prompt="test", variations=1),
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(prompt="test", variations=1),
                 fake_ctx,
             )
 
-        assert result.summary.total == 1
-        assert result.summary.succeeded == 1
+        assert result.summary is None
+        assert len(result.artifacts) == 1
 
     async def test_all_variations_fail(
         self,
@@ -258,8 +258,8 @@ class TestSeedreamVariationsTool:
             },
         )
 
-        result = await seedream_generate_image_variations(
-            SeedreamVariationsInput(prompt="test", variations=2, base_seed=0),
+        result = await seedream_generate_image(
+            SeedreamGenerateInput(prompt="test", variations=2, seed=0),
             fake_ctx,
         )
 
@@ -281,8 +281,8 @@ class TestSeedreamVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seedream_generate_image_variations(
-                SeedreamVariationsInput(prompt="test", variations=2, base_seed=None),
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(prompt="test", variations=2, seed=None),
                 fake_ctx,
             )
 

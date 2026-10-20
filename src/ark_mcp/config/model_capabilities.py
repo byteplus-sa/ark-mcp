@@ -12,9 +12,14 @@ each logical family via environment variables.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from difflib import get_close_matches
 from enum import StrEnum
-from typing import Any
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from ark_mcp.config.env import (
     Seed3DFamily,
@@ -38,8 +43,13 @@ class ModelFamily(StrEnum):
     SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"
     SEED_2_1_PRO = "seed_2_1_pro"
     SEED_2_1_TURBO = "seed_2_1_turbo"
+    SEED_AUDIO_UNDERSTANDING = "seed_audio_understanding"
     SEED3D_HYPER3D = "seed3d_hyper3d"
     SEED3D_HITEM3D = "seed3d_hitem3d"
+
+
+SEEDANCE_RATIOS: tuple[str, ...] = ("16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive")
+SEEDANCE_2_5_TASK_TYPES: tuple[str, ...] = ("auto", "reference", "edit", "extend")
 
 
 @dataclass(frozen=True)
@@ -56,6 +66,7 @@ class ImageCapabilities:
     supports_watermark: bool = True
     supports_prompt_optimization: bool = True
     default_prompt_optimization_mode: str | None = None
+    supports_transparent_background: bool = False
 
     def resolve_prompt_optimization(self, requested: str | None) -> str | None:
         """Return the effective prompt optimization mode for a request.
@@ -85,13 +96,19 @@ class VideoCapabilities:
     supports_camera_fixed: bool
     supports_frames: bool
     supports_service_tier_flex: bool
-    duration_range: tuple[int, int]  # inclusive bounds, -1 means auto
+    duration_range: tuple[int, int]  # inclusive bounds; -1 (auto) is accepted separately
     priority_range: tuple[int, int]
     execution_expires_after_range: tuple[int, int]
     supports_generate_audio: bool = True
     supports_return_last_frame: bool = True
     supports_watermark: bool = True
     supports_safety_identifier: bool = True
+    supports_draft: bool = False
+    draft_final_resolution: str | None = None
+    supports_audio_only_input: bool = False
+    supported_task_types: tuple[str, ...] = ()
+    supported_output_formats: tuple[str, ...] = ()
+    supported_ratios: tuple[str, ...] = SEEDANCE_RATIOS
 
 
 @dataclass(frozen=True)
@@ -140,6 +157,7 @@ def _seedream_capabilities() -> dict[str, ImageCapabilities]:
                 supports_streaming=False,
                 supported_output_formats=("png", "jpeg"),
                 default_prompt_optimization_mode=settings.seedream_prompt_optimization_mode,
+                supports_transparent_background=True,
             )
         elif binding.family is SeedreamFamily.LITE:
             caps = ImageCapabilities(
@@ -197,9 +215,16 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
                 supports_camera_fixed=False,
                 supports_frames=False,
                 supports_service_tier_flex=False,
-                duration_range=(-1, 30),
+                duration_range=(4, 30),
                 priority_range=(0, 9),
                 execution_expires_after_range=(3600, 259200),
+                supports_draft=True,
+                draft_final_resolution="4k"
+                if family is ModelFamily.SEEDANCE_2_5_PREMIUM
+                else "1080p",
+                supports_audio_only_input=True,
+                supported_task_types=SEEDANCE_2_5_TASK_TYPES,
+                supported_output_formats=("mp4", "mov"),
             )
         else:
             capabilities[binding.model_id] = VideoCapabilities(
@@ -213,7 +238,7 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
                 supports_camera_fixed=False,
                 supports_frames=False,
                 supports_service_tier_flex=False,
-                duration_range=(-1, 15),
+                duration_range=(4, 15),
                 priority_range=(0, 9),
                 execution_expires_after_range=(3600, 259200),
             )
@@ -232,6 +257,17 @@ def _seed_understanding_capabilities() -> dict[str, UnderstandingCapabilities]:
         capabilities[binding.model_id] = UnderstandingCapabilities(
             family=family,
             model_id=binding.model_id,
+        )
+    audio_model = settings.seed_audio_understanding_model
+    existing = capabilities.get(audio_model)
+    if existing is not None:
+        capabilities[audio_model] = replace(existing, supports_audio=True)
+    else:
+        capabilities[audio_model] = UnderstandingCapabilities(
+            family=ModelFamily.SEED_AUDIO_UNDERSTANDING,
+            model_id=audio_model,
+            supports_audio=True,
+            max_media_parts=8,
         )
     return capabilities
 
@@ -311,15 +347,8 @@ class CapabilityRegistry:
         default_model: str | None = None,
     ) -> Seed3DCapabilities:
         """Return 3D generation capabilities for the given model or the family default."""
-        settings = get_settings()
-        if model_id is None:
-            model_id = default_model or settings.hyper3d_default_model
-        if model_id not in self._seed3d_caps:
-            raise ValueError(
-                f"Model '{model_id}' is not in the configured Seed3D capability "
-                f"registry. Allowed: {list(self._seed3d_caps.keys())}"
-            )
-        return self._seed3d_caps[model_id]
+        default = default_model or get_settings().hyper3d_default_model
+        return _resolve_exact(self._seed3d_caps, model_id, default, kind="3d")
 
     def list_seed3d_models(self) -> list[str]:
         """Return all configured 3D generation model IDs."""
@@ -341,6 +370,52 @@ class CapabilityRegistry:
     def list_understanding_models(self) -> list[str]:
         """Return all configured understanding model IDs."""
         return list(self._understanding_caps.keys())
+
+    def resolve_video_model(self, requested: str | None) -> VideoCapabilities:
+        """Return capabilities for an exact configured video model ID, or the default."""
+        default = get_settings().seedance_default_model
+        return _resolve_exact(self._video_caps, requested, default, kind="video")
+
+    def resolve_image_model(self, requested: str | None) -> ImageCapabilities:
+        """Return capabilities for an exact configured image model ID, or the default."""
+        default = get_settings().seedream_default_model
+        return _resolve_exact(self._image_caps, requested, default, kind="image")
+
+    def resolve_understanding_model(
+        self, requested: str | None, *, has_audio: bool
+    ) -> UnderstandingCapabilities:
+        """Return understanding capabilities, routing an omitted model by input modality.
+
+        Requests with audio default to the audio-understanding binding; all
+        other requests default to the Seed 2.1 default model.
+        """
+        settings = get_settings()
+        default = (
+            settings.seed_audio_understanding_model
+            if has_audio
+            else settings.seed_understanding_default_model
+        )
+        return _resolve_exact(self._understanding_caps, requested, default, kind="understanding")
+
+    def resolve_task_model(self, model_id: str) -> VideoCapabilities | Seed3DCapabilities | None:
+        """Return the binding for a model that runs ModelArk async tasks, if configured."""
+        return self._video_caps.get(model_id) or self._seed3d_caps.get(model_id)
+
+    def configured_models(
+        self,
+    ) -> tuple[
+        Mapping[str, ImageCapabilities],
+        Mapping[str, VideoCapabilities],
+        Mapping[str, UnderstandingCapabilities],
+        Mapping[str, Seed3DCapabilities],
+    ]:
+        """Return read-only views of every configured binding, by kind."""
+        return (
+            MappingProxyType(self._image_caps),
+            MappingProxyType(self._video_caps),
+            MappingProxyType(self._understanding_caps),
+            MappingProxyType(self._seed3d_caps),
+        )
 
     def validate_image_size(self, model_id: str | None, size: str | None) -> str | None:
         """Validate that the size is supported by the model, if sizes are restricted."""
@@ -393,6 +468,35 @@ class CapabilityRegistry:
                 f"Use -1 for auto-duration."
             )
         return duration
+
+
+def _resolve_exact[CapsT](
+    capabilities: Mapping[str, CapsT], requested: str | None, default: str, *, kind: str
+) -> CapsT:
+    model_id = requested if requested is not None else default
+    caps = capabilities.get(model_id)
+    if caps is not None:
+        return caps
+    configured = list(capabilities)
+    suggestion = _closest_model_id(model_id, configured)
+    hint = f" Did you mean '{suggestion}'?" if suggestion else ""
+    if requested is None:
+        raise ValueError(
+            f"The default {kind} model '{default}' is not configured. Configured {kind} "
+            f"models: {configured}. Call ark_list_models(kind='{kind}') for details."
+        )
+    raise ValueError(
+        f"Model '{requested}' is not configured.{hint} Configured {kind} models: "
+        f"{configured}. Call ark_list_models(kind='{kind}') for details."
+    )
+
+
+def _closest_model_id(requested: str, configured: list[str]) -> str | None:
+    normalized = {model_id.replace(".", "-").lower(): model_id for model_id in configured}
+    matches = get_close_matches(
+        requested.replace(".", "-").lower(), list(normalized), n=1, cutoff=0.5
+    )
+    return normalized[matches[0]] if matches else None
 
 
 _registry: CapabilityRegistry | None = None

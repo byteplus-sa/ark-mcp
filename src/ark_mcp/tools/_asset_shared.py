@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Sequence
+from functools import partial
 from typing import Any, Literal
 from weakref import WeakKeyDictionary, WeakValueDictionary
 
@@ -30,6 +31,7 @@ from ark_mcp.providers.modelark.assets import AssetService, AssetTypeName
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
+from ark_mcp.tools._asset_models import AssetLookupError
 
 _ASSET_TYPE_BY_EXTENSION: dict[str, AssetTypeName] = {
     ".jpg": "Image",
@@ -83,19 +85,42 @@ def require_asset_library() -> None:
 
 
 async def asset_call[T](ctx: Context, operation: Callable[[AssetService], Awaitable[T]]) -> T:
-    """Run one or more asset operations under the shared ``modelark-openapi`` limiter.
+    """Run asset operations, holding the ``modelark-openapi`` limiter per provider request.
 
-    Only non-ambiguous retryable errors (throttling, 5xx on reads) are retried;
+    The provider and per-principal slots are acquired around each signed call
+    only, so asset waits (processing polls, verification polls, CreateAsset
+    spacing) never hold a slot that a billed Seedance preflight needs. Only
+    non-ambiguous retryable errors (throttling, 5xx on reads) are retried;
     ``CreateAsset`` / ``CreateAssetGroup`` 5xx responses are ambiguous and raise.
     """
     require_asset_library()
-    runtime = get_runtime(ctx)
-    service = AssetService()
+    limiters = get_runtime(ctx).provider_limiters
+    principal = get_principal(ctx)
+    service = AssetService(call_slot=lambda: limiters.acquire("modelark-openapi", principal))
     try:
-        async with runtime.provider_limiters.acquire("modelark-openapi", get_principal(ctx)):
-            return await operation(service)
+        return await operation(service)
     finally:
         await service.close()
+
+
+async def lookup_each[T](
+    ids: Sequence[str], fetch: Callable[[str], Awaitable[T]]
+) -> tuple[list[T], list[AssetLookupError]]:
+    """Read each ID in order, collecting provider failures instead of raising."""
+    found: list[T] = []
+    errors: list[AssetLookupError] = []
+    for item_id in dict.fromkeys(ids):
+        try:
+            found.append(await retrying(partial(fetch, item_id)))
+        except ProviderError as exc:
+            errors.append(
+                AssetLookupError(
+                    id=item_id,
+                    code=exc.error.code or str(exc.error.http_status or "provider_error"),
+                    message=exc.error.message,
+                )
+            )
+    return found, errors
 
 
 async def retrying[T](operation: Callable[[], Awaitable[T]]) -> T:
@@ -304,7 +329,7 @@ async def preflight_seedance_assets(ctx: Context, asset_ids: list[str]) -> None:
         details = ", ".join(f"{asset_id} is {status}" for asset_id, status in blocked)
         raise ValueError(
             f"asset_not_active: {details}. Only Active assets can be used; wait for "
-            "Processing assets (ark_asset_get) or re-upload Failed ones."
+            "Processing assets (ark_asset_list) or re-upload Failed ones."
         )
 
 

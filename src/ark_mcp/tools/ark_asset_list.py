@@ -1,4 +1,4 @@
-"""``ark_asset_list`` tool — list assets with filters and pagination."""
+"""``ark_asset_list`` tool — list assets with filters, or read them by ID."""
 
 from __future__ import annotations
 
@@ -9,19 +9,26 @@ from ark_mcp.domain.assets import Asset
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.providers.modelark.assets import AssetService
 from ark_mcp.tools._asset_models import AssetListInput, AssetPage
-from ark_mcp.tools._asset_shared import asset_call, retrying
+from ark_mcp.tools._asset_shared import asset_call, lookup_each, retrying
 from ark_mcp.tools._errors import provider_error_result
 
 
 async def ark_asset_list(input: AssetListInput, ctx: Context) -> AssetPage | ToolResult:
-    """List private assets filtered by group IDs, group type, status, or fuzzy name.
+    """List private assets by group, type, status or name, or read up to 20 by asset_ids.
 
-    Returns each asset's asset:// URI and status. Pass next_token to page.
-    Requires BytePlus AK/SK.
+    Returns each asset's asset:// URI and status; only Active assets can be used in generation.
+    preview_url is a temporary (~12 h) viewing link; pass asset_uri to Seedance. Assets
+    authorized from another account are not listed but usable by ID. Requires AK/SK.
     """
+    asset_ids = input.asset_ids
 
-    async def _list(service: AssetService) -> tuple[list[Asset], str | None]:
-        return await retrying(
+    async def _list(service: AssetService) -> AssetPage:
+        if asset_ids:
+            assets, errors = await lookup_each(
+                asset_ids, lambda asset_id: service.get_asset(asset_id, input.project_name)
+            )
+            return AssetPage(assets=assets, errors=errors)
+        assets_page: tuple[list[Asset], str | None] = await retrying(
             lambda: service.list_assets(
                 group_ids=input.group_ids,
                 group_type=input.group_type,
@@ -33,12 +40,12 @@ async def ark_asset_list(input: AssetListInput, ctx: Context) -> AssetPage | Too
                 project_name=input.project_name,
             )
         )
+        return AssetPage(assets=assets_page[0], next_token=assets_page[1])
 
     try:
-        assets, next_token = await asset_call(ctx, _list)
+        return await asset_call(ctx, _list)
     except ProviderError as exc:
         return provider_error_result(exc)
-    return AssetPage(assets=assets, next_token=next_token)
 
 
 TOOL_ANNOTATIONS = {

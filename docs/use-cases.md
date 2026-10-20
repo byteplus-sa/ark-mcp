@@ -74,15 +74,16 @@ Using the same seed and prompt produces the same image.
 ## 4. Parallel Image Variations
 
 Generate multiple distinct image variations in a single call to give the
-user choices. Each variation gets a distinct seed.
+user choices. With `variations > 1`, `seed` is the base seed, so each
+variation gets a distinct seed.
 
-**Tool:** `seedream_generate_image_variations`
+**Tool:** `seedream_generate_image`
 
 ```json
 {
   "prompt": "A futuristic city skyline, cyberpunk aesthetic",
   "variations": 5,
-  "base_seed": 100,
+  "seed": 100,
   "size": "1024x1024",
   "persist": true
 }
@@ -90,13 +91,14 @@ user choices. Each variation gets a distinct seed.
 
 This produces 5 images with seeds [100, 101, 102, 103, 104]. Each is an
 independent generation. Partial failures are captured — if 4 of 5 succeed,
-the tool returns 4 artifacts and 1 error.
+`summary` holds 4 artifacts and 1 error. Add `"dry_run": true` first to see
+the five request bodies and the estimated cost without billing.
 
 ## 5. Per-Variation Prompts
 
 Generate variations with different prompts for each.
 
-**Tool:** `seedream_generate_image_variations`
+**Tool:** `seedream_generate_image`
 
 ```json
 {
@@ -150,9 +152,10 @@ Generate audio that mimics a reference voice.
 
 ## 8. Parallel Audio Variations
 
-Generate multiple audio takes to choose from.
+Generate multiple audio takes to choose from (`variations` 1-5; results are
+in `summary`).
 
-**Tool:** `seed_audio_generate_variations`
+**Tool:** `seed_audio_generate`
 
 ```json
 {
@@ -183,28 +186,32 @@ Create an async video generation task.
 }
 ```
 
+Omitting `model` uses the configured default (Seedance 2.5); pass an exact ID
+from `ark_list_models(kind='video')` to pick another model. Add
+`"dry_run": true` to preview the request and estimated cost without billing.
+
 The background submission returns a local MCP task or Ark job ID. Read the
-provider task ID from its terminal result, then pass that provider ID to
-`seedance_get_task`.
+provider task ID (`tasks[0].task_id`) from its terminal result, then pass that
+provider ID to `gen_task_get`.
 
 ## 10. Polling for Video Completion
 
-Check the status of a video generation task.
+Check the status of one or more video (or 3D) generation tasks.
 
-**Tool:** `seedance_get_task`
+**Tool:** `gen_task_get`
 
 ```json
 {
-  "task_id": "provider-task-abc123",
-  "persist_output": false
+  "task_ids": ["provider-task-abc123"]
 }
 ```
 
-Use `persist_output=false` for foreground status polling. To persist the
-completed output, run the retrieval as a background job with
-`persist_output=true` (or omit the field) after the provider task reaches a
-terminal state; subsequent polls return the cached artifact without
-re-downloading.
+`persist_output` defaults to `false`, so this is a foreground status poll.
+Wait `recommended_poll_after_ms` between polls and stop when `all_terminal` is
+`true`; **never resubmit the create tool to poll**. To persist the completed
+outputs, run the call as a background job with `persist_output=true` after the
+task reaches a terminal state; subsequent polls return the cached artifact
+without re-downloading.
 
 ## 11. First/Last Frame Video Generation
 
@@ -234,9 +241,10 @@ Generate a video that starts with one image and ends with another.
 
 ## 12. Parallel Video Task Variations
 
-Create multiple video tasks with different prompts.
+Create multiple video tasks with different prompts in one call
+(`variations` 1-5; each variation is a separate billed task).
 
-**Tool:** `seedance_create_task_variations`
+**Tool:** `seedance_create_task`
 
 ```json
 {
@@ -259,28 +267,30 @@ Create multiple video tasks with different prompts.
 ```
 
 The background submission returns a local MCP task or Ark job ID. Read the
-per-variation provider task IDs from its terminal result, then pass each
-provider ID to `seedance_get_task`.
+per-variation provider task IDs from `tasks` in its terminal result (a failed
+submission has `error` instead of `task_id`), then pass all of them to one
+`gen_task_get` call.
 
 ## 13. List Recent Video Tasks
 
-List video generation tasks from the last 7 days.
+List your generation tasks from the last 7 days, newest first.
 
-**Tool:** `seedance_list_tasks`
+**Tool:** `gen_task_list`
 
 ```json
 {
-  "page": 1,
   "page_size": 20,
   "status": "succeeded"
 }
 ```
 
+Pass `next_cursor` back as `cursor` with the same filters until it is `null`.
+
 ## 14. Cancel or Delete a Video Task
 
-Cancel a queued task or delete a completed one.
+Cancel a queued task or delete a completed one (Seedance or 3D).
 
-**Tool:** `seedance_cancel_or_delete_task`
+**Tool:** `gen_task_cancel_or_delete`
 
 Cancel (queued):
 
@@ -337,7 +347,7 @@ seedance_create_task({
 3. Poll for video completion in the foreground:
 
 ```
-seedance_get_task({"task_id": "<provider task ID from background result>", "persist_output": false})
+gen_task_get({"task_ids": ["<provider task ID from background result>"]})
 ```
 
 ## 16. Batch Storyboard with Seedream
@@ -370,20 +380,29 @@ a video reference for Seedance. Requires TOS or S3 credentials.
 
 ```json
 {
-  "media_type": "video",
-  "mime_type": "video/mp4",
-  "data": "base64-encoded-video-bytes"
+  "items": [
+    {"media_type": "video", "mime_type": "video/mp4", "data": "base64-encoded-video-bytes"}
+  ]
 }
 ```
 
-Returns:
+Returns (check `failed`; a failed item carries `error` instead of `url`):
 
 ```json
 {
-  "url": "https://bucket.tos-ap-southeast-1.bytepluses.com/references/video/abc?...",
-  "expires_at": "2026-07-24T07:30:00+00:00",
-  "object_key": "references/video/abc",
-  "bytes": 5242880
+  "items": [
+    {
+      "index": 0,
+      "url": "https://bucket.tos-ap-southeast-1.bytepluses.com/references/video/abc?...",
+      "expires_at": "2026-07-24T07:30:00+00:00",
+      "object_key": "references/video/abc",
+      "mime_type": "video/mp4",
+      "bytes": 5242880
+    }
+  ],
+  "succeeded": 1,
+  "failed": 0,
+  "total_bytes": 5242880
 }
 ```
 
@@ -407,8 +426,7 @@ Returns:
 
 The presigned URL is valid for 30 minutes by default (configurable via
 `TOS_PRESIGN_TTL_SECONDS` or `S3_PRESIGN_TTL_SECONDS` depending on the
-selected backend). When the URL expires, use `media_presign` with the
-`object_key` from the original upload to generate a fresh URL without
-re-uploading. To renew many references at once, use `media_presign_batch`
-with a list of `object_keys`. The bucket remains private; the presigned URL is
-the only way for BytePlus to read the object.
+selected backend). When the URL expires, call `media_presign` with
+`object_keys` set to the `object_key` values from the original upload (up to
+100 at once) to generate fresh URLs without re-uploading. The bucket remains
+private; the presigned URL is the only way for BytePlus to read the object.

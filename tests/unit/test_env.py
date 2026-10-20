@@ -102,6 +102,7 @@ class TestSettings:
     def test_seedance_2_5_premium_flag_appends_binding(self) -> None:
         settings = Settings(
             _env_file=None,
+            SEEDANCE_DEFAULT_MODEL="dreamina-seedance-2-0-260128",
             BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
             SEEDANCE_MODEL_BINDINGS=[
                 {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"}
@@ -110,6 +111,24 @@ class TestSettings:
         bindings = {b.model_id: b.family for b in settings.seedance_model_bindings}
         assert bindings["dreamina-seedance-2-5-premium-260915"] == "seedance_2_5_premium"
         assert bindings["dreamina-seedance-2-0-260128"] == "standard"
+
+    def test_seedance_default_model_is_2_5(self) -> None:
+        settings = Settings(_env_file=None)
+        assert settings.seedance_default_model == "dreamina-seedance-2-5-260628"
+        bindings = {b.model_id: b.family for b in settings.seedance_model_bindings}
+        assert bindings == {"dreamina-seedance-2-5-260628": "seedance_2_5"}
+
+    def test_2_0_only_bindings_without_default_explain_the_fix(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
+            Settings(
+                _env_file=None,
+                SEEDANCE_MODEL_BINDINGS=[
+                    {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"}
+                ],
+            )
+        message = str(excinfo.value)
+        assert "default model 'dreamina-seedance-2-5-260628' is missing" in message
+        assert "dreamina-seedance-2-0-260128" in message
 
     def test_seedance_2_5_premium_model_override(self) -> None:
         settings = Settings(
@@ -124,6 +143,7 @@ class TestSettings:
     def test_seedance_2_5_premium_explicit_binding_kept(self) -> None:
         settings = Settings(
             _env_file=None,
+            SEEDANCE_DEFAULT_MODEL="dreamina-seedance-2-0-260128",
             BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
             SEEDANCE_MODEL_BINDINGS=[
                 {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"},

@@ -1,7 +1,7 @@
 ---
 title: ModelArk 3D Generation (Hyper3D + Hitem3d)
 type: plan
-status: active
+status: in-progress
 created: 2026-09-01
 updated: 2026-09-01
 tags:

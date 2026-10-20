@@ -1,8 +1,8 @@
 """Seed3D adapter — asynchronous 3D generation task management.
 
 Translates domain input models to provider DTOs, calls the ModelArk gateway
-for the four task operations (create, get, list, delete), and maps provider
-responses to domain output models.
+to create 3D tasks. Retrieval, listing and deletion are shared with Seedance
+in ``generation_tasks.GenerationTaskService``.
 
 Hyper3D and Hitem3d share the same ``/contents/generations/tasks`` task
 endpoints as Seedance, so this adapter mirrors ``SeedanceService`` while
@@ -12,25 +12,17 @@ using 3D-specific content items and the ``file_url`` output field.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
-from ark_mcp.domain.models import (
-    Seed3DTaskStatus,
-    Seed3DTaskSummary,
-    Seed3DTaskUsage,
-)
 from ark_mcp.observability.logger import debug as log_debug
 from ark_mcp.providers.modelark.client import ModelArkGateway
 from ark_mcp.providers.modelark.schemas import (
     Seed3DContentItem,
     Seed3DCreateProviderRequest,
     Seed3DCreateProviderResponse,
-    Seed3DTaskListResponse,
-    Seed3DTaskResponse,
 )
 
 
@@ -101,115 +93,6 @@ class Seed3DService:
             request_id=request_id,
         )
         return parsed.id, request_id
-
-    async def get_task(self, task_id: str) -> tuple[Seed3DTaskResponse, str | None]:
-        """Call ``GET /contents/generations/tasks/{id}``.
-
-        Returns ``(task, request_id)``.
-        """
-        log_debug("seed3d_get_task", task_id=task_id)
-        try:
-            response = await self._gateway.get(f"/contents/generations/tasks/{task_id}")
-        except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("get_task", side_effect=False) from None
-        except httpx.ConnectError as exc:
-            raise ModelArkGateway.normalize_connection_error("get_task", exc) from exc
-        except httpx.TransportError as exc:
-            raise ModelArkGateway.normalize_transport_error("get_task", exc) from exc
-
-        request_id = ModelArkGateway.extract_request_id(response)
-
-        if response.status_code >= 400:
-            raise ModelArkGateway.normalize_error(response, "get_task")
-
-        body = _parse_success_body(response, "get_task")
-        parsed = Seed3DTaskResponse.model_validate(body)
-        log_debug(
-            "seed3d_get_task_complete",
-            task_id=task_id,
-            status=parsed.status,
-            status_code=response.status_code,
-            request_id=request_id,
-        )
-        return parsed, request_id
-
-    async def list_tasks(
-        self,
-        *,
-        page: int = 1,
-        page_size: int = 20,
-        status: str | None = None,
-        task_ids: list[str] | None = None,
-        model: str | None = None,
-    ) -> tuple[Seed3DTaskListResponse, str | None]:
-        """Call ``GET /contents/generations/tasks``.
-
-        Returns ``(page, request_id)``.
-        """
-        params: dict[str, Any] = {
-            "page_num": page,
-            "page_size": page_size,
-        }
-        if status:
-            params["filter.status"] = status
-        if task_ids:
-            params["filter.task_ids"] = task_ids
-        if model:
-            params["filter.model"] = model
-
-        log_debug("seed3d_list_tasks", page=page, page_size=page_size)
-        try:
-            response = await self._gateway.get("/contents/generations/tasks", params=params)
-        except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("list_tasks", side_effect=False) from None
-        except httpx.ConnectError as exc:
-            raise ModelArkGateway.normalize_connection_error("list_tasks", exc) from exc
-        except httpx.TransportError as exc:
-            raise ModelArkGateway.normalize_transport_error("list_tasks", exc) from exc
-
-        request_id = ModelArkGateway.extract_request_id(response)
-
-        if response.status_code >= 400:
-            raise ModelArkGateway.normalize_error(response, "list_tasks")
-
-        body = _parse_success_body(response, "list_tasks")
-        parsed = Seed3DTaskListResponse.model_validate(body)
-        log_debug(
-            "seed3d_list_tasks_complete",
-            page=page,
-            total=len(parsed.items) if parsed.items else 0,
-            status_code=response.status_code,
-            request_id=request_id,
-        )
-        return parsed, request_id
-
-    async def delete_task(self, task_id: str) -> str | None:
-        """Call ``DELETE /contents/generations/tasks/{id}``.
-
-        Returns the request ID.
-        """
-        log_debug("seed3d_delete_task", task_id=task_id)
-        try:
-            response = await self._gateway.delete(f"/contents/generations/tasks/{task_id}")
-        except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("delete_task") from None
-        except httpx.ConnectError as exc:
-            raise ModelArkGateway.normalize_connection_error("delete_task", exc) from exc
-        except httpx.TransportError as exc:
-            raise ModelArkGateway.normalize_transport_error("delete_task", exc) from exc
-
-        request_id = ModelArkGateway.extract_request_id(response)
-
-        if response.status_code >= 400:
-            raise ModelArkGateway.normalize_error(response, "delete_task")
-
-        log_debug(
-            "seed3d_delete_task_complete",
-            task_id=task_id,
-            status_code=response.status_code,
-            request_id=request_id,
-        )
-        return request_id
 
     @staticmethod
     def build_text_command(params: dict[str, Any]) -> str:
@@ -287,47 +170,6 @@ class Seed3DService:
             seed=seed,
             callback_url=callback_url,
         )
-
-    @staticmethod
-    def to_task_summary(task: Seed3DTaskResponse) -> Seed3DTaskSummary:
-        """Convert a full task response to a summary for list results."""
-        return Seed3DTaskSummary(
-            task_id=task.id,
-            model=task.model,
-            status=Seed3DTaskStatus(task.status),
-            created_at=str(task.created_at or ""),
-            updated_at=str(task.updated_at or ""),
-        )
-
-    @staticmethod
-    def extract_usage(task: Seed3DTaskResponse) -> Seed3DTaskUsage | None:
-        """Extract usage data from a task response."""
-        if task.usage is None:
-            return None
-        return Seed3DTaskUsage(
-            completion_tokens=task.usage.completion_tokens,
-            total_tokens=task.usage.total_tokens,
-        )
-
-    @staticmethod
-    def get_created_at(task: Seed3DTaskResponse) -> str:
-        """Format the task's ``created_at`` as ISO-8601."""
-        raw = task.created_at
-        if raw is None:
-            return datetime.now(UTC).isoformat()
-        if isinstance(raw, (int, float)):
-            return datetime.fromtimestamp(raw, tz=UTC).isoformat()
-        return str(raw)
-
-    @staticmethod
-    def get_updated_at(task: Seed3DTaskResponse) -> str:
-        """Format the task's ``updated_at`` as ISO-8601."""
-        raw = task.updated_at
-        if raw is None:
-            return datetime.now(UTC).isoformat()
-        if isinstance(raw, (int, float)):
-            return datetime.fromtimestamp(raw, tz=UTC).isoformat()
-        return str(raw)
 
     async def close(self) -> None:
         await self._gateway.close()

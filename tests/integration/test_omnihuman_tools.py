@@ -33,6 +33,7 @@ from ark_mcp.tools.omnihuman_get_task import (
     omnihuman_get_task,
 )
 from tests.fixtures.fake_context import FakeContext
+from tests.fixtures.ownership import owned_task_ids
 
 IMAGE_URL = "https://media.example.com/face.png"
 AUDIO_URL = "https://media.example.com/voice.mp3"
@@ -124,7 +125,7 @@ class TestCreate:
         assert request["prompt"] == "waves"
         assert request["enable_watermark"] is True
         runtime = fake_ctx.lifespan_context["runtime"]
-        assert await runtime.ownership_store.list_task_ids("vision-cv", AuthContext()) == {"oh-1"}
+        assert await owned_task_ids(runtime, "vision-cv") == {"oh-1"}
 
     async def test_watermark_can_be_disabled(
         self, fake_ctx: FakeContext, submitted: list[object]
@@ -236,7 +237,7 @@ class TestCreate:
         assert result.is_error
         assert "50510" in result.content[0].text
         runtime = fake_ctx.lifespan_context["runtime"]
-        assert await runtime.ownership_store.list_task_ids("vision-cv", AuthContext()) == set()
+        assert await owned_task_ids(runtime, "vision-cv") == set()
 
     async def test_rejects_when_not_configured(
         self, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch

@@ -4,19 +4,30 @@
 
 Ark Seed Multimodal MCP Server — a Python MCP server (FastMCP on uv)
 that exposes BytePlus multimodal generation through a small, typed, safe tool
-surface:
+surface. **One tool per capability**: models, variations, edit modes and
+dry runs are parameters validated against the capability registry, not
+separate tools. The flow is discovery → create → poll:
 
-- **Seed Audio** — full-scene audio generation through Seed Speech.
-- **Seedream** — image generation and editing through ModelArk.
-- **Seedance** — asynchronous video generation and task management through
-  ModelArk. Supports two model generations: 2.0 (legacy, 15s, 4K) and 2.5
-  (default, 30s, 1080p, structured editing, native extension). Seedance 2.5
-  Premium (`dreamina-seedance-2-5-premium-260915`, adds 4K) is a separate,
-  whitelist-only family with its own `seedance_2_5_premium_*` tools, gated by
+- **Discovery** — `ark_list_models` returns the bound models, their limits,
+  and the tool that serves each one, from the static tool catalog
+  (`tools/_catalog.py`) and the capability registry.
+- **Seed Audio** — full-scene audio generation through Seed Speech
+  (`seed_audio_generate`, including parallel variations).
+- **Seedream** — image generation and editing through ModelArk with one
+  tool, `seedream_generate_image` (generate, edit with point/bbox,
+  transparent background, variations, dry run).
+- **Seedance** — asynchronous video generation through ModelArk with one
+  create tool, `seedance_create_task`. Supports two model generations: 2.0
+  (legacy, 15s, 4K) and 2.5 (default, 30s, 1080p, structured editing, native
+  extension). Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`,
+  adds 4K) is a whitelist-only model selected through `model`, gated by
   `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`; disabled by default.
 - **Seed 3D** — asynchronous 3D model generation through ModelArk (Hyper3D
   text-to-3D and Hitem3d image-to-3D). Gated by `BYTEPLUS_MODELARK_3D_ENABLED`;
   disabled by default.
+- **Generation tasks** — `gen_task_get`, `gen_task_list` and
+  `gen_task_cancel_or_delete` poll, list and cancel Seedance and 3D tasks
+  (scopes `gen:read` / `gen:delete`).
 - **OmniHuman 2.0** — image + audio to talking-avatar video through BytePlus
   Vision AI (`omnihuman_create_task`, `omnihuman_get_task`,
   `omnihuman_cancel_task`). Bearer `BYTEPLUS_CV_API_KEY`; gated by
@@ -29,9 +40,10 @@ surface:
 - **Speech-to-Text** — background audio transcription through Seed Speech ASR.
 - **VOD AI MediaKit** — asynchronous video enhancement, video transcoding,
   subtitle burn-in and precision subtitle/text erasure, and voice/background
-  audio separation through the BytePlus VOD AI MediaKit.
-- **Object storage upload** — presigned URL generation for URL-only media
-  workflows (TOS or S3 backend).
+  audio separation through the BytePlus VOD AI MediaKit; every operation is
+  polled with `vod_get_task`.
+- **Object storage upload** — `media_upload` / `media_presign` take lists and
+  return presigned URLs for URL-only media workflows (TOS or S3 backend).
 - **Private asset library** — `ark_asset_*` tools for Dreamina Seedance
   Advanced Creation Rights assets (AIGC virtual portraits, real-person
   liveness verification, uploads) through the AK/SK-signed ModelArk OpenAPI;
@@ -118,6 +130,8 @@ engineer or agent can execute it without re-deriving the design.
 - Naming convention: `PLAN_<FEATURE_OR_SCOPE>.md`.
 - Include frontmatter (`title`, `type: plan`, `status`, `created`, `updated`,
   `tags`, `source`, `related`) when the plan draws on external research.
+- `status` is one of `draft`, `proposed`, `accepted`, `in-progress`,
+  `shipped`, `superseded`, or `deprecated`.
 - A plan is a living document: update `status` and `updated` as work
   progresses. Once shipped, the durable decisions should move to `specs/` or
   `docs/` and the plan can be archived or marked `status: shipped`.

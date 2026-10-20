@@ -6,21 +6,13 @@ import pytest
 from pydantic import ValidationError
 
 from ark_mcp.domain.media import AudioReference, MediaSource, MediaSourceKind
+from ark_mcp.tools._seedream_shared import EditCoordinate, edit_prompt
+from ark_mcp.tools.gen_task_cancel_or_delete import (
+    GenTaskCancelOrDeleteInput,
+)
 from ark_mcp.tools.seed_audio_generate import SeedAudioGenerateInput
-from ark_mcp.tools.seedance_2_5_create_task import Seedance25CreateTaskInput
-from ark_mcp.tools.seedance_2_5_create_task_variations import Seedance25VariationsInput
-from ark_mcp.tools.seedance_cancel_or_delete_task import (
-    SeedanceCancelOrDeleteInput,
-)
 from ark_mcp.tools.seedance_create_task import SeedanceCreateTaskInput
-from ark_mcp.tools.seedance_create_task_variations import SeedanceVariationsInput
-from ark_mcp.tools.seedream_edit_image import (
-    EditCoordinate,
-    SeedreamEditInput,
-    _coordinate_markup,
-)
 from ark_mcp.tools.seedream_generate_image import SeedreamGenerateInput
-from ark_mcp.tools.seedream_generate_image_variations import SeedreamVariationsInput
 
 
 class TestSeedAudioGenerateInput:
@@ -114,44 +106,11 @@ class TestSeedanceCreateTaskInput:
         assert len(inp.videos or []) == 1
         assert len(inp.audios or []) == 1
 
-    def test_audio_only_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceAudioInput
-
-        with pytest.raises(ValidationError, match="cannot be the sole media input"):
-            SeedanceCreateTaskInput(
-                audios=[SeedanceAudioInput(kind="url", url="https://example.com/a.wav")]
-            )
-
     def test_audio_input_rejects_image_mime(self) -> None:
         from ark_mcp.tools.seedance_create_task import SeedanceAudioInput
 
         with pytest.raises(ValidationError, match="Audio MIME type"):
             SeedanceAudioInput(kind="base64", data="aGVsbG8=", mime_type="image/png")
-
-    def test_too_many_images_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceImageInput
-
-        images = [
-            SeedanceImageInput(kind="url", url=f"https://example.com/img{i}.png") for i in range(10)
-        ]
-        with pytest.raises(ValidationError, match="Too many reference images"):
-            SeedanceCreateTaskInput(images=images)
-
-    def test_too_many_videos_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        videos = [SeedanceVideoInput(url=f"https://example.com/v{i}.mp4") for i in range(4)]
-        with pytest.raises(ValidationError, match="Too many reference videos"):
-            SeedanceCreateTaskInput(videos=videos)
-
-    def test_duration_out_of_range_raises(self) -> None:
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        with pytest.raises(ValidationError):
-            SeedanceCreateTaskInput(
-                videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-                duration=20,
-            )
 
     def test_empty_prompt_raises(self) -> None:
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
@@ -180,30 +139,6 @@ class TestSeedanceCreateTaskInput:
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
-    def test_ratio_stripped_for_extend_video(self) -> None:
-        """Ratio is stripped for extend_video to prevent InvalidParameter.TaskTypeConstraint."""
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        inp = SeedanceCreateTaskInput(
-            prompt="extend this video",
-            videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-            omni_reference_task_type="extend_video",
-            ratio="16:9",
-        )
-        assert inp.ratio is None
-
-    def test_ratio_preserved_for_edit_video(self) -> None:
-        """Ratio is not stripped for edit_video."""
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        inp = SeedanceCreateTaskInput(
-            prompt="edit this video",
-            videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-            omni_reference_task_type="edit_video",
-            ratio="16:9",
-        )
-        assert inp.ratio == "16:9"
-
     def test_ratio_preserved_for_auto_task_type(self) -> None:
         """Ratio is not stripped when omni_reference_task_type is omitted."""
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
@@ -215,31 +150,39 @@ class TestSeedanceCreateTaskInput:
         )
         assert inp.ratio == "16:9"
 
+    def test_outer_bounds_still_enforced_statically(self) -> None:
+        with pytest.raises(ValidationError):
+            SeedanceCreateTaskInput(prompt="x", duration=31)
+        with pytest.raises(ValidationError):
+            SeedanceCreateTaskInput(
+                prompt="x", images=[f"https://example.com/{i}.png" for i in range(31)]
+            )
 
-class TestSeedanceCancelOrDeleteInput:
+
+class TestGenTaskCancelOrDeleteInput:
     """Tests for Seedance cancel/delete input validation."""
 
     def test_cancel_queued_valid(self) -> None:
-        inp = SeedanceCancelOrDeleteInput(
+        inp = GenTaskCancelOrDeleteInput(
             task_id="task-123", mode="cancel", expected_status="queued"
         )
         assert inp.mode == "cancel"
 
     def test_delete_succeeded_valid(self) -> None:
-        inp = SeedanceCancelOrDeleteInput(
+        inp = GenTaskCancelOrDeleteInput(
             task_id="task-123", mode="delete", expected_status="succeeded"
         )
         assert inp.mode == "delete"
 
     def test_cancel_succeeded_raises(self) -> None:
         with pytest.raises(ValidationError, match="Cancel mode requires"):
-            SeedanceCancelOrDeleteInput(
+            GenTaskCancelOrDeleteInput(
                 task_id="task-123", mode="cancel", expected_status="succeeded"
             )
 
     def test_delete_queued_raises(self) -> None:
         with pytest.raises(ValidationError, match="Delete mode requires"):
-            SeedanceCancelOrDeleteInput(task_id="task-123", mode="delete", expected_status="queued")
+            GenTaskCancelOrDeleteInput(task_id="task-123", mode="delete", expected_status="queued")
 
 
 class TestSeedanceVariationsInput:
@@ -248,7 +191,7 @@ class TestSeedanceVariationsInput:
     def test_variation_prompt_at_max_length_valid(self) -> None:
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
 
-        inp = SeedanceVariationsInput(
+        inp = SeedanceCreateTaskInput(
             variation_prompts=["x" * 32000],
             variations=1,
             videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
@@ -259,64 +202,51 @@ class TestSeedanceVariationsInput:
         from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
 
         with pytest.raises(ValidationError):
-            SeedanceVariationsInput(
+            SeedanceCreateTaskInput(
                 variation_prompts=["x" * 32001],
                 variations=1,
                 videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
             )
 
     def test_prompt_at_max_length_valid(self) -> None:
-        inp = SeedanceVariationsInput(prompt="x" * 32000, variations=1)
+        inp = SeedanceCreateTaskInput(prompt="x" * 32000, variations=1)
         assert len(inp.prompt or "") == 32000
 
     def test_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedanceVariationsInput(prompt="x" * 32001, variations=1)
-
-    def test_inherits_ratio_stripping_for_extend_video(self) -> None:
-        """Variations input inherits ratio stripping from base model."""
-        from ark_mcp.tools.seedance_create_task import SeedanceVideoInput
-
-        inp = SeedanceVariationsInput(
-            variations=2,
-            variation_prompts=["extend clip a", "extend clip b"],
-            videos=[SeedanceVideoInput(url="https://example.com/v.mp4")],
-            omni_reference_task_type="extend_video",
-            ratio="9:16",
-        )
-        assert inp.ratio is None
+            SeedanceCreateTaskInput(prompt="x" * 32001, variations=1)
 
 
 class TestSeedance25CreateTaskInput:
     """Tests for Seedance 2.5 create task prompt-length validation."""
 
     def test_prompt_at_max_length_valid(self) -> None:
-        inp = Seedance25CreateTaskInput(prompt="x" * 32000)
+        inp = SeedanceCreateTaskInput(prompt="x" * 32000)
         assert len(inp.prompt or "") == 32000
 
     def test_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            Seedance25CreateTaskInput(prompt="x" * 32001)
+            SeedanceCreateTaskInput(prompt="x" * 32001)
 
 
 class TestSeedance25VariationsInput:
     """Tests for Seedance 2.5 variations prompt-length validation."""
 
     def test_prompt_at_max_length_valid(self) -> None:
-        inp = Seedance25VariationsInput(prompt="x" * 32000, variations=1)
+        inp = SeedanceCreateTaskInput(prompt="x" * 32000, variations=1)
         assert len(inp.prompt or "") == 32000
 
     def test_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            Seedance25VariationsInput(prompt="x" * 32001, variations=1)
+            SeedanceCreateTaskInput(prompt="x" * 32001, variations=1)
 
     def test_variation_prompt_at_max_length_valid(self) -> None:
-        inp = Seedance25VariationsInput(variation_prompts=["x" * 32000], variations=1)
+        inp = SeedanceCreateTaskInput(variation_prompts=["x" * 32000], variations=1)
         assert len(inp.variation_prompts[0]) == 32000
 
     def test_variation_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            Seedance25VariationsInput(variation_prompts=["x" * 32001], variations=1)
+            SeedanceCreateTaskInput(variation_prompts=["x" * 32001], variations=1)
 
 
 class TestSeedreamPromptLength:
@@ -331,28 +261,28 @@ class TestSeedreamPromptLength:
             SeedreamGenerateInput(prompt="x" * 4001)
 
     def test_variations_prompt_at_max_length_valid(self) -> None:
-        inp = SeedreamVariationsInput(prompt="x" * 4000, variations=1)
+        inp = SeedreamGenerateInput(prompt="x" * 4000, variations=1)
         assert len(inp.prompt or "") == 4000
 
     def test_variations_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedreamVariationsInput(prompt="x" * 4001, variations=1)
+            SeedreamGenerateInput(prompt="x" * 4001, variations=1)
 
     def test_variation_prompt_at_max_length_valid(self) -> None:
-        inp = SeedreamVariationsInput(variation_prompts=["x" * 4000], variations=1)
+        inp = SeedreamGenerateInput(variation_prompts=["x" * 4000], variations=1)
         assert len(inp.variation_prompts[0]) == 4000
 
     def test_variation_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedreamVariationsInput(variation_prompts=["x" * 4001], variations=1)
+            SeedreamGenerateInput(variation_prompts=["x" * 4001], variations=1)
 
     def _edit_image(self) -> MediaSource:
         return MediaSource(kind=MediaSourceKind.url, url="https://example.com/img.png")
 
     def test_edit_prompt_at_max_length_with_markup_valid(self) -> None:
         point = EditCoordinate(x=500, y=500)
-        markup_len = len(_coordinate_markup(point, None))
-        inp = SeedreamEditInput(
+        markup_len = len(edit_prompt("", point, None).rstrip())
+        inp = SeedreamGenerateInput(
             prompt="x" * (4000 - markup_len - 1),
             images=[self._edit_image()],
             point=point,
@@ -361,9 +291,9 @@ class TestSeedreamPromptLength:
 
     def test_edit_prompt_with_markup_too_long_raises(self) -> None:
         point = EditCoordinate(x=500, y=500)
-        markup_len = len(_coordinate_markup(point, None))
+        markup_len = len(edit_prompt("", point, None).rstrip())
         with pytest.raises(ValidationError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="x" * (4000 - markup_len),
                 images=[self._edit_image()],
                 point=point,
@@ -371,7 +301,7 @@ class TestSeedreamPromptLength:
 
     def test_edit_prompt_too_long_raises(self) -> None:
         with pytest.raises(ValidationError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="x" * 4001,
                 images=[self._edit_image()],
                 point=EditCoordinate(x=500, y=500),

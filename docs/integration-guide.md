@@ -152,7 +152,7 @@ async def main():
         )
         print("MCP submission task:", submission.task_id)
         created = await submission.result()
-        provider_id = created.structured_content["task_id"]
+        provider_id = created.structured_content["tasks"][0]["task_id"]
         directory = Path(".artifacts")
         directory.mkdir(exist_ok=True)
         with (directory / "provider_tasks.jsonl").open("a") as stream:
@@ -162,25 +162,28 @@ async def main():
 
         for _ in range(30):
             status = await client.call_tool(
-                "seedance_get_task",
-                {"input": {"task_id": provider_id, "persist_output": False}},
+                "gen_task_get",
+                {"input": {"task_ids": [provider_id], "persist_output": False}},
             )
-            state = status.structured_content["status"]
+            result = status.structured_content
+            if result["errors"]:
+                raise RuntimeError(f"Provider task {provider_id}: {result['errors'][0]}")
+            state = result["tasks"][0]["status"]
             if state == "succeeded":
                 break
             if state in {"failed", "cancelled", "expired"}:
                 raise RuntimeError(f"Provider task {provider_id}: {state}")
-            await asyncio.sleep(10)
+            await asyncio.sleep(result["recommended_poll_after_ms"] / 1000)
         else:
             raise TimeoutError(f"Resume polling provider task {provider_id}")
 
         persistence = await call_tool_task(
             client,
-            "seedance_get_task",
-            {"input": {"task_id": provider_id, "persist_output": True}},
+            "gen_task_get",
+            {"input": {"task_ids": [provider_id], "persist_output": True}},
         )
         completed = await persistence.result()
-        print(completed.structured_content["video"])
+        print(completed.structured_content["tasks"][0]["outputs"])
 
 
 asyncio.run(main())
@@ -401,10 +404,14 @@ The server skips registering tools for products without credentials. Check:
 
 If only some products' tools are registered:
 
-- No ModelArk key → no Seedream or Seedance tools (5 tools missing)
-- No Seed Audio key → no Seed Audio tools (2 tools missing)
+- No ModelArk key → no `seedream_generate_image`, `seedance_create_task`,
+  `gen_task_*`, `seed_understand`, or `seed_audio_understand`
+- No Seed Speech key → no `seed_audio_generate` or `speech_to_text`
+- Optional products (Seed 3D, OmniHuman, VOD MediaKit, object storage, asset
+  library) also need their own keys or feature flags; see
+  [Configuration](configuration.md).
 
-Both keys are required for all 9 tools to appear.
+`ark_list_models` reports which optional services are enabled.
 
 ## Environment Variables Reference
 
@@ -415,7 +422,7 @@ Both keys are required for all 9 tools to appear.
 | `BYTEPLUS_MODELARK_BASE_URL` | No | `https://ark.ap-southeast.bytepluses.com/api/v3` | ModelArk region endpoint |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | No | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech endpoint |
 | `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-0-pro-260628` | Seedream model ID |
-| `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-0-260128` | Seedance model ID |
+| `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-5-260628` | Default Seedance model ID for `seedance_create_task` (Seedance 2.5) |
 | `MCP_TRANSPORT` | No | `stdio` | `stdio` or `http` |
 | `MCP_HOST` | No | `127.0.0.1` | HTTP bind address |
 | `MCP_PORT` | No | `3000` | HTTP port |

@@ -32,11 +32,18 @@ def register_video_cost_override(model_id: str, cost_per_task: float) -> None:
     _VIDEO_COST_OVERRIDES[model_id] = cost_per_task
 
 
-def _video_cost_for_model(model_id: str | None) -> float:
-    """Return the cost-per-task for a given video model, or the default."""
+_SEEDANCE_2_5_FAMILIES = frozenset({"seedance_2_5", "seedance_2_5_premium"})
+
+
+def _video_cost_for_model(model_id: str | None, family: str | None = None) -> float:
+    """Return the cost-per-task for a video model, keyed on its registry family.
+
+    A model-specific override wins. Pricing follows the family so that a
+    custom endpoint ID bound to Seedance 2.5 is priced as 2.5.
+    """
     if model_id and model_id in _VIDEO_COST_OVERRIDES:
         return _VIDEO_COST_OVERRIDES[model_id]
-    if model_id and "seedance-2-5" in model_id:
+    if family in _SEEDANCE_2_5_FAMILIES:
         return COST_PER_VIDEO_TASK_2_5
     return COST_PER_VIDEO_TASK
 
@@ -59,6 +66,7 @@ def estimate_cost(
     max_tokens: int | None = None,
     model_id: str | None = None,
     seed3d_family: str | None = None,
+    video_family: str | None = None,
 ) -> float:
     """Estimate the cost of a parallel generation batch.
 
@@ -70,6 +78,7 @@ def estimate_cost(
         max_tokens: Maximum output tokens (understanding only).
         model_id: Model ID for model-specific pricing (video only).
         seed3d_family: Family for 3D pricing ("seed3d_hyper3d" or "seed3d_hitem3d").
+        video_family: Registry family for video pricing (e.g. "seedance_2_5").
 
     Returns:
         Estimated cost in USD.
@@ -79,7 +88,7 @@ def estimate_cost(
     if product == "audio":
         return round(variations * max(duration_seconds, 10) * COST_PER_AUDIO_SECOND, 2)
     if product == "video":
-        return round(variations * _video_cost_for_model(model_id), 2)
+        return round(variations * _video_cost_for_model(model_id, video_family), 2)
     if product == "3d":
         return round(variations * _3d_cost_for_model(model_id, seed3d_family), 2)
     if product == "stt":
@@ -100,6 +109,7 @@ def log_cost_estimate(
     max_tokens: int | None = None,
     model_id: str | None = None,
     seed3d_family: str | None = None,
+    video_family: str | None = None,
 ) -> float:
     """Log a cost estimate before dispatching a batch."""
     cost = estimate_cost(
@@ -110,6 +120,7 @@ def log_cost_estimate(
         max_tokens=max_tokens,
         model_id=model_id,
         seed3d_family=seed3d_family,
+        video_family=video_family,
     )
     log_info(
         "cost_estimate",

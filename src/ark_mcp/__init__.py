@@ -15,4 +15,4 @@ from __future__ import annotations
 from ark_mcp.server import create_server, mcp
 
 __all__ = ["create_server", "mcp"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

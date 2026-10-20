@@ -6,15 +6,16 @@ provider adapter; this tool exposes a stable, bounded persistence outcome.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
+from ark_mcp.domain.media import HttpsUrl
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
@@ -30,45 +31,39 @@ from ark_mcp.security.media_policy import get_media_limits
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
-from ark_mcp.tools._vod_shared import VodArtifactPersistenceIssue
-
-HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
+from ark_mcp.tools._vod_shared import (
+    VOD_OPERATION_DESCRIPTION,
+    VodArtifactPersistenceIssue,
+    VodOperation,
+)
 
 
 class VodEnhanceVideoInput(BaseModel):
     """Input for fast, standard, or professional MediaKit video enhancement."""
 
     video_url: HttpsUrl = Field(
-        description="Public HTTPS source-video URL that BytePlus can fetch. Private and link-local destinations are rejected."
+        description="Public HTTPS source-video URL; private and link-local hosts are rejected."
     )
     tool_version: EnhancementTier = Field(
         default="professional",
         description=(
-            "Enhancement tier. 'fast' is speed-first lightweight super-resolution for latency-sensitive "
-            "work (input up to 2K). 'standard' balances speed and quality with 10+ algorithms and honors "
-            "'scene'. 'professional' is the highest-quality tier with 30+ algorithms, slower and costlier."
+            "'fast': lightweight, fastest (input up to 2K). 'standard': balanced, honors 'scene'. "
+            "'professional': highest quality, slower and costlier."
         ),
     )
     scene: Literal["common", "ugc", "short_series", "aigc", "old_film"] = Field(
         default="common",
-        description=(
-            "Enhancement scenario preset. Only takes effect when tool_version is 'standard'; ignored "
-            "by 'professional' and not sent for 'fast'."
-        ),
+        description="Scenario preset; only used when tool_version is 'standard'.",
     )
     enhance_style: Literal["hd", "natural"] | None = Field(
         default=None,
-        description=(
-            "Enhancement style for 'standard' and 'professional': 'hd' (provider default) is sharper, "
-            "'natural' reduces sharpening artifacts. Not supported by 'fast'. Omit to use the provider default."
-        ),
+        description="'hd' (provider default) is sharper; 'natural' reduces sharpening artifacts. Not supported by 'fast'.",
     )
     resolution: EnhancementResolution | None = Field(
         default=None,
         description=(
-            "Target output resolution level. 'standard'/'professional' accept 240p, 360p, 480p, 540p, 720p, "
-            "1080p, 2k, 4k, 6k, 8k; 'fast' accepts 240p up to 4k. Mutually exclusive with resolution_limit. "
-            "Defaults to '4k' when neither resolution nor resolution_limit is set."
+            "Target resolution level; 'fast' tops out at 4k. Mutually exclusive with "
+            "resolution_limit. Defaults to '4k' when neither is set."
         ),
     )
     resolution_limit: int | None = Field(
@@ -76,44 +71,40 @@ class VodEnhanceVideoInput(BaseModel):
         ge=128,
         le=FULL_RESOLUTION_LIMIT_MAX,
         description=(
-            "Target short-side pixel count, scaled proportionally to preserve aspect ratio. Range 128-4320 "
-            "for 'standard'/'professional', 128-2160 for 'fast'. Mutually exclusive with resolution."
+            "Target short-side pixels, aspect ratio preserved; max 2160 for 'fast'. Mutually "
+            "exclusive with resolution."
         ),
     )
     bitrate_level: Literal["low", "medium", "high"] = Field(
         default="high",
-        description="Target bitrate tier controlling output quality and file size. Ignored when bitrate is set.",
+        description="Target bitrate tier; ignored when bitrate is set.",
     )
     bitrate: int | None = Field(
         default=None,
         ge=10,
         le=150000,
-        description="Exact target average bitrate in kbps (10-150000). Takes precedence over bitrate_level.",
+        description="Exact average bitrate in kbps; overrides bitrate_level.",
     )
     fps: float | None = Field(
         default=24,
         ge=15,
         le=120,
-        description=(
-            "Target frame rate in frames per second (15-120); values above the source rate use frame "
-            "interpolation, and staying within 4x the source rate is recommended. Defaults to 24. "
-            "Pass null to keep the source frame rate."
-        ),
+        description="Target frames per second; above the source rate interpolates (keep within 4x). Null keeps the source rate.",
     )
     project: str = Field(
         default="default",
         min_length=1,
         max_length=128,
-        description="MediaKit project label, serialized upstream using the case-sensitive 'Project' field.",
+        description="MediaKit project label (case-sensitive).",
     )
     input_duration_seconds: float | None = Field(
         default=None,
         gt=0,
-        description="Optional source duration in seconds. Retained for future pricing support; no estimate is emitted until convenience-endpoint billing is confirmed.",
+        description="Source duration in seconds; currently unused (reserved for pricing).",
     )
     persist: bool = Field(
         default=True,
-        description="Best-effort copy of the completed output into the durable MCP artifact store.",
+        description="Copy a directly returned completed output into the durable artifact store (best effort).",
     )
 
     @model_validator(mode="after")
@@ -132,65 +123,58 @@ class VodEnhanceVideoOutput(BaseModel):
     """Normalized successful MediaKit enhancement result."""
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
-        default="byteplus-vod-mediakit", description="Provider surface that enhanced the video."
+        default="byteplus-vod-mediakit", description="Provider surface."
     )
     status: Literal["accepted", "succeeded"] = Field(
-        description="Normalized state: accepted for an asynchronous task or succeeded for a completed output.",
+        description="accepted: task queued, poll vod_get_task; succeeded: output returned directly.",
     )
-    request_id: str | None = Field(
-        default=None, description="Provider diagnostic request ID, when returned."
-    )
+    request_id: str | None = Field(default=None, description="Provider request ID, when returned.")
     provider_log_id: str | None = Field(
-        default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
+        default=None, description="Provider x-tt-logid, when returned."
     )
     task_id: str | None = Field(
         default=None,
-        description="Provider task identifier to poll with vod_get_enhancement_task.",
+        description="Task ID to poll with vod_get_task (operation 'enhance').",
     )
+    operation: VodOperation = Field(default="enhance", description=VOD_OPERATION_DESCRIPTION)
     provider_status: str | None = Field(
         default=None,
-        description="Raw provider status label, when included in the accepted success response.",
+        description="Raw provider status label, when returned.",
     )
     video: ArtifactRef | None = Field(
         default=None,
-        description="Durable enhanced-video artifact when best-effort persistence succeeds.",
+        description="Durable enhanced-video artifact, when persisted.",
     )
     source_url: HttpsUrl | None = Field(
         default=None,
-        description="Provider output URL for succeeded results; absent while an accepted task is processing.",
+        description="Expiring provider output URL; absent while a task is still processing.",
     )
     source_expires_at: str | None = Field(
-        default=None, description="Provider-reported ISO-8601 output URL expiry, when returned."
+        default=None, description="ISO-8601 expiry of source_url, when returned."
     )
     output_size_bytes: int | None = Field(
-        default=None, ge=0, description="Provider-reported output size in bytes, when returned."
+        default=None, ge=0, description="Output size in bytes, when returned."
     )
     persistence: Literal["not_applicable", "not_requested", "persisted", "failed"] = Field(
-        description="Outcome of durable artifact persistence, independent of provider success."
+        description="Durable persistence outcome, independent of provider success."
     )
     persistence_issue: VodArtifactPersistenceIssue | None = Field(
-        default=None, description="Safe failure details when persistence did not complete."
+        default=None, description="Safe explanation when persistence failed."
     )
     estimated_cost_usd: float | None = Field(
         default=None,
-        description="Always null until convenience-endpoint pricing and billing-unit mapping are confirmed.",
+        description="Always null; cost estimation is not available.",
     )
 
 
 async def vod_enhance_video(
     input: VodEnhanceVideoInput, ctx: Context
 ) -> VodEnhanceVideoOutput | ToolResult:
-    """Upscale and enhance a public video using BytePlus VOD AI MediaKit.
+    """Upscale and enhance a public video with BytePlus VOD AI MediaKit.
 
-    Choose a tier with tool_version (fast, standard, or professional) and a
-    target resolution from 240p up to 8K (fast tops out at 4K) or a short-side
-    pixel limit. Defaults to professional, 4K, high bitrate, 24 fps. Fast uses
-    its own provider endpoint. The mutation is never retried automatically because completion can be ambiguous after a
-    timeout. An accepted response contains a task ID without an output URL; poll
-    it with vod_get_enhancement_task. If MediaKit directly returns a completed
-    output, its provider URL is preserved and durable persistence is best-effort
-    under the 200 MiB video policy. Requires MCP task-augmented execution for
-    submission and any immediate persistence.
+    Defaults to professional tier, 4K, 24 fps. Not retried automatically. An
+    accepted result carries a task_id: poll it with vod_get_task (operation
+    'enhance'). Requires background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

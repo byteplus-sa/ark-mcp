@@ -7,18 +7,25 @@ mocked via ``patch`` so no SDK client or network is involved.
 
 from __future__ import annotations
 
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastmcp.tools import ToolResult
+from pydantic import ValidationError
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
+from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.tools.media_presign import (
     MediaPresignInput,
     MediaPresignOutput,
     media_presign,
 )
+from ark_mcp.tools.media_upload import MediaUploadInput, MediaUploadItem, media_upload
 from tests.fixtures.fake_context import FakeContext
+
+_GATEWAY = "ark_mcp.tools.media_presign.make_object_storage_gateway"
+_UPLOAD_GATEWAY = "ark_mcp.tools.media_upload.make_object_storage_gateway"
+_VALID_KEY = "references/video/abc-123-def"
 
 
 def _mock_gateway() -> AsyncMock:
@@ -28,73 +35,94 @@ def _mock_gateway() -> AsyncMock:
     return gw
 
 
-_VALID_KEY = "references/video/abc-123-def"
+def _upload_gateway() -> AsyncMock:
+    gw = AsyncMock()
+    gw.upload_bytes = AsyncMock(return_value=None)
+    gw.presign_get = AsyncMock(return_value="https://tos.example.com/original-url")
+    gw.close = AsyncMock()
+    return gw
+
+
+def _video_upload_input() -> MediaUploadInput:
+    return MediaUploadInput(
+        items=[
+            MediaUploadItem(
+                media_type="video",
+                mime_type="video/mp4",
+                data=base64.b64encode(b"fake-video-bytes").decode(),
+            )
+        ]
+    )
+
+
+def _principal(principal_id: str) -> AuthContext:
+    return AuthContext(principal_id=principal_id, tenant_id="tenant-a", transport="http")
+
+
+async def _presign(
+    ctx: FakeContext,
+    gateway: AsyncMock,
+    *object_keys: str,
+    expires_in_seconds: int | None = None,
+) -> MediaPresignOutput:
+    with patch(_GATEWAY, return_value=gateway):
+        return await media_presign(
+            MediaPresignInput(object_keys=list(object_keys), expires_in_seconds=expires_in_seconds),
+            ctx,
+        )
 
 
 class TestMediaPresignSuccess:
     async def test_presign_returns_fresh_url(self, test_env: None, fake_ctx: FakeContext) -> None:
         mock_gw = _mock_gateway()
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
+        result = await _presign(fake_ctx, mock_gw, _VALID_KEY)
 
         assert isinstance(result, MediaPresignOutput)
-        assert result.url == "https://s3.example.com/fresh-presigned-url"
-        assert result.object_key == _VALID_KEY
-        assert result.expires_at
+        assert result.succeeded == 1
+        assert result.failed == 0
+        item = result.items[0]
+        assert item.url == "https://s3.example.com/fresh-presigned-url"
+        assert item.object_key == _VALID_KEY
+        assert item.expires_at
+        assert item.code is None
+        assert item.error is None
         mock_gw.presign_get.assert_called_once_with(key=_VALID_KEY)
         mock_gw.close.assert_called_once()
 
     async def test_presign_with_custom_expiry(self, test_env: None, fake_ctx: FakeContext) -> None:
         mock_gw = _mock_gateway()
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY, expires_in_seconds=3600),
-                fake_ctx,
-            )
+        result = await _presign(fake_ctx, mock_gw, _VALID_KEY, expires_in_seconds=3600)
 
-        assert isinstance(result, MediaPresignOutput)
+        assert result.succeeded == 1
         mock_gw.presign_get.assert_called_once_with(key=_VALID_KEY, expires=3600)
 
     async def test_presign_with_custom_prefix_key(
         self, test_env: None, fake_ctx: FakeContext
     ) -> None:
         key = "uploads/2026/audio/my-file-uuid"
+
+        result = await _presign(fake_ctx, _mock_gateway(), key)
+
+        assert result.succeeded == 1
+        assert result.items[0].object_key == key
+
+    async def test_presign_multiple_keys_preserves_order(
+        self, test_env: None, fake_ctx: FakeContext
+    ) -> None:
+        keys = ["references/video/a", "references/image/b", "references/audio/c"]
         mock_gw = _mock_gateway()
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=key),
-                fake_ctx,
-            )
+        result = await _presign(fake_ctx, mock_gw, *keys)
 
-        assert isinstance(result, MediaPresignOutput)
-        assert result.object_key == key
+        assert result.succeeded == 3
+        assert [item.object_key for item in result.items] == keys
+        assert mock_gw.presign_get.call_count == 3
+        mock_gw.close.assert_called_once()
 
     async def test_presign_progress_reported(self, test_env: None, fake_ctx: FakeContext) -> None:
-        mock_gw = _mock_gateway()
-
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
+        await _presign(fake_ctx, _mock_gateway(), _VALID_KEY)
 
         assert (10, 100) in fake_ctx.progress_reports
         assert (30, 100) in fake_ctx.progress_reports
@@ -117,64 +145,31 @@ class TestMediaPresignTosBackend:
         )
         monkeypatch.setattr("ark_mcp.tools.media_presign.get_settings", lambda: tos_settings)
 
-        mock_gw = _mock_gateway()
+        result = await _presign(fake_ctx, _mock_gateway(), _VALID_KEY)
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
-
-        assert isinstance(result, MediaPresignOutput)
-        assert result.url == "https://s3.example.com/fresh-presigned-url"
-        assert result.object_key == _VALID_KEY
+        assert result.succeeded == 1
+        assert result.items[0].url == "https://s3.example.com/fresh-presigned-url"
+        assert result.items[0].object_key == _VALID_KEY
 
     async def test_tos_backend_presign_after_upload_workflow(
         self, test_env: None, fake_ctx: FakeContext
     ) -> None:
-        """End-to-end: upload then re-presign with the same gateway mock."""
-        import base64
-
-        from ark_mcp.tools.media_upload import MediaUploadInput, media_upload
-
-        upload_gw = AsyncMock()
-        upload_gw.upload_bytes = AsyncMock(return_value=None)
-        upload_gw.presign_get = AsyncMock(return_value="https://tos.example.com/original-url")
-        upload_gw.close = AsyncMock()
-
-        presign_gw = AsyncMock()
+        upload_gw = _upload_gateway()
+        presign_gw = _mock_gateway()
         presign_gw.presign_get = AsyncMock(return_value="https://tos.example.com/renewed-url")
-        presign_gw.close = AsyncMock()
 
-        data = base64.b64encode(b"fake-video-bytes").decode()
+        with patch(_UPLOAD_GATEWAY, return_value=upload_gw):
+            upload_result = await media_upload(_video_upload_input(), fake_ctx)
+        uploaded = upload_result.items[0]
+        assert uploaded.object_key is not None
 
-        with (
-            patch(
-                "ark_mcp.tools.media_upload.make_object_storage_gateway",
-                return_value=upload_gw,
-            ),
-            patch(
-                "ark_mcp.tools.media_presign.make_object_storage_gateway",
-                return_value=presign_gw,
-            ),
-        ):
-            upload_result = await media_upload(
-                MediaUploadInput(media_type="video", mime_type="video/mp4", data=data),
-                fake_ctx,
-            )
-            presign_result = await media_presign(
-                MediaPresignInput(object_key=upload_result.object_key),
-                fake_ctx,
-            )
+        presign_result = await _presign(fake_ctx, presign_gw, uploaded.object_key)
 
-        assert upload_result.url == "https://tos.example.com/original-url"
-        assert presign_result.url == "https://tos.example.com/renewed-url"
-        assert presign_result.object_key == upload_result.object_key
+        assert uploaded.url == "https://tos.example.com/original-url"
+        assert presign_result.items[0].url == "https://tos.example.com/renewed-url"
+        assert presign_result.items[0].object_key == uploaded.object_key
         upload_gw.upload_bytes.assert_called_once()
-        presign_gw.presign_get.assert_called_once_with(key=upload_result.object_key)
+        presign_gw.presign_get.assert_called_once_with(key=uploaded.object_key)
 
 
 class TestMediaPresignS3Backend:
@@ -196,61 +191,77 @@ class TestMediaPresignS3Backend:
         )
         monkeypatch.setattr("ark_mcp.tools.media_presign.get_settings", lambda: s3_settings)
 
-        mock_gw = _mock_gateway()
+        result = await _presign(fake_ctx, _mock_gateway(), _VALID_KEY)
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
-
-        assert isinstance(result, MediaPresignOutput)
-        assert result.url == "https://s3.example.com/fresh-presigned-url"
+        assert result.succeeded == 1
+        assert result.items[0].url == "https://s3.example.com/fresh-presigned-url"
 
 
 class TestMediaPresignValidation:
-    async def test_path_traversal_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="object_key must contain only"):
-            MediaPresignInput(object_key="../../../etc/passwd")
+    @pytest.mark.parametrize(
+        ("object_key", "message"),
+        [
+            ("../../../etc/passwd", "object_key must contain only"),
+            ("/references/video/abc", "object_key must contain only"),
+            ("-references/video/abc", "object_key must contain only"),
+            ("references//video/abc", "empty path segments"),
+            ("references/video/abc/", "empty path segments"),
+            ("", "object_key must contain only"),
+            ("references/video/file.txt", "object_key must contain only"),
+            ("references/video/my file", "object_key must contain only"),
+        ],
+        ids=[
+            "path_traversal",
+            "leading_slash",
+            "leading_dash",
+            "empty_segments",
+            "trailing_slash",
+            "empty_key",
+            "dot_in_key",
+            "space_in_key",
+        ],
+    )
+    async def test_invalid_key_reported_per_item(
+        self, test_env: None, fake_ctx: FakeContext, object_key: str, message: str
+    ) -> None:
+        mock_gw = _mock_gateway()
 
-    async def test_leading_slash_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="object_key must contain only"):
-            MediaPresignInput(object_key="/references/video/abc")
+        result = await _presign(fake_ctx, mock_gw, object_key)
 
-    async def test_leading_dash_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="object_key must contain only"):
-            MediaPresignInput(object_key="-references/video/abc")
+        assert result.succeeded == 0
+        assert result.failed == 1
+        item = result.items[0]
+        assert item.object_key == object_key
+        assert item.code == "INVALID_KEY"
+        assert item.error is not None
+        assert message in item.error
+        assert item.url is None
+        mock_gw.presign_get.assert_not_called()
 
-    async def test_empty_segments_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="empty path segments"):
-            MediaPresignInput(object_key="references//video/abc")
+    async def test_invalid_key_does_not_block_valid_keys(
+        self, test_env: None, fake_ctx: FakeContext
+    ) -> None:
+        mock_gw = _mock_gateway()
 
-    async def test_trailing_slash_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="empty path segments"):
-            MediaPresignInput(object_key="references/video/abc/")
+        result = await _presign(fake_ctx, mock_gw, _VALID_KEY, "../../../etc/passwd")
 
-    async def test_empty_key_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="object_key must contain only"):
-            MediaPresignInput(object_key="")
+        assert result.succeeded == 1
+        assert result.failed == 1
+        assert result.items[0].url == "https://s3.example.com/fresh-presigned-url"
+        assert result.items[1].code == "INVALID_KEY"
+        mock_gw.presign_get.assert_called_once_with(key=_VALID_KEY)
 
-    async def test_dot_in_key_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="object_key must contain only"):
-            MediaPresignInput(object_key="references/video/file.txt")
-
-    async def test_space_in_key_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError, match="object_key must contain only"):
-            MediaPresignInput(object_key="references/video/my file")
+    async def test_empty_key_list_rejected(self, test_env: None) -> None:
+        with pytest.raises(ValidationError):
+            MediaPresignInput(object_keys=[])
 
     async def test_expiry_below_minimum_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError):
-            MediaPresignInput(object_key=_VALID_KEY, expires_in_seconds=59)
+        with pytest.raises(ValidationError):
+            MediaPresignInput(object_keys=[_VALID_KEY], expires_in_seconds=59)
 
     async def test_expiry_above_maximum_rejected(self, test_env: None) -> None:
-        with pytest.raises(ValueError):
-            MediaPresignInput(object_key=_VALID_KEY, expires_in_seconds=604801)
+        with pytest.raises(ValidationError):
+            MediaPresignInput(object_keys=[_VALID_KEY], expires_in_seconds=604801)
 
 
 class TestMediaPresignErrors:
@@ -272,12 +283,9 @@ class TestMediaPresignErrors:
         monkeypatch.setattr("ark_mcp.tools.media_presign.get_settings", lambda: no_storage)
 
         with pytest.raises(ValueError, match="Object storage is not configured"):
-            await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
+            await _presign(fake_ctx, _mock_gateway(), _VALID_KEY)
 
-    async def test_provider_error_returns_tool_result(
+    async def test_provider_error_reported_per_item(
         self, test_env: None, fake_ctx: FakeContext
     ) -> None:
         mock_gw = _mock_gateway()
@@ -290,23 +298,20 @@ class TestMediaPresignErrors:
                     code="AccessDenied",
                     message="Access denied",
                     retryable=False,
+                    request_id="req-123",
                 )
             )
         )
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
+        result = await _presign(fake_ctx, mock_gw, _VALID_KEY)
 
-        assert isinstance(result, ToolResult)
-        assert result.is_error
-        assert result.structured_content is None
-        assert "http_status=403" in result.content[0].text
+        assert result.succeeded == 0
+        assert result.failed == 1
+        item = result.items[0]
+        assert item.code == "AccessDenied"
+        assert item.error == "Access denied"
+        assert item.request_id == "req-123"
+        assert item.url is None
         mock_gw.close.assert_called_once()
 
     async def test_provider_error_5xx_is_retryable(
@@ -333,17 +338,10 @@ class TestMediaPresignErrors:
 
         mock_gw.presign_get = _fail_then_succeed
 
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=mock_gw,
-        ):
-            result = await media_presign(
-                MediaPresignInput(object_key=_VALID_KEY),
-                fake_ctx,
-            )
+        result = await _presign(fake_ctx, mock_gw, _VALID_KEY)
 
-        assert isinstance(result, MediaPresignOutput)
-        assert result.url == "https://s3.example.com/recovered-url"
+        assert result.succeeded == 1
+        assert result.items[0].url == "https://s3.example.com/recovered-url"
         assert call_count == 2
 
 
@@ -351,73 +349,48 @@ class TestMediaPresignOwnership:
     async def test_unknown_key_rejected_for_remote_principal(
         self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from ark_mcp.security.auth_context import AuthContext
-
         monkeypatch.setattr(
-            "ark_mcp.tools.media_presign.get_principal",
-            lambda _ctx: AuthContext(principal_id="alice", tenant_id="tenant-a", transport="http"),
+            "ark_mcp.tools.media_presign.get_principal", lambda _ctx: _principal("alice")
         )
         mock_gw = _mock_gateway()
-        with (
-            patch(
-                "ark_mcp.tools.media_presign.make_object_storage_gateway",
-                return_value=mock_gw,
-            ),
-            pytest.raises(PermissionError, match="not owned"),
-        ):
-            await media_presign(MediaPresignInput(object_key=_VALID_KEY), fake_ctx)
+
+        result = await _presign(fake_ctx, mock_gw, _VALID_KEY)
+
+        assert result.failed == 1
+        assert result.items[0].code == "NOT_OWNED"
+        assert result.items[0].error is not None
+        assert "not owned" in result.items[0].error
+        assert result.items[0].url is None
         mock_gw.presign_get.assert_not_called()
 
     async def test_cross_principal_presign_rejected(
         self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import base64
-
-        from ark_mcp.security.auth_context import AuthContext
-        from ark_mcp.tools.media_upload import MediaUploadInput, media_upload
-
         monkeypatch.setattr(
-            "ark_mcp.tools.media_upload.get_principal",
-            lambda _ctx: AuthContext(principal_id="bob", tenant_id="tenant-a", transport="http"),
+            "ark_mcp.tools.media_upload.get_principal", lambda _ctx: _principal("bob")
         )
-        upload_gw = AsyncMock()
-        upload_gw.upload_bytes = AsyncMock(return_value=None)
-        upload_gw.presign_get = AsyncMock(return_value="https://tos.example.com/original-url")
-        upload_gw.close = AsyncMock()
-        with patch(
-            "ark_mcp.tools.media_upload.make_object_storage_gateway",
-            return_value=upload_gw,
-        ):
-            uploaded = await media_upload(
-                MediaUploadInput(
-                    media_type="video",
-                    mime_type="video/mp4",
-                    data=base64.b64encode(b"fake-video-bytes").decode(),
-                ),
-                fake_ctx,
-            )
+        with patch(_UPLOAD_GATEWAY, return_value=_upload_gateway()):
+            uploaded = await media_upload(_video_upload_input(), fake_ctx)
+        object_key = uploaded.items[0].object_key
+        assert object_key is not None
 
         monkeypatch.setattr(
-            "ark_mcp.tools.media_presign.get_principal",
-            lambda _ctx: AuthContext(principal_id="alice", tenant_id="tenant-a", transport="http"),
+            "ark_mcp.tools.media_presign.get_principal", lambda _ctx: _principal("alice")
         )
         presign_gw = _mock_gateway()
-        with (
-            patch(
-                "ark_mcp.tools.media_presign.make_object_storage_gateway",
-                return_value=presign_gw,
-            ),
-            pytest.raises(PermissionError, match="not owned"),
-        ):
-            await media_presign(MediaPresignInput(object_key=uploaded.object_key), fake_ctx)
+        denied = await _presign(fake_ctx, presign_gw, object_key)
+
+        assert denied.failed == 1
+        assert denied.items[0].code == "NOT_OWNED"
+        assert denied.items[0].error is not None
+        assert "not owned" in denied.items[0].error
+        presign_gw.presign_get.assert_not_called()
 
         monkeypatch.setattr(
-            "ark_mcp.tools.media_presign.get_principal",
-            lambda _ctx: AuthContext(principal_id="bob", tenant_id="tenant-a", transport="http"),
+            "ark_mcp.tools.media_presign.get_principal", lambda _ctx: _principal("bob")
         )
-        with patch(
-            "ark_mcp.tools.media_presign.make_object_storage_gateway",
-            return_value=presign_gw,
-        ):
-            ok = await media_presign(MediaPresignInput(object_key=uploaded.object_key), fake_ctx)
-        assert isinstance(ok, MediaPresignOutput)
+        allowed = await _presign(fake_ctx, presign_gw, object_key)
+
+        assert allowed.succeeded == 1
+        assert allowed.items[0].url == "https://s3.example.com/fresh-presigned-url"
+        presign_gw.presign_get.assert_called_once_with(key=object_key)

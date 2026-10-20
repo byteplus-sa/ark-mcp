@@ -83,11 +83,11 @@ flowchart LR
   `https://openapi.cv.bytepluses.com`, and treats `code == 10000` in the
   response body as the only success signal.
 - **VOD AI MediaKit gateway** (`providers/vod_mediakit/`) — serves the
-  `vod_enhance_video` / `vod_get_enhancement_task` submit-then-poll pair, the
-  `vod_transcode_video` / `vod_get_transcode_task` submit-then-poll pair, and
-  the subtitle burn-in and precision-erasure submit-then-poll pairs, and
-  the `vod_separate_audio` / `vod_get_audio_separation` submit-then-poll pair
-  (`POST /tools/separate-voice` + `GET /tasks/{task_id}`). It uses Bearer auth
+  `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
+  `vod_remove_subtitles`, and `vod_separate_audio` submit tools (for example
+  `POST /tools/separate-voice`) and the single `vod_get_task` poller
+  (`GET /tasks/{task_id}`), which dispatches on the `operation` each submit
+  tool returns. It uses Bearer auth
   and defaults to `https://mediakit.ap-southeast-1.bytepluses.com/api/v1`. Its
   success schemas are isolated in the adapters; the gateway accepts only known
   result shapes and rejects unknown shapes.
@@ -99,10 +99,8 @@ flowchart LR
 MediaKit enhancement, transcode, subtitle, and separation submissions are non-idempotent
 mutations and bypass the automatic retry helper: a timeout can be ambiguous after
 the provider has begun work. All operations use the verified task-status
-endpoint (`GET /tasks/{task_id}`), so `vod_get_enhancement_task`,
-`vod_get_transcode_task`, both subtitle poll tools, and
-`vod_get_audio_separation` poll it and reuse the
-shared ownership store and task-artifact cache under the `vod-mediakit` provider
+endpoint (`GET /tasks/{task_id}`), so `vod_get_task` polls it for every
+operation and reuses the shared ownership store and task-artifact cache under the `vod-mediakit` provider
 key. For all surfaces, a completed provider URL is preserved and
 persistence is attempted separately as a best-effort operation (under the
 200 MiB video limit for video, 10 MiB audio limit for separated tracks).

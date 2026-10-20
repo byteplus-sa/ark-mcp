@@ -34,18 +34,13 @@ class ArtifactPersistenceIssue(BaseModel):
         "source_expired",
         "download_failed",
         "storage_failed",
-    ] = Field(description="Stable persistence failure category.")
-    message: str = Field(description="Credential- and URL-safe persistence failure message.")
-    retryable: bool = Field(description="Whether persistence may succeed if attempted again later.")
-    artifact_limit_bytes: int = Field(
-        description="Maximum output size accepted by the durable artifact policy, in bytes."
-    )
+    ] = Field(description="Failure category.")
+    message: str = Field(description="Safe failure message (no credentials or URLs).")
+    retryable: bool = Field(description="Whether retrying persistence later may succeed.")
+    artifact_limit_bytes: int = Field(description="Maximum durable artifact size in bytes.")
     source_url_expires_at: str | None = Field(
         default=None,
-        description=(
-            "ISO-8601 timestamp when the unpersisted provider URL (returned as the "
-            "artifact's uri) expires. None when no provider URL is available."
-        ),
+        description="ISO-8601 expiry of the unpersisted provider URL (the artifact uri).",
     )
 
 
@@ -54,48 +49,36 @@ class ArtifactRef(BaseModel):
 
     id: str = Field(..., description="Unique artifact identifier.")
     uri: str = Field(..., description="MCP resource URI (seed-media://artifacts/{id}).")
-    media_type: MediaType = Field(..., description="Logical media type: image, audio, or video.")
-    mime_type: str = Field(..., description="MIME type of the stored content (e.g. image/png).")
-    bytes: int | None = Field(default=None, description="Size of the stored content in bytes.")
-    sha256: str | None = Field(
-        default=None, description="SHA-256 hex digest of the stored content."
-    )
+    media_type: MediaType = Field(..., description="image, audio, video or three_d.")
+    mime_type: str = Field(..., description="MIME type, e.g. image/png.")
+    bytes: int | None = Field(default=None, description="Size in bytes.")
+    sha256: str | None = Field(default=None, description="SHA-256 hex digest.")
     created_at: str = Field(..., description="ISO-8601 timestamp of artifact creation.")
     expires_at: str | None = Field(
         default=None,
-        description="ISO-8601 timestamp when the local artifact expires.",
+        description="ISO-8601 expiry of the stored artifact.",
     )
     source_expires_at: str | None = Field(
         default=None,
-        description="ISO-8601 timestamp when the provider URL expires.",
+        description="ISO-8601 expiry of the provider URL.",
     )
     persistence_error: ArtifactPersistenceIssue | None = Field(
         default=None,
         description=(
-            "Set when the output was generated (and billed) but could not be stored durably. "
-            "Then id is 'provider-url' and uri is the temporary provider URL (valid until "
-            "source_expires_at), or id is 'inline-fallback' and the bytes are in fallback_data. "
-            "Re-persist a provider URL with seed_media_persist_url before it expires."
+            "Set when the output was billed but not stored. id is then 'provider-url' (uri is "
+            "the temporary provider URL; re-persist it with seed_media_persist_url before "
+            "source_expires_at) or 'inline-fallback' (bytes in fallback_data)."
         ),
     )
     fallback_data: str | None = Field(
         default=None,
-        description=(
-            "Base64-encoded output bytes, returned only when inline output could not be "
-            "stored and is within ARTIFACT_INLINE_FALLBACK_MAX_BYTES. Otherwise None."
-        ),
+        description="Base64 output bytes, only with id 'inline-fallback'.",
     )
     local_path: str | None = Field(
         default=None,
-        description=(
-            "Absolute local file path the artifact was written to when output_path or "
-            "output_dir was requested (stdio only). None when no local copy was written."
-        ),
+        description="Absolute path of the local copy written for output_path/output_dir.",
     )
     export_error: str | None = Field(
         default=None,
-        description=(
-            "Why the requested local copy (output_path/output_dir) was not written. "
-            "The durable artifact is unaffected. None when no copy was requested or it succeeded."
-        ),
+        description="Why the requested local copy was not written (the artifact is unaffected).",
     )

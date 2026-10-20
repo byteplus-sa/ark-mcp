@@ -1,7 +1,7 @@
 ---
 title: Agent Workflow Ergonomics — understanding output, strict JSON, timeout retryability, batch helpers, queue visibility
 type: plan
-status: in-review
+status: in-progress
 created: 2026-09-21
 updated: 2026-09-22
 reviewed: 2026-09-22 (subagent plan review; findings folded in)
@@ -11,7 +11,7 @@ source:
   - BytePlus ModelArk Chat Completions API reference (response_format, thinking) — URL to be recorded during Phase 2 verification
   - BytePlus ModelArk Seedance task list API (filter.task_ids) — URL to be recorded during Phase 3 verification
 related:
-  - plans/PLAN_CONCURRENCY_AND_TIMEOUT_REMEDIATION.md
+  - docs/runtime.md
   - plans/PLAN_PARALLEL_GENERATION.md
   - plans/PLAN_SEEDANCE_REFERENCE_ERGONOMICS.md
   - docs/artifacts.md

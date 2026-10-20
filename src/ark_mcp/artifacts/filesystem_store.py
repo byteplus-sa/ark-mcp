@@ -141,6 +141,7 @@ _MIME_TO_EXT: dict[str, str] = {
     "image/jpeg": ".jpg",
     "image/webp": ".webp",
     "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
     "video/webm": ".webm",
     "application/zip": ".zip",
     "application/x-zip-compressed": ".zip",

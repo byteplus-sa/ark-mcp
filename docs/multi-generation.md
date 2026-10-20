@@ -38,28 +38,32 @@ preferred over variations when the model supports it.
 ## Client-side parallel variations
 
 When a product does not support native batch (or when the client needs
-per-variation control like distinct prompts, seeds, or media inputs), the
-`*_variations` tools make multiple independent API calls in parallel.
+per-variation control like distinct prompts or seeds), the `variations`
+field on the generation tools makes multiple independent API calls in
+parallel. There are no separate `*_variations` tools; every variation shares
+the call's other inputs, including reference media.
 
 ### Products with variation support
 
 | Tool | Product | Uses native batch? | Parallel mechanism |
 |---|---|---|---|
-| `seedream_generate_image_variations` | Seedream | No (always parallel calls) | `run_variation_batch` |
-| `seed_audio_generate_variations` | Seed Audio | No | `run_variation_batch` |
-| `seedance_create_task_variations` | Seedance | No | `run_variation_batch` |
-| `seedance_2_5_create_task_variations` | Seedance 2.5 | No | `run_variation_batch` |
-| `seedance_2_5_premium_create_task_variations` | Seedance 2.5 Premium (flag-gated) | No | `run_variation_batch` |
+| `seedream_generate_image` with `variations` 2-10 | Seedream (any model; cannot be combined with `max_images > 1`) | No (always parallel calls) | `run_variation_batch` |
+| `seed_audio_generate` with `variations` 2-5 | Seed Audio | No | `run_variation_batch` |
+| `seedance_create_task` with `variations` 2-5 | Seedance (every configured model) | No | `run_variation_batch` |
 
 ### How it works
 
 The shared helper [`run_variation_batch`] in `tools/_parallel.py`:
 
-1. Generates distinct seeds for each variation via `generate_seeds`:
-   - `base_seed=None` → provider randomizes each (seed not recorded).
-   - `base_seed=-1` → client picks random seeds (recorded for reproducibility).
-   - `base_seed=N` → deterministic sequence `[N, N+1, N+2, ...]` modulo
+1. For Seedream, derives one seed per variation from the request's `seed`
+   (the base seed) via `generate_seeds`:
+   - `seed` omitted → provider randomizes each (seed not recorded).
+   - `seed=-1` → client picks random seeds (recorded for reproducibility).
+   - `seed=N` → deterministic sequence `[N, N+1, N+2, ...]` modulo
      `2147483648`.
+
+   Seed Audio and Seedance take no seed; their variations differ by sampling
+   or by `variation_prompts`.
 2. Resolves prompts via `resolve_prompts`: either per-variation prompts or
    the same base prompt repeated N times.
 3. Launches N tasks, each calling the provider API independently.
@@ -87,7 +91,7 @@ batch_deadline = waves × per_variation
 
 `request_timeout` is `BYTEPLUS_REQUEST_TIMEOUT_MS`; `download_timeout` and
 `download_attempts` are `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` and
-`ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`. Seedance variation tools only submit tasks,
+`ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`. Seedance variations only submit tasks,
 so their deadline omits the download term.
 
 A variation that hits the batch deadline, or whose output could not be
@@ -113,23 +117,26 @@ drops a billed output; see [Artifacts](artifacts.md#persistence-failures).
 
 ### Writing variations to a local directory
 
-On stdio transport, `seedream_generate_image_variations` and
-`seed_audio_generate_variations` accept `output_dir` (plus `overwrite`) to
-write every persisted variation to a local directory as
+On stdio transport, `seedream_generate_image` and `seed_audio_generate`
+accept `output_path` (plus `overwrite`); with `variations > 1` it must be a
+directory ending in `/`, and every persisted variation is written there as
 `<artifact_id>.<ext>`. Each variation's `ArtifactRef` reports `local_path` or
 `export_error`. See [Tools](tools.md#writing-outputs-to-local-paths).
 
 ### Seedance variations
 
 Seedance variations are fundamentally different from Seedream/Seed Audio
-because each variation creates a **separate provider task**. The client first
-retrieves the variation summary from the background result, then polls the
-provider task IDs to retrieve results. Poll them all at once with
-`seedance_get_tasks` (1-50 task IDs, one provider list call per page of 20,
-`all_terminal`
-tells you when to stop, and `output_dir` writes finished videos locally), or
-one at a time with `seedance_get_task`. The actual video generation runs
-asynchronously on the provider side.
+because each variation creates a **separate provider task**. They are not a
+separate tool: call `seedance_create_task` with `variations` (1-5) and
+optionally `variation_prompts` (exactly one per variation). The background
+result lists every variation in `tasks` (`index`, `task_id` or `error`) with
+`submitted` and `failed` counts. Poll all task IDs at once with
+`gen_task_get` (1-50 task IDs, one provider list call per page of 20;
+`all_terminal` tells you when to stop, and `output_dir` writes finished videos
+locally). **Never resubmit `seedance_create_task` to poll**: that starts new
+billed tasks. Use `dry_run=true` first to check the request bodies and
+estimated cost of every variation without billing. `draft=true` works with
+variations; `draft_task_id` requires `variations=1`.
 
 ### Cost
 
@@ -143,9 +150,10 @@ usage fields.
 | Scenario | Use |
 |---|---|
 | Multiple images, same prompt, Lite or 4.x model | `max_images` on `seedream_generate_image` |
-| Multiple images, Pro model | `seedream_generate_image_variations` |
-| Per-variation prompts, seeds, or reference images | `*_variations` tool |
-| Multiple audio outputs | `seed_audio_generate_variations` |
-| Multiple video tasks | `seedance_create_task_variations`, then `seedance_get_tasks` |
+| Multiple images, Pro model | `variations` on `seedream_generate_image` |
+| Per-variation prompts or seeds | `variations` plus `variation_prompts` (and `seed` on Seedream) |
+| Multiple audio outputs | `variations` on `seed_audio_generate` |
+| Check requests and cost first | `dry_run=true` on `seedream_generate_image` or `seedance_create_task` |
+| Multiple video tasks | `seedance_create_task` with `variations` (1-5), then `gen_task_get` |
 
 [`run_variation_batch`]: ../src/ark_mcp/tools/_parallel.py

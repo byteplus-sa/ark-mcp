@@ -9,7 +9,6 @@ from ark_mcp.tools._seedance_shared import (
     SeedanceAudioInput,
     SeedanceVideoInput,
 )
-from ark_mcp.tools.seedance_2_5_create_task import Seedance25CreateTaskInput
 from ark_mcp.tools.seedance_create_task import SeedanceCreateTaskInput
 
 
@@ -122,7 +121,7 @@ class TestSeedance25Coercion:
     """Seedance 2.5 inherits the same coercion via shared models."""
 
     def test_plain_string_image_coerced(self) -> None:
-        inp = Seedance25CreateTaskInput(
+        inp = SeedanceCreateTaskInput(
             prompt="a cat",
             images=["https://example.com/cat.png"],
         )

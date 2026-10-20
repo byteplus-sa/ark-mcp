@@ -134,8 +134,9 @@ Check `persistence_error.code` and `retryable`: `output_too_large` and
 ### `output_path` rejected or `export_error` set
 
 - `... is disabled: no output roots are configured`: the client does not
-  advertise MCP roots and `OUTPUT_ROOTS` is empty. Set `OUTPUT_ROOTS` to one
-  or more absolute directories.
+  advertise MCP roots and `OUTPUT_ROOTS` is empty (a call inside
+  `ark_job_submit` never has MCP roots). Set `OUTPUT_ROOTS` to one or more
+  absolute directories.
 - `must be inside an allowed output root` / `must be an absolute path`: use an
   absolute path under a client root or an `OUTPUT_ROOTS` entry.
 - `only supported in stdio transport mode`: local paths are stdio-only.
@@ -162,20 +163,19 @@ artifact is unaffected and can be exported later with
 ### Why is there no queue position or ETA?
 
 ModelArk publishes no queue position or ETA for Seedance tasks. The `queue`
-field on `seedance_get_task`, `seedance_get_tasks`, and `seedance_list_tasks`
-is derived by the server from the task's own timestamps: time queued, time
+field on each video task returned by `gen_task_get` is derived by the server from the task's own timestamps: time queued, time
 running, service tier (`flex` usually queues longer), and `expires_at`, the
 time the provider fails an unfinished task (`created_at` +
 `execution_expires_after`; `expires_at_estimated=true` means the 48-hour
-default was assumed). Relay `queue.hint` to the user, and use
-`seedance_get_tasks` to poll many tasks until `all_terminal` is `true`.
+default was assumed). Relay `queue.hint` to the user, and pass every task ID
+to one `gen_task_get` call until `all_terminal` is `true`.
 
 ### Cannot Cancel or Delete
 
 - `running` tasks cannot be cancelled or deleted — wait for completion
 - `cancelled` tasks cannot be deleted
 
-The `seedance_cancel_or_delete_task` tool requires `expected_status` to
+The `gen_task_cancel_or_delete` tool (Seedance and 3D tasks) requires `expected_status` to
 match the actual status, preventing accidental destructive actions.
 
 ## Timeout on Long Generations
@@ -231,10 +231,12 @@ operations rather than keeping the original foreground request open.
 - On a task-capable client, you may instead invoke those tools with MCP task
   metadata, retain the returned MCP task ID, and poll `tasks/get` at the
   advertised interval until terminal.
-- For long video work, the background result contains the provider task ID.
-  Poll `seedance_get_task` in the foreground with `persist_output=false`;
-  run it in the background with `persist_output=true` when the completed output
-  needs persistence.
+- For long video and VOD work, the background result contains the provider
+  task ID. Poll `gen_task_get` (Seedance, 3D) or `vod_get_task` (VOD, with the
+  echoed `operation`) in the foreground; both default to
+  `persist_output=false`. Then run the poller once through `ark_job_submit`
+  with `persist_output=true` to keep the outputs. Never resubmit the create
+  tool to poll.
 - If a client disconnects after task acceptance, reconcile with the returned
   MCP task ID or provider task ID rather than resubmitting (see
   `ambiguous_completion`).
@@ -299,7 +301,7 @@ origins to `MCP_ALLOWED_ORIGINS`.
 
 FastMCP hides tools whose required scopes are absent. Verify the Bearer token
 has the appropriate `seed:audio:generate`, `seedream:generate`,
-`seedance:create`, `seedance:read`, `seedance:delete`, `media:upload`, or
+`seedance:create`, `gen:read`, `gen:delete`, `vod:read`, `media:upload`, or
 `artifacts:read` scope and contains both a principal (`sub`) and configured tenant claim.
 
 ## Running Tests

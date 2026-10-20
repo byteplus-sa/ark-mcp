@@ -1,20 +1,20 @@
-"""Integration tests for the ``seed_audio_generate_variations`` tool."""
+"""Integration tests for the ``seed_audio_generate`` tool."""
 
 from __future__ import annotations
 
 import base64
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.providers.seed_speech.schemas import SeedAudioProviderResponse
 from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
-from ark_mcp.tools.seed_audio_generate_variations import (
-    SeedAudioVariationsInput,
-    SeedAudioVariationsOutput,
-    seed_audio_generate_variations,
+from ark_mcp.tools.seed_audio_generate import (
+    SeedAudioGenerateInput,
+    SeedAudioGenerateOutput,
+    seed_audio_generate,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -45,7 +45,49 @@ def _patch_audio_by_prompt(
 
 
 class TestSeedAudioVariationsTool:
-    """Integration tests for seed_audio_generate_variations."""
+    """Integration tests for seed_audio_generate."""
+
+    @pytest.mark.parametrize("base_prompt", [None, "base prompt"])
+    @pytest.mark.parametrize("variations", [1, 2])
+    async def test_variation_prompts_override_base_prompt(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        base_prompt: str | None,
+        variations: int,
+    ) -> None:
+        generate = AsyncMock(
+            return_value=(
+                SeedAudioProviderResponse(
+                    code=0, url="https://example.com/audio.wav", duration=2.0
+                ),
+                "log-override",
+            )
+        )
+        monkeypatch.setattr(SeedAudioService, "generate", generate)
+        monkeypatch.setattr(SeedAudioService, "close", AsyncMock())
+        prompts = [f"override {index}" for index in range(variations)]
+
+        result = await seed_audio_generate(
+            SeedAudioGenerateInput(
+                text_prompt=base_prompt,
+                variation_prompts=prompts,
+                variations=variations,
+                persist=False,
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, SeedAudioGenerateOutput)
+        assert [call.args[0].text_prompt for call in generate.await_args_list] == prompts
+        if variations == 1:
+            assert result.summary is None
+            assert result.artifact is not None
+        else:
+            assert result.summary is not None
+            assert result.summary.succeeded == variations
+            assert result.summary.failed == 0
 
     async def test_three_variations_all_succeed(
         self,
@@ -63,15 +105,15 @@ class TestSeedAudioVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seed_audio_generate_variations(
-                SeedAudioVariationsInput(
+            result = await seed_audio_generate(
+                SeedAudioGenerateInput(
                     text_prompt="hello",
                     variations=3,
                 ),
                 fake_ctx,
             )
 
-        assert isinstance(result, SeedAudioVariationsOutput)
+        assert isinstance(result, SeedAudioGenerateOutput)
         assert result.summary.total == 3
         assert result.summary.succeeded == 3
         assert result.summary.failed == 0
@@ -102,8 +144,8 @@ class TestSeedAudioVariationsTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seed_audio_generate_variations(
-                SeedAudioVariationsInput(
+            result = await seed_audio_generate(
+                SeedAudioGenerateInput(
                     variation_prompts=["good", "bad", "good"],
                     variations=3,
                 ),
@@ -118,7 +160,7 @@ class TestSeedAudioVariationsTool:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError, match="Either text_prompt or variation_prompts"):
-            SeedAudioVariationsInput(variations=2)
+            SeedAudioGenerateInput(variations=2)
 
     async def test_media_mixing_raises(self) -> None:
         from pydantic import ValidationError
@@ -126,9 +168,43 @@ class TestSeedAudioVariationsTool:
         from ark_mcp.domain.media import AudioReference, MediaSource, MediaSourceKind
 
         with pytest.raises(ValidationError, match="mutually exclusive"):
-            SeedAudioVariationsInput(
+            SeedAudioGenerateInput(
                 text_prompt="test",
                 variations=1,
                 audio_references=[AudioReference(kind="speaker", speaker_id="v1")],
                 image_reference=MediaSource(kind=MediaSourceKind.url, url="https://x.com/i.png"),
             )
+
+    async def test_single_generation_leaves_summary_empty(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        temp_store: Any,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        audio_b64 = base64.b64encode(b"fake-audio").decode()
+        _patch_audio_by_prompt(
+            monkeypatch, {"solo": {"code": 0, "audio": audio_b64, "duration": 2.0}}
+        )
+
+        with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
+            result = await seed_audio_generate(
+                SeedAudioGenerateInput(variation_prompts=["solo"]), fake_ctx
+            )
+
+        assert isinstance(result, SeedAudioGenerateOutput)
+        assert result.summary is None
+        assert result.artifact is not None
+        assert result.duration_seconds == 2.0
+
+    async def test_variation_prompts_count_must_match(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="exactly 3 entries"):
+            SeedAudioGenerateInput(variation_prompts=["a", "b"], variations=3)
+
+    async def test_too_many_variations_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            SeedAudioGenerateInput(text_prompt="x", variations=6)

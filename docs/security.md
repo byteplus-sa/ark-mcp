@@ -91,16 +91,20 @@ A frozen Pydantic model (`security/auth_context.py`):
 
 `component_auth(settings, *scopes)` returns `None` in `LOCAL` mode, or
 `require_scopes(*scopes)` (a FastMCP `AuthCheck`) in JWT mode. The
-tool → scope mapping is wired in `server.py::register_tools`:
+tool → scope mapping is the `scope` column of the static tool catalog
+(`tools/_catalog.py`), applied by `server.py::register_tools`:
 
 | Scope | Protects |
 |---|---|
-| `seed:audio:generate` | `seed_audio_generate`, `seed_audio_generate_variations` |
-| `seedream:generate` | `seedream_generate_image`, `seedream_generate_image_variations` |
-| `seedance:create` | `seedance_create_task`, `seedance_create_task_variations` |
-| `seedance:read` | `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks` |
-| `seedance:delete` | `seedance_cancel_or_delete_task` |
+| `seed:audio:generate` | `seed_audio_generate` (single clip or variations) |
+| `seedream:generate` | `seedream_generate_image` (generation, editing, variations, and dry runs) |
+| `seedance:create` | `seedance_create_task` (every Seedance model, including variations and dry runs) |
+| `gen:read` | `gen_task_get`, `gen_task_list` (Seedance, Hyper3D and Hitem3d tasks) |
+| `gen:delete` | `gen_task_cancel_or_delete` |
 | `seed:asr:transcribe` | `speech_to_text` |
+| `understanding:read` | `seed_understand`, `seed_audio_understand` |
+| `hyper3d:create` | `hyper3d_create_task` |
+| `hitem3d:create` | `hitem3d_create_task` |
 | `omnihuman:create` | `omnihuman_create_task` |
 | `omnihuman:read` | `omnihuman_get_task` |
 | `omnihuman:cancel` | `omnihuman_cancel_task` |
@@ -110,26 +114,30 @@ tool → scope mapping is wired in `server.py::register_tools`:
 | `vod:subtitle:remove` | `vod_remove_subtitles` |
 | `vod:read` | All MediaKit task polling tools |
 | `vod:extract` | `vod_separate_audio` |
-| `media:upload` | `media_upload`, `media_upload_batch`, `seed_media_persist_url` |
-| `media:presign` | `media_presign`, `media_presign_batch` |
+| `media:upload` | `media_upload`, `seed_media_persist_url` |
+| `media:presign` | `media_presign` |
 | `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}`, `seed_media_get_artifact`, `seed_media_export_artifact` |
-| `assets:read` | `ark_asset_group_get`, `ark_asset_group_list`, `ark_asset_get`, `ark_asset_list` |
-| `assets:write` | `ark_asset_group_ensure`, `ark_asset_group_create`, `ark_asset_group_update`, `ark_asset_create`, `ark_asset_update` |
+| `assets:read` | `ark_asset_group_list`, `ark_asset_list` |
+| `assets:write` | `ark_asset_group_ensure`, `ark_asset_create`, `ark_asset_update` |
 | `assets:verify` | `ark_asset_verification_start`, `ark_asset_verification_result` |
-| `assets:delete` | `ark_asset_delete`, `ark_asset_group_delete` (registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
+| `assets:delete` | `ark_asset_delete` (assets and groups; registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
+
+**Create scopes are per product because that is where spend happens; read
+and delete scopes are shared** (`gen:read`, `gen:delete`) because the
+ownership store already limits every principal to the tasks it created.
+
+`ark_job_*` and `ark_list_models` need an authenticated principal but no
+scope: job tools enforce the target tool's scope at submit time, and
+`ark_list_models` returns only configured model IDs and limits.
 
 The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
 routes are **not** scope-protected at the FastMCP layer. Seed Audio and
 speech-to-text tools are registered only when `BYTEPLUS_SEED_SPEECH_API_KEY`
 is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
-`vod_enhance_video`, `vod_get_enhancement_task`,
-`vod_transcode_video`, `vod_get_transcode_task`, `vod_add_subtitles`,
-`vod_get_subtitle_addition_task`, `vod_remove_subtitles`,
-`vod_get_subtitle_removal_task`, `vod_separate_audio`, and
-`vod_get_audio_separation` only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload`,
-`media_upload_batch`, `media_presign`, and `media_presign_batch` tools are
-registered only when object storage credentials are set (TOS:
+`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
+`vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` only when
+`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload` and
+`media_presign` tools are registered only when object storage credentials are set (TOS:
 `TOS_ACCESS_KEY` / `TOS_SECRET_KEY` / `TOS_BUCKET`, or S3:
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` with
 `OBJECT_STORAGE_BACKEND=s3`).
@@ -160,8 +168,9 @@ and `/`. File-path input is restricted to the `stdio` transport to prevent
 remote file reads over HTTP.
 
 Uploaded object keys are recorded in the SQLite `object_key_ownership`
-ledger keyed by `(principal_id, tenant_id)`. `media_presign` and
-`media_presign_batch` verify the caller owns each key before minting a read
+ledger keyed by `(principal_id, tenant_id)`. `media_presign`
+verifies the caller owns each key (an unowned key returns `NOT_OWNED` for that
+key only) before minting a read
 URL; a remote principal cannot re-presign another tenant's object. In `LOCAL`
 mode, unrecorded keys remain presignable by the single local principal. A
 successful `record` or `require_owner` refreshes the row's `created_at`
@@ -217,7 +226,20 @@ bucket is empty, the middleware returns `429 "Rate limit exceeded"` with a
 `Retry-After` header indicating the seconds until the next token is
 available, plus `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and
 `X-RateLimit-Reset` headers so well-behaved clients can self-throttle. The
-bucket dict is protected by an `asyncio.Lock`.
+bucket dict is protected by an `asyncio.Lock`, and expired buckets are evicted
+once more than 10,000 keys are tracked.
+
+| Env var | Default | Notes |
+|---|---|---|
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | Key buckets on the first `X-Forwarded-For` entry instead of the socket peer IP |
+
+**Enable proxy headers only behind a proxy that overwrites
+`X-Forwarded-For`.** Otherwise a client can choose its own bucket key and
+evade the limit.
+
+Both ASGI middlewares are applied by `HardenedFastMCP.http_app`
+(`server.py`) whenever `MCP_TRANSPORT=http`, so they are active whether the
+server starts through `python -m ark_mcp` or `fastmcp run`.
 
 ## SSRF-safe downloader (`security/safe_downloader.py`)
 
@@ -287,7 +309,9 @@ generation and get tools, `save_to` on `seed_understand` and
 - **Allowed roots.** The client's MCP roots (`roots/list`, `file://` URIs
   only, 2-second timeout) are used when available; otherwise `OUTPUT_ROOTS`
   (comma-separated absolute directories). With neither, path writing is
-  disabled and every such field is rejected.
+  disabled and every such field is rejected. A background worker has no MCP
+  session and so no MCP roots: local writes inside `ark_job_submit` are
+  checked against `OUTPUT_ROOTS` only.
 - **Containment.** The path must be absolute and resolve inside a root. A file
   target cannot be a directory or a root itself.
 - **Pre-flight.** Paths are validated before any billable provider call, so a

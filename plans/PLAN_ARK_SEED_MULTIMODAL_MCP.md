@@ -1,7 +1,7 @@
 ---
 title: Ark Seed Multimodal MCP Server Plan
 type: project
-status: active
+status: in-progress
 created: 2026-07-20
 updated: 2026-07-20
 tags:

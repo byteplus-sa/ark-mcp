@@ -32,19 +32,20 @@ InputT = TypeVar("InputT", bound=BaseModel)
 ResultT = TypeVar("ResultT")
 
 _OUTPUT_ROOT_NOTE = (
-    "stdio transport only; must be absolute and inside an allowed output root (the client's "
-    "MCP roots, or OUTPUT_ROOTS). Validated before any provider call. The durable artifact is "
-    "always kept; the local copy is reported in ArtifactRef.local_path (or export_error)."
+    "stdio only; absolute path inside an allowed output root (client MCP roots or "
+    "OUTPUT_ROOTS). The durable artifact is always kept; the copy is reported in "
+    "ArtifactRef.local_path."
 )
 
 
-def output_path_field(what: str = "the output") -> Any:
+def output_path_field(what: str = "the output", *, directory_needed: str = "") -> Any:
     """Field for an optional local file (or directory, ending in '/') destination."""
+    needed = f" A directory is required {directory_needed}." if directory_needed else ""
     return Field(
         None,
         description=(
-            f"Optional local destination for {what}: a file path, or a directory when it ends "
-            f"with '/', where files are named <artifact_id>.<ext>. {_OUTPUT_ROOT_NOTE}"
+            f"Optional local destination for {what}: a file, or a directory when it ends with "
+            f"'/' (files named <artifact_id>.<ext>).{needed} {_OUTPUT_ROOT_NOTE}"
         ),
     )
 
@@ -54,7 +55,7 @@ def output_dir_field(what: str = "each output") -> Any:
     return Field(
         None,
         description=(
-            f"Optional local directory where {what} is written as <artifact_id>.<ext>. "
+            f"Optional local directory for {what}, written as <artifact_id>.<ext>. "
             f"{_OUTPUT_ROOT_NOTE}"
         ),
     )
@@ -65,8 +66,8 @@ def overwrite_field() -> Any:
     return Field(
         False,
         description=(
-            "Allow output_path/output_dir to replace an existing file with different content. "
-            "An existing file with identical content is always accepted."
+            "Replace an existing file at output_path/output_dir when its content differs "
+            "(identical content is always accepted)."
         ),
     )
 

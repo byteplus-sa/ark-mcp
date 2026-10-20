@@ -28,57 +28,43 @@ class SeedMediaExportArtifactInput(BaseModel):
     artifact_id: str = Field(
         ...,
         min_length=1,
-        description="The artifact ID returned by a previous generation call.",
+        description="Artifact ID (ArtifactRef.id) from a generation result.",
     )
     destination_path: str | None = Field(
         None,
         description=(
-            "Optional absolute file path where the server writes an atomic copy of the artifact. "
-            "Must be inside an allowed output root (the client's MCP roots, or OUTPUT_ROOTS). "
-            "When omitted, the tool returns the canonical on-disk path of a filesystem-backed "
-            "artifact instead."
+            "Absolute path for a copy of the artifact, inside an allowed output root (client "
+            "roots or OUTPUT_ROOTS). Omit to get the store path instead."
         ),
     )
     overwrite: bool = Field(
         False,
-        description=(
-            "Allow replacing an existing destination file with different content. An existing "
-            "file with identical content is always accepted."
-        ),
+        description="Allow replacing an existing destination file with different content.",
     )
 
 
 class SeedMediaExportArtifactOutput(BaseModel):
     """Output model for ``seed_media_export_artifact``."""
 
-    artifact_id: str = Field(..., description="Unique artifact identifier.")
-    path: str = Field(..., description="Absolute on-disk path of the exported media file.")
-    media_type: MediaType = Field(
-        ..., description="Logical media type: image, audio, video, or three_d."
-    )
-    mime_type: str = Field(..., description="MIME type of the stored content (e.g. image/png).")
-    bytes: int = Field(..., description="Size of the stored content in bytes.")
-    sha256: str | None = Field(None, description="SHA-256 hex digest of the stored content.")
+    artifact_id: str = Field(..., description="Artifact identifier.")
+    path: str = Field(..., description="Absolute on-disk path of the file.")
+    media_type: MediaType = Field(..., description="image, audio, video, or three_d.")
+    mime_type: str = Field(..., description="MIME type of the stored content.")
+    bytes: int = Field(..., description="Size in bytes.")
+    sha256: str | None = Field(None, description="SHA-256 hex digest.")
     copied: bool = Field(
         ...,
-        description=(
-            "True when the artifact was copied to destination_path (or an identical copy was "
-            "already there); False when path is the canonical store location."
-        ),
+        description="True when path is a copy at destination_path; false when it is the store location.",
     )
 
 
 async def seed_media_export_artifact(
     input: SeedMediaExportArtifactInput, ctx: Context
 ) -> SeedMediaExportArtifactOutput:
-    """Locate or copy a persisted media artifact on the local filesystem.
+    """Get the local file path of a persisted artifact, or copy it to destination_path.
 
-    Returns the absolute on-disk path of a persisted artifact instead of
-    streaming its Base64 bytes through the MCP context. With ``destination_path``
-    the server writes an atomic copy of the artifact to that path, which must be
-    absolute and inside an allowed output root; otherwise it returns the
-    canonical store path for a filesystem-backed artifact store. Only available
-    over stdio transport, where the client and server share a filesystem.
+    Avoids streaming Base64 through context. Stdio transport only (client and server share a
+    filesystem).
     """
     await context_log(ctx, "info", f"Exporting artifact {input.artifact_id}")
 

@@ -31,7 +31,7 @@ client is missing tools and that warning is absent, look at
 | `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | HTTPS VOD AI MediaKit convenience-endpoint base URL |
 | `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-0-pro-260628` | Default image model/endpoint ID |
 | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | `standard` | Mode 5.0 Pro sends when a caller omits `prompt_optimization`: `standard` (prompt-following quality) or `fast` (lower latency). Both are provider-accepted; an explicit per-call value wins |
-| `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-0-260128` | Default video model/endpoint ID |
+| `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-5-260628` | Default video model/endpoint ID used by `seedance_create_task` when `model` is omitted (Seedance 2.5; was 2.0 before the tool consolidation, see the [upgrade note](#seedance-default-model-upgrade-note)) |
 | `SEED_UNDERSTANDING_DEFAULT_MODEL` | `dola-seed-2-1-turbo-260628` | Default understanding model/endpoint ID. Set to `dola-seed-evolving` to use the latest Pro-tier model (auto-resolves to family `pro`, no `SEED_UNDERSTANDING_MODEL_FAMILY` needed) |
 | `SEEDREAM_MODEL_FAMILY` | empty | Family for a custom default: `pro`, `lite`, or `4x` |
 | `SEEDANCE_MODEL_FAMILY` | empty | Family for a custom default: `standard`, `fast`, `mini`, `seedance_2_5`, or `seedance_2_5_premium` |
@@ -40,7 +40,7 @@ client is missing tools and that warning is absent, look at
 | `SEEDANCE_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | Model/endpoint ID used by `seed_audio_understand`. Any ModelArk model that accepts Chat Completions `input_audio` parts with deep thinking works; change it when a newer audio-capable model ships |
-| `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` | `false` | Feature flag for whitelist-only Seedance 2.5 Premium (4K). Registers `seedance_2_5_premium_create_task` and its variations tool; reuses the ModelArk key. When false, `seedance_2_5_premium` bindings are rejected at startup |
+| `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` | `false` | Feature flag for whitelist-only Seedance 2.5 Premium (4K). Binds the Premium model ID so `seedance_create_task` accepts it as `model`; reuses the ModelArk key. When false, `seedance_2_5_premium` bindings are rejected at startup |
 | `SEEDANCE_2_5_PREMIUM_MODEL` | `dreamina-seedance-2-5-premium-260915` | Premium model/endpoint ID bound automatically when the flag is on and `SEEDANCE_MODEL_BINDINGS` has no `seedance_2_5_premium` binding |
 | `BYTEPLUS_MODELARK_3D_ENABLED` | `false` | Feature flag for 3D generation (Hyper3D + Hitem3d); reuses the ModelArk key, disabled by default |
 | `HYPER3D_DEFAULT_MODEL` | `hyper3d-gen2` | Default Hyper3D model/endpoint ID |
@@ -58,6 +58,34 @@ For example:
 SEEDREAM_DEFAULT_MODEL=my-image-endpoint
 SEEDREAM_MODEL_BINDINGS=[{"model_id":"my-image-endpoint","family":"pro"}]
 ```
+
+### Seedance default model upgrade note
+
+**`SEEDANCE_DEFAULT_MODEL` now defaults to Seedance 2.5
+(`dreamina-seedance-2-5-260628`) instead of 2.0.** Every Seedance model is
+called through the single `seedance_create_task` tool, and the default model
+must be one of the bound IDs.
+
+| Your configuration | Result after upgrading |
+|---|---|
+| No `SEEDANCE_MODEL_BINDINGS`, no `SEEDANCE_DEFAULT_MODEL` | Seedance 2.5 is bound automatically and is the default |
+| `SEEDANCE_DEFAULT_MODEL` set explicitly | Unchanged |
+| `SEEDANCE_MODEL_BINDINGS` lists only a Seedance 2.0 model and `SEEDANCE_DEFAULT_MODEL` is unset | **Startup fails** with `Seedance default model 'dreamina-seedance-2-5-260628' is missing from its bindings. Set the default model env var to one of the bound IDs: [...]` |
+
+**Fix** for the failing case: set `SEEDANCE_DEFAULT_MODEL` to the bound 2.0 ID
+to keep 2.0 as the default, or add a 2.5 binding to use the new default:
+
+```dotenv
+# Keep Seedance 2.0 as the default
+SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-0-260128
+SEEDANCE_MODEL_BINDINGS=[{"model_id":"dreamina-seedance-2-0-260128","family":"standard"}]
+
+# Or bind both and default to 2.5
+SEEDANCE_MODEL_BINDINGS=[{"model_id":"dreamina-seedance-2-0-260128","family":"standard"},{"model_id":"dreamina-seedance-2-5-260628","family":"seedance_2_5"}]
+```
+
+Callers then choose a model per request with `model`, taking an exact ID from
+`ark_list_models(kind='video')`.
 
 Credentials are startup-only. If a provider key is absent, its tools are not
 registered. Specifically, `vod_enhance_video` is registered independently
@@ -100,7 +128,8 @@ claim. Tool scopes are enforced by FastMCP:
 
 - `seed:audio:generate`
 - `seedream:generate`
-- `seedance:create`, `seedance:read`, `seedance:delete`
+- `seedance:create`
+- `gen:read`, `gen:delete` (`gen_task_*` tools for Seedance and 3D tasks)
 - `understanding:read`
 - `vod:enhance`
 - `vod:transcode`
@@ -140,22 +169,23 @@ set. The tool supports the `fast`, `standard`, and `professional` enhancement
 tiers with target resolutions from 240p to 8K (4K for `fast`) and defaults to
 `professional`/`4k`/`high`/24 fps. It serializes the project label upstream as
 case-sensitive `Project` for `standard`/`professional`. Submission returns an asynchronous
-task ID for `vod_get_enhancement_task`; the poll tool returns and best-effort
-persists completed outputs. The submit POST is not retried automatically.
+task ID and `operation="enhance"` for `vod_get_task`, the single MediaKit
+poller, which returns and best-effort persists completed outputs. The submit POST is not retried automatically.
 Convenience-endpoint pricing is not yet confirmed, so the tool does not emit a
 cost estimate.
 
-`vod_transcode_video` and `vod_get_transcode_task` are also registered when
+`vod_transcode_video` and `vod_get_task` are also registered when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `vod_transcode_video` submits an async
 transcoding task (codec, container format, scaling, bitrate, frame rate, HDR);
-`vod_get_transcode_task` polls it and best-effort persists the completed output.
+`vod_get_task` with `operation="transcode"` polls it and best-effort persists
+the completed output.
 The transcode request/status contract is verified from the official AI MediaKit
 API reference; the output URL hostname (`*.byteplusvod.com`) is confirmed and
 trusted for durable persistence. `queue_id`/`Project` request params remain
 unverified and are not exposed.
 
-`vod_add_subtitles` / `vod_get_subtitle_addition_task` and
-`vod_remove_subtitles` / `vod_get_subtitle_removal_task` use the same API key.
+`vod_add_subtitles` and `vod_remove_subtitles` (polled with `vod_get_task`,
+`operation="add_subtitles"` or `"remove_subtitles"`) use the same API key.
 Addition accepts a public HTTPS SRT, VTT, or ASS file or inline timed cues and
 burns them into the output video. Removal defaults to dialogue-subtitle mode;
 the broader `text` mode may also erase titles, labels, or watermarks. Both
@@ -166,17 +196,19 @@ convenience-endpoint extensions and are omitted unless explicitly supplied.
 
 ## VOD AI MediaKit audio separation
 
-`vod_separate_audio` and `vod_get_audio_separation` are registered when
+`vod_separate_audio` and `vod_get_task` are registered when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set, sharing the same Bearer-authenticated
 convenience surface as enhancement and transcoding.
 
 `vod_separate_audio` submits a `POST /api/v1/tools/separate-voice` task from a
 public HTTPS `audio_url` or `video_url` (exactly one) plus an optional `scene`
 (`Audio` default, `Music`, `Drama`, `Narrate`) and `output_format` (`aac`
-default, `mp3`, `wav`, `m4a`, `flac`). `vod_get_audio_separation` polls
-`GET /api/v1/tasks/{task_id}` and returns each separated track's expiring
-`source_url` (valid 24 hours) plus a durable `artifact` reference when
-best-effort persistence succeeds.
+default, `mp3`, `wav`, `m4a`, `flac`). `vod_get_task` with
+`operation="separate_audio"` polls `GET /api/v1/tasks/{task_id}` and returns
+each separated track (`voice`, `background`, `music`, `sfx`) as an output with
+its expiring `source_url` (valid 24 hours) plus a durable `artifact` reference
+when best-effort persistence succeeds. An `output_path` directory receives
+every track.
 
 ## Private asset library (AK/SK)
 
@@ -193,7 +225,7 @@ only the API key. See [assets.md](assets.md).
 | `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | ModelArk OpenAPI host (HTTPS) |
 | `BYTEPLUS_MODELARK_REGION` | `ap-southeast-1` | Signing region |
 | `BYTEPLUS_MODELARK_PROJECT_NAME` | `default` | Default project for groups and assets; must match the inference endpoint's project |
-| `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE` | `false` | Registers the irreversible `ark_asset_delete` / `ark_asset_group_delete` tools |
+| `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE` | `false` | Registers the irreversible `ark_asset_delete` tool (assets and groups) |
 | `BYTEPLUS_MODELARK_ASSET_CREATE_QPM` | `3` | Client-side `CreateAsset` pacing; set to your tier (3 Entry, 120 Advanced, 300 Premium) |
 | `BYTEPLUS_MODELARK_ASSET_VERIFY_CALLBACK_URL` | empty | Default HTTPS redirect for real-person verification |
 | `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE` | `off` | Seedream / Seed Audio `asset://` handling: `off` rejects, `resolve` swaps in the temporary asset URL (experimental; needs AK/SK) |
@@ -203,17 +235,16 @@ JWT tool scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`
 
 ## Object storage (TOS or S3, optional)
 
-The `media_upload`, `media_upload_batch`, `media_presign`, and
-`media_presign_batch` tools are registered when the selected object-storage
-backend is configured. `media_upload` uploads media to a **private** bucket and
-returns a presigned HTTPS GET URL; `media_upload_batch` does the same for 1-50
-files in one call; `media_presign` generates a fresh presigned URL for an
-existing object without re-uploading.
+The `media_upload` and `media_presign` tools are registered when the selected
+object-storage backend is configured. `media_upload` uploads 1-50 files to a
+**private** bucket and returns a presigned HTTPS GET URL per file;
+`media_presign` generates fresh presigned URLs for 1-100 existing objects
+without re-uploading.
 Use `OBJECT_STORAGE_BACKEND` to select `tos` (default) or `s3`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MEDIA_UPLOAD_BATCH_MAX_BYTES` | `524288000` (500 MiB) | Maximum total decoded bytes in one `media_upload_batch` call; checked before any upload starts |
+| `MEDIA_UPLOAD_BATCH_MAX_BYTES` | `524288000` (500 MiB) | Maximum total decoded bytes in one `media_upload` call (all items); checked before any upload starts, and an oversized call fails as a whole |
 
 ### TOS backend
 
@@ -279,7 +310,10 @@ budget, cache, and limiter implementations before horizontal scaling is safe.
 
 The client's MCP roots (`roots/list`) take precedence when the client provides
 them; `OUTPUT_ROOTS` is the fallback. With neither, local path writing is
-disabled and those fields are rejected. Path writing is stdio-only. See
+disabled and those fields are rejected. **Background jobs
+(`ark_job_submit`) run in a worker with no MCP session and therefore no MCP
+roots, so local writes from a job always use `OUTPUT_ROOTS`; set it whenever
+jobs should write files.** Path writing is stdio-only. See
 [Security](security.md#local-output-paths).
 
 ## Timeouts and logging

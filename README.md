@@ -4,6 +4,10 @@ A Python [Model Context Protocol](https://modelcontextprotocol.io) server
 built on [FastMCP](https://gofastmcp.com) that exposes BytePlus multimodal
 generation through a typed, safe tool surface.
 
+> **Upgrading from 0.1.x?** 0.2.0 consolidates the tool surface and removes
+> the old per-model, per-variation and per-operation tools with no
+> compatibility layer. See the [migration guide](docs/migration-0.2.md).
+
 ## What It Does
 
 The server provides a conditional MCP tool surface across several BytePlus
@@ -11,26 +15,31 @@ products plus artifact access and an optional media upload helper:
 
 | Product | Tools | Description |
 |---|---|---|
-| **Seed Audio** | `seed_audio_generate`, `seed_audio_generate_variations` | Background-task full-scene audio generation through Seed Speech |
-| **Seedream** | `seedream_generate_image`, `seedream_edit_image`, `seedream_generate_image_variations` | Background-task image generation and editing through ModelArk |
-| **Seedance** | `seedance_create_task`, `seedance_create_task_variations`, `seedance_get_task`, `seedance_get_tasks`, `seedance_list_tasks`, `seedance_cancel_or_delete_task` | Background-task video submission with optionally background output retrieval (single or batched status checks with derived queue timing) through ModelArk |
-| **Seedance 2.5 Premium** | `seedance_2_5_premium_create_task`, `seedance_2_5_premium_create_task_variations` | Whitelist-only Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`) with 4K output; same inputs as Seedance 2.5 (including Draft mode) and shares the `seedance_get_task` lifecycle tools (gated by `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`, disabled by default) |
-| **Hyper3D / Hitem3d** | `hyper3d_*`, `hitem3d_*` task tools | Background-task 3D submission with optionally background output retrieval through ModelArk (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
+| **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech; one clip or 1-5 parallel variations |
+| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: text-to-image, reference editing, point/box edits, transparency-preserving PNG edits (5.0 Pro), provider batches, 1-10 parallel variations, and `dry_run` request and cost previews |
+| **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (2.0, 2.5 by default, and whitelist-only 2.5 Premium with 4K when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`): pick the model from `ark_list_models(kind='video')`, create 1-5 variations, use Draft mode on 2.5, or `dry_run` for a free request and cost preview; poll with the shared generation task tools |
+| **Hyper3D / Hitem3d** | `hyper3d_create_task`, `hitem3d_create_task` | Background-task 3D submission through ModelArk; poll with the shared generation task tools (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
+| **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | One lifecycle for every ModelArk generation task (Seedance video and 3D): batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
 | **OmniHuman 2.0** | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task` | Image + audio to talking-avatar video through BytePlus Vision AI; background-task submission, polling with durable video persistence, and queue cancel (gated by `BYTEPLUS_OMNIHUMAN_ENABLED` and `BYTEPLUS_CV_API_KEY`, disabled by default) |
 | **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions; always thinks, returns only the final answer, enforces JSON Schemas, and can save the answer to a local file |
 | **Seed Audio Understanding** | `seed_audio_understand` | Background-task audio understanding (transcription, translation, speaker/emotion analysis, summaries, Q&A) through ModelArk Chat Completions `input_audio`; model set by `SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`), same thinking, JSON Schema, and `save_to` controls as `seed_understand` |
 | **Speech-to-Text** | `speech_to_text` | Background-task audio transcription through Seed Speech ASR (HTTP) |
-| **VOD AI MediaKit** | `vod_enhance_video`, `vod_get_enhancement_task` | Submit and poll asynchronous AI video upscaling/enhancement with fast, standard, or professional tiers and target resolutions from 240p to 8K |
-| **VOD AI MediaKit Transcode** | `vod_transcode_video`, `vod_get_transcode_task` | Submit and poll async video transcoding (codec, container, resolution, bitrate, frame rate) |
-| **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_get_subtitle_addition_task`, `vod_remove_subtitles`, `vod_get_subtitle_removal_task` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
-| **VOD Audio Separation** | `vod_separate_audio`, `vod_get_audio_separation` | Submit and poll voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
-| **Private Asset Library** | `ark_asset_group_ensure`, `ark_asset_create`, `ark_asset_get`, `ark_asset_list`, `ark_asset_verification_start`, `ark_asset_verification_result`, … | Manage Seedance Advanced Creation Rights assets (virtual portraits, verified real people) with BytePlus AK/SK; reference them as `asset://<id>` in Seedance |
+| **VOD AI MediaKit** | `vod_enhance_video` | Submit asynchronous AI video upscaling/enhancement with fast, standard, or professional tiers and target resolutions from 240p to 8K |
+| **VOD AI MediaKit Transcode** | `vod_transcode_video` | Submit async video transcoding (codec, container, resolution, bitrate, frame rate) |
+| **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_remove_subtitles` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
+| **VOD Audio Separation** | `vod_separate_audio` | Submit voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
+| **VOD task polling** | `vod_get_task` | One poller for every `vod_*` task: pass the `task_id` and `operation` the create tool returned; normalized status and outputs with optionally background durable persistence |
+| **Private Asset Library** | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result`, `ark_asset_delete` | Manage Seedance Advanced Creation Rights assets (virtual portraits, verified real people) with BytePlus AK/SK; reference them as `asset://<id>` in Seedance |
 | **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url` | Retrieve persisted media inline by artifact ID, locate/copy it to a local path without Base64 round-trips, or durably persist a provider URL whose storage failed |
-| **Object storage** (optional) | `media_upload`, `media_upload_batch`, `media_presign`, `media_presign_batch` | Background-task upload of Base64 or local-file media (one file or up to 50) to TOS or S3; foreground URL renewal without re-uploading |
+| **Object storage** (optional) | `media_upload`, `media_presign` | Background-task upload of 1-50 Base64 or local-file media items to TOS or S3 with per-item results; foreground URL renewal for 1-100 object keys without re-uploading |
 | **Background jobs** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools and the default way to submit and manage long-running work; no task-augmented execution required |
 
 Key features:
 
+- **Model discovery** - `ark_list_models` reports configured models and the
+  tools serving them. Understanding modalities describe the named tool:
+  `seed_understand` takes images/videos; `seed_audio_understand` takes audio
+  only, with a server-configured model.
 - **Durable artifacts** — generated media is persisted locally so MCP
   resources remain usable after known provider URL lifetimes (2h audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at
@@ -44,8 +53,8 @@ Key features:
   symlink-safe, no-silent-overwrite writes
 - **Parallel variations** — generate N independent variations in a single
   call, partial failures captured per variation with the failure phase
-- **Per-variation seeds** — Seedream supports reproducible generation with
-  `base_seed + index` deterministic seeds
+- **Per-variation seeds** — Seedream supports reproducible variations: with
+  `variations > 1`, `seed` is the base seed and variation *i* uses `seed + i`
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
 - **Timeout-safe long operations** — generation, transcription, large upload,
@@ -73,20 +82,19 @@ accepts as reference input:
 | Tool | Modality | URL | Base64 | Speaker ID | Roles | Max | Constraints |
 |---|---|:---:|:---:|:---:|---|:---:|---|
 | `seedream_generate_image` | Image | ✓ | ✓ | — | reference | 10 PRO / 14 LITE·4X | — |
-| `seedance_create_task` | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 9 | — |
-| `seedance_create_task` | Video | ✓ | — | — | `reference_video` | 3 | URL only |
-| `seedance_create_task` | Audio | ✓ | ✓ | — | `reference_audio` | 3 | Not sole input |
-| `seedance_2_5_create_task` | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 30 | — |
-| `seedance_2_5_create_task` | Video | ✓ | — | — | `reference_video` | 10 | URL only |
-| `seedance_2_5_create_task` | Audio | ✓ | ✓ | — | `reference_audio` | 10 | Not sole input |
+| `seedance_create_task` (2.0 models) | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 9 | — |
+| `seedance_create_task` (2.0 models) | Video | ✓ | — | — | `reference_video` | 3 | URL only |
+| `seedance_create_task` (2.0 models) | Audio | ✓ | ✓ | — | `reference_audio` | 3 | Not sole input |
+| `seedance_create_task` (2.5 models) | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 30 | — |
+| `seedance_create_task` (2.5 models) | Video | ✓ | — | — | `reference_video` | 10 | URL only |
+| `seedance_create_task` (2.5 models) | Audio | ✓ | ✓ | — | `reference_audio` | 10 | May be the sole input |
 | `seed_audio_generate` | Audio | ✓ | ✓ | ✓ | — | 3 | Exclusive w/ image |
 | `seed_audio_generate` | Image | ✓ | ✓ | — | — | 1 | Exclusive w/ audio |
 
-> The `_variations` siblings (`seedream_generate_image_variations`,
-> `seedance_create_task_variations`, `seedance_2_5_create_task_variations`,
-> `seedance_2_5_premium_create_task_variations`,
-> `seed_audio_generate_variations`) accept
-> the same input modalities as their base tools.
+> Variations are a field on the base tools (`variations` on
+> `seedream_generate_image`, `seed_audio_generate`, and
+> `seedance_create_task`), so they accept the same input modalities and limits
+> as a single call.
 
 > [!NOTE]
 > **Video references must be pre-hosted.** `seedance_create_task` accepts
@@ -207,20 +215,24 @@ BYTEPLUS_VOD_MEDIAKIT_API_KEY=your_vod_mediakit_key
 BYTEPLUS_CV_API_KEY=your_vision_ai_key
 BYTEPLUS_OMNIHUMAN_ENABLED=true
 SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628
-SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-0-260128
+SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-5-260628
 ```
+
+> [!IMPORTANT]
+> **Upgrading:** `SEEDANCE_DEFAULT_MODEL` now defaults to Seedance 2.5. If
+> `SEEDANCE_MODEL_BINDINGS` lists only a Seedance 2.0 model, set
+> `SEEDANCE_DEFAULT_MODEL` to that ID (or add a 2.5 binding), or the server
+> fails at startup. See [Configuration](docs/configuration.md#seedance-default-model-upgrade-note).
 
 If a credential is absent, the server skips registering that product's
 tools. `seed_media_get_artifact`, `seed_media_export_artifact`, and
 `seed_media_persist_url` are always available, provider tools appear only
-when their credentials are configured, `media_upload`, `media_upload_batch`,
-`media_presign`, and `media_presign_batch` appear
+when their credentials are configured, `media_upload` and
+`media_presign` appear
 only when object storage credentials (TOS or S3) are configured, and
 `speech_to_text` appears only when `BYTEPLUS_SEED_SPEECH_API_KEY` is set.
-`vod_enhance_video`, `vod_get_enhancement_task`, `vod_transcode_video`,
-`vod_get_transcode_task`, `vod_add_subtitles`, `vod_get_subtitle_addition_task`,
-`vod_remove_subtitles`, `vod_get_subtitle_removal_task`, `vod_separate_audio`,
-and `vod_get_audio_separation` appear only when
+`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
+`vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` appear only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `omnihuman_create_task`,
 `omnihuman_get_task`, and `omnihuman_cancel_task` appear only when
 `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is set.
@@ -410,6 +422,7 @@ make check-env     # Validate environment configuration
 | Document | Description |
 |---|---|
 | [Getting Started](docs/getting-started.md) | Installation, configuration, and first run |
+| [Migrating to 0.2.0](docs/migration-0.2.md) | Removed 0.1.x tools and their replacements |
 | [Architecture](docs/architecture.md) | System structure, two-gateway domain layer, request flow |
 | [Configuration](docs/configuration.md) | Full environment variable reference |
 | [Integration Guide](docs/integration-guide.md) | MCP client setup (Claude, Cursor, VS Code, Inspector) |
