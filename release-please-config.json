@@ -4,7 +4,7 @@
     ".": {
       "release-type": "python",
       "package-name": "ark-mcp",
-      "initial-version": "0.2.0",
+      "release-as": "0.2.0",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "bump-minor-pre-major": true,
@@ -16,7 +16,7 @@
         {
           "type": "toml",
           "path": "uv.lock",
-          "jsonpath": "$.package[?(@.name=='ark-mcp')].version"
+          "jsonpath": "$.package[?(@.name.value=='ark-mcp')].version"
         }
       ]
     }
