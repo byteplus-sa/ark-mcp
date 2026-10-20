@@ -28,6 +28,11 @@ MCP_TRANSPORT=http uv run python -m ark_mcp    # Streamable HTTP, 127.0.0.1:3000
 - For a single-organization deployment, use the Caddy/JWT/Redis Compose kit in
   `deploy/compose/` and the repository's `docs/self-hosting.md` guide. Keep one
   replica and configure both spend and rate limits.
+- Releases use `vX.Y.Z` tags, GitHub wheel/source/checksum assets, and versioned
+  GHCR images. `latest` is a release; `edge` is a main build. Prefer a digest
+  pin for deployment. PyPI publishing is not configured. Release publication
+  does not update a source checkout or restart an MCP client; see the
+  repository's `docs/releases.md`.
 
 ## What enables what
 
