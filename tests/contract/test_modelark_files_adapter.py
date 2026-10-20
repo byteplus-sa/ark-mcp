@@ -65,6 +65,65 @@ def _multipart_fields(request: httpx.Request) -> dict[str, str]:
 
 
 class TestUploadUrl:
+    @pytest.mark.parametrize(
+        ("body", "cleanup"),
+        [
+            (b"not json", False),
+            (b"[]", False),
+            (b'{"status":"active"}', False),
+            (b'{"id":42,"status":"active"}', False),
+            (b'{"id":"../other","status":"active"}', False),
+            (b'{"id":"file-created"}', True),
+            (b'{"id":"file-created","status":null}', True),
+            (b'{"id":"file-created","status":""}', True),
+        ],
+    )
+    @respx.mock
+    async def test_malformed_success_is_ambiguous_and_cleans_safe_id(
+        self, service: ModelArkFilesService, body: bytes, cleanup: bool
+    ) -> None:
+        respx.post(f"{MODELARK_BASE}/files").respond(
+            200, content=body, headers={"X-Request-Id": "req-upload"}
+        )
+        deletion = respx.delete(f"{MODELARK_BASE}/files/file-created").respond(200)
+        with pytest.raises(ProviderError) as info:
+            await service.upload_url(SOURCE_URL)
+        assert info.value.code == "INVALID_RESPONSE"
+        assert info.value.error.ambiguous_completion is True
+        assert info.value.error.retryable is False
+        assert info.value.error.request_id == "req-upload"
+        assert deletion.called is cleanup
+        assert body.decode() not in info.value.message
+
+    @pytest.mark.parametrize("failure", [httpx.Response(503), httpx.ReadError("lost")])
+    @respx.mock
+    async def test_cleanup_failure_preserves_invalid_upload_error(
+        self, service: ModelArkFilesService, failure: httpx.Response | Exception
+    ) -> None:
+        respx.post(f"{MODELARK_BASE}/files").respond(200, json={"id": "file-created"})
+        deletion = respx.delete(f"{MODELARK_BASE}/files/file-created")
+        if isinstance(failure, Exception):
+            deletion.mock(side_effect=failure)
+        else:
+            deletion.mock(return_value=failure)
+        with pytest.raises(ProviderError) as info:
+            await service.upload_url(SOURCE_URL)
+        assert info.value.code == "INVALID_RESPONSE"
+        assert info.value.error.ambiguous_completion is True
+        assert deletion.called
+
+    @respx.mock
+    async def test_invalid_retrieval_is_normalized_without_deleting(
+        self, service: ModelArkFilesService
+    ) -> None:
+        respx.get(f"{MODELARK_BASE}/files/file-1").respond(200, json={"id": "file-1"})
+        deletion = respx.delete(f"{MODELARK_BASE}/files/file-1").respond(200)
+        with pytest.raises(ProviderError) as info:
+            await service.retrieve("file-1")
+        assert info.value.code == "INVALID_RESPONSE"
+        assert info.value.error.ambiguous_completion is False
+        assert not deletion.called
+
     @pytest.mark.parametrize("status", [500, 502, 503])
     @respx.mock
     async def test_server_error_may_have_created_file(

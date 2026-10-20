@@ -170,6 +170,9 @@ date. A snapshot older than twice the refresh interval is ignored. If a refresh
 fails, the previous snapshot is kept until it expires and the failure is logged
 as `pricing_refresh_failed`. The `cost_estimate` log line carries
 `price_source` (`live` or `builtin`).
+The refresher uses the server's resolved settings for credentials, endpoint,
+region, model bindings, timeouts, and snapshot freshness, including when the
+server was constructed with explicit settings instead of environment defaults.
 
 **Built-in rates** (used when there is no fresh price for the model):
 

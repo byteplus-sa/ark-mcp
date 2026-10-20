@@ -17,10 +17,10 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from ark_mcp.config.env import Settings, get_settings
-from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.pricing import ChargeItem, ModelPricing
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
+from ark_mcp.providers.byteplus_openapi.signing import OpenApiCredentials
 from ark_mcp.providers.modelark.openapi import ModelArkOpenApiGateway
 
 if TYPE_CHECKING:
@@ -61,8 +61,24 @@ def parse_model_pricing(item: Mapping[str, Any]) -> ModelPricing:
 class PricingService:
     """Fetches model pricing from the ModelArk catalog."""
 
-    def __init__(self, gateway: ModelArkOpenApiGateway | None = None) -> None:
-        self._gateway = gateway or ModelArkOpenApiGateway()
+    def __init__(
+        self,
+        gateway: ModelArkOpenApiGateway | None = None,
+        *,
+        settings: Settings | None = None,
+    ) -> None:
+        resolved = settings or get_settings()
+        self._gateway = gateway or ModelArkOpenApiGateway(
+            credentials=OpenApiCredentials(
+                access_key_id=resolved.modelark_access_key,
+                secret_access_key=resolved.modelark_secret_key,
+                session_token=resolved.modelark_session_token,
+            ),
+            region=resolved.modelark_region,
+            base_url=resolved.modelark_openapi_base_url,
+            timeout=min(resolved.request_timeout_ms / 1000, 60.0),
+            connect_timeout=resolved.connect_timeout_ms / 1000,
+        )
 
     async def close(self) -> None:
         await self._gateway.close()
@@ -133,19 +149,17 @@ def get_price_book() -> PriceBook:
     return _PRICE_BOOK
 
 
-def configured_model_ids() -> list[str]:
-    """Return every model ID bound in the capability registry, deduplicated."""
-    registry = get_capability_registry()
-    return list(
-        dict.fromkeys(
-            [
-                *registry.list_image_models(),
-                *registry.list_video_models(),
-                *registry.list_seed3d_models(),
-                *registry.list_understanding_models(),
-            ]
-        )
+def configured_model_ids(settings: Settings | None = None) -> list[str]:
+    """Return every configured model binding plus the audio model, deduplicated."""
+    resolved = settings or get_settings()
+    binding_groups = (
+        resolved.seedream_model_bindings,
+        resolved.seedance_model_bindings,
+        resolved.seed3d_model_bindings,
+        resolved.seed_understanding_model_bindings,
     )
+    model_ids = [binding.model_id for bindings in binding_groups for binding in bindings]
+    return list(dict.fromkeys([*model_ids, resolved.seed_audio_understanding_model]))
 
 
 def _refresh_interval(settings: Settings) -> float:
@@ -160,17 +174,18 @@ def live_pricing_enabled(settings: Settings | None = None) -> bool:
 
 async def refresh_price_book(
     *,
+    settings: Settings | None = None,
     service: PricingService | None = None,
     price_book: PriceBook | None = None,
 ) -> bool:
     """Refresh the price book from the catalog; return False (keeping old data) on failure."""
-    settings = get_settings()
+    resolved = settings or get_settings()
     book = price_book or _PRICE_BOOK
     owned = service is None
-    pricing_service = service or PricingService()
+    pricing_service = service or PricingService(settings=resolved)
     try:
         prices = await pricing_service.fetch(
-            catalog_name(model_id) for model_id in configured_model_ids()
+            catalog_name(model_id) for model_id in configured_model_ids(resolved)
         )
     except Exception as exc:
         log_warning("pricing_refresh_failed", error_type=type(exc).__name__)
@@ -178,7 +193,7 @@ async def refresh_price_book(
     finally:
         if owned:
             await pricing_service.close()
-    book.update(prices, max_age_seconds=_refresh_interval(settings) * 2)
+    book.update(prices, max_age_seconds=_refresh_interval(resolved) * 2)
     log_info("pricing_refreshed", models=len(prices))
     return True
 
@@ -196,5 +211,5 @@ async def run_price_refresher(settings: Settings) -> None:
     """Refresh the price book now and then every refresh interval, until cancelled."""
     interval = _refresh_interval(settings)
     while True:
-        await refresh_price_book()
+        await refresh_price_book(settings=settings)
         await asyncio.sleep(interval)

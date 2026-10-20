@@ -1433,6 +1433,9 @@ retry; unrelated errors are returned. Base64 stays inline in every mode.
 Uploads are processed sequentially, awaited until active, and deleted after
 success, failure, or cancellation. Best-effort deletion can fail; uploads then
 expire after roughly one day. An ambiguous upload timeout is not retried.
+Malformed upload success responses also return non-retryable
+`INVALID_RESPONSE` with `ambiguous_completion=true`. A recoverable, safe file ID
+is deleted best-effort; without one, expiry is the only cleanup fallback.
 
 With `seed-2-0-lite-260428`, `json_schema` is enforced by the provider but
 `json_object` is not, so use `json_schema` (or `json_retry`) when you need JSON.

@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
+import asyncio
+import json
+from unittest.mock import AsyncMock
 
+import pytest
+import respx
+
+from ark_mcp.config.env import Settings
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.domain.pricing import ChargeItem, ModelPricing
 from ark_mcp.providers.modelark.pricing import (
@@ -232,6 +238,77 @@ def test_configured_model_ids_are_unique() -> None:
 
 
 class TestRefresher:
+    @respx.mock
+    async def test_explicit_settings_control_request_and_freshness(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        settings = Settings(
+            _env_file=None,
+            BYTEPLUS_MODELARK_ACCESS_KEY="AKLTexplicit",
+            BYTEPLUS_MODELARK_SECRET_KEY="fixture-only",  # pragma: allowlist secret
+            BYTEPLUS_MODELARK_OPENAPI_BASE_URL="https://explicit.example.com",
+            BYTEPLUS_MODELARK_REGION="us-east-1",
+            BYTEPLUS_MODELARK_SESSION_TOKEN="fixture-session",
+            BYTEPLUS_REQUEST_TIMEOUT_MS=30000,
+            BYTEPLUS_CONNECT_TIMEOUT_MS=7000,
+            BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS=120,
+            SEEDREAM_DEFAULT_MODEL="explicit-image-260101",
+            SEEDREAM_MODEL_FAMILY="pro",
+            SEED_AUDIO_UNDERSTANDING_MODEL="explicit-audio-260101",
+        )
+        clock = FakeClock()
+        book = PriceBook(clock)
+        monkeypatch.setattr("ark_mcp.providers.modelark.pricing._PRICE_BOOK", book)
+        route = respx.post("https://explicit.example.com/").respond(
+            200,
+            json={
+                "Result": {"Items": [{"FoundationModelName": "explicit-image"}], "TotalCount": 1}
+            },
+        )
+        refreshed = asyncio.Event()
+
+        async def stop_after_refresh(delay: float) -> None:
+            assert delay == 120
+            refreshed.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr("ark_mcp.providers.modelark.pricing.asyncio.sleep", stop_after_refresh)
+        from ark_mcp.providers.modelark.pricing import run_price_refresher
+
+        task = asyncio.create_task(run_price_refresher(settings))
+        try:
+            await asyncio.wait_for(refreshed.wait(), timeout=2)
+            assert route.call_count == 1
+            request = route.calls.last.request
+            assert "Credential=AKLTexplicit/" in request.headers["Authorization"]
+            assert "/us-east-1/ark/request" in request.headers["Authorization"]
+            assert request.headers["X-Security-Token"] == "fixture-session"
+            assert request.extensions["timeout"]["read"] == 30
+            assert request.extensions["timeout"]["connect"] == 7
+            names = json.loads(request.content)["Filter"]["FoundationModelNames"]
+            assert "explicit-image" in names
+            assert "explicit-audio" in names
+            assert "dola-seedream-5-0-pro" not in names
+            assert book.lookup("explicit-image-260101") is not None
+            clock.now += 241
+            assert not book.is_fresh()
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+    async def test_cancelled_refresh_closes_owned_service(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service = FakeService({})
+        service.fetch = AsyncMock(side_effect=asyncio.CancelledError())
+        monkeypatch.setattr(
+            "ark_mcp.providers.modelark.pricing.PricingService", lambda **kwargs: service
+        )
+        with pytest.raises(asyncio.CancelledError):
+            await refresh_price_book()
+        assert service.closed
+
     async def test_refresher_repeats_until_cancelled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import asyncio
 
@@ -241,7 +318,7 @@ class TestRefresher:
         calls = 0
         refreshed_twice = asyncio.Event()
 
-        async def fake_refresh() -> bool:
+        async def fake_refresh(*, settings: Settings) -> bool:
             nonlocal calls
             calls += 1
             if calls == 2:

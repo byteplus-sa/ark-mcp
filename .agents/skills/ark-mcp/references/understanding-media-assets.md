@@ -59,6 +59,9 @@ Do not pass `thinking` (ignored).
   frames sampled at 0.2 fps, which also consume tokens. Outputs report
   `audio_delivery` per input and `delivery_fallback_reason`. Uploads are
   deleted best-effort after the call and otherwise expire after roughly a day.
+  Malformed upload successes return `INVALID_RESPONSE` with
+  `ambiguous_completion=true`, not a safe retry. Cleanup uses a recoverable,
+  validated file ID; without one, the upload must expire.
 
 ### Shaping and saving the answer
 

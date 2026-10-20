@@ -23,16 +23,15 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.observability.logger import debug as log_debug
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.modelark.client import ModelArkGateway
-from ark_mcp.providers.modelark.seedance import _parse_success_body
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -51,11 +50,14 @@ class ModelArkFileError(BaseModel):
     message: str | None = None
 
 
-class ModelArkFile(BaseModel):
+class _FileIdentity(BaseModel):
+    id: str = Field(min_length=1, max_length=256, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+
+
+class ModelArkFile(_FileIdentity):
     """The ModelArk file object (only the fields this server reads)."""
 
-    id: str
-    status: str
+    status: str = Field(min_length=1)
     bytes: int | None = None
     mime_type: str | None = None
     filename: str | None = None
@@ -116,14 +118,40 @@ class ModelArkFilesService:
         if video_fps is not None:
             fields["preprocess_configs[video][fps]"] = f"{video_fps:g}"
         response = await self._send("upload_file", self._gateway.post_multipart("/files", fields))
-        uploaded = ModelArkFile.model_validate(_parse_success_body(response, "upload_file"))
+        uploaded = await self._parse_file(response, "upload_file")
         log_debug("modelark_file_uploaded", file_id=uploaded.id, status=uploaded.status)
         return uploaded
 
     async def retrieve(self, file_id: str) -> ModelArkFile:
         """Return the current file object."""
         response = await self._send("retrieve_file", self._gateway.get(f"/files/{file_id}"))
-        return ModelArkFile.model_validate(_parse_success_body(response, "retrieve_file"))
+        return await self._parse_file(response, "retrieve_file")
+
+    async def _parse_file(self, response: httpx.Response, operation: str) -> ModelArkFile:
+        body: Any = None
+        try:
+            body = response.json()
+            return ModelArkFile.model_validate(body)
+        except ValueError:
+            if operation == "upload_file":
+                try:
+                    identity = _FileIdentity.model_validate(body)
+                except ValidationError:
+                    identity = None
+                if identity is not None:
+                    await self.delete(identity.id)
+            raise ProviderError(
+                NormalizedProviderError(
+                    provider="modelark",
+                    operation=operation,
+                    code="INVALID_RESPONSE",
+                    message="ModelArk returned an invalid file response.",
+                    http_status=response.status_code,
+                    request_id=ModelArkGateway.extract_request_id(response),
+                    retryable=False,
+                    ambiguous_completion=operation == "upload_file",
+                )
+            ) from None
 
     async def wait_until_active(
         self,

@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+import respx
 from fastmcp.tools import ToolResult
 from pydantic import ValidationError
 
@@ -34,6 +35,32 @@ from tests.fixtures.fake_context import FakeContext
 
 _AUDIO_URL = "https://cdn.example.com/speech.mp3"
 _WAV_B64 = base64.b64encode(b"RIFF" + b"\x00" * 64).decode()
+
+
+@respx.mock
+async def test_malformed_upload_is_cleaned_and_returned_without_understanding_call(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = get_settings().modelark_base_url.rstrip("/")
+    respx.post(f"{base}/files").respond(200, json={"id": "file-malformed"})
+    deletion = respx.delete(f"{base}/files/file-malformed").respond(200)
+    captured = _capture_requests(monkeypatch)
+
+    result = await seed_audio_understand(
+        SeedAudioUnderstandInput(
+            prompt="Transcribe", audios=[{"kind": "url", "url": _AUDIO_URL}], delivery="files_api"
+        ),
+        fake_ctx,
+    )
+
+    assert isinstance(result, ToolResult)
+    assert result.is_error
+    text = result.content[0].text
+    assert "code=INVALID_RESPONSE" in text
+    assert "ambiguous_completion=True" in text
+    assert "retryable=False" in text
+    assert deletion.called
+    assert captured == []
 
 
 def _response(content: str) -> dict[str, Any]:

@@ -260,7 +260,12 @@ is unreadable without it.
 docker compose up -d --build
 ```
 
-The server finishes in-flight requests before stopping. A background job that
+The application container has a `660s` stop grace period: the default
+600-second request timeout plus 60 seconds for cleanup. Compose sends SIGTERM,
+then allows this window before forcing termination. If you increase
+`BYTEPLUS_REQUEST_TIMEOUT_MS`, also increase `stop_grace_period` in your Compose
+override by at least the same amount. This is a bounded drain window, not a
+guarantee that every long background workflow finishes. A background job that
 had already started a paid provider call is not replayed after a restart; see
 [Deployment](deployment.md#background-tasks-in-a-single-replica-deployment).
 

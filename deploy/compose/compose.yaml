@@ -16,6 +16,7 @@ services:
     build:
       context: ../..
     restart: unless-stopped
+    stop_grace_period: 660s
     env_file: .env
     environment:
       # Pinned here so .env cannot switch the service into an unsafe posture.
