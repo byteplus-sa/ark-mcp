@@ -4,7 +4,6 @@
     ".": {
       "release-type": "python",
       "package-name": "ark-mcp",
-      "release-as": "0.2.0",
       "include-component-in-tag": false,
       "include-v-in-tag": true,
       "bump-minor-pre-major": true,
