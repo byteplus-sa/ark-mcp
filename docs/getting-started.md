@@ -15,6 +15,38 @@ Multimodal MCP Server.
 
 ## Installation
 
+### Agent-Guided Setup
+
+The [`ark-mcp-setup` skill](../.agents/skills/ark-mcp-setup/SKILL.md) guides
+installation and updates in the user's preferred agent. It detects the current
+client where possible and asks when ambiguous, distinguishes Claude Code from
+Desktop and TRAE IDE from Work, and defaults to **global/user-level MCP
+registration**. Request project-only setup to change that scope.
+
+The instructions cover macOS, Linux, and native Windows, including
+Bash/PowerShell command differences, XDG/Windows known-folder paths, and
+POSIX permissions/Windows ACLs. They also distinguish local, WSL, SSH, and
+container execution and pause for private user editing on headless hosts.
+No personal usernames, account settings, or author-machine paths are required.
+
+The workflow selects the latest published stable GitHub release and stages a
+locked installation before changing client configuration. If no stable release
+is published, it asks before using a default-branch commit. Existing credentials,
+other MCP servers, and development checkouts are preserved.
+
+For credentials, it creates an owner-only plaintext `.env` outside the checkout,
+opens a local text editor for the user, and registers only the absolute
+`ARK_MCP_ENV_FILE` path in the client. Never paste keys into agent chat.
+Permissions do not prevent processes running as the same OS user from reading
+the file. See [Configuration](configuration.md) for env-file resolution.
+
+This is an agent-executed workflow, not an unattended installer. Credential
+entry and some clients' configuration UIs need user interaction. Verification
+checks startup and tool discovery without paid generation; provider key validity
+and account entitlement are not established by those local checks.
+
+### Manual Setup
+
 Clone the repository and install dependencies:
 
 ```bash
