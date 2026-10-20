@@ -315,6 +315,8 @@ no provider calls**.
 | Field | Type | Description |
 |---|---|---|
 | `models` | list[ModelInfo] | Configured models matching the filter |
+| `pricing_status` | `"live"` \| `"unavailable"` | Whether a fresh account catalog snapshot is cached |
+| `pricing_note` | string \| null | Safe explanation when prices are unavailable |
 | `services` | list[ServiceStatus] | Enablement of each optional service |
 
 **ModelInfo:** `model_id` (exact ID to pass as `model`), `family`, `kind`,
@@ -325,6 +327,12 @@ output formats), `image` (reference count, output formats, batch support,
 sizes, transparent background), `seed3d` (text-to-3D support, reference count,
 file formats, seed support), or `understanding` (modalities, media-part limit,
 thinking support, reasoning efforts, response formats).
+
+Each `ModelInfo` also has nullable `pricing` with `catalog_name`, `display_name`,
+`available`, and `charge_items` (`charge_type`, `price`, `list_price`, `unit`).
+Prices are account-specific catalog rates populated by the background refresher
+when AK/SK is configured. Discovery makes no network calls; stale or unmatched
+prices are null. See [Runtime](runtime.md#cost-estimation-toolscostpy).
 
 Understanding modalities and media limits describe the named `tool`, not
 every possible use of the underlying model. The `seed_audio_understand`
@@ -1106,6 +1114,7 @@ The tool shares `seed_understand`'s answer-shaping fields and output shape:
 |---|---|---|---|---|
 | `prompt` | string | Yes | — | 1-32,000 chars |
 | `audios` | list[UnderstandingAudioInput] | Yes | — | 1-8 clips, sent in order |
+| `delivery` | `"auto"` \| `"direct"` \| `"files_api"` | No | `"auto"` | Automatic Files API fallback, direct only, or upload URLs first; Base64 stays inline |
 | *(shared fields)* | — | No | — | As `seed_understand`, without `images`, `videos`, `model`, or `thinking` |
 
 **UnderstandingAudioInput:** `kind` (`"url"` or `"base64"`), `url`, `data`,
@@ -1125,6 +1134,14 @@ The tool shares `seed_understand`'s answer-shaping fields and output shape:
 Same fields as [`seed_understand`](#7-seed_understand) (`provider`, `model`,
 `completion_id`, `choices`, `usage`, `attempts`, `saved_path`, `saved_bytes`,
 `request_id`). `model` is the configured `SEED_AUDIO_UNDERSTANDING_MODEL`.
+Also returns `audio_delivery` (per-input `url`, `base64`, `files_api_audio`,
+or `files_api_video`) and nullable `delivery_fallback_reason`.
+
+Direct URL audio is limited to 25 MiB by the default model. Files API accepts
+up to 512 MB, including video soundtracks with sampled frames at 0.2 fps
+(frames consume input tokens). Automatic fallback only retries a 400 rejection
+mentioning audio, once. Uploaded files are deleted best-effort after the call;
+unremoved files expire after roughly one day. See [tool details](tools.md#seed_audio_understand).
 
 ### Example
 

@@ -165,7 +165,7 @@ async def run_seedream_variations(
 ) -> VariationSummary:
     """Generate one image per prompt in parallel, capturing failures per variation."""
     settings = get_settings()
-    log_cost_estimate(product="image", variations=len(prompts))
+    log_cost_estimate(product="image", variations=len(prompts), model_id=caps.model_id)
     store = get_runtime(ctx).artifact_store
     owner = get_principal(ctx)
     service = SeedreamService()
@@ -179,7 +179,9 @@ async def run_seedream_variations(
                 ctx,
                 provider="modelark",
                 product="image",
-                estimated_cost_usd=estimate_cost(product="image", variations=1),
+                estimated_cost_usd=estimate_cost(
+                    product="image", variations=1, model_id=caps.model_id
+                ),
             ):
                 progress.phase = "generating"
                 response, request_id = await call_with_retry(

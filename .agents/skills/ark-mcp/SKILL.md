@@ -44,7 +44,8 @@ flowchart LR
 1. **Discover.** `ark_list_models` returns the configured models, their
    limits, which tool takes each, and `services`. **`model` accepts exact IDs
    only**; an unknown ID fails with a did-you-mean hint. Omit `model` for the
-   default.
+   default. Optional account pricing comes from a cached snapshot; discovery
+   never calls the provider. Check `pricing_status` before relying on it.
 2. **Create.** One tool per product, run through `ark_job_submit` (see
    [Background jobs](#background-jobs)). Use `variations` instead of looking
    for variation tools, and `dry_run` (Seedance, Seedream) to check a request
@@ -137,6 +138,11 @@ flowchart LR
 
 ### Media upload and assets
 
+- **Audio understanding:** `seed_audio_understand.delivery` defaults to `auto`,
+  which retries rejected URL audio through Files API. `files_api` uploads first;
+  `direct` disables fallback. Files API supports up to 512 MB and video inputs
+  include sampled frames as well as the soundtrack. Cleanup is best effort;
+  never blindly retry an ambiguous upload timeout.
 - **`media_upload` and `media_presign` items fail independently.** Always check
   `failed` and `items[].error` (`media_presign` codes: `INVALID_KEY`,
   `NOT_OWNED`, `INTERNAL`, or a provider code). Only an over-size request

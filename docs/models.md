@@ -147,6 +147,17 @@ with no family binding. It must accept Chat Completions `input_audio` parts
 with deep thinking; `seed-2-0-lite-260428` is an interim choice and is expected
 to be replaced by a newer audio-capable model.
 
+The default model limits direct URL audio to 25 MiB. `seed_audio_understand`
+can upload URL audio/video through the Files API (up to 512 MB per file);
+video frames sampled at 0.2 fps also consume input tokens. `delivery` selects
+automatic fallback, direct-only input, or explicit Files API upload.
+See [audio understanding](tools.md#seed_audio_understand).
+
+`ark_list_models` also returns cached account-specific pricing when AK/SK
+enables the background pricing refresher. Unavailable or stale rates are null.
+Image and understanding estimates use recognized fresh catalog units;
+custom endpoint IDs without a catalog match retain built-in estimates.
+
 ## Environment variables
 
 | Env var | Format | Default |

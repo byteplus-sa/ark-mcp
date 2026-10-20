@@ -4,6 +4,13 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 
 ## Discovery with `ark_list_models`
 
+- **Cached pricing:** `models[].pricing` carries account catalog rates when a
+  fresh snapshot exists; unmatched or stale prices are null. `pricing_status`
+  and `pricing_note` explain availability. Discovery never calls the provider.
+  AK/SK and `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS>0` enable the background
+  refresher. Image/understanding estimates use recognized fresh rates; other
+  estimates and unknown endpoint IDs retain built-in fallback rates.
+
 **Call it before any generation or understanding tool.** It is read-only and idempotent, needs no auth scope, and **makes no provider calls**; it reads the server's own configuration.
 
 - **`kind`** (`video`, `image`, `3d`, `understanding`) filters the list; omit it to get every configured kind.

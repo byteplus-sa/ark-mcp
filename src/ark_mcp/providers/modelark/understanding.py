@@ -93,7 +93,9 @@ class SeedUnderstandingService:
         - Translates image/video URL/Base64 inputs into Chat API content parts.
         - Translates audio inputs into ``input_audio`` parts: URLs as
           ``{"url": ...}``; Base64 as raw ``{"data": ..., "format": ...}``, where
-          each Base64 part must carry a ``format`` key (e.g. ``wav``, ``mp3``).
+          each Base64 part must carry a ``format`` key (e.g. ``wav``, ``mp3``);
+          Files API audio as ``{"file_id": ...}``. A Files API *video* (audio
+          part kind ``video_file_id``) becomes ``video_url: {"file_id": ...}``.
         - Forces ``stream: false`` for MVP.
         - ``thinking=True`` (the default) always sends ``thinking.type='enabled'``
           and ``reasoning_effort``; ``thinking=False`` sends neither (used only for
@@ -148,6 +150,18 @@ class SeedUnderstandingService:
                             type="input_audio",
                             input_audio={"data": part["data"], "format": part["format"]},
                         )
+                    )
+                elif part.get("kind") == "file_id":
+                    content_parts.append(
+                        ChatContentPart(
+                            type="input_audio", input_audio={"file_id": part["file_id"]}
+                        )
+                    )
+                elif part.get("kind") == "video_file_id":
+                    # A Files API video: input_audio rejects video containers, so
+                    # the soundtrack is sent as a video part.
+                    content_parts.append(
+                        ChatContentPart(type="video_url", video_url={"file_id": part["file_id"]})
                     )
 
         content_parts.append(ChatContentPart(type="text", text=prompt))

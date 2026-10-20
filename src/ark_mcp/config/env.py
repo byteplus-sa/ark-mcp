@@ -227,6 +227,16 @@ class Settings(BaseSettings):
         validation_alias="BYTEPLUS_MODELARK_REGION",
         description="Region used in the OpenAPI signing credential scope.",
     )
+    modelark_pricing_refresh_seconds: int = Field(
+        default=86400,
+        ge=0,
+        validation_alias="BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS",
+        description=(
+            "Seconds between live price refreshes from the ModelArk pricing catalog "
+            "(requires AK/SK). Prices older than twice this interval are ignored and cost "
+            "estimates fall back to built-in rates. 0 disables live pricing."
+        ),
+    )
     modelark_project_name: str = Field(
         default="default",
         min_length=1,

@@ -3,6 +3,11 @@
 Remote deployment uses FastMCP Streamable HTTP with fail-closed JWT
 authentication. Local stdio remains the simplest operating mode.
 
+For a single-organization deployment, see [Self-Hosting](self-hosting.md)
+and the [Docker Compose kit](../deploy/compose/README.md). The kit includes
+TLS ingress, an authenticated internal Redis job backend, and hardened
+application settings. Its guide identifies remaining live-deployment checks.
+
 ## Build the container
 
 ```bash

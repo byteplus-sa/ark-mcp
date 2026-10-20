@@ -1,0 +1,23 @@
+# TLS-terminating reverse proxy for the Ark Seed MCP server.
+#
+# Caddy obtains a public certificate automatically when MCP_PUBLIC_HOST resolves
+# to this machine and ports 80/443 are reachable. For an internal-only hostname,
+# add `tls internal` (Caddy's private CA) or `tls /path/cert.pem /path/key.pem`
+# inside the site block below.
+
+{$MCP_PUBLIC_HOST} {
+	# Matches the server's MCP_HTTP_MAX_BODY_BYTES default (inline Base64 video).
+	request_body {
+		max_size 300MB
+	}
+
+	# Operational endpoints stay inside the Docker network. /ready also lists
+	# which providers are configured. Scrape /metrics as http://ark-mcp:3000/metrics.
+	@internal path /metrics /metrics/* /ready /ready/*
+	respond @internal 404
+
+	reverse_proxy ark-mcp:3000 {
+		# Streamable HTTP/SSE: stream responses immediately, never buffer.
+		flush_interval -1
+	}
+}

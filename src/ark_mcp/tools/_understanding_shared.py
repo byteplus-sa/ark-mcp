@@ -12,6 +12,7 @@ logged, or saved.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from fastmcp import Context
@@ -257,11 +258,18 @@ async def run_understanding[OutputT: SeedUnderstandOutput](
     image_parts: list[dict[str, Any]] | None = None,
     video_parts: list[dict[str, Any]] | None = None,
     audio_parts: list[dict[str, Any]] | None = None,
+    audio_rejection_fallback: (
+        Callable[[ProviderError], Awaitable[list[dict[str, Any]] | None]] | None
+    ) = None,
 ) -> OutputT | ToolResult:
     """Validate save_to, run the billed completion loop, and shape the output.
 
     Callers validate media and model capabilities first; this helper performs
     no billable call until save_to has been validated.
+
+    ``audio_rejection_fallback`` is consulted once, when the first request is
+    rejected. It returns replacement ``audio_parts`` to retry with (a rejected
+    request is not billed), or None to report the original error.
     """
     # Validate save_to before any billable call.
     save_target = await validate_output_target(
@@ -282,6 +290,7 @@ async def run_understanding[OutputT: SeedUnderstandOutput](
     response: ChatCompletionProviderResponse | None = None
     request_id: str | None = None
     checked: list[tuple[str, str, dict[str, Any] | list[Any] | None, SchemaViolation | None]] = []
+    fallback_used = False
     try:
         while True:
             attempts += 1
@@ -301,7 +310,10 @@ async def run_understanding[OutputT: SeedUnderstandOutput](
                 response_format=response_format_payload,
             )
             estimated_cost = log_cost_estimate(
-                product="understanding", variations=1, max_tokens=options.max_tokens
+                product="understanding",
+                variations=1,
+                max_tokens=options.max_tokens,
+                model_id=model_id,
             )
             await ctx.report_progress(progress=50, total=100)
             try:
@@ -317,6 +329,19 @@ async def run_understanding[OutputT: SeedUnderstandOutput](
                     )
                     response = attempt_response
             except ProviderError as exc:
+                if audio_rejection_fallback is not None and not checked and not fallback_used:
+                    fallback_used = True
+                    try:
+                        replacement = await audio_rejection_fallback(exc)
+                    except ProviderError as fallback_exc:
+                        await context_log(
+                            ctx, "error", f"Audio fallback failed: {fallback_exc.message}"
+                        )
+                        return provider_error_result(fallback_exc)
+                    if replacement is not None:
+                        audio_parts = replacement
+                        attempts -= 1
+                        continue
                 await context_log(ctx, "error", f"Understanding failed: {exc.message}")
                 if checked:
                     # A json_retry attempt failed, but the previous attempt was

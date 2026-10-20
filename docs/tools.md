@@ -157,6 +157,12 @@ needs no scope.
   `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`,
   `asset_library` and `asset_delete`, each with `enabled` and, when disabled,
   a `reason` naming the setting to change (never a secret value).
+- **`models[].pricing`**: cached account catalog rates, or null for an uncached
+  model. Each rate includes `charge_type`, `price`, `list_price`, and `unit`.
+- **`pricing_status` / `pricing_note`**: `live` when a fresh catalog snapshot
+  exists, otherwise `unavailable` with a safe explanation. Discovery never
+  waits for a catalog request. The background refresher requires AK/SK and
+  `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` greater than zero.
 
 Models are listed only when their service is enabled. The Seedance 2.5
 Premium binding exists only when its whitelist flag is on.
@@ -1406,6 +1412,7 @@ timeout `SEED_UNDERSTANDING_TIMEOUT_MS`.
 |---|---|---|---|
 | `prompt` | string | Yes | The question or task about the audio (1-32,000 chars) |
 | `audios` | list[UnderstandingAudioInput] | Yes | Audio clips (1-8), sent to the model in order |
+| `delivery` | `"auto"` \| `"direct"` \| `"files_api"` | No | Default `auto`: retry rejected URL audio through Files API; `direct`: return rejections; `files_api`: upload URLs first |
 | `system`, `reasoning_effort`, `response_format`, `json_retry`, `save_to`, `overwrite`, `return_content`, `temperature`, `max_tokens`, `top_p`, `repetition_penalty` | — | No | Same as [`seed_understand`](#seed_understand) |
 
 **UnderstandingAudioInput** is a `MediaSource` (`kind`, `url`, `data`,
@@ -1418,13 +1425,24 @@ timeout `SEED_UNDERSTANDING_TIMEOUT_MS`.
   `audio/aac`, or `audio/mp4` (m4a), plus their `x-` aliases. The provider
   rejects Base64 Ogg/Opus and raw PCM; pass those as URLs.
 
+The default model's direct URL limit is 25 MiB. Files API uploads support up to
+512 MB per file, including video containers whose soundtrack is analyzed along
+with sparsely sampled frames (0.2 fps). Those frames also consume input tokens.
+In `auto` mode, a 400 rejection mentioning audio triggers at most one Files API
+retry; unrelated errors are returned. Base64 stays inline in every mode.
+Uploads are processed sequentially, awaited until active, and deleted after
+success, failure, or cancellation. Best-effort deletion can fail; uploads then
+expire after roughly one day. An ambiguous upload timeout is not retried.
+
 With `seed-2-0-lite-260428`, `json_schema` is enforced by the provider but
 `json_object` is not, so use `json_schema` (or `json_retry`) when you need JSON.
 
 ### Output
 
-Returns `SeedAudioUnderstandOutput`, identical in shape to
-`SeedUnderstandOutput`. `model` is the configured audio model.
+Returns `SeedAudioUnderstandOutput`: the `SeedUnderstandOutput` fields plus
+`audio_delivery` (one route per input: `url`, `base64`, `files_api_audio`, or
+`files_api_video`) and `delivery_fallback_reason` (the rejection that triggered
+fallback, otherwise null). `model` is the configured audio model.
 
 ### Example
 

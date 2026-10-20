@@ -156,28 +156,47 @@ The daily window is the UTC calendar date, scoped per `(principal_id, tenant_id)
 
 ### Cost estimation (`tools/_cost.py`)
 
-The estimator used by parallel variation tools. Costs are per product and
-per variation only — there is **no per-model or per-family cost table**.
+The estimator behind the daily budget and the cost log. Image and understanding
+estimates use fresh, recognized prices from the ModelArk pricing catalog when
+available; unmatched models, unsupported units, and other products use built-in
+rates.
+
+**Live prices.** With AK/SK configured, the server loads the account's prices
+(discounts applied) from `ListModelChargeItems` in the background at startup and refreshes them
+every `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` (default 86400, 24 hours). The snapshot
+lives in an in-process price book (`providers/modelark/pricing.py`) keyed by
+catalog name, which is the configured model ID without its trailing version
+date. A snapshot older than twice the refresh interval is ignored. If a refresh
+fails, the previous snapshot is kept until it expires and the failure is logged
+as `pricing_refresh_failed`. The `cost_estimate` log line carries
+`price_source` (`live` or `builtin`).
+
+**Built-in rates** (used when there is no fresh price for the model):
 
 | Constant | Value |
 |---|---|
 | `COST_PER_IMAGE` | `0.03` USD |
 | `COST_PER_AUDIO_SECOND` | `0.0031` USD |
-| `COST_PER_VIDEO_TASK` | `0.07` USD |
+| `COST_PER_VIDEO_TASK` | `0.07` USD (`0.35` for Seedance 2.5) |
+| `COST_PER_STT_SECOND` | `0.0006` USD |
+| `COST_UNDERSTANDING_INPUT_PER_MTOK` / `_OUTPUT_PER_MTOK` | `0.50` / `3.00` USD |
+| `COST_PER_3D_TASK_HYPER3D` / `_HITEM3D` | `0.25` / `1.0` USD |
 | `DEFAULT_MAX_CONCURRENT` | `5` |
 
-`estimate_cost(product, variations, duration_seconds=0.0)`:
+`estimate_cost(product, variations, ..., model_id=None)`:
 
 | `product` | Formula |
 |---|---|
-| `"image"` | `round(variations * 0.03, 2)` |
+| `"image"` | Live: `variations * ToICompletion` price per piece. Built-in: `variations * 0.03`. Rounded to 4 decimals |
+| `"understanding"` | Live: `InferencePrompt` and `InferenceCompletion` per-K-token prices scaled to millions of tokens. Built-in: the per-Mtok constants. Uses `prompt_tokens` and `max_tokens` |
 | `"audio"` | `round(variations * max(duration_seconds, 10) * 0.0031, 2)` — **floor of 10 seconds per variation** |
-| `"video"` | `round(variations * 0.07, 2)` |
+| `"video"` | `round(variations * 0.07, 2)` (Seedance 2.5 uses `0.35`); live video prices are token-based and not yet used |
+| `"3d"` | Per-task built-in rate by family; live prices are not yet used |
+| `"stt"` | Built-in per-second rate with a 10 second floor |
 | (any other) | `0.0` |
 
-> Note: `SeedreamFamily` (`pro`/`lite`/`4x`) and `SeedanceFamily`
-> (`standard`/`fast`/`mini`) are model-binding constructs defined in
-> `config/env.py`, **not** cost tiers. They do not affect the estimate.
+> Live prices are looked up by model ID. Built-in video estimates retain the
+> selected model family's rate, including Seedance 2.5.
 
 ## Provider task ownership (`SQLiteTaskOwnershipStore`)
 
