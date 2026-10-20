@@ -82,6 +82,9 @@ upgrade or restart TRAE or other MCP clients automatically.
 Enable **Settings > Actions > General > Allow GitHub Actions to create and
 approve pull requests**. Keep the default workflow token permissions read-only;
 the release job requests the specific write permissions it needs.
+The publication resolver also needs job-scoped `contents: write`: GitHub
+requires push access to view draft releases, even though this job only reads
+the draft and resolves its tag.
 
 No PAT, extra registry password, or PyPI secret is needed. Release Please uses
 `GITHUB_TOKEN`. Since bot-created PRs and tags do not trigger ordinary event

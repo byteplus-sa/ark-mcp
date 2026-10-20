@@ -19,6 +19,8 @@ jobs:
   resolve:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       sha: ${{ steps.resolve.outputs.sha }}
     steps:

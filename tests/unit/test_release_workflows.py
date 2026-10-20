@@ -15,6 +15,7 @@ def test_publisher_validates_exact_tag_commit_before_writing() -> None:
     assert set(publisher["on"]) == {"workflow_dispatch"}
     assert publisher["permissions"] == {"contents": "read"}
     resolve = publisher["jobs"]["resolve"]
+    assert resolve["permissions"] == {"contents": "write"}
     assert resolve["if"] == "github.ref == 'refs/heads/main'"
     assert "git merge-base --is-ancestor" in resolve["steps"][-1]["run"]
     assert "isDraft" in resolve["steps"][-1]["run"]
