@@ -23,10 +23,16 @@ requests, not published for every commit to `main`.
    pushes the versioned Docker image, records its digest in the release notes,
    and only then publishes the GitHub Release.
 
-The initial empty `.release-please-manifest.json` is a one-time bootstrap.
-Release Please fills it with `0.2.0` in the first release PR. Published tags
-require all four version locations to agree; never reset the manifest to
-bootstrap another release.
+The initial empty `.release-please-manifest.json` and `release-as: 0.2.0`
+configuration are a one-time bootstrap. Release Please fills the manifest
+with `0.2.0` in the first release PR. **Remove `release-as` from that PR before
+merging**; CI requires its removal once the manifest is populated so it cannot
+freeze later versions. Published tags require all four version locations to
+agree; never reset the manifest to bootstrap another release.
+
+The TOML updater represents scalar fields as tagged values. Its JSONPath
+therefore filters on `name.value` to select the root package without touching
+dependency versions.
 
 ## Choosing versions
 
