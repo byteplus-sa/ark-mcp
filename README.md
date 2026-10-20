@@ -192,6 +192,14 @@ sequenceDiagram
 
 ## Quick Start
 
+For agent-guided installation or updates, use the
+[`ark-mcp-setup` skill](.agents/skills/ark-mcp-setup/SKILL.md). It detects the
+target client (including TRAE, Claude, and Codex), defaults to global MCP
+registration, prefers the latest stable release, and opens a private local
+credential file for user entry. If no stable release exists, it asks before
+using a default-branch commit. See [Getting Started](docs/getting-started.md)
+for scope and credential details.
+
 ```bash
 # Clone the repository
 git clone <repo-url> ark-mcp
