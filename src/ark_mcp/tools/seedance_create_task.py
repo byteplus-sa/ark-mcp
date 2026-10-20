@@ -384,7 +384,7 @@ async def seedance_create_task(
     if input.dry_run:
         return _preview(input, caps, media, prompts)
     if input.variations == 1:
-        return await _create_single(input, ctx, caps, media)
+        return await _create_single(input, ctx, caps, media, prompt=prompts[0])
     summary = await run_seedance_variations(input, ctx, caps, media, prompts)
     await ctx.report_progress(progress=100, total=100)
     return _variations_output(caps, summary)
@@ -411,8 +411,10 @@ async def _create_single(
     ctx: Context,
     caps: VideoCapabilities,
     media: MediaPayloads,
+    *,
+    prompt: str | None,
 ) -> SeedanceCreateTaskOutput | ToolResult:
-    result = await execute_seedance_create(input, ctx, caps, media)
+    result = await execute_seedance_create(input, ctx, caps, media, prompt=prompt)
     if isinstance(result, ToolResult):
         return result
     task_id, request_id = result

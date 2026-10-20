@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -46,6 +46,48 @@ def _patch_audio_by_prompt(
 
 class TestSeedAudioVariationsTool:
     """Integration tests for seed_audio_generate."""
+
+    @pytest.mark.parametrize("base_prompt", [None, "base prompt"])
+    @pytest.mark.parametrize("variations", [1, 2])
+    async def test_variation_prompts_override_base_prompt(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        base_prompt: str | None,
+        variations: int,
+    ) -> None:
+        generate = AsyncMock(
+            return_value=(
+                SeedAudioProviderResponse(
+                    code=0, url="https://example.com/audio.wav", duration=2.0
+                ),
+                "log-override",
+            )
+        )
+        monkeypatch.setattr(SeedAudioService, "generate", generate)
+        monkeypatch.setattr(SeedAudioService, "close", AsyncMock())
+        prompts = [f"override {index}" for index in range(variations)]
+
+        result = await seed_audio_generate(
+            SeedAudioGenerateInput(
+                text_prompt=base_prompt,
+                variation_prompts=prompts,
+                variations=variations,
+                persist=False,
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, SeedAudioGenerateOutput)
+        assert [call.args[0].text_prompt for call in generate.await_args_list] == prompts
+        if variations == 1:
+            assert result.summary is None
+            assert result.artifact is not None
+        else:
+            assert result.summary is not None
+            assert result.summary.succeeded == variations
+            assert result.summary.failed == 0
 
     async def test_three_variations_all_succeed(
         self,

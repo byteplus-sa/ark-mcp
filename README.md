@@ -36,6 +36,10 @@ products plus artifact access and an optional media upload helper:
 
 Key features:
 
+- **Model discovery** - `ark_list_models` reports configured models and the
+  tools serving them. Understanding modalities describe the named tool:
+  `seed_understand` takes images/videos; `seed_audio_understand` takes audio
+  only, with a server-configured model.
 - **Durable artifacts** — generated media is persisted locally so MCP
   resources remain usable after known provider URL lifetimes (2h audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at

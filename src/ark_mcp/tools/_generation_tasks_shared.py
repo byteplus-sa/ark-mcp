@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 
@@ -142,7 +143,13 @@ def output_urls(task: GenerationTaskResponse, kind: TaskKind) -> dict[str, str]:
 
 def needs_full_fetch(task: GenerationTaskResponse, kind: TaskKind) -> bool:
     """Whether a list entry lacks outputs that a succeeded task should carry."""
-    return task.status == "succeeded" and not output_urls(task, kind)
+    if task.status != "succeeded":
+        return False
+    if kind == "video":
+        return task.video_url is None
+    if kind == "3d":
+        return task.file_url is None
+    return task.video_url is None and task.file_url is None
 
 
 def infer_3d_mime(file_url: str) -> str:
@@ -157,7 +164,9 @@ def infer_3d_mime(file_url: str) -> str:
 def _mime_type(spec: OutputSpec, url: str) -> str:
     if spec.media_type is MediaType.THREE_D:
         return infer_3d_mime(url)
-    return "video/mp4" if spec.media_type is MediaType.VIDEO else "image/jpeg"
+    if spec.media_type is MediaType.VIDEO:
+        return "video/quicktime" if urlsplit(url).path.lower().endswith(".mov") else "video/mp4"
+    return "image/jpeg"
 
 
 def _is_durable(ref: ArtifactRef | None) -> bool:
@@ -172,24 +181,27 @@ async def persist_task_outputs(
 ) -> dict[str, ArtifactRef | None]:
     """Persist a succeeded task's outputs exactly once, keyed by output role.
 
-    Durable results are cached; when storage fails, the temporary provider
-    URL is returned with ``persistence_error`` and nothing is cached, so a
-    later poll retries.
+    Durable results are cached individually. Missing outputs are added on
+    later polls; failed outputs retain their temporary provider URL and
+    ``persistence_error`` and are retried without copying durable siblings.
     """
     specs = _OUTPUTS_BY_KIND[kind]
     async with runtime.task_artifact_locks.acquire("modelark", task.id) as singleflight:
         cached = singleflight.artifacts
         if cached is None:
             stored = await runtime.task_artifact_cache.get("modelark", task.id)
-            cached = dict(stored) if stored else None
-        if cached is not None:
-            singleflight.artifacts = cached
-            return {spec.role: cached.get(spec.cache_key) for spec in specs}
+            cached = dict(stored) if stored else {}
+        artifacts = {key: ref for key, ref in cached.items() if _is_durable(ref)}
+        singleflight.artifacts = dict(artifacts)
 
         urls = output_urls(task, kind)
         source_expiry = (datetime.now(UTC) + SOURCE_URL_LIFETIME).isoformat()
         refs: dict[str, ArtifactRef | None] = {}
         for spec in specs:
+            ref = artifacts.get(spec.cache_key)
+            if _is_durable(ref):
+                refs[spec.role] = ref
+                continue
             url = urls.get(spec.role)
             refs[spec.role] = (
                 await persist_from_url(
@@ -203,12 +215,12 @@ async def persist_task_outputs(
                 if url
                 else None
             )
+            if _is_durable(refs[spec.role]):
+                artifacts[spec.cache_key] = refs[spec.role]
+                singleflight.artifacts = dict(artifacts)
+                await runtime.task_artifact_cache.set("modelark", task.id, dict(artifacts))
 
-        if all(_is_durable(refs[spec.role]) for spec in specs if urls.get(spec.role)):
-            artifacts = {spec.cache_key: refs[spec.role] for spec in specs}
-            await runtime.task_artifact_cache.set("modelark", task.id, artifacts)
-            singleflight.artifacts = artifacts
-        else:
+        if any(not _is_durable(refs[spec.role]) for spec in specs if urls.get(spec.role)):
             log_warning("artifact_persist_failed", task_id=task.id, provider="modelark")
         return refs
 

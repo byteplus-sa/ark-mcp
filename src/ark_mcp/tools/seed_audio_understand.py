@@ -47,7 +47,7 @@ _BASE64_AUDIO_FORMATS: dict[str, str] = {
     "audio/mp4": "m4a",
 }
 
-_MAX_AUDIOS = 8
+MAX_AUDIO_INPUTS = 8
 
 
 def _normalize_mime(mime_type: str | None) -> str:
@@ -93,9 +93,9 @@ class SeedAudioUnderstandInput(UnderstandingOptions):
     audios: list[UnderstandingAudioInput] = Field(
         ...,
         min_length=1,
-        max_length=_MAX_AUDIOS,
+        max_length=MAX_AUDIO_INPUTS,
         description=(
-            f"Audio clips (1-{_MAX_AUDIOS}), sent in order. kind='url' (HTTPS) or kind='base64' "
+            f"Audio clips (1-{MAX_AUDIO_INPUTS}), sent in order. kind='url' (HTTPS) or kind='base64' "
             "(raw data without data: prefix, max 10 MB decoded) with mime_type audio/wav, "
             "audio/mpeg, audio/flac, audio/aac, or audio/mp4. Upload local files with "
             "media_upload first."

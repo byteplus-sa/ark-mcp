@@ -268,7 +268,7 @@ async def seed_audio_generate(
         await ctx.report_progress(progress=100, total=100)
         return SeedAudioGenerateOutput(summary=summary)
 
-    text_prompt = input.text_prompt or (input.variation_prompts or [""])[0]
+    text_prompt = resolve_prompts(input.text_prompt, input.variation_prompts, input.variations)[0]
     service = SeedAudioService()
     await ctx.report_progress(progress=30, total=100)
 

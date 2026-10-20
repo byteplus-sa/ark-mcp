@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 from urllib.parse import urlencode
@@ -13,6 +15,7 @@ from urllib.parse import urlencode
 import pytest
 from fastmcp.tools import ToolResult
 
+from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import refresh_capability_registry
 from ark_mcp.domain.artifacts import ArtifactRef
@@ -26,6 +29,7 @@ from ark_mcp.providers.modelark.schemas import (
 )
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.safe_downloader import DownloadedMedia
+from ark_mcp.tools._generation_tasks_shared import persist_task_outputs
 from ark_mcp.tools.gen_task_cancel_or_delete import (
     GenTaskCancelOrDeleteInput,
     GenTaskCancelOrDeleteOutput,
@@ -39,6 +43,7 @@ SEEDANCE_MODEL = "dreamina-seedance-2-0-260128"
 HYPER3D_MODEL = "hyper3d-gen2-260112"
 VIDEO_URL = "https://tos-ap-southeast.bytepluses.com/video.mp4"
 FILE_URL = "https://tos-ap-southeast.bytepluses.com/model.glb"
+LAST_FRAME_URL = "https://tos-ap-southeast.bytepluses.com/last-frame.jpg"
 ALICE = AuthContext(principal_id="alice", tenant_id="tenant-a", transport="http")
 
 
@@ -126,6 +131,181 @@ def _download(body: bytes, content_type: str, url: str) -> Any:
 
 
 class TestGenTaskGet:
+    async def test_last_frame_only_list_entry_refetches_primary_video(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        full = _task(
+            "t-last-frame",
+            "succeeded",
+            content={"video_url": VIDEO_URL, "last_frame_url": LAST_FRAME_URL},
+        )
+        calls = _serve(
+            monkeypatch,
+            [full],
+            listed=[_task(full.id, "succeeded", content={"last_frame_url": LAST_FRAME_URL})],
+        )
+
+        result = await gen_task_get(GenTaskGetInput(task_ids=[full.id]), fake_ctx)
+
+        assert isinstance(result, GenTaskGetOutput)
+        assert calls["get"] == [full.id]
+        assert [output.role for output in result.tasks[0].outputs] == ["video", "last_frame"]
+
+    @pytest.mark.parametrize("cached_role", ["video", "last_frame"])
+    async def test_partial_cache_persists_later_outputs_without_redownloading(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        temp_store: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        cached_role: str,
+    ) -> None:
+        runtime = fake_ctx.lifespan_context["runtime"]
+        urls = {"video": VIDEO_URL, "last_frame": LAST_FRAME_URL}
+        partial = _task("t-partial", "succeeded", content={f"{cached_role}_url": urls[cached_role]})
+        full = _task(
+            partial.id,
+            "succeeded",
+            content={"video_url": VIDEO_URL, "last_frame_url": LAST_FRAME_URL},
+        )
+        _serve(monkeypatch, [full])
+        with _download(b"media-bytes", "application/octet-stream", VIDEO_URL) as download:
+            first = await persist_task_outputs(runtime, AuthContext(), partial, "video")
+            second = await gen_task_get(
+                GenTaskGetInput(task_ids=[full.id], persist_output=True), fake_ctx
+            )
+            third = await gen_task_get(
+                GenTaskGetInput(task_ids=[full.id], persist_output=True), fake_ctx
+            )
+
+        assert isinstance(second, GenTaskGetOutput) and isinstance(third, GenTaskGetOutput)
+        outputs = {output.role: output for output in second.tasks[0].outputs}
+        assert all(output.persistence == "persisted" for output in outputs.values())
+        assert outputs[cached_role].artifact == first[cached_role]
+        assert third.tasks[0].outputs == second.tasks[0].outputs
+        assert sorted(call.args[0] for call in download.await_args_list) == sorted(urls.values())
+        for output in outputs.values():
+            assert output.artifact is not None
+            assert (await temp_store.get(output.artifact.id)).data == b"media-bytes"
+
+    async def test_overlapping_polls_merge_missing_outputs_under_singleflight_lock(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        runtime = fake_ctx.lifespan_context["runtime"]
+        partial = _task("t-overlap", "succeeded", content={"video_url": VIDEO_URL})
+        full = _task(
+            partial.id,
+            "succeeded",
+            content={"video_url": VIDEO_URL, "last_frame_url": LAST_FRAME_URL},
+        )
+        started = asyncio.Event()
+        release = asyncio.Event()
+        original_copy = runtime.artifact_store.copy_from_trusted_url
+        attempts: list[str] = []
+
+        async def copy(*, url: str, **kwargs: Any) -> ArtifactRef:
+            attempts.append(url)
+            if url == VIDEO_URL:
+                started.set()
+                await release.wait()
+            return await original_copy(url=url, **kwargs)
+
+        async def later_poll() -> dict[str, ArtifactRef | None]:
+            await started.wait()
+            release.set()
+            return await persist_task_outputs(runtime, AuthContext(), full, "video")
+
+        monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
+        with _download(b"media-bytes", "application/octet-stream", VIDEO_URL):
+            first, second = await asyncio.wait_for(
+                asyncio.gather(
+                    persist_task_outputs(runtime, AuthContext(), partial, "video"), later_poll()
+                ),
+                timeout=2,
+            )
+
+        assert second["video"] == first["video"]
+        assert second["last_frame"] is not None
+        assert attempts == [VIDEO_URL, LAST_FRAME_URL]
+        cached = await runtime.task_artifact_cache.get("modelark", partial.id)
+        assert cached == second
+
+    async def test_failed_output_retries_without_redownloading_durable_sibling(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        task = _task(
+            "t-retry-output",
+            "succeeded",
+            content={"video_url": VIDEO_URL, "last_frame_url": LAST_FRAME_URL},
+        )
+        _serve(monkeypatch, [task])
+        store = fake_ctx.lifespan_context["runtime"].artifact_store
+        original_copy = store.copy_from_trusted_url
+        attempts: list[str] = []
+
+        async def copy(*, url: str, **kwargs: Any) -> ArtifactRef:
+            attempts.append(url)
+            if url == LAST_FRAME_URL and attempts.count(url) == 1:
+                raise ArtifactPersistenceError(
+                    "storage_failed", "Temporary failure.", retryable=True
+                )
+            return await original_copy(url=url, **kwargs)
+
+        monkeypatch.setattr(store, "copy_from_trusted_url", copy)
+        with _download(b"media-bytes", "application/octet-stream", VIDEO_URL):
+            first = await gen_task_get(
+                GenTaskGetInput(task_ids=[task.id], persist_output=True), fake_ctx
+            )
+            second = await gen_task_get(
+                GenTaskGetInput(task_ids=[task.id], persist_output=True), fake_ctx
+            )
+
+        assert isinstance(first, GenTaskGetOutput) and isinstance(second, GenTaskGetOutput)
+        assert [output.persistence for output in first.tasks[0].outputs] == ["persisted", "failed"]
+        assert first.tasks[0].outputs[1].persistence_issue is not None
+        assert all(output.persistence == "persisted" for output in second.tasks[0].outputs)
+        assert second.tasks[0].outputs[0].artifact == first.tasks[0].outputs[0].artifact
+        assert attempts == [VIDEO_URL, LAST_FRAME_URL, LAST_FRAME_URL]
+
+    @pytest.mark.parametrize(
+        "content_type", ["application/octet-stream", "binary/octet-stream", "video/quicktime", ""]
+    )
+    async def test_mov_output_persists_and_exports_with_mov_extension(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        temp_store: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        content_type: str,
+    ) -> None:
+        url = "https://tos-ap-southeast.bytepluses.com/video.MOV?download=1#output"
+        _serve(monkeypatch, [_task("t-mov", "succeeded", content={"video_url": url})])
+        runtime = fake_ctx.lifespan_context["runtime"]
+        monkeypatch.setattr(runtime.settings, "output_roots", str(tmp_path))
+        target = tmp_path / "exports"
+
+        with _download(b"mov-bytes", content_type, url):
+            result = await gen_task_get(
+                GenTaskGetInput(task_ids=["t-mov"], persist_output=True, output_dir=str(target)),
+                fake_ctx,
+            )
+
+        assert isinstance(result, GenTaskGetOutput)
+        [output] = result.tasks[0].outputs
+        assert output.persistence == "persisted"
+        ref = output.artifact
+        assert ref is not None
+        assert ref.mime_type == "video/quicktime"
+        stored = await temp_store.get(ref.id)
+        assert stored.mime_type == "video/quicktime"
+        assert stored.data == b"mov-bytes"
+        location = await temp_store.locate(ref.id)
+        assert location.path is not None and location.path.suffix == ".mov"
+        assert ref.export_error is None
+        assert ref.local_path == str(target / f"{ref.id}.mov")
+        assert Path(ref.local_path).read_bytes() == b"mov-bytes"
+
     async def test_queued_task_reports_status_and_poll_hint(
         self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:

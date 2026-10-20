@@ -302,8 +302,13 @@ class TestSeedreamUnifiedModes:
         with pytest.raises(ValueError, match=message):
             await seedream_generate_image(SeedreamGenerateInput(**arguments), fake_ctx)
 
+    @pytest.mark.parametrize("scheme", ["https", "HTTPS", "hTtPs"])
     async def test_dry_run_returns_requests_and_cost_without_generating(
-        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        scheme: str,
     ) -> None:
         generate = AsyncMock(side_effect=AssertionError("dry_run must not generate"))
         monkeypatch.setattr(SeedreamService, "generate", generate)
@@ -312,7 +317,9 @@ class TestSeedreamUnifiedModes:
                 prompt="a fox",
                 variations=3,
                 seed=7,
-                images=[{"kind": "url", "url": "https://cdn.example.com/private/ref.png?sig=x"}],
+                images=[
+                    {"kind": "url", "url": f"{scheme}://cdn.example.com/private/ref.png?sig=x"}
+                ],
                 dry_run=True,
             ),
             fake_ctx,
@@ -320,7 +327,9 @@ class TestSeedreamUnifiedModes:
         assert isinstance(result, SeedreamGenerateOutput)
         assert result.dry_run is True and result.preview is not None
         assert [request["seed"] for request in result.preview.requests] == [7, 8, 9]
-        assert result.preview.requests[0]["image"] == "https://cdn.example.com"
+        assert all(
+            request["image"] == "https://cdn.example.com" for request in result.preview.requests
+        )
         assert result.preview.estimated_cost_usd == 0.09
         generate.assert_not_awaited()
 

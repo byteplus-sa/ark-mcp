@@ -224,8 +224,10 @@ missing required fields, and non-loopback HTTP without JWT.
 ## Checking capability drift
 
 The server validates requests against the static registry in
-`config/model_capabilities.py`, and `ark_list_models` reports the same data
-to clients. To compare the registry with BytePlus's ArkModels catalog:
+`config/model_capabilities.py`. `ark_list_models` reports those limits to
+clients, restricting understanding modalities and media counts to the named
+tool's input contract (audio-only, up to eight clips for
+`seed_audio_understand`). To compare the registry with BytePlus's ArkModels catalog:
 
 ```bash
 make audit-capabilities CATALOG=path/to/arkmodels.json

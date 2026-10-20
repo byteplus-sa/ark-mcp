@@ -292,10 +292,12 @@ async def execute_seedance_create(
     ctx: Context,
     caps: VideoCapabilities,
     media: MediaPayloads,
+    *,
+    prompt: str | None,
 ) -> tuple[str, str | None] | ToolResult:
     """Create one Seedance task; returns ``(task_id, request_id)`` or a provider error result."""
     await ctx.report_progress(progress=50, total=100)
-    provider_request = build_seedance_request(request, caps, media, prompt=request.prompt)
+    provider_request = build_seedance_request(request, caps, media, prompt=prompt)
     log_cost_estimate(product="video", variations=1, video_family=caps.family)
     service = SeedanceService()
     try:

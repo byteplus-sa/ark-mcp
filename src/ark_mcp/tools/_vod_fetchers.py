@@ -342,8 +342,8 @@ async def persist_vod_outputs(
         if any(source.role not in known for source in snapshot.sources):
             known = {**await _cached_artifacts(ctx, runtime, snapshot.task_id, label), **known}
 
+        singleflight.artifacts = dict(known)
         outputs: list[TaskOutputFile] = []
-        created = False
         for source in snapshot.sources:
             outcome: ArtifactRef | ArtifactPersistenceIssue | None = known.get(source.role)
             if outcome is None:
@@ -352,17 +352,16 @@ async def persist_vod_outputs(
                 )
                 if isinstance(outcome, ArtifactRef):
                     known[source.role] = outcome
-                    created = True
+                    singleflight.artifacts = dict(known)
+                    try:
+                        await runtime.task_artifact_cache.set(
+                            _PROVIDER_KEY, snapshot.task_id, dict(known)
+                        )
+                    except Exception:
+                        await context_log(
+                            ctx,
+                            "warning",
+                            f"VOD {label} artifact cache update failed; the artifact remains available.",
+                        )
             outputs.append(_output_file(source, snapshot.source_expires_at, outcome))
-
-        singleflight.artifacts = dict(known)
-        if created:
-            try:
-                await runtime.task_artifact_cache.set(_PROVIDER_KEY, snapshot.task_id, dict(known))
-            except Exception:
-                await context_log(
-                    ctx,
-                    "warning",
-                    f"VOD {label} artifact cache update failed; the artifact remains available.",
-                )
     return outputs

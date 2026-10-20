@@ -326,6 +326,12 @@ sizes, transparent background), `seed3d` (text-to-3D support, reference count,
 file formats, seed support), or `understanding` (modalities, media-part limit,
 thinking support, reasoning efforts, response formats).
 
+Understanding modalities and media limits describe the named `tool`, not
+every possible use of the underlying model. The `seed_audio_understand`
+entry advertises only `audio` (up to eight clips); it has no `model` argument.
+Even when audio and visual defaults share an ID, use `seed_understand` for
+images/videos. Neither route supports mixed audio/visual requests.
+
 **ServiceStatus:** `service`, `enabled`, and `reason` (the env var or flag that
 enables a disabled service; never a secret value). Services: `modelark`,
 `seedance_2_5_premium`, `seed3d`, `seed_audio`, `speech_to_text`,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -44,6 +45,45 @@ def _patch_seedance_by_prompt(
 
 class TestSeedanceVariationsTool:
     """Integration tests for seedance_create_task."""
+
+    @pytest.mark.parametrize("base_prompt", [None, "base prompt"])
+    @pytest.mark.parametrize("variations", [1, 2])
+    async def test_prompt_overrides_match_preview_and_submission(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        base_prompt: str | None,
+        variations: int,
+    ) -> None:
+        create = AsyncMock(return_value=("task-override", "req-override"))
+        monkeypatch.setattr(SeedanceService, "create_task", create)
+        monkeypatch.setattr(SeedanceService, "close", AsyncMock())
+        prompts = [f"override {index}" for index in range(variations)]
+        request = SeedanceCreateTaskInput(
+            prompt=base_prompt,
+            variation_prompts=prompts,
+            variations=variations,
+            dry_run=True,
+        )
+
+        preview = await seedance_create_task(request, fake_ctx)
+
+        assert isinstance(preview, SeedanceCreateTaskOutput)
+        assert preview.preview is not None
+        assert [body["content"] for body in preview.preview.requests] == [
+            [{"type": "text", "text": prompt}] for prompt in prompts
+        ]
+        create.assert_not_awaited()
+
+        result = await seedance_create_task(request.model_copy(update={"dry_run": False}), fake_ctx)
+
+        assert isinstance(result, SeedanceCreateTaskOutput)
+        assert result.submitted == variations
+        assert result.failed == 0
+        assert [
+            call.args[0].model_dump(exclude_none=True) for call in create.await_args_list
+        ] == preview.preview.requests
 
     async def test_three_tasks_all_succeed(
         self,

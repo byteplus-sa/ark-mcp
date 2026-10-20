@@ -149,7 +149,7 @@ needs no scope.
   - `image`: reference maximum, output formats, batch support, sizes,
     transparent-background support.
   - `3d`: text-to-3D support, reference maximum, file formats, seed support.
-  - `understanding`: accepted modalities, media-part maximum, thinking,
+  - `understanding`: modalities accepted by the named `tool`, media-part maximum, thinking,
     reasoning efforts, response formats. Both the default model for requests
     with audio and the default for requests without audio are marked
     `is_default`.
@@ -160,6 +160,12 @@ needs no scope.
 
 Models are listed only when their service is enabled. The Seedance 2.5
 Premium binding exists only when its whitelist flag is on.
+
+The audio-model entry names `seed_audio_understand`, advertises only `audio`
+with an eight-clip limit, and uses the server-configured model without a
+`model` argument. This remains true when audio and visual defaults share an
+ID. Image/video requests use `seed_understand`; discovery does not imply
+that the two handlers can accept mixed audio/visual inputs.
 
 ## Background-job tools
 
@@ -522,8 +528,9 @@ persisted (with `local_path` when also exported), and a safe
 success.
 
 With `persist_output=true`, concurrent first polls share one artifact copy per
-task and the result is cached by task ID, so repeated polls do not
-re-download. Durable copies are capped by the media policy (200 MiB for
+task output and each completed track is cached immediately. Cancelling while
+a later audio track downloads preserves earlier tracks for subsequent polls.
+Repeated polls reuse cached artifacts. Durable copies are capped by the media policy (200 MiB for
 video). GET polling is automatically retried on retryable errors: 429, 5xx,
 and poll timeouts or connection failures (a poll creates no provider state).
 
@@ -1022,9 +1029,11 @@ are waiting on in one call. Registered when `BYTEPLUS_MODELARK_API_KEY` is set
 
 The server makes one provider list call per page of 20 task IDs (at most
 three), filtered by the requested IDs, and re-fetches individually only the
-tasks missing from the list or reported succeeded without an output URL.
-Persistence uses a per-task single-flight cache, so overlapping polls never
-download the same file twice.
+tasks missing from the list or reported succeeded without their primary
+video/model-file URL; a last-frame URL alone is not sufficient.
+Persistence uses a per-task single-flight cache. Later polls fill missing or
+failed outputs without downloading cached successful outputs again. MOV
+outputs retain `video/quicktime` and `.mov` filenames on directory export.
 
 **Execution:** Optional background job; background execution is required when
 `persist_output=true`.

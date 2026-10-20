@@ -14,7 +14,7 @@ def redact_media_url(url: str) -> str:
     """
     if url.startswith("data:"):
         return f"<base64: {len(url)} bytes>"
-    if url.startswith("https://"):
-        parts = urlsplit(url)
+    parts = urlsplit(url)
+    if parts.scheme == "https":
         return f"{parts.scheme}://{parts.netloc}"
     return url

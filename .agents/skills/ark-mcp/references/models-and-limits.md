@@ -9,7 +9,7 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 - **`kind`** (`video`, `image`, `3d`, `understanding`) filters the list; omit it to get every configured kind.
 - **`models[]`** has one entry per configured model whose service is enabled (empty when ModelArk is not configured; `3d` models appear only when 3D is enabled). Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, `seed3d`, or `understanding`).
 - **`model_id` is the exact value the `model` argument accepts.** Omitting `model` uses the entry with `is_default: true`.
-- **`tool`** names the tool that takes the model.
+- **`tool`** names the tool that serves the model. Understanding modalities and media limits describe this route, not every possible use of the underlying model. `seed_audio_understand` advertises only `audio` (up to eight clips); use `seed_understand` for images/videos. Neither handler accepts mixed audio/visual requests.
 - **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seedance_2_5_premium`, `seed3d`, `seed_audio`, `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
 
 | `kind` | `tool` | Notes on `is_default` |
@@ -125,7 +125,7 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 
 - **Max media parts counts images plus videos together** in `seed_understand`; exceeding it is rejected before the call. `seed_audio_understand` accepts 1-8 audio clips.
 - **Deep thinking is always on** for Seed 2.1; `reasoning_effort` sets its depth (default `medium`). `ark_list_models` reports `supports_thinking` and `reasoning_efforts` per model.
-- **Audio model.** The default audio model does not enforce `json_object`; use `json_schema` for structured output from `seed_audio_understand`. If the audio model ID is also a bound Seed 2.1 model, it is listed once with `audio` among its modalities and `tool: seed_audio_understand`.
+- **Audio model.** The default audio model does not enforce `json_object`; use `json_schema` for structured output from `seed_audio_understand`. If the audio model ID is also a bound Seed 2.1 model, it is listed once with only `audio` in its advertised modalities and `tool: seed_audio_understand`. The same bound ID remains usable through `seed_understand` for images/videos.
 - **Default routing.** With `model` omitted, `seed_understand` uses the non-audio default; `seed_audio_understand` always uses the audio model.
 - For long-form transcription with word timings and utterances use `speech_to_text`, not either understanding tool. Media input forms and limits: [understanding-media-assets.md](understanding-media-assets.md).
 

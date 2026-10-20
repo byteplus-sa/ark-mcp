@@ -16,6 +16,7 @@ from ark_mcp.config.model_capabilities import (
     VideoCapabilities,
     get_capability_registry,
 )
+from ark_mcp.tools.seed_audio_understand import MAX_AUDIO_INPUTS
 
 ModelKind = Literal["video", "image", "3d", "understanding"]
 UnderstandingModality = Literal["image", "video", "audio"]
@@ -97,7 +98,7 @@ class UnderstandingModelLimits(BaseModel):
     """Per-model limits for a multimodal understanding model."""
 
     modalities: list[UnderstandingModality] = Field(
-        ..., description="Input media modalities this model accepts."
+        ..., description="Input media modalities accepted by the named tool for this model."
     )
     max_media_parts: int = Field(..., description="Maximum media inputs per request.")
     supports_thinking: bool = Field(..., description="Whether deep thinking is available.")
@@ -108,7 +109,9 @@ class UnderstandingModelLimits(BaseModel):
 class ModelInfo(BaseModel):
     """One configured model binding."""
 
-    model_id: str = Field(..., description="Exact configured model ID to pass as `model`.")
+    model_id: str = Field(
+        ..., description="Configured model ID; pass as `model` when the tool supports selection."
+    )
     family: str = Field(..., description="Logical model family.")
     kind: ModelKind = Field(..., description="Model kind.")
     is_default: bool = Field(
@@ -119,7 +122,9 @@ class ModelInfo(BaseModel):
             "are both marked."
         ),
     )
-    tool: str = Field(..., description="Tool that accepts this model.")
+    tool: str = Field(
+        ..., description="Tool serving this model; understanding limits describe this route."
+    )
     video: VideoModelLimits | None = Field(None, description="Limits for video models.")
     image: ImageModelLimits | None = Field(None, description="Limits for image models.")
     seed3d: Seed3DModelLimits | None = Field(None, description="Limits for 3D models.")
@@ -240,15 +245,16 @@ def _seed3d_info(caps: Seed3DCapabilities, settings: Settings) -> ModelInfo:
 
 
 def _understanding_info(caps: UnderstandingCapabilities, settings: Settings) -> ModelInfo:
-    modalities: list[UnderstandingModality] = []
-    if caps.supports_image:
-        modalities.append("image")
-    if caps.supports_video:
-        modalities.append("video")
-    if caps.supports_audio:
-        modalities.append("audio")
-    defaults = {settings.seed_understanding_default_model, settings.seed_audio_understanding_model}
     is_audio_model = caps.model_id == settings.seed_audio_understanding_model
+    modalities: list[UnderstandingModality] = []
+    if is_audio_model:
+        modalities.append("audio")
+    else:
+        if caps.supports_image:
+            modalities.append("image")
+        if caps.supports_video:
+            modalities.append("video")
+    defaults = {settings.seed_understanding_default_model, settings.seed_audio_understanding_model}
     return ModelInfo(
         model_id=caps.model_id,
         family=caps.family.value,
@@ -257,7 +263,7 @@ def _understanding_info(caps: UnderstandingCapabilities, settings: Settings) -> 
         tool=AUDIO_UNDERSTANDING_TOOL if is_audio_model else UNDERSTANDING_TOOL,
         understanding=UnderstandingModelLimits(
             modalities=modalities,
-            max_media_parts=caps.max_media_parts,
+            max_media_parts=MAX_AUDIO_INPUTS if is_audio_model else caps.max_media_parts,
             supports_thinking=caps.supports_thinking,
             reasoning_efforts=list(caps.reasoning_efforts),
             response_formats=list(caps.response_formats),

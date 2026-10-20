@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from pathlib import Path
 from typing import Any
@@ -433,6 +434,55 @@ async def test_partially_cached_tracks_only_copy_the_missing_ones(
     cached = await runtime.task_artifact_cache.get("vod-mediakit", TASK_ID)
     assert cached is not None
     assert set(cached) == {"voice", "background", "music", "sfx"}
+
+
+async def test_cancellation_during_second_track_preserves_first_track_for_retry(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_services(monkeypatch)
+    runtime = fake_ctx.lifespan_context["runtime"]
+    voice = _artifact("audio")
+    copy = AsyncMock(side_effect=[voice, asyncio.CancelledError()])
+    monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
+    request = VodGetTaskInput(task_id=TASK_ID, operation="separate_audio", persist_output=True)
+
+    with pytest.raises(asyncio.CancelledError):
+        await vod_get_task(request, fake_ctx)
+
+    cached = await runtime.task_artifact_cache.get("vod-mediakit", TASK_ID)
+    copy.side_effect = None
+    copy.return_value = _artifact("audio").model_copy(update={"id": "remaining-track"})
+    result = await vod_get_task(request, fake_ctx)
+
+    assert isinstance(result, VodTaskOutput)
+    assert result.outputs[0].artifact == voice
+    assert cached == {"voice": voice}
+    urls = [call.kwargs["url"] for call in copy.await_args_list]
+    assert sum(url.endswith("/voice.wav") for url in urls) == 1
+    assert sum(url.endswith("/background.wav") for url in urls) == 2
+    assert copy.await_count == 5
+    assert all(output.persistence == "persisted" for output in result.outputs)
+
+
+async def test_per_track_cache_failures_preserve_success_and_attempt_remaining_tracks(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stub_services(monkeypatch)
+    runtime = fake_ctx.lifespan_context["runtime"]
+    copy = AsyncMock(return_value=_artifact("audio"))
+    cache_set = AsyncMock(side_effect=RuntimeError("cache unavailable"))
+    monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
+    monkeypatch.setattr(runtime.task_artifact_cache, "set", cache_set)
+
+    result = await vod_get_task(
+        VodGetTaskInput(task_id=TASK_ID, operation="separate_audio", persist_output=True),
+        fake_ctx,
+    )
+
+    assert isinstance(result, VodTaskOutput)
+    assert all(output.persistence == "persisted" for output in result.outputs)
+    assert copy.await_count == 4
+    assert any("artifact cache update failed" in message for message in fake_ctx.messages)
 
 
 def test_input_rejects_unknown_operation_and_unsafe_task_id() -> None:

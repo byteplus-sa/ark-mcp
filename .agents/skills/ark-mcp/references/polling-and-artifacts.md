@@ -26,7 +26,7 @@ flowchart LR
 - **`persist_output=true` needs background execution** (`ark_job_submit` or native task augmentation). In a foreground call it returns an error result telling you to use `persist_output=false`.
 - **`omnihuman_get_task` defaults to `persist_output=true`**, so a foreground status check must pass `false` explicitly.
 - **Never resubmit a create tool to poll.** `queued`, `running` and `processing` are not failures, and a second create call starts a second billed task. After a local timeout, disconnect or client restart, poll the same task ID again.
-- **Persistence is once per task.** Concurrent and repeated polls share one durable copy (per-task lock plus cache), so persisting again is cheap and returns the same artifacts. Only a failed persistence is retried by a later persist run.
+- **Persistence is cached per task and output.** Concurrent and repeated polls reuse each cached durable copy. Missing or failed generation outputs can be persisted later without copying successful siblings again. VOD audio tracks are cached as each completes, so cancellation during a later track retains the completed tracks.
 - Local files written by a persist run (`output_dir`, `output_path`) need `OUTPUT_ROOTS` on the server; see [background-job-output.md](background-job-output.md).
 
 ```json
@@ -49,7 +49,7 @@ One toolset serves Seedance (every model generation) and Hyper3D/Hitem3d. It nee
 - **`outputs` is empty until `succeeded`.** Video tasks produce `video` and `last_frame`; 3D tasks produce `model_file` (usually a zip). Each output always keeps its `source_url` (expires in about 24 h); `persistence` is `not_requested`, `persisted` or `failed`.
 - **Tasks whose model is not configured on this server have `kind: "unknown"` and are never persisted.** Their outputs stay `not_requested` even with `persist_output=true`; copy them with `seed_media_persist_url` before the URL expires.
 - **Draft tasks:** a succeeded Seedance Draft reports `draft: true`; pass its `task_id` as `draft_task_id` to `seedance_create_task` within 7 days of `created_at`.
-- **`output_dir`** (stdio only) writes each succeeded task's files as `<artifact_id>.<ext>` and requires `persist_output=true`.
+- **`output_dir`** (stdio only) writes each succeeded task's files as `<artifact_id>.<ext>` and requires `persist_output=true`. MOV video outputs retain `video/quicktime` and the `.mov` extension, including when their download uses a generic Content-Type.
 
 ### `gen_task_list`
 

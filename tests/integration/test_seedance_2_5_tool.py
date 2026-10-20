@@ -266,10 +266,14 @@ class TestSeedance25CreateTaskVariationsTool:
         assert result.submitted == 3
         assert result.failed == 0
 
+    @pytest.mark.parametrize("scheme", ["https", "HTTPS", "hTtPs"])
+    @pytest.mark.parametrize("media_kind", ["images", "videos", "audios"])
     async def test_dry_run_returns_redacted_requests_without_billing(
         self,
         seedance_2_5_ctx: FakeContext,
         monkeypatch: pytest.MonkeyPatch,
+        scheme: str,
+        media_kind: str,
     ) -> None:
         async def fail_create(self: SeedanceService, request: object) -> tuple[str, str | None]:
             raise AssertionError("dry_run must not submit")
@@ -279,7 +283,7 @@ class TestSeedance25CreateTaskVariationsTool:
             SeedanceCreateTaskInput(
                 variations=2,
                 variation_prompts=["a fox", "a cat"],
-                images=["https://cdn.example.com/private/frame.png?sig=secret"],
+                **{media_kind: [f"{scheme}://cdn.example.com/private/reference?sig=secret"]},
                 dry_run=True,
             ),
             seedance_2_5_ctx,
@@ -290,8 +294,9 @@ class TestSeedance25CreateTaskVariationsTool:
         assert result.preview is not None
         assert len(result.preview.requests) == 2
         assert result.preview.estimated_cost_usd == 0.7
-        image = result.preview.requests[0]["content"][1]
-        assert image["image_url"]["url"] == "https://cdn.example.com"
+        for request in result.preview.requests:
+            media = request["content"][1]
+            assert media[f"{media_kind[:-1]}_url"]["url"] == "https://cdn.example.com"
         assert await get_runtime_owned(seedance_2_5_ctx) == set()
 
     async def test_partial_variation_failures_are_reported(
