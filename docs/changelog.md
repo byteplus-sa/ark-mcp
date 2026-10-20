@@ -5,6 +5,10 @@
 
 ### ⚠ BREAKING CHANGES
 
+* 0.2.0 consolidates the MCP surface to 38 capabilities and removes old per-model,
+  per-variation, and per-operation tool names without a compatibility layer.
+  Update clients using the [0.2 migration guide](https://github.com/byteplus-sa/ark-mcp/blob/v0.2.0/docs/migration-0.2.md)
+  and restart MCP sessions to refresh cached tool definitions.
 * rename modelark-mcp server and skill to ark-mcp
 
 ### Features
