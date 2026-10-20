@@ -1,0 +1,149 @@
+name: Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag created by Release Please (vX.Y.Z)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Resolve an existing tag on main
+        id: resolve
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          sha="$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")"
+          git merge-base --is-ancestor "$sha" origin/main
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+  validate:
+    needs: resolve
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+
+  security:
+    needs: resolve
+    permissions:
+      contents: read
+      security-events: write
+    uses: ./.github/workflows/codeql.yml
+    with:
+      ref: ${{ needs.resolve.outputs.sha }}
+
+  publish:
+    needs: [resolve, validate, security]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.26"
+          python-version: "3.12"
+
+      - name: Validate and build release distributions
+        run: |
+          uv lock --check
+          python scripts/release_checks.py --tag "$RELEASE_TAG"
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          uv build --no-sources
+          python scripts/release_checks.py --tag "$RELEASE_TAG" --artifacts dist
+
+      - name: Select version and latest image tags
+        id: tags
+        run: |
+          current="${RELEASE_TAG#v}"
+          latest="$(gh release list --limit 1000 --json tagName,isDraft,isPrerelease |
+            jq -r --arg current "$current" '
+              ([$current | split(".") | map(tonumber)] +
+              [.[] | select(.isDraft == false and .isPrerelease == false) |
+              .tagName | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$")) |
+              ltrimstr("v") | split(".") | map(tonumber)]) | max ==
+              ($current | split(".") | map(tonumber))')"
+          image="ghcr.io/${GH_REPO,,}"
+          {
+            echo "latest=$latest"
+            echo "images<<EOF"
+            echo "$image:$RELEASE_TAG"
+            echo "$image:$current"
+            if [[ "$latest" == true ]]; then echo "$image:latest"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload distributions without replacing differing assets
+        run: |
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          existing="$(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')"
+          for asset in dist/*.whl dist/*.tar.gz dist/SHA256SUMS; do
+            name="$(basename "$asset")"
+            if grep -Fxq "$name" <<< "$existing"; then
+              gh release download "$RELEASE_TAG" --pattern "$name" --dir "$RUNNER_TEMP/release-assets"
+              cmp "$asset" "$RUNNER_TEMP/release-assets/$name"
+            else
+              gh release upload "$RELEASE_TAG" "$asset"
+            fi
+          done
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish versioned image
+        id: image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.images }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.sha }}
+            org.opencontainers.image.version=${{ inputs.tag }}
+
+      - name: Publish the completed GitHub Release
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          IS_LATEST: ${{ steps.tags.outputs.latest }}
+        run: |
+          gh release view "$RELEASE_TAG" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
+          printf '\n## Container\n\n`ghcr.io/%s@%s`\n' "${GH_REPO,,}" "$IMAGE_DIGEST" >> "$RUNNER_TEMP/release-notes.md"
+          gh release edit "$RELEASE_TAG" --draft=false --latest="$IS_LATEST" --notes-file "$RUNNER_TEMP/release-notes.md"

@@ -8,6 +8,14 @@ generation through a typed, safe tool surface.
 > the old per-model, per-variation and per-operation tools with no
 > compatibility layer. See the [migration guide](docs/migration-0.2.md).
 
+## Releases
+
+Version bumps and changelogs are reviewed in automated release PRs. Merging
+one publishes a tested GitHub Release with Python distributions and versioned
+GHCR images. `latest` follows releases; `edge` follows passing main builds.
+See [release policy and installation](docs/releases.md) and the
+[changelog](docs/changelog.md). PyPI publication is not configured.
+
 ## What It Does
 
 The server provides a conditional MCP tool surface across several BytePlus
