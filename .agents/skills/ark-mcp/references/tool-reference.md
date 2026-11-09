@@ -110,9 +110,9 @@ Needs `BYTEPLUS_MODELARK_API_KEY`. **`seedream_generate_image` is the only Seedr
 
 ### `max_images` versus `variations`
 
-- **`max_images`** is one provider call returning up to 15 images: one request, one `usage`, results in `artifacts` and `item_errors`. Only on batch-capable families (Lite, 4.x); **Seedream 5.0 Pro does not support it**.
+- **`max_images`** is one provider call returning up to 15 images: one request, one `usage`, results in `artifacts` and `item_errors`. Only on batch-capable families (Lite, 4.x); **Seedream 5.5 and 5.0 Pro do not support it**.
 - **`variations`** is separate parallel calls: works on every model, supports `variation_prompts` and per-variation seeds, results in `summary` (`artifacts` and `usage` stay empty).
-- **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On Pro, use `variations`.
+- **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On 5.5 and Pro, use `variations`.
 
 ### Seeds
 
@@ -126,10 +126,19 @@ A fixed `seed` with the same prompt reproduces a single image. With `variations 
 
 ### Transparent background
 
-`background="transparent"` **edits exactly one PNG input that already has transparent pixels and keeps that transparency**. It does **not** cut a subject out of an opaque image. Requires Seedream 5.0 Pro and `output_format` omitted or `png`. A Base64 input whose `mime_type` is not `image/png` is rejected locally; an opaque PNG fails at the provider with HTTP 400 ("transparent background requires a PNG input with at least one transparent pixel"). To get transparency from an opaque image, remove the background with another tool first.
+`background="transparent"` requires `output_format` omitted or `png`.
+Seedream 5.5 (early-access default) accepts text-only prompts and reference images
+without alpha. It defaults to PNG even for ordinary generation. Omit
+`prompt_optimization` on 5.5; the control is not exposed yet.
+
+On Seedream 5.0 Pro, transparency **edits exactly one PNG input that already has
+transparent pixels**. It does not remove an opaque background. Non-PNG Base64
+input is rejected locally; an opaque PNG fails at the provider with HTTP 400.
+The following example selects Pro, which must be bound by the operator:
 
 ```json
 {
+  "model": "dola-seedream-5-0-pro-260628",
   "prompt": "Turn the circle into a glossy ceramic button, keep the background transparent",
   "images": [{ "kind": "url", "url": "https://cdn.example.com/circle-rgba.png" }],
   "background": "transparent",

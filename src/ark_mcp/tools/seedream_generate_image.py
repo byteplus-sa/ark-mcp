@@ -85,7 +85,7 @@ class SeedreamGenerateInput(BaseModel):
         None,
         description="Exact model ID from ark_list_models(kind='image'); the default if omitted.",
     )
-    size: str | None = Field(None, description="Output size, e.g. '2048x2048'.")
+    size: str | None = Field(None, description="Output size, e.g. '2K' or '2048x2048'.")
     seed: int | None = Field(
         None,
         ge=-1,
@@ -105,7 +105,8 @@ class SeedreamGenerateInput(BaseModel):
         ),
     )
     output_format: Literal["png", "jpeg"] | None = Field(
-        None, description="Output image format (per-model set in ark_list_models)."
+        None,
+        description="Output format. Defaults to png on 5.5 and for transparent backgrounds; otherwise provider default.",
     )
     response_format: Literal["url", "b64_json"] | None = Field(
         None, description="Provider response format: URL or Base64 JSON."
@@ -115,15 +116,15 @@ class SeedreamGenerateInput(BaseModel):
         None,
         description=(
             "standard (quality) or fast (latency). Default: SEEDREAM_PROMPT_OPTIMIZATION_MODE "
-            "on 5.0 Pro, the provider's on other models."
+            "on 5.0 Pro. Not exposed on early-access 5.5; omit to use the provider default."
         ),
     )
     background: Literal["opaque", "transparent"] | None = Field(
         None,
         description=(
-            "Seedream 5.0 Pro only. 'transparent' edits exactly one PNG input that already has "
-            "transparent pixels and keeps them (png output); it does not cut out an opaque "
-            "background."
+            "'transparent' requires png output. Seedream 5.5 supports text-only generation "
+            "and references without alpha. On 5.0 Pro it requires exactly one PNG input "
+            "with transparent pixels and preserves that transparency."
         ),
     )
     variations: int = Field(
@@ -246,8 +247,9 @@ async def seedream_generate_image(
 
     Pass images to edit or use as references; point or bbox targets a spot on the first
     image. variations (up to 10) run in parallel; max_images is one provider batch on models
-    that support it. background='transparent' edits a PNG that already has transparent
-    pixels (5.0 Pro). Model limits: ark_list_models(kind='image'); requests outside them
+    that support it. background='transparent' generates transparent PNGs from text or
+    references on 5.5; 5.0 Pro requires an already-transparent PNG input.
+    Model limits: ark_list_models(kind='image'); requests outside them
     are rejected with every problem listed. dry_run=true returns request bodies and a cost
     estimate. Run through ark_job_submit.
     """
@@ -312,7 +314,7 @@ async def _generate_single(
 
     await ctx.report_progress(progress=80, total=100)
     artifacts = await store_response_images(
-        ctx, response, persist=input.persist, output_format=input.output_format
+        ctx, response, persist=input.persist, output_format=request.output_format
     )
     await ctx.report_progress(progress=100, total=100)
     log_info(

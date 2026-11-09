@@ -22,8 +22,8 @@ Three pillars:
 - **Clients** — connect to any MCP server (local or remote, programmatic or CLI) with full protocol support.
 - **Apps** — give tools interactive UIs rendered directly in the conversation.
 
-> **Verified version: `v4.0.3` (September 4, 2026).** This skill targets
-> `fastmcp>=4.0,<5`.
+> **Verified version: `v4.1.6` (November 9, 2026).** This skill targets
+> `fastmcp>=4.1.6,<4.2`.
 > Docs reflect the `main` branch; features are marked with version badges (e.g.
 > `New in version: 3.0.0`). Verify unreleased features against live docs.
 
@@ -81,6 +81,22 @@ FASTMCP_LOG_LEVEL=DEBUG fastmcp dev server.py
 # Install to Claude Desktop / Cursor / Gemini
 fastmcp install server.py
 ```
+
+## FastMCP 4.1 Upgrade Notes
+
+The project pins the patched 4.1 line. Version 4.1 tightens MultiAuth identity
+scopes, OpenAPI path parameters, skill-directory containment and regex tool
+search. Stateful HTTP sessions now inherit the SDK's 30-minute idle timeout;
+clients must reconnect expired sessions. Drain pending tasks before upgrading.
+
+Version 4.1.2 fixes authorization after component transforms and denied-resource
+template fallback. OAuth client-credentials providers must explicitly configure
+`issuer` for issuer binding; upgrading alone does not enable that protection.
+This project uses its JWT verifier rather than those OAuth providers.
+
+Sources: [4.1.0](https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.0),
+[4.1.2](https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.2),
+[4.1.6](https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.6).
 
 ## What's New in v4 (vs v3)
 
@@ -209,7 +225,7 @@ uv add --upgrade fastmcp
 Pin in `requirements.txt` / `pyproject.toml`:
 
 ```
-fastmcp>=4.0,<5
+fastmcp>=4.1.6,<4.2
 ```
 
 Most v3 servers upgrade to v4 without code changes. MCP Python SDK v2 model
@@ -967,7 +983,7 @@ For stdio-only hosts connecting to remote servers, use the `fastmcp-remote` brid
 14. OAuth security: consent screens + encrypted storage + JWT signing + PKCE.
 15. Comprehensive docstrings (LLMs read these!).
 16. Environment variables for config (never hardcode secrets).
-17. Pin versions within the tested major line: `fastmcp>=4.0,<5`.
+17. Pin versions within the tested minor line: `fastmcp>=4.1.6,<4.2`.
 18. In MCP SDK v2 protocol models, use Python `snake_case` attributes while
     preserving camelCase in JSON wire payloads.
 
@@ -984,7 +1000,7 @@ For stdio-only hosts connecting to remote servers, use the `fastmcp-remote` brid
 
 ### Package Versions
 
-- `fastmcp>=4.0,<5` (verified with `v4.0.3`, 2026-09-04)
+- `fastmcp>=4.1.6,<4.2` (verified with `v4.1.6`, 2026-11-09)
 - Python `>=3.10`
 - Dependencies: `httpx`, `pydantic`, `py-key-value-aio`, `mcp` SDK
 - Optional: `fastmcp[tasks]`, `py-key-value-aio[redis]`
@@ -996,5 +1012,5 @@ For stdio-only hosts connecting to remote servers, use the `fastmcp-remote` brid
 
 ---
 
-_Last updated: 2026-09-10. Verified against FastMCP v4.0.3 and the official
-`gofastmcp.com` v3-to-v4 upgrade guide._
+_Last updated: 2026-11-09. Verified against FastMCP v4.1.6, the official release
+notes, and the project's offline transport and task tests._

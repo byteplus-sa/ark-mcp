@@ -162,14 +162,15 @@ def check_image_request(request: ImageRequest, caps: ImageCapabilities) -> list[
     if request.background == "transparent":
         if not caps.supports_transparent_background:
             violations.append("background='transparent' is not supported")
-        if image_count != 1:
-            violations.append(
-                "background='transparent' needs exactly one input image with an alpha channel"
-            )
+        if not caps.supports_transparent_generation:
+            if image_count != 1:
+                violations.append(
+                    "background='transparent' needs exactly one input image with an alpha channel"
+                )
+            if any(_is_non_png_base64(image) for image in request.images or []):
+                violations.append("background='transparent' needs a PNG input image (image/png)")
         if request.output_format not in (None, "png"):
             violations.append("background='transparent' requires output_format omitted or 'png'")
-        if any(_is_non_png_base64(image) for image in request.images or []):
-            violations.append("background='transparent' needs a PNG input image (image/png)")
     return violations
 
 

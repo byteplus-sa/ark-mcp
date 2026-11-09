@@ -484,11 +484,11 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `size` | string | No | — | e.g. `"2048x2048"`; checked against the model's size list when it has one |
 | `seed` | integer | No | — | -1 to 2147483647; the **base seed** when `variations > 1` (see below) |
 | `max_images` | integer | No | — | 1-15 images from **one provider call**; batch-capable models only. **Cannot be combined with `variations > 1`** |
-| `output_format` | `"png"` \| `"jpeg"` | No | — | Model-dependent |
+| `output_format` | `"png"` \| `"jpeg"` | No | `png` on 5.5 and transparent output; provider default otherwise | Model-dependent |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | Provider response format |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro; provider default otherwise | Rejected if the model does not support it |
-| `background` | `"opaque"` \| `"transparent"` | No | — | `transparent` edits **exactly one PNG input image that already has transparent pixels** and keeps that transparency (png output); it does **not** remove the background of an opaque image. Rules: supported model (Seedream 5.0 Pro), exactly one PNG input image with transparent pixels, `output_format` omitted or `png`. A Base64 input whose `mime_type` is not `image/png` is rejected before the provider call; the provider returns 400 for an input without transparent pixels |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro; provider default otherwise | Not exposed on early-access 5.5; omit it |
+| `background` | `"opaque"` \| `"transparent"` | No | — | `transparent` requires `output_format` omitted or `png`. **5.5:** text-only or reference-based generation, no existing alpha required. **5.0 Pro:** exactly one PNG input with transparent pixels; preserves transparency, not background removal. Non-PNG Base64 input is rejected locally on Pro |
 | `variations` | integer | No | `1` | **1-10** independent parallel generations |
 | `variation_prompts` | list[string] | No | — | Exactly `variations` entries (each 1-4000 chars); overrides `prompt` |
 | `persist` | boolean | No | `true` | Persist as durable MCP resources |
@@ -528,9 +528,15 @@ Built-in family limits (**`ark_list_models(kind='image')` is authoritative**):
 
 | Family | Max references | `max_images` batch | `output_format` | `prompt_optimization` | Transparent background |
 |---|---|---|---|---|---|
-| Pro (Seedream 5.0 Pro, default `dola-seedream-5-0-pro-260628`) | 10 | No (use `variations`) | png, jpeg | Yes (default `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Yes |
+| 5.5 (early-access default `dola-seedream-5-5-261028`) | 10 | No (use `variations`) | png (default), jpeg | Not yet exposed; provider default | Text-only and reference-based |
+| Pro (Seedream 5.0 Pro, `dola-seedream-5-0-pro-260628`) | 10 | No (use `variations`) | png, jpeg | Yes (default `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Existing transparent PNG only |
 | Lite | 14 | Yes | png, jpeg | Yes | No |
 | 4.x | 14 | Yes | jpeg | Yes | No |
+
+Discovery's image limits include `supports_transparent_generation` and
+`supports_prompt_optimization`. 5.5 requires account authorization; see the
+[default upgrade note](configuration.md#seedream-default-model-upgrade-note).
+Examples below that return a 5.0 Pro model ID assume Pro is configured explicitly.
 
 ### Output
 
@@ -607,6 +613,7 @@ variations, and dry runs**:
 ```json
 // Edit an image with transparency on Seedream 5.0 Pro (arguments.input)
 {
+  "model": "dola-seedream-5-0-pro-260628",
   "prompt": "Turn the circle into a glossy ceramic button, keep the background transparent",
   "images": [{ "kind": "url", "url": "https://example.com/circle-transparent.png", "mime_type": "image/png" }],
   "background": "transparent",

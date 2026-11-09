@@ -90,7 +90,7 @@ def build_seedream_request(
         size=request.size,
         seed=seed,
         max_images=request.max_images,
-        output_format=request.output_format,
+        output_format=caps.resolve_output_format(request.output_format, request.background),
         response_format=request.response_format,
         watermark=request.watermark,
         prompt_optimization=caps.resolve_prompt_optimization(request.prompt_optimization),
@@ -188,7 +188,15 @@ async def run_seedream_variations(
                     lambda: service.generate(provider_request)
                 )
             artifact = await _persist_variation(
-                response, request, store, owner, progress, index, seeds[index], request_id
+                response,
+                request,
+                store,
+                owner,
+                progress,
+                index,
+                seeds[index],
+                request_id,
+                output_format=provider_request.output_format,
             )
             return VariationResult(
                 index=index, seed=seeds[index], artifact=artifact, request_id=request_id
@@ -244,11 +252,13 @@ async def _persist_variation(
     index: int,
     seed: int | None,
     request_id: str | None,
+    *,
+    output_format: str | None,
 ) -> ArtifactRef | None:
     if not response.data:
         return None
     item = response.data[0]
-    mime_type = _mime_type(item.output_format, request.output_format)
+    mime_type = _mime_type(item.output_format, output_format)
     source_expiry = _source_expiry()
     if item.url:
         progress.partial = VariationResult(

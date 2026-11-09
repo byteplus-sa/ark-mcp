@@ -122,16 +122,16 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
   top-left origin; `round(pixel / dimension * 1000)`, capped at 999). **Do not
   write the markup into `prompt`**: the server prepends `Image 1<point>...`
   or `Image 1<bbox>...` itself, and applies it to every variation prompt.
-- `background="transparent"` is a transparency-preserving edit, not a cut-out:
-  exactly one PNG that already has transparent pixels, Seedream 5.0 Pro,
-  `output_format` omitted or `png`. To remove a background from an opaque
-  image, edit it with a prompt instead.
+- `background="transparent"` supports text-only generation or references
+  without alpha on Seedream 5.5. On 5.0 Pro it is a transparency-preserving
+  edit requiring exactly one PNG that already has transparent pixels.
+  Both require `output_format` omitted or `png`.
 - To iterate on a generated image, pass its provider URL (valid 24 h) or
   re-upload via `media_upload` and use the presigned URL.
 - A fixed `seed` with the same prompt reproduces a single image. With
   `variations > 1`, `seed` is a base: `N` gives `N, N+1, ...`, `-1` picks a
   random recorded seed per variation, omitted leaves them unrecorded. On
-  Seedream 5.0 Pro use `variations` instead of `max_images`.
+  Seedream 5.5 and 5.0 Pro use `variations` instead of `max_images`.
 
 ### Asset-reference flow (Seedance `asset://`)
 

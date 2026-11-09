@@ -29,11 +29,11 @@ client is missing tools and that warning is absent, look at
 | `BYTEPLUS_MODELARK_BASE_URL` | AP Southeast ModelArk URL | HTTPS data-plane base URL |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | AP Southeast Seed Speech URL | HTTPS service base URL |
 | `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | HTTPS VOD AI MediaKit convenience-endpoint base URL |
-| `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-0-pro-260628` | Default image model/endpoint ID |
+| `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-5-261028` | Default image model/endpoint ID (Seedream 5.5, early access; account authorization required) |
 | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | `standard` | Mode 5.0 Pro sends when a caller omits `prompt_optimization`: `standard` (prompt-following quality) or `fast` (lower latency). Both are provider-accepted; an explicit per-call value wins |
 | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-5-260628` | Default video model/endpoint ID used by `seedance_create_task` when `model` is omitted (Seedance 2.5; was 2.0 before the tool consolidation, see the [upgrade note](#seedance-default-model-upgrade-note)) |
 | `SEED_UNDERSTANDING_DEFAULT_MODEL` | `dola-seed-2-1-turbo-260628` | Default understanding model/endpoint ID. Set to `dola-seed-evolving` to use the latest Pro-tier model (auto-resolves to family `pro`, no `SEED_UNDERSTANDING_MODEL_FAMILY` needed) |
-| `SEEDREAM_MODEL_FAMILY` | empty | Family for a custom default: `pro`, `lite`, or `4x` |
+| `SEEDREAM_MODEL_FAMILY` | empty | Family for a custom default: `seedream_5_5`, `pro`, `lite`, or `4x` |
 | `SEEDANCE_MODEL_FAMILY` | empty | Family for a custom default: `standard`, `fast`, `mini`, `seedance_2_5`, or `seedance_2_5_premium` |
 | `SEED_UNDERSTANDING_MODEL_FAMILY` | empty | Family for a custom default: `pro` or `turbo` |
 | `SEEDREAM_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
@@ -50,7 +50,7 @@ client is missing tools and that warning is absent, look at
 | `BYTEPLUS_CV_BASE_URL` | `https://openapi.cv.bytepluses.com` | HTTPS Vision AI base URL |
 | `BYTEPLUS_OMNIHUMAN_REQ_KEY` | `realman_avatar_picture_omni20_cv` | Service identifier sent as `req_key`; change only if BytePlus issues a new one |
 
-The two built-in default IDs have known families. A custom ID must be bound
+The recognized built-in IDs have known families. A custom ID must be bound
 explicitly; the server does not infer capabilities from substrings in an ID.
 For example:
 
@@ -58,6 +58,32 @@ For example:
 SEEDREAM_DEFAULT_MODEL=my-image-endpoint
 SEEDREAM_MODEL_BINDINGS=[{"model_id":"my-image-endpoint","family":"pro"}]
 ```
+
+### Seedream default model upgrade note
+
+The default is now **Seedream 5.5 (`dola-seedream-5-5-261028`, early access)**.
+This changes only deployments that omit `SEEDREAM_DEFAULT_MODEL`; existing
+explicit defaults stay unchanged. Discovery reflects configured models, not
+provider authorization. Accounts without 5.5 access should retain 5.0 Pro:
+
+```dotenv
+SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628
+```
+
+Both built-in IDs resolve without a family setting. For a custom 5.5 endpoint,
+set `SEEDREAM_MODEL_FAMILY=seedream_5_5`. If `SEEDREAM_MODEL_BINDINGS` contains
+only older models and no explicit default, startup fails until the default is
+set to a bound ID or a 5.5 binding is added. To offer both:
+
+```dotenv
+SEEDREAM_DEFAULT_MODEL=dola-seedream-5-5-261028
+SEEDREAM_MODEL_BINDINGS=[{"model_id":"dola-seedream-5-5-261028","family":"seedream_5_5"},{"model_id":"dola-seedream-5-0-pro-260628","family":"pro"}]
+```
+
+5.5 uses PNG output when omitted and accepts transparent text-to-image.
+`SEEDREAM_PROMPT_OPTIMIZATION_MODE` remains specific to 5.0 Pro; explicit
+`prompt_optimization` is not exposed for early-access 5.5 pending confirmation
+of its ModelArk contract. See [image model limits](models.md#image-capabilities-imagecapabilities).
 
 ### Seedance default model upgrade note
 

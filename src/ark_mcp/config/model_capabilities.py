@@ -33,6 +33,7 @@ from ark_mcp.config.env import (
 class ModelFamily(StrEnum):
     """Logical product family for capability lookup."""
 
+    SEEDREAM_5_5 = "seedream_5_5"
     SEEDREAM_PRO = "seedream_pro"
     SEEDREAM_LITE = "seedream_lite"
     SEEDREAM_4X = "seedream_4x"
@@ -67,6 +68,12 @@ class ImageCapabilities:
     supports_prompt_optimization: bool = True
     default_prompt_optimization_mode: str | None = None
     supports_transparent_background: bool = False
+    supports_transparent_generation: bool = False
+    default_output_format: str | None = None
+
+    def resolve_output_format(self, requested: str | None, background: str | None) -> str | None:
+        """Resolve the format for both the provider request and artifact metadata."""
+        return requested or ("png" if background == "transparent" else self.default_output_format)
 
     def resolve_prompt_optimization(self, requested: str | None) -> str | None:
         """Return the effective prompt optimization mode for a request.
@@ -148,7 +155,20 @@ def _seedream_capabilities() -> dict[str, ImageCapabilities]:
     settings = get_settings()
     capabilities: dict[str, ImageCapabilities] = {}
     for binding in settings.seedream_model_bindings:
-        if binding.family is SeedreamFamily.PRO:
+        if binding.family is SeedreamFamily.SEEDREAM_5_5:
+            caps = ImageCapabilities(
+                family=ModelFamily.SEEDREAM_5_5,
+                model_id=binding.model_id,
+                max_references=10,
+                supports_batch=False,
+                supports_streaming=False,
+                supported_output_formats=("png", "jpeg"),
+                supports_prompt_optimization=False,
+                supports_transparent_background=True,
+                supports_transparent_generation=True,
+                default_output_format="png",
+            )
+        elif binding.family is SeedreamFamily.PRO:
             caps = ImageCapabilities(
                 family=ModelFamily.SEEDREAM_PRO,
                 model_id=binding.model_id,

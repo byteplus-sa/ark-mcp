@@ -24,7 +24,7 @@ products plus artifact access and an optional media upload helper:
 | Product | Tools | Description |
 |---|---|---|
 | **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech; one clip or 1-5 parallel variations |
-| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: text-to-image, reference editing, point/box edits, transparency-preserving PNG edits (5.0 Pro), provider batches, 1-10 parallel variations, and `dry_run` request and cost previews |
+| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: Seedream 5.5 (early-access default), text-to-image, reference editing, point/box edits, native transparent PNG generation (5.5), transparency-preserving edits (5.0 Pro), provider batches, 1-10 parallel variations, and `dry_run` previews |
 | **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (2.0, 2.5 by default, and whitelist-only 2.5 Premium with 4K when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`): pick the model from `ark_list_models(kind='video')`, create 1-5 variations, use Draft mode on 2.5, or `dry_run` for a free request and cost preview; poll with the shared generation task tools |
 | **Hyper3D / Hitem3d** | `hyper3d_create_task`, `hitem3d_create_task` | Background-task 3D submission through ModelArk; poll with the shared generation task tools (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
 | **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | One lifecycle for every ModelArk generation task (Seedance video and 3D): batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
@@ -96,7 +96,7 @@ accepts as reference input:
 
 | Tool | Modality | URL | Base64 | Speaker ID | Roles | Max | Constraints |
 |---|---|:---:|:---:|:---:|---|:---:|---|
-| `seedream_generate_image` | Image | ✓ | ✓ | — | reference | 10 PRO / 14 LITE·4X | — |
+| `seedream_generate_image` | Image | ✓ | ✓ | — | reference | 10 5.5·PRO / 14 LITE·4X | — |
 | `seedance_create_task` (2.0 models) | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 9 | — |
 | `seedance_create_task` (2.0 models) | Video | ✓ | — | — | `reference_video` | 3 | URL only |
 | `seedance_create_task` (2.0 models) | Audio | ✓ | ✓ | — | `reference_audio` | 3 | Not sole input |
@@ -229,7 +229,7 @@ BYTEPLUS_SEED_SPEECH_API_KEY=your_seed_speech_key  # pragma: allowlist secret
 BYTEPLUS_VOD_MEDIAKIT_API_KEY=your_vod_mediakit_key
 BYTEPLUS_CV_API_KEY=your_vision_ai_key
 BYTEPLUS_OMNIHUMAN_ENABLED=true
-SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628
+SEEDREAM_DEFAULT_MODEL=dola-seedream-5-5-261028
 SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-5-260628
 ```
 
@@ -267,7 +267,7 @@ enqueue the same FastMCP Docket worker and preserve the same typed tool result,
 ownership, scope, concurrency, and replay safeguards.
 
 Both paths are tested in-process, over subprocess stdio, and over authenticated
-Streamable HTTP with the locked FastMCP 4.0.x runtime. The ordinary path uses
+Streamable HTTP with the locked FastMCP 4.1.6 runtime. The ordinary path uses
 standard MCP tool calls and does not require a client-specific task transport.
 The named desktop/IDE snippets below remain connection templates because exact
 client releases and tool-selection behavior can change. See the

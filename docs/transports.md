@@ -2,6 +2,15 @@
 
 The server supports stdio and FastMCP Streamable HTTP.
 
+## Runtime upgrade
+
+The locked runtime is FastMCP 4.1.6, which includes the authorization fixes
+released in [4.1.2](https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.2).
+Compared with 4.0, stateful HTTP sessions inherit the MCP SDK's 30-minute idle
+timeout; clients must reconnect expired sessions. Drain active generation jobs
+before restarting for an upgrade, especially with the default in-memory queue.
+See the [4.1 upgrade notes](https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.0).
+
 ## stdio
 
 stdio is the secure local default. MCP JSON-RPC uses stdin/stdout; structured

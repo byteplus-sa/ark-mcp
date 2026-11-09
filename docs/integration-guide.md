@@ -42,7 +42,7 @@ with task metadata instead; that path is fully supported and unchanged. A
 foreground call made directly to a required-task tool is still rejected before
 provider submission.
 
-The repository tests both paths with the locked FastMCP **4.0.x** runtime. The
+The repository tests both paths with the locked FastMCP **4.1.6** runtime. The
 ordinary path is covered in-process, over a real subprocess stdio transport, and
 over authenticated Streamable HTTP without advertising the task extension.
 These tests use mocked providers and do not make billable generation calls.
@@ -190,7 +190,7 @@ asyncio.run(main())
 ```
 
 `task.result()` waits through `tasks/get` and returns the terminal tool result.
-In this single-process stdio example, FastMCP 4.0.3 automatically task-augments
+In this single-process stdio example, FastMCP 4.1.6 automatically task-augments
 `client.call_tool()` for the optional status tool as well; `persist_output=false`
 still prevents downloads. The standalone smoke scripts use modern and public
 `mode="legacy"` clients connected to the same in-process server lifespan to
@@ -421,7 +421,7 @@ If only some products' tools are registered:
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | For audio | — | Seed Speech X-Api-Key |
 | `BYTEPLUS_MODELARK_BASE_URL` | No | `https://ark.ap-southeast.bytepluses.com/api/v3` | ModelArk region endpoint |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | No | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech endpoint |
-| `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-0-pro-260628` | Seedream model ID |
+| `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-5-261028` | Seedream model ID (5.5 early access; retain an explicit 5.0 Pro default if not authorized) |
 | `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-5-260628` | Default Seedance model ID for `seedance_create_task` (Seedance 2.5) |
 | `MCP_TRANSPORT` | No | `stdio` | `stdio` or `http` |
 | `MCP_HOST` | No | `127.0.0.1` | HTTP bind address |

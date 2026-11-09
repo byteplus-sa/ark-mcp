@@ -76,14 +76,21 @@ class VideoModelLimits(BaseModel):
 class ImageModelLimits(BaseModel):
     """Per-model limits for a Seedream image model."""
 
-    max_reference_images: int = Field(..., description="Maximum reference images per request.")
-    output_formats: list[str] = Field(..., description="Accepted output_format values.")
-    supports_batch: bool = Field(..., description="Whether max_images greater than 1 is accepted.")
+    max_reference_images: int = Field(..., description="Maximum reference images.")
+    output_formats: list[str] = Field(..., description="Accepted output formats.")
+    supports_batch: bool = Field(..., description="Accepts max_images > 1.")
     supported_sizes: list[str] | None = Field(
-        None, description="Allowed size values; null means any size the provider accepts."
+        None, description="Allowed sizes, or null for provider validation."
     )
     supports_transparent_background: bool = Field(
-        ..., description="Whether background='transparent' is accepted."
+        ..., description="Accepts background='transparent'."
+    )
+    supports_transparent_generation: bool = Field(
+        ...,
+        description="Transparent PNGs from text-only prompts or references without alpha (5.5).",
+    )
+    supports_prompt_optimization: bool = Field(
+        ..., description="Accepts explicit prompt_optimization."
     )
 
 
@@ -252,6 +259,8 @@ def _image_info(caps: ImageCapabilities, settings: Settings) -> ModelInfo:
             supports_batch=caps.supports_batch,
             supported_sizes=list(caps.supported_sizes) if caps.supported_sizes else None,
             supports_transparent_background=caps.supports_transparent_background,
+            supports_transparent_generation=caps.supports_transparent_generation,
+            supports_prompt_optimization=caps.supports_prompt_optimization,
         ),
     )
 

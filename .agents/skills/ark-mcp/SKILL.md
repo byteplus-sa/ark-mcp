@@ -109,12 +109,16 @@ flowchart LR
 
 ### Seedream
 
+- Default: Seedream 5.5 (`dola-seedream-5-5-261028`, early access; requires
+  account authorization). Explicit operator defaults remain unchanged.
 - `images` plus optional `point` or `bbox` (0-999, on the first image) edits;
   without images it is text-to-image.
-- `background="transparent"` needs Seedream 5.0 Pro, **exactly one PNG input
-  that already has transparent pixels**, and `output_format` omitted or `png`.
-  It edits that image and keeps the transparency; it does not cut a subject out
-  of an opaque image.
+- `background="transparent"` on 5.5 accepts text-only prompts or references
+  without existing alpha. On 5.0 Pro it requires **exactly one PNG input that
+  already has transparent pixels** and preserves that transparency.
+  Both require `output_format` omitted or `png`. 5.5 defaults to PNG.
+- Use `variations`, not provider batches, on 5.5 and 5.0 Pro.
+  Omit `prompt_optimization` on early-access 5.5; it is not exposed yet.
 
 ### Polling and persistence
 

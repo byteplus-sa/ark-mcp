@@ -32,6 +32,7 @@ preferred over variations when the model supports it.
 | Model family | Supports `max_images` | Max images |
 |---|---|---|
 | **Pro** (`seedream_pro`) | No | 1 |
+| **5.5** (`seedream_5_5`, early-access default) | No | 1 |
 | **Lite** (`seedream_lite`) | Yes | 15 |
 | **4.x** (`seedream_4x`) | Yes | 15 |
 
@@ -150,7 +151,7 @@ usage fields.
 | Scenario | Use |
 |---|---|
 | Multiple images, same prompt, Lite or 4.x model | `max_images` on `seedream_generate_image` |
-| Multiple images, Pro model | `variations` on `seedream_generate_image` |
+| Multiple images, 5.5 or Pro model | `variations` on `seedream_generate_image` |
 | Per-variation prompts or seeds | `variations` plus `variation_prompts` (and `seed` on Seedream) |
 | Multiple audio outputs | `variations` on `seed_audio_generate` |
 | Check requests and cost first | `dry_run=true` on `seedream_generate_image` or `seedance_create_task` |

@@ -8,10 +8,11 @@ with an actionable `ValueError`.
 
 ## Families
 
-`ModelFamily` (`StrEnum`) has twelve members:
+`ModelFamily` (`StrEnum`) includes:
 
 | Member | Value |
 |---|---|
+| `SEEDREAM_5_5` | `seedream_5_5` |
 | `SEEDREAM_PRO` | `seedream_pro` |
 | `SEEDREAM_LITE` | `seedream_lite` |
 | `SEEDREAM_4X` | `seedream_4x` |
@@ -27,7 +28,7 @@ with an actionable `ValueError`.
 
 The binding enums (`config/env.py`):
 
-- `SeedreamFamily`: `PRO = "pro"`, `LITE = "lite"`, `V4X = "4x"`.
+- `SeedreamFamily`: `SEEDREAM_5_5 = "seedream_5_5"`, `PRO = "pro"`, `LITE = "lite"`, `V4X = "4x"`.
 - `SeedanceFamily`: `STANDARD = "standard"`, `FAST = "fast"`, `MINI = "mini"`,
   `SEEDANCE_2_5 = "seedance_2_5"`, `SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"`.
 - `SeedUnderstandingFamily`: `PRO = "pro"`, `TURBO = "turbo"`.
@@ -35,16 +36,39 @@ The binding enums (`config/env.py`):
 
 ## Image capabilities (`ImageCapabilities`)
 
-| Field | `PRO` | `LITE` | `4X` |
-|---|---|---|---|
-| `max_references` | 10 | 14 | 14 |
-| `supports_batch` | `False` | `True` | `True` |
-| `supports_streaming` | `False` | `True` | `True` |
-| `supported_output_formats` | `("png", "jpeg")` | `("png", "jpeg")` | `("jpeg",)` |
-| `supported_sizes` | `None` (any) | `None` | `None` |
-| `supports_watermark` | `True` | `True` | `True` |
-| `supports_prompt_optimization` | `True` | `True` | `True` |
-| `default_prompt_optimization_mode` | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`"standard"`) | `None` | `None` |
+| Field | `SEEDREAM_5_5` | `PRO` | `LITE` | `4X` |
+|---|---|---|---|---|
+| `max_references` | 10 | 10 | 14 | 14 |
+| `supports_batch` | `False` | `False` | `True` | `True` |
+| `supports_streaming` | `False` | `False` | `True` | `True` |
+| `supported_output_formats` | `("png", "jpeg")` | `("png", "jpeg")` | `("png", "jpeg")` | `("jpeg",)` |
+| `default_output_format` | `"png"` | `None` | `None` | `None` |
+| `supported_sizes` | `None` (provider validated) | `None` | `None` | `None` |
+| `supports_watermark` | `True` | `True` | `True` | `True` |
+| `supports_prompt_optimization` | `False` (not yet exposed) | `True` | `True` | `True` |
+| `default_prompt_optimization_mode` | `None` | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`"standard"`) | `None` | `None` |
+| `supports_transparent_background` | `True` | `True` | `False` | `False` |
+| `supports_transparent_generation` | `True` | `False` | `False` | `False` |
+
+**Seedream 5.5 is early access.** This integration covers generation and editing,
+not layer decomposition or OCR. `background="transparent"` supports a text-only
+prompt or up to ten references without requiring existing alpha. 5.0 Pro retains
+its requirement for exactly one already-transparent PNG. Transparent output
+uses PNG when `output_format` is omitted; JPEG is rejected locally.
+
+`ark_list_models` exposes `supports_transparent_generation` to distinguish
+these modes, and `supports_prompt_optimization` to identify models that accept
+that optional control. No 5.0 Pro optimization setting is injected into 5.5.
+
+Initial 5.5 support is based on the supplied ModelArk request (2026-11-09).
+[Atlas Cloud's 5.5 model reference](https://www.atlascloud.ai/models/bytedance/seedream-v5.5/text-to-image)
+corroborates the ten-reference limit, single-image output, PNG/JPEG and native
+transparency (accessed 2026-11-09); its API and pricing are not ModelArk's
+contract. The [official image API](https://docs.byteplus.com/en/docs/ModelArk/1541523)
+body could not be verified for 5.5 during implementation. Live ModelArk validation,
+exact size limits and explicit optimization modes remain pre-release checks;
+sizes are passed through for provider validation and optimization controls are
+not exposed on 5.5 yet.
 
 > `default_prompt_optimization_mode` controls what 5.0 Pro sends as
 > `optimize_prompt_options.mode` when a caller omits `prompt_optimization`. It
@@ -131,14 +155,16 @@ are tunable via `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` and
 
 | Field | Env var | Default | Implied family |
 |---|---|---|---|
-| `seedream_default_model` | `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-0-pro-260628` | `PRO` |
+| `seedream_default_model` | `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-5-261028` | `SEEDREAM_5_5` |
 | `seedance_default_model` | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-5-260628` | `SEEDANCE_2_5` |
 | `seed_understanding_default_model` | `SEED_UNDERSTANDING_DEFAULT_MODEL` | `dola-seed-2-1-turbo-260628` | `TURBO` |
 | `seed_audio_understanding_model` | `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | — (single model, no family registry) |
 
 The "implied family" defaults are hard-coded in `Settings.validate_model_bindings`
 and apply only when the default model ID equals one of the recognized built-in
-IDs. `dola-seed-evolving` is also a recognized built-in ID that auto-resolves to
+IDs. `dola-seedream-5-0-pro-260628` remains recognized as `PRO` when explicitly
+configured. See the [default upgrade note](configuration.md#seedream-default-model-upgrade-note).
+`dola-seed-evolving` is also a recognized built-in ID that auto-resolves to
 family `PRO` when explicitly set as the default (no need to set
 `SEED_UNDERSTANDING_MODEL_FAMILY` for it).
 
@@ -162,7 +188,7 @@ custom endpoint IDs without a catalog match retain built-in estimates.
 
 | Env var | Format | Default |
 |---|---|---|
-| `SEEDREAM_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "pro"\|"lite"\|"4x"}` | `[]` |
+| `SEEDREAM_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "seedream_5_5"\|"pro"\|"lite"\|"4x"}` | `[]` |
 | `SEEDANCE_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "standard"\|"fast"\|"mini"\|"seedance_2_5"\|"seedance_2_5_premium"}` | `[]` |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "pro"\|"turbo"}` | `[]` |
 | `SEEDREAM_MODEL_FAMILY` | single family string | `""` |
@@ -188,7 +214,7 @@ from the model ID string):
    `SEEDANCE_MODEL_FAMILY`) is non-empty, a single binding is synthesized
    from the default model ID + that family.
 3. If both are empty and the default model ID equals a recognized built-in
-   ID, the hard-coded family is used (Seedream `PRO`, Seedance `STANDARD`,
+   ID, the hard-coded family is used (Seedream `SEEDREAM_5_5` or legacy `PRO`, Seedance `STANDARD`,
    Seed understanding `TURBO` for the default `dola-seed-2-1-turbo-260628`,
    and `PRO` for `dola-seed-evolving` when explicitly opted in).
 4. Otherwise (custom default model, no family, no bindings) → startup fails
