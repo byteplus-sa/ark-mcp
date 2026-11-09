@@ -73,6 +73,12 @@ The shared helper [`run_variation_batch`] in `tools/_parallel.py`:
 5. Waits for all of them under one batch deadline (see below), then builds a
    `VariationSummary` with per-variation success/failure tracking.
 
+Seedream also returns `generations`, ordered by zero-based `variation_index`,
+for completed provider calls. Each includes per-call usage, echoed safety ID,
+and provider-reported image size, format and actual background, with matching
+artifact IDs. Failed provider calls have no metadata entry; absent provider
+values remain `null`. The top-level `usage` remains single-call-only.
+
 ### Deadlines and failure phases
 
 Individual variations have **no wall-clock timeout** of their own. Every phase

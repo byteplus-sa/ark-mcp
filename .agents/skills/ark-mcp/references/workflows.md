@@ -126,6 +126,13 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
   without alpha on Seedream 5.5. On 5.0 Pro it is a transparency-preserving
   edit requiring exactly one PNG that already has transparent pixels.
   Both require `output_format` omitted or `png`.
+- 5.5 defaults to `background="auto"`; use `generations[].images[].background`
+  to read the actual returned background, not infer it from the request.
+  `prompt_optimization` is omitted or `standard`, never `fast`.
+- 5.5 supports size tiers `1K`, `1.5K`, `2K` and bounded custom dimensions;
+  consult discovery. `auto` size and layer-decomposition/OCR controls are rejected.
+- Use only a stable hashed `safety_identifier` (5.5/Pro, 1-64 non-space ASCII);
+  previews/logs redact it, while `generations` preserves the provider echo.
 - To iterate on a generated image, pass its provider URL (valid 24 h) or
   re-upload via `media_upload` and use the presigned URL.
 - A fixed `seed` with the same prompt reproduces a single image. With

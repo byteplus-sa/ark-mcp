@@ -80,7 +80,22 @@ class ImageModelLimits(BaseModel):
     output_formats: list[str] = Field(..., description="Accepted output formats.")
     supports_batch: bool = Field(..., description="Accepts max_images > 1.")
     supported_sizes: list[str] | None = Field(
-        None, description="Allowed sizes, or null for provider validation."
+        None, description="Named size tiers (5.5 default: 2K); null for provider validation."
+    )
+    custom_size_pixels_range: tuple[int, int] | None = Field(
+        None, description="Inclusive custom WIDTHxHEIGHT pixel-count bounds; null if unspecified."
+    )
+    custom_size_aspect_ratio_range: tuple[float, float] | None = Field(
+        None, description="Inclusive custom width/height ratio bounds; null if unspecified."
+    )
+    background_modes: list[str] = Field(
+        ..., description="Accepted backgrounds; 5.5 defaults to auto, older models to opaque."
+    )
+    prompt_optimization_modes: list[str] = Field(
+        ..., description="Accepted explicit prompt_optimization modes."
+    )
+    supports_safety_identifier: bool = Field(
+        ..., description="Accepts a hashed end-user safety_identifier."
     )
     supports_transparent_background: bool = Field(
         ..., description="Accepts background='transparent'."
@@ -258,6 +273,13 @@ def _image_info(caps: ImageCapabilities, settings: Settings) -> ModelInfo:
             output_formats=list(caps.supported_output_formats),
             supports_batch=caps.supports_batch,
             supported_sizes=list(caps.supported_sizes) if caps.supported_sizes else None,
+            custom_size_pixels_range=caps.custom_size_pixels_range,
+            custom_size_aspect_ratio_range=caps.custom_size_aspect_ratio_range,
+            background_modes=list(caps.background_modes),
+            prompt_optimization_modes=(
+                list(caps.prompt_optimization_modes) if caps.supports_prompt_optimization else []
+            ),
+            supports_safety_identifier=caps.supports_safety_identifier,
             supports_transparent_background=caps.supports_transparent_background,
             supports_transparent_generation=caps.supports_transparent_generation,
             supports_prompt_optimization=caps.supports_prompt_optimization,

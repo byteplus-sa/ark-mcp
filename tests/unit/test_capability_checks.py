@@ -200,6 +200,7 @@ class ImageRequest:
     max_images: int | None = None
     background: str | None = None
     prompt_optimization: str | None = None
+    safety_identifier: str | None = None
 
 
 @dataclass

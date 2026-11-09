@@ -43,32 +43,47 @@ The binding enums (`config/env.py`):
 | `supports_streaming` | `False` | `False` | `True` | `True` |
 | `supported_output_formats` | `("png", "jpeg")` | `("png", "jpeg")` | `("png", "jpeg")` | `("jpeg",)` |
 | `default_output_format` | `"png"` | `None` | `None` | `None` |
-| `supported_sizes` | `None` (provider validated) | `None` | `None` | `None` |
+| `supported_sizes` | `("1K", "1.5K", "2K")` | `None` | `None` | `None` |
+| `custom_size_pixels_range` | `(921600, 4624220)` | `None` | `None` | `None` |
+| `custom_size_aspect_ratio_range` | `(1/16, 16)` | `None` | `None` | `None` |
 | `supports_watermark` | `True` | `True` | `True` | `True` |
-| `supports_prompt_optimization` | `False` (not yet exposed) | `True` | `True` | `True` |
+| `supports_prompt_optimization` | `True` | `True` | `True` | `True` |
+| `prompt_optimization_modes` | `("standard",)` | `("standard", "fast")` | `("standard", "fast")` | `("standard", "fast")` |
 | `default_prompt_optimization_mode` | `None` | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`"standard"`) | `None` | `None` |
 | `supports_transparent_background` | `True` | `True` | `False` | `False` |
 | `supports_transparent_generation` | `True` | `False` | `False` | `False` |
+| `supports_auto_background` | `True` | `False` | `False` | `False` |
+| `supports_safety_identifier` | `True` | `True` | `False` | `False` |
 
 **Seedream 5.5 is early access.** This integration covers generation and editing,
-not layer decomposition or OCR. `background="transparent"` supports a text-only
+not layer decomposition or OCR; those input fields are rejected. `background="transparent"` supports a text-only
 prompt or up to ten references without requiring existing alpha. 5.0 Pro retains
 its requirement for exactly one already-transparent PNG. Transparent output
 uses PNG when `output_format` is omitted; JPEG is rejected locally.
 
-`ark_list_models` exposes `supports_transparent_generation` to distinguish
-these modes, and `supports_prompt_optimization` to identify models that accept
-that optional control. No 5.0 Pro optimization setting is injected into 5.5.
+5.5 accepts named tiers `1K`, `1.5K`, `2K` (provider default), or positive
+`WIDTHxHEIGHT` dimensions with inclusive pixel count 921,600-4,624,220 and
+width/height ratio 1/16-16. `auto`, `3K`, and `4K` sizes are rejected for generation.
+Older-family size validation is unchanged and remains provider-side.
 
-Initial 5.5 support is based on the supplied ModelArk request (2026-11-09).
-[Atlas Cloud's 5.5 model reference](https://www.atlascloud.ai/models/bytedance/seedream-v5.5/text-to-image)
-corroborates the ten-reference limit, single-image output, PNG/JPEG and native
-transparency (accessed 2026-11-09); its API and pricing are not ModelArk's
-contract. The [official image API](https://docs.byteplus.com/en/docs/ModelArk/1541523)
-body could not be verified for 5.5 during implementation. Live ModelArk validation,
-exact size limits and explicit optimization modes remain pre-release checks;
-sizes are passed through for provider validation and optimization controls are
-not exposed on 5.5 yet.
+`background` defaults to `auto` on 5.5: the prompt determines transparency,
+except JPEG is always opaque. Explicit `prompt_optimization="standard"` is
+accepted; `fast` is rejected. Omitted optimization uses the provider's standard
+default, not the Pro-only operator setting.
+
+Discovery exposes named tiers, custom-size bounds, `background_modes`,
+`prompt_optimization_modes`, and `supports_safety_identifier`, alongside the
+transparency flags. Optional `safety_identifier` accepts 1-64 non-space printable
+ASCII characters on 5.5 and Pro. Use a stable hashed user identifier, not raw
+personal data. Dry-run previews and structured logs redact it; generation
+metadata preserves the provider's echo.
+
+Source: [Seedream 5.5 early-access API parameter description](https://bytedance.larkoffice.com/wiki/K2VlwdRaqifHvwkFQufc94m1nug),
+revision 579, accessed 2026-11-09, including the 2026-11-07 pixel-limit reduction.
+The document is subject to change; the
+[public image API](https://docs.byteplus.com/en/docs/modelark/image-generation-api)
+takes precedence after release. Authorized live generation and actual PNG-alpha
+verification remain pre-release checks.
 
 > `default_prompt_optimization_mode` controls what 5.0 Pro sends as
 > `optimize_prompt_options.mode` when a caller omits `prompt_optimization`. It

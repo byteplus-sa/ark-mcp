@@ -12,14 +12,19 @@ from typing import Annotated, Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import BaseModel, Field, JsonValue, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import ImageCapabilities, get_capability_registry
 from ark_mcp.domain.artifacts import ArtifactRef
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.media import ReferenceImageInput
-from ark_mcp.domain.models import SeedreamItemError, SeedreamUsage, VariationSummary
+from ark_mcp.domain.models import (
+    SeedreamGenerationMetadata,
+    SeedreamItemError,
+    SeedreamUsage,
+    VariationSummary,
+)
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
@@ -58,6 +63,8 @@ __all__ = [
 class SeedreamGenerateInput(BaseModel):
     """Input model for ``seedream_generate_image``."""
 
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str | None = Field(
         None,
         min_length=1,
@@ -85,7 +92,10 @@ class SeedreamGenerateInput(BaseModel):
         None,
         description="Exact model ID from ark_list_models(kind='image'); the default if omitted.",
     )
-    size: str | None = Field(None, description="Output size, e.g. '2K' or '2048x2048'.")
+    size: str | None = Field(
+        None,
+        description="5.5: 1K, 1.5K, 2K (default), or WIDTHxHEIGHT: 921600-4624220 pixels, ratio 1:16-16:1.",
+    )
     seed: int | None = Field(
         None,
         ge=-1,
@@ -115,17 +125,24 @@ class SeedreamGenerateInput(BaseModel):
     prompt_optimization: Literal["standard", "fast"] | None = Field(
         None,
         description=(
-            "standard (quality) or fast (latency). Default: SEEDREAM_PROMPT_OPTIMIZATION_MODE "
-            "on 5.0 Pro. Not exposed on early-access 5.5; omit to use the provider default."
+            "5.5: standard only (provider default); fast is rejected. "
+            "5.0 Pro: standard or fast, default SEEDREAM_PROMPT_OPTIMIZATION_MODE."
         ),
     )
-    background: Literal["opaque", "transparent"] | None = Field(
+    background: Literal["auto", "opaque", "transparent"] | None = Field(
         None,
         description=(
-            "'transparent' requires png output. Seedream 5.5 supports text-only generation "
-            "and references without alpha. On 5.0 Pro it requires exactly one PNG input "
-            "with transparent pixels and preserves that transparency."
+            "5.5 defaults to auto (prompt decides; jpeg is opaque). transparent requires png "
+            "output; 5.5 accepts text or references without alpha, 5.0 Pro needs one "
+            "already-transparent PNG. auto is 5.5-only."
         ),
+    )
+    safety_identifier: str | None = Field(
+        None,
+        min_length=1,
+        max_length=64,
+        pattern=r"^[\x21-\x7E]+$",
+        description="5.5/5.0 Pro: stable end-user ID, 1-64 non-space printable ASCII characters. Use a hash, not personal data.",
     )
     variations: int = Field(
         1,
@@ -189,7 +206,7 @@ class SeedreamGeneratePreview(BaseModel):
         ...,
         description=(
             "Provider request bodies that would be sent, one per variation. Reference image "
-            "URLs are reduced to scheme and host and inline Base64 data to its size."
+            "URLs are reduced to scheme and host, inline Base64 to its size, and safety_identifier redacted."
         ),
     )
     estimated_cost_usd: float = Field(
@@ -221,6 +238,10 @@ class SeedreamGenerateOutput(BaseModel):
         None,
         description="Per-variation results (seed, artifact or error) when variations > 1.",
     )
+    generations: list[SeedreamGenerationMetadata] = Field(
+        default_factory=list,
+        description="Metadata for completed provider calls, including variations; empty for dry runs.",
+    )
     preview: SeedreamGeneratePreview | None = Field(
         None, description="Request bodies and cost estimate; set only for a dry run."
     )
@@ -249,6 +270,8 @@ async def seedream_generate_image(
     image. variations (up to 10) run in parallel; max_images is one provider batch on models
     that support it. background='transparent' generates transparent PNGs from text or
     references on 5.5; 5.0 Pro requires an already-transparent PNG input.
+    5.5 supports auto background and standard optimization only. Layer decomposition
+    and rich-text OCR are not supported; unknown input fields are rejected.
     Model limits: ark_list_models(kind='image'); requests outside them
     are rejected with every problem listed. dry_run=true returns request bodies and a cost
     estimate. Run through ark_job_submit.
@@ -280,10 +303,15 @@ async def seedream_generate_image(
     if input.dry_run:
         return _preview(input, caps, images, prompts, seeds)
     if input.variations > 1:
-        summary = await run_seedream_variations(input, ctx, caps, images, prompts, seeds)
+        summary, generations = await run_seedream_variations(
+            input, ctx, caps, images, prompts, seeds
+        )
         await ctx.report_progress(progress=100, total=100)
         return SeedreamGenerateOutput(
-            model=caps.model_id, created_at=datetime.now(UTC).isoformat(), summary=summary
+            model=caps.model_id,
+            created_at=datetime.now(UTC).isoformat(),
+            summary=summary,
+            generations=generations,
         )
     return await _generate_single(input, ctx, caps, images, prompts[0])
 
@@ -316,6 +344,14 @@ async def _generate_single(
     artifacts = await store_response_images(
         ctx, response, persist=input.persist, output_format=request.output_format
     )
+    metadata = service.extract_generation_metadata(response)
+    output_indices = [
+        index
+        for index, item in enumerate(response.data)
+        if item.url or (input.persist and item.b64_json)
+    ]
+    for index, artifact in zip(output_indices, artifacts, strict=True):
+        metadata.images[index].artifact_id = artifact.id
     await ctx.report_progress(progress=100, total=100)
     log_info(
         "seedream_complete",
@@ -329,6 +365,7 @@ async def _generate_single(
         artifacts=artifacts,
         item_errors=SeedreamService.extract_item_errors(response),
         usage=SeedreamService.extract_usage(response),
+        generations=[metadata],
     )
 
 
@@ -359,6 +396,8 @@ def _preview(
 
 
 def _redact(body: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    if "safety_identifier" in body:
+        body["safety_identifier"] = "[REDACTED]"
     image = body.get("image")
     if isinstance(image, str):
         body["image"] = redact_media_url(image)

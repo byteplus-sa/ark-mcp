@@ -82,8 +82,10 @@ SEEDREAM_MODEL_BINDINGS=[{"model_id":"dola-seedream-5-5-261028","family":"seedre
 
 5.5 uses PNG output when omitted and accepts transparent text-to-image.
 `SEEDREAM_PROMPT_OPTIMIZATION_MODE` remains specific to 5.0 Pro; explicit
-`prompt_optimization` is not exposed for early-access 5.5 pending confirmation
-of its ModelArk contract. See [image model limits](models.md#image-capabilities-imagecapabilities).
+`prompt_optimization="standard"` is accepted on 5.5, while `fast` is rejected
+even when the Pro-only operator setting is `fast`. Omitted 5.5 optimization
+uses the provider's standard default. Background defaults to `auto` on 5.5.
+See [image model limits](models.md#image-capabilities-imagecapabilities).
 
 ### Seedance default model upgrade note
 

@@ -481,14 +481,15 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `point` | EditCoordinate | No | — | `x`, `y` in 0-999 (normalized) on the **first** image; requires `images` |
 | `bbox` | EditBbox | No | — | `x1`, `y1`, `x2`, `y2` in 0-999 on the **first** image, `x1 <= x2`, `y1 <= y2`; requires `images` |
 | `model` | string | No | `SEEDREAM_DEFAULT_MODEL` | Exact configured ID from `ark_list_models(kind='image')` |
-| `size` | string | No | — | e.g. `"2048x2048"`; checked against the model's size list when it has one |
+| `size` | string | No | `2K` on 5.5 | 5.5: `1K`, `1.5K`, `2K`, or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and ratio 1/16-16, inclusive. No generation `auto`; older families remain provider-validated |
 | `seed` | integer | No | — | -1 to 2147483647; the **base seed** when `variations > 1` (see below) |
 | `max_images` | integer | No | — | 1-15 images from **one provider call**; batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | `png` on 5.5 and transparent output; provider default otherwise | Model-dependent |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | Provider response format |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro; provider default otherwise | Not exposed on early-access 5.5; omit it |
-| `background` | `"opaque"` \| `"transparent"` | No | — | `transparent` requires `output_format` omitted or `png`. **5.5:** text-only or reference-based generation, no existing alpha required. **5.0 Pro:** exactly one PNG input with transparent pixels; preserves transparency, not background removal. Non-PNG Base64 input is rejected locally on Pro |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.5; operator setting on Pro | 5.5 rejects `fast`; Pro accepts both. Omitted 5.5 mode uses the provider default |
+| `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | `auto` on 5.5; `opaque` otherwise | `auto` is 5.5-only; JPEG always opaque in auto mode. Transparent output requires PNG. 5.5 accepts text or references without alpha; Pro needs exactly one already-transparent PNG |
+| `safety_identifier` | string | No | — | 5.5/Pro: 1-64 non-space printable ASCII characters; use a stable hashed user ID, not personal data. Redacted in previews and logs |
 | `variations` | integer | No | `1` | **1-10** independent parallel generations |
 | `variation_prompts` | list[string] | No | — | Exactly `variations` entries (each 1-4000 chars); overrides `prompt` |
 | `persist` | boolean | No | `true` | Persist as durable MCP resources |
@@ -497,6 +498,9 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `overwrite` | boolean | No | `false` | Replace existing files at `output_path` |
 
 \* Provide `prompt` or `variation_prompts`.
+
+Unknown input fields are rejected, including layer-decomposition/OCR controls;
+only generation and editing are supported.
 
 **Point and bbox edits.** The tool prepends coordinate markup to every prompt
 (including each variation prompt): `Image 1<bbox>x1 y1 x2 y2</bbox>` and/or
@@ -528,13 +532,15 @@ Built-in family limits (**`ark_list_models(kind='image')` is authoritative**):
 
 | Family | Max references | `max_images` batch | `output_format` | `prompt_optimization` | Transparent background |
 |---|---|---|---|---|---|
-| 5.5 (early-access default `dola-seedream-5-5-261028`) | 10 | No (use `variations`) | png (default), jpeg | Not yet exposed; provider default | Text-only and reference-based |
+| 5.5 (early-access default `dola-seedream-5-5-261028`) | 10 | No (use `variations`) | png (default), jpeg | `standard` only (provider default) | Text-only and reference-based |
 | Pro (Seedream 5.0 Pro, `dola-seedream-5-0-pro-260628`) | 10 | No (use `variations`) | png, jpeg | Yes (default `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Existing transparent PNG only |
 | Lite | 14 | Yes | png, jpeg | Yes | No |
 | 4.x | 14 | Yes | jpeg | Yes | No |
 
 Discovery's image limits include `supports_transparent_generation` and
-`supports_prompt_optimization`. 5.5 requires account authorization; see the
+`supports_prompt_optimization`, named size tiers, custom pixel/ratio bounds,
+`background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`.
+5.5 requires account authorization; see the
 [default upgrade note](configuration.md#seedream-default-model-upgrade-note).
 Examples below that return a 5.0 Pro model ID assume Pro is configured explicitly.
 
@@ -551,15 +557,16 @@ variations, and dry runs**:
 | `dry_run` | boolean | `true` when nothing was generated; see `preview` |
 | `artifacts` | list[ArtifactRef] | Images from a single call (`variations=1`); an image that could not be stored is returned as a `provider-url` or `inline-fallback` reference with `persistence_error`. **Empty for variations and dry runs** |
 | `item_errors` | list[SeedreamItemError] | Per-image errors (`index`, `code`, `message`) from a single provider batch |
-| `usage` | SeedreamUsage \| null | Token usage of a single call; `null` for variations and dry runs |
+| `usage` | SeedreamUsage \| null | Single-call usage: legacy token fields plus `input_images`, `generated_images`, `output_tokens`; `null` for variations and dry runs |
 | `summary` | VariationSummary \| null | Per-variation `index`, `seed`, artifact or error, and `request_id` when `variations > 1` |
+| `generations` | list[SeedreamGenerationMetadata] | Completed provider calls ordered by `variation_index` (0 for single calls). Each has per-call `usage`, echoed `safety_identifier`, and `images`: provider-data `index`, matching `artifact_id`, actual `size`, `output_format`, and `background` (`opaque`/`transparent`). Absent provider values stay `null`; empty on dry runs |
 | `preview` | SeedreamGeneratePreview \| null | Set only for a dry run |
 
 **SeedreamGeneratePreview:**
 
 | Field | Type | Description |
 |---|---|---|
-| `requests` | list[object] | Provider request bodies, one per variation. Reference image URLs are reduced to scheme and host, inline Base64 to its size |
+| `requests` | list[object] | Provider request bodies, one per variation. Reference URLs are reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted |
 | `estimated_cost_usd` | number | Static estimate from the server's price table; **not a provider quote** |
 
 ### Examples

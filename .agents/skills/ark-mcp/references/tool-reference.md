@@ -128,8 +128,18 @@ A fixed `seed` with the same prompt reproduces a single image. With `variations 
 
 `background="transparent"` requires `output_format` omitted or `png`.
 Seedream 5.5 (early-access default) accepts text-only prompts and reference images
-without alpha. It defaults to PNG even for ordinary generation. Omit
-`prompt_optimization` on 5.5; the control is not exposed yet.
+without alpha. It defaults to PNG even for ordinary generation.
+`prompt_optimization="standard"` is accepted (provider default); `fast` is rejected.
+`background="auto"` is the 5.5 default and follows the prompt; JPEG is always opaque.
+
+Use 5.5 size tiers `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT`
+with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive.
+Optional `safety_identifier` on 5.5/Pro must be a stable hashed user ID,
+1-64 non-space printable ASCII characters. Previews and logs redact it.
+`generations` preserves per-call usage, identifier echo, and provider-reported
+image size, format and actual background, with image/variation indices and
+matching artifact IDs. Missing values stay null; successful provider metadata
+survives partial variation failures. Decomposition/OCR inputs are rejected.
 
 On Seedream 5.0 Pro, transparency **edits exactly one PNG input that already has
 transparent pixels**. It does not remove an opaque background. Non-PNG Base64

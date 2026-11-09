@@ -118,7 +118,16 @@ flowchart LR
   already has transparent pixels** and preserves that transparency.
   Both require `output_format` omitted or `png`. 5.5 defaults to PNG.
 - Use `variations`, not provider batches, on 5.5 and 5.0 Pro.
-  Omit `prompt_optimization` on early-access 5.5; it is not exposed yet.
+- 5.5 sizes: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with
+  921600-4624220 pixels and width/height ratio 1/16-16, inclusive. No `auto` size.
+- 5.5 `prompt_optimization` accepts `standard` only (provider default);
+  `background` defaults to `auto` (JPEG always opaque). Pro's operator
+  optimization setting never applies to 5.5.
+- `safety_identifier` on 5.5/Pro must be a stable hashed user ID, 1-64 non-space
+  printable ASCII characters; previews and logs redact it.
+- Read `generations` for provider-reported background, size, format, per-call
+  usage and identifier echo, mapped to artifacts and variation indices.
+  Absent metadata stays null. Layer-decomposition/OCR inputs are rejected.
 
 ### Polling and persistence
 

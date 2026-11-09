@@ -105,15 +105,17 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 
 | Family | Max references | `max_images` batch | `output_format` | Prompt optimization | Transparent background |
 |---|---|---|---|---|---|
-| 5.5 (early-access default) | 10 | No | `png` (default), `jpeg` | Not exposed yet; omit | Text-only or references without alpha |
+| 5.5 (early-access default) | 10 | No | `png` (default), `jpeg` | `standard` only (provider default) | Text-only or references without alpha |
 | Pro (5.0 Pro) | 10 | No | `png`, `jpeg` | Yes; omitted value uses `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | Existing transparent PNG only |
 | Lite | 14 | Yes | `png`, `jpeg` | Yes; provider default when omitted | No |
 | 4.x | 14 | Yes | `jpeg` only | Yes; provider default when omitted | No |
 
-- **`supported_sizes` is `null` (any size the provider accepts) on every built-in family.**
+- **5.5 sizes:** `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with inclusive pixel count 921600-4624220 and width/height ratio 1/16-16. `auto`, `3K`, and `4K` are rejected for generation. Older families keep `supported_sizes=null` (provider validation).
 - **`max_images` vs `variations`.** `max_images` is one provider batch (one request, one usage record) and only works where batch is supported (Lite, 4.x). `variations` (1-10) runs separate calls in parallel and works on every model. **On 5.5 and Pro use `variations`.** Passing both is rejected.
 - **`background="transparent"`** requires `output_format` omitted or `png`. 5.5 supports text-only and reference-based generation without existing alpha. Pro edits exactly one already-transparent PNG; it does not remove an opaque background.
-- Discovery reports `supports_transparent_generation` and `supports_prompt_optimization`. Early-access validation gaps and scope are recorded in [docs/models.md](../../../../docs/models.md#image-capabilities-imagecapabilities); layer decomposition and OCR are not exposed.
+- **5.5 background:** `auto` (default), `opaque`, `transparent`; JPEG in auto mode is always opaque. Pro accepts only `opaque` and `transparent`.
+- **Safety IDs:** optional `safety_identifier` on 5.5/Pro, 1-64 non-space printable ASCII characters; use a stable hash, not personal data.
+- Discovery reports transparency, named/custom size limits, `background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`. Source and remaining live-alpha validation: [docs/models.md](../../../../docs/models.md#image-capabilities-imagecapabilities). Layer-decomposition/OCR inputs are rejected.
 
 ## Seed 3D (`kind: 3d`, requires `BYTEPLUS_MODELARK_3D_ENABLED=true`)
 

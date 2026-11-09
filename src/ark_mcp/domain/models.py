@@ -138,6 +138,36 @@ class SeedreamUsage(BaseModel):
     prompt_tokens: int | None = Field(None, description="Prompt tokens consumed.")
     completion_tokens: int | None = Field(None, description="Completion tokens consumed.")
     total_tokens: int | None = Field(None, description="Total tokens consumed.")
+    input_images: int | None = Field(None, description="Input image count reported by provider.")
+    generated_images: int | None = Field(None, description="Generated image count.")
+    output_tokens: int | None = Field(None, description="Output tokens reported by provider.")
+
+
+class SeedreamImageMetadata(BaseModel):
+    """Provider-reported image properties, not inferred from the request."""
+
+    index: int = Field(..., description="Zero-based position in provider data.")
+    artifact_id: str | None = Field(
+        None, description="Matching artifact ID, or null without output."
+    )
+    size: str | None = Field(None, description="Returned WIDTHxHEIGHT in pixels; null if absent.")
+    output_format: str | None = Field(None, description="Returned image format; null if absent.")
+    background: Literal["opaque", "transparent"] | None = Field(
+        None, description="Actual provider-reported background; null if absent."
+    )
+
+
+class SeedreamGenerationMetadata(BaseModel):
+    """Metadata for one completed Seedream provider call."""
+
+    variation_index: int = Field(..., description="Zero-based variation index; 0 for single calls.")
+    images: list[SeedreamImageMetadata] = Field(
+        default_factory=list, description="Image metadata in provider data order."
+    )
+    safety_identifier: str | None = Field(
+        None, description="Provider-echoed end-user identifier; null if absent."
+    )
+    usage: SeedreamUsage | None = Field(None, description="Per-call usage; null if absent.")
 
 
 class SeedanceQueueInfo(BaseModel):

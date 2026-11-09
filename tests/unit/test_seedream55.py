@@ -3,12 +3,16 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from pydantic import ValidationError
 
 from ark_mcp.config.env import Settings, get_settings
 from ark_mcp.config.model_capabilities import (
     CapabilityRegistry,
     refresh_capability_registry,
 )
+from ark_mcp.observability.logger import info as log_info
+from ark_mcp.providers.modelark.schemas import SeedreamProviderResponse
+from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.tools._capability_checks import check_image_request
 from ark_mcp.tools._seedream_shared import build_seedream_request
 from ark_mcp.tools.seedream_generate_image import SeedreamGenerateInput
@@ -94,7 +98,7 @@ def test_seedream55_transparency_accepts_optional_non_png_references(
     [
         ({"output_format": "jpeg", "background": "transparent"}, "requires output_format"),
         ({"max_images": 2}, "batch generation"),
-        ({"prompt_optimization": "fast"}, "prompt_optimization is not supported"),
+        ({"prompt_optimization": "fast"}, "prompt_optimization 'fast' is not supported"),
         (
             {"images": [{"kind": "url", "url": "https://example.com/image.png"}] * 11},
             "maximum of 10",
@@ -167,3 +171,142 @@ def test_seedream55_request_matches_supplied_transparent_example(
         "watermark": True,
         "stream": False,
     }
+
+
+@pytest.mark.parametrize(
+    "size",
+    [
+        None,
+        "1K",
+        "1.5K",
+        "2K",
+        "1280x720",
+        "2048x2048",
+        "2140x2160",
+        "2300x2000",
+        "4880x305",
+        "305x4880",
+        "2830x1634",
+    ],
+)
+def test_seedream55_accepts_documented_sizes(
+    registry: CapabilityRegistry, size: str | None
+) -> None:
+    request = SeedreamGenerateInput(prompt="test", size=size)
+    assert check_image_request(request, registry.resolve_image_model(MODEL)) == []
+    assert registry.validate_image_size(MODEL, size) == size
+
+
+@pytest.mark.parametrize(
+    "size",
+    [
+        "",
+        "auto",
+        "3K",
+        "4K",
+        "2880x2880",
+        "1279x720",
+        "2300x2011",
+        "2091x2212",
+        "4881x305",
+        "305x4881",
+        "0x2048",
+        "-1000x2048",
+        "2048.0x2048",
+        "2048X2048",
+        "2048x2048\n",
+        "9" * 5000 + "x1000",
+    ],
+)
+def test_seedream55_rejects_invalid_sizes_before_request_building(
+    registry: CapabilityRegistry, size: str
+) -> None:
+    request = SeedreamGenerateInput(prompt="test", size=size)
+    assert any(
+        "size" in error
+        for error in check_image_request(request, registry.resolve_image_model(MODEL))
+    )
+    with pytest.raises(ValueError, match=r"[Ss]ize"):
+        registry.validate_image_size(MODEL, size)
+
+
+@pytest.mark.parametrize("output_format", [None, "png", "jpeg"])
+def test_auto_background_is_55_only(
+    registry: CapabilityRegistry, output_format: str | None
+) -> None:
+    request = SeedreamGenerateInput(prompt="test", background="auto", output_format=output_format)
+    assert check_image_request(request, registry.resolve_image_model(MODEL)) == []
+    assert any(
+        "background='auto'" in error
+        for error in check_image_request(request, registry.resolve_image_model(PRO_MODEL))
+    )
+
+
+def test_55_standard_optimization_does_not_inherit_pro_fast_default(
+    registry: CapabilityRegistry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SEEDREAM_PROMPT_OPTIMIZATION_MODE", "fast")
+    get_settings.cache_clear()
+    registry = refresh_capability_registry()
+    caps = registry.resolve_image_model(MODEL)
+    request = SeedreamGenerateInput(prompt="test", prompt_optimization="standard")
+    assert check_image_request(request, caps) == []
+    assert caps.resolve_prompt_optimization(None) is None
+    assert caps.resolve_prompt_optimization("standard") == "standard"
+    assert registry.resolve_image_model(PRO_MODEL).resolve_prompt_optimization(None) == "fast"
+    body = build_seedream_request(request, caps, None, prompt="test", seed=None).model_dump(
+        exclude_none=True
+    )
+    assert body["optimize_prompt_options"] == {"mode": "standard"}
+
+
+@pytest.mark.parametrize("identifier", ["user-hash", "a" * 64])
+def test_safety_identifier_is_forwarded(registry: CapabilityRegistry, identifier: str) -> None:
+    request = SeedreamGenerateInput(prompt="test", safety_identifier=identifier)
+    assert check_image_request(request, registry.resolve_image_model(MODEL)) == []
+    assert check_image_request(request, registry.resolve_image_model(PRO_MODEL)) == []
+    body = build_seedream_request(
+        request, registry.resolve_image_model(MODEL), None, prompt="test", seed=None
+    ).model_dump(exclude_none=True)
+    assert body["safety_identifier"] == identifier
+
+
+@pytest.mark.parametrize("identifier", ["", "a" * 65, "user\n", "\x00", "\u00e9", "user id"])
+def test_safety_identifier_rejects_invalid_input(identifier: str) -> None:
+    with pytest.raises(ValidationError, match="safety_identifier"):
+        SeedreamGenerateInput(prompt="test", safety_identifier=identifier)
+
+
+@pytest.mark.parametrize(
+    "extra", [{"layer_decomposition": True}, {"layer_decomposition_options": {"max_images": 10}}]
+)
+def test_layer_decomposition_is_rejected_not_silently_ignored(extra: dict[str, object]) -> None:
+    with pytest.raises(ValidationError, match="Extra inputs"):
+        SeedreamGenerateInput(prompt="test", **extra)
+
+
+def test_seedream_metadata_does_not_infer_absent_provider_values() -> None:
+    metadata = SeedreamService.extract_generation_metadata(
+        SeedreamProviderResponse(data=[{"url": "https://example.com/output.png"}])
+    )
+    assert metadata.variation_index == 0
+    assert metadata.safety_identifier is None
+    assert metadata.usage is None
+    assert metadata.images[0].background is None
+    assert metadata.images[0].size is None
+    assert metadata.images[0].output_format is None
+
+
+def test_seedream_metadata_rejects_invalid_actual_background() -> None:
+    with pytest.raises(ValidationError, match="background"):
+        SeedreamProviderResponse(data=[{"background": "auto"}])
+
+
+def test_safety_identifier_is_redacted_recursively_in_logs(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    log_info("test", response={"generations": [{"safety_identifier": "sha256-test-user"}]})
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "sha256-test-user" not in captured.err
+    assert "[REDACTED]" in captured.err

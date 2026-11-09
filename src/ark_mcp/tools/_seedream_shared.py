@@ -11,7 +11,12 @@ from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
-from ark_mcp.domain.models import VariationError, VariationResult, VariationSummary
+from ark_mcp.domain.models import (
+    SeedreamGenerationMetadata,
+    VariationError,
+    VariationResult,
+    VariationSummary,
+)
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
@@ -95,6 +100,7 @@ def build_seedream_request(
         watermark=request.watermark,
         prompt_optimization=caps.resolve_prompt_optimization(request.prompt_optimization),
         background=request.background,
+        safety_identifier=request.safety_identifier,
     )
 
 
@@ -162,13 +168,14 @@ async def run_seedream_variations(
     images: list[dict[str, Any]] | None,
     prompts: list[str],
     seeds: list[int | None],
-) -> VariationSummary:
+) -> tuple[VariationSummary, list[SeedreamGenerationMetadata]]:
     """Generate one image per prompt in parallel, capturing failures per variation."""
     settings = get_settings()
     log_cost_estimate(product="image", variations=len(prompts), model_id=caps.model_id)
     store = get_runtime(ctx).artifact_store
     owner = get_principal(ctx)
     service = SeedreamService()
+    generations: dict[int, SeedreamGenerationMetadata] = {}
 
     async def generate_one(index: int, progress: VariationProgress) -> VariationResult:
         try:
@@ -187,6 +194,9 @@ async def run_seedream_variations(
                 response, request_id = await call_with_retry(
                     lambda: service.generate(provider_request)
                 )
+            generations[index] = service.extract_generation_metadata(
+                response, variation_index=index
+            )
             artifact = await _persist_variation(
                 response,
                 request,
@@ -240,7 +250,11 @@ async def run_seedream_variations(
         succeeded=summary.succeeded,
         failed=summary.failed,
     )
-    return summary
+    for result in summary.variations:
+        metadata = generations.get(result.index)
+        if metadata is not None and metadata.images and result.artifact is not None:
+            metadata.images[0].artifact_id = result.artifact.id
+    return summary, [generations[index] for index in sorted(generations)]
 
 
 async def _persist_variation(

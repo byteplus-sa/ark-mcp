@@ -766,14 +766,15 @@ Explicit existing defaults stay unchanged. See the
 | `point` | EditCoordinate | No | Edit mode: `{x, y}` in normalized `0..999` space on the **first** image. Requires `images` |
 | `bbox` | EditBbox | No | Edit mode: `{x1, y1, x2, y2}` in normalized `0..999` space (`x1 <= x2`, `y1 <= y2`) on the **first** image. Requires `images` |
 | `model` | string | No | Exact configured model ID; omit for the default |
-| `size` | string | No | Size tier (e.g. `"2K"`) or dimensions (e.g. `"2048x2048"`); provider validates allowed sizes |
+| `size` | string | No | 5.5: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive. `auto` is not a generation size. Older families remain provider-validated |
 | `seed` | integer | No | `-1` to `2147483647`. For a single call it is sent as is. **With `variations > 1` it is the base seed**: omitted lets the provider randomize each variation, `-1` picks a random seed per variation (recorded in `summary`), and `N` uses `N`, `N+1`, `N+2`, ... |
 | `max_images` | integer | No | Images from one provider call (1-15), batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | Defaults to `png` on 5.5 and for transparent output; otherwise provider default |
 | `response_format` | `"url"` \| `"b64_json"` | No | Provider response format |
 | `watermark` | boolean | No | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | Not exposed on early-access 5.5; omit it. 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
-| `background` | `"opaque"` \| `"transparent"` | No | `transparent` needs `output_format` omitted or `png`. On **5.5**, accepts text-only prompts or references without alpha. On **5.0 Pro**, requires exactly one PNG that already has transparent pixels; this preserves transparency, not background removal. Non-PNG Base64 input is rejected locally on Pro |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | 5.5: `standard` only (provider default); `fast` rejected. 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
+| `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | 5.5 defaults to `auto` (prompt decides; JPEG always opaque). `auto` is 5.5-only. `transparent` requires PNG output; 5.5 accepts text or references without alpha; Pro requires exactly one already-transparent PNG |
+| `safety_identifier` | string | No | 5.5/Pro: stable hashed end-user ID, 1-64 non-space printable ASCII characters. Never send raw personal data; redacted from previews and logs |
 | `variations` | integer | No | Independent generations to run in parallel (1-10, default 1); partial failures are reported per variation |
 | `variation_prompts` | list[string] | No | One prompt per variation, overriding `prompt`; must have exactly `variations` entries |
 | `persist` | boolean | No | Whether to persist output (default: true) |
@@ -782,6 +783,10 @@ Explicit existing defaults stay unchanged. See the
 | `overwrite` | boolean | No | Allow `output_path` to replace an existing file (default: false) |
 
 \* Either `prompt` or `variation_prompts` must be provided.
+
+Unknown fields, including `layer_decomposition` and
+`layer_decomposition_options`, are rejected before job submission.
+Layer decomposition and rich-text OCR are not exposed.
 
 With `point` or `bbox`, the tool prepends coordinate markup to every prompt
 (`Image 1<bbox>x1 y1 x2 y2</bbox>` and/or `Image 1<point>x y</point>`), so
@@ -797,9 +802,10 @@ Returns `SeedreamGenerateOutput`:
 | `dry_run` | `true` when nothing was generated; see `preview` |
 | `artifacts` | Images from a single call (`variations=1`); empty for variations and dry runs |
 | `item_errors` | Per-image errors from a single provider batch |
-| `usage` | Token usage of a single call; `null` for variations and dry runs |
+| `usage` | Single-call usage, including provider-reported `input_images`, `generated_images`, `output_tokens`, and legacy token fields; `null` for variations and dry runs |
 | `summary` | `VariationSummary` when `variations > 1`: `total`, `succeeded`, `failed`, and per-variation `index`, `seed`, artifact or error |
-| `preview` | Dry run only: `requests` (provider bodies, one per variation, with reference image URLs reduced to scheme and host and inline Base64 to its size) and `estimated_cost_usd` (a static estimate, not a provider quote) |
+| `generations` | Completed provider-call metadata, ordered by zero-based `variation_index`. Each contains `images` (provider-data `index`, matching `artifact_id`, returned `size`, `output_format`, actual `background`), per-call `usage`, and echoed `safety_identifier`. Missing provider values stay `null`; empty for dry runs. Available metadata survives partial variation failures |
+| `preview` | Dry run only: `requests` (provider bodies, one per variation, with URLs reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted) and static `estimated_cost_usd` |
 
 A storage failure does not fail the call. Each image degrades on its own:
 URL outputs come back as `id="provider-url"` references to the temporary
