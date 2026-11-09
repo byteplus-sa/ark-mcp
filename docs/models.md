@@ -100,8 +100,9 @@ verification remain pre-release checks.
 > default; families without a default send no mode and the provider applies its
 > own.
 
-> There is **no aspect-ratio field** on image capabilities. Only
-> `supported_sizes` (defaulting to `None` = unrestricted).
+> Images have no separate `ratio` tool input. 5.5 custom `WIDTHxHEIGHT`
+> dimensions are checked against `custom_size_aspect_ratio_range` and
+> `custom_size_pixels_range`; older families leave those bounds unspecified.
 
 ## Video capabilities (`VideoCapabilities`)
 
@@ -246,7 +247,7 @@ from the model ID string):
 |---|---|
 | Unknown `model_id` | not in the configured registry (`ValueError` lists allowed IDs) |
 | Image `output_format` | not in `supported_output_formats` (e.g. `png` on a `4X` model, which only supports `jpeg`) |
-| Image `size` | `supported_sizes` is set and `size` not in it (Seedream defaults leave this `None`, so any size passes) |
+| Image `size` | Not a supported named tier or valid custom dimensions. 5.5 enforces pixel-count and aspect-ratio bounds; older families leave sizes to the provider |
 | Video `resolution` | not in `supported_resolutions` (e.g. `1080p`/`4k` on `MINI`/`FAST`) |
 | Video `duration` | outside `duration_range` unless `-1` (auto) |
 
@@ -269,7 +270,7 @@ missing required fields, and non-loopback HTTP without JWT.
 - It is **not a cost table.** Cost estimation (see
   [runtime.md](runtime.md#cost-estimation-toolscostpy)) is per product and
   per variation; families do not affect cost.
-- It does **not** validate aspect ratios.
+- It does **not** infer size or ratio limits for families without configured bounds.
 - It does **not** call the provider — it is a local, pre-flight validation
   layer built entirely from configuration.
 
