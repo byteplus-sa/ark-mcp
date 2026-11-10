@@ -770,7 +770,7 @@ Explicit existing defaults stay unchanged. See the
 | `seed` | integer | No | `-1` to `2147483647`. For a single call it is sent as is. **With `variations > 1` it is the base seed**: omitted lets the provider randomize each variation, `-1` picks a random seed per variation (recorded in `summary`), and `N` uses `N`, `N+1`, `N+2`, ... |
 | `max_images` | integer | No | Images from one provider call (1-15), batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | Defaults to `png` on 5.5 and for transparent output; otherwise provider default |
-| `response_format` | `"url"` \| `"b64_json"` | No | Provider response format |
+| `response_format` | `"url"` \| `"b64_json"` | No | Base64 requires `persist=true`; invalid combinations are rejected before submission, even for dry runs |
 | `watermark` | boolean | No | AIGC watermark |
 | `prompt_optimization` | `"standard"` \| `"fast"` | No | 5.5: `standard` only (provider default); `fast` rejected. 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
 | `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | 5.5 defaults to `auto` (prompt decides; JPEG always opaque). `auto` is 5.5-only. `transparent` requires PNG output; 5.5 accepts text or references without alpha; Pro requires exactly one already-transparent PNG |
@@ -801,11 +801,20 @@ Returns `SeedreamGenerateOutput`:
 | `provider`, `model`, `created_at` | Provider (`byteplus-modelark`), model ID used, and ISO-8601 timestamp |
 | `dry_run` | `true` when nothing was generated; see `preview` |
 | `artifacts` | Images from a single call (`variations=1`); empty for variations and dry runs |
-| `item_errors` | Per-image errors from a single provider batch |
+| `item_errors` | Single-call image errors: `NO_OUTPUT` for empty/missing output, `NO_DELIVERABLE_OUTPUT` for unexpected Base64-only output without persistence |
 | `usage` | Single-call usage, including provider-reported `input_images`, `generated_images`, `output_tokens`, and legacy token fields; `null` for variations and dry runs |
 | `summary` | `VariationSummary` when `variations > 1`: `total`, `succeeded`, `failed`, and per-variation `index`, `seed`, artifact or error |
-| `generations` | Completed provider-call metadata, ordered by zero-based `variation_index`. Each contains `images` (provider-data `index`, matching `artifact_id`, returned `size`, `output_format`, actual `background`), per-call `usage`, and echoed `safety_identifier`. Missing provider values stay `null`; empty for dry runs. Available metadata survives partial variation failures |
-| `preview` | Dry run only: `requests` (provider bodies, one per variation, with URLs reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted) and static `estimated_cost_usd` |
+| `generations` | Completed calls ordered by `variation_index`, with `request_id`, submitted `seed`, final `prompt_sha256` and allowlisted `request_options`; per-call provider usage/identifier echo and `images` with artifact mapping, provider reports and independent `inspection`. Absent provider values stay null; empty for dry runs |
+| `preview` | Dry run only: redacted `requests`, `estimated_cost_usd` and `price_source` (`catalog`: fresh cached account image rate, `builtin`: fallback). Neither billing nor a provider quote; no pricing fetch |
+
+Image inspection reports decoded dimensions, format and actual alpha separately
+from provider claims: `verified`, `mismatch`, `invalid` or `unavailable`, or null
+for URL-only delivery. It retains billed artifacts without rerolls; verified
+bytes do not establish visual acceptance. A single-call seed of `-1` or null is
+provider randomness, not a recovered actual seed. Full contracts:
+[API reference](api-reference.md#3-seedream_generate_image),
+[image inspection](artifacts.md#seedream-image-inspection) and
+[bounded review/edit](integration-guide.md#seedream-review-and-edit).
 
 A storage failure does not fail the call. Each image degrades on its own:
 URL outputs come back as `id="provider-url"` references to the temporary

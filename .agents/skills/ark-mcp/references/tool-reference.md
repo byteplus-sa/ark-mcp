@@ -26,7 +26,7 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 - **No per-variation timeout.** Queue wait never counts; one batch deadline bounds the call. A deadline or storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry), `generating` (may have completed, **do not retry blindly**), `persisting` (billed output not stored; the provider URL may still be in the result).
 - **`variation_prompts`** must have exactly `variations` entries and replaces `prompt` (and satisfies "prompt required").
 - **Local export:** image and audio variations need an `output_path` directory ending in `/`. Video variations are polled together with **one** `gen_task_get` call over all non-null `task_id`s.
-- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is a static estimate, not a provider quote. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
+- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is an estimate, not billing or a provider quote. Seedream adds `price_source`: `catalog` for a fresh cached image rate, otherwise `builtin`. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
 - **Runtime validation reports everything at once.** Per-model limits are checked from the capability registry before any provider call, and all violations come back in one error ending with `Call ark_list_models(kind=...) for per-model limits.` Fix them together.
 
 ## Seedance
@@ -116,7 +116,7 @@ Needs `BYTEPLUS_MODELARK_API_KEY`. **`seedream_generate_image` is the only Seedr
 
 ### Seeds
 
-A fixed `seed` with the same prompt reproduces a single image. With `variations > 1`, `seed` is the **base seed**:
+A fixed `seed` reproduces request settings, not guaranteed identical pixels. Single-call `-1` or omitted seed remains provider randomness, not a recovered actual seed. With `variations > 1`, `seed` is the **base seed**:
 
 | `seed` | Per-variation seeds |
 |---|---|
@@ -160,6 +160,17 @@ The following example selects Pro, which must be bound by the operator:
 
 - `persist=true` (default) stores each image as a durable artifact. **A storage failure never drops a billed image**: the result carries the 24-hour provider URL (id `provider-url`) with `persistence_error`, or, for Base64 output, `fallback_data` inline up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`. Check each artifact's `persistence_error` and download from `source_url`/`uri` before it expires. Details: [polling-and-artifacts.md](polling-and-artifacts.md).
 - `persist=false` returns provider-URL references only.
+- Explicit `response_format="b64_json"` with `persist=false` is rejected before
+  submission, even for dry runs. Missing output yields `NO_OUTPUT`; unexpected
+  Base64-only delivery without persistence yields `NO_DELIVERABLE_OUTPUT`.
+- `generations` includes single/variation request IDs, submitted seeds,
+  final-prompt hashes and allowlisted options excluding private media and
+  identifiers. `images[].inspection` independently measures decoded format,
+  dimensions and actual alpha: `verified`, `mismatch`, `invalid`, `unavailable`,
+  or null for URL-only delivery. It preserves artifacts, never overwrites
+  provider reports, and does not establish visual quality or trigger paid retries.
+- Use the bounded [review/edit workflow](workflows.md#seedream-generate-review-edit)
+  before accepting text, counts or geometry; publishing previews are a separate check.
 - `output_path` (stdio local export) needs `persist=true` and **must be a directory ending in `/`** when `variations > 1` or `max_images > 1`.
 - `asset://` references are **not** accepted by Seedream natively: rejected unless `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental; sends the asset's temporary download URL and only works for assets this account can look up).
 - Dry-run cost covers `variations x max_images` images.

@@ -143,6 +143,26 @@ class SeedreamUsage(BaseModel):
     output_tokens: int | None = Field(None, description="Output tokens reported by provider.")
 
 
+class SeedreamImageInspection(BaseModel):
+    """Local byte inspection, independent of provider reports and visual quality."""
+
+    status: Literal["verified", "mismatch", "invalid", "unavailable"] = Field(
+        ...,
+        description="Byte checks passed, claims differ, bytes invalid, or inspection unavailable.",
+    )
+    width: int | None = Field(default=None, description="Decoded width in pixels.")
+    height: int | None = Field(default=None, description="Decoded height in pixels.")
+    output_format: str | None = Field(default=None, description="Byte-detected png or jpeg format.")
+    has_transparency: bool | None = Field(
+        default=None,
+        description="True when decoded pixels contain alpha below 255; null if unchecked.",
+    )
+    issues: list[str] = Field(
+        default_factory=list,
+        description="Safe byte-check or claim-mismatch codes; no paid retries.",
+    )
+
+
 class SeedreamImageMetadata(BaseModel):
     """Provider-reported image properties, not inferred from the request."""
 
@@ -155,12 +175,27 @@ class SeedreamImageMetadata(BaseModel):
     background: Literal["opaque", "transparent"] | None = Field(
         None, description="Actual provider-reported background; null if absent."
     )
+    inspection: SeedreamImageInspection | None = Field(
+        default=None, description="Local byte checks; null for URL-only delivery or no artifact."
+    )
 
 
 class SeedreamGenerationMetadata(BaseModel):
     """Metadata for one completed Seedream provider call."""
 
     variation_index: int = Field(..., description="Zero-based variation index; 0 for single calls.")
+    request_id: str | None = Field(default=None, description="Provider request ID; null if absent.")
+    seed: int | None = Field(
+        default=None,
+        description="Submitted seed; -1 or null means provider randomness, not a recovered seed.",
+    )
+    prompt_sha256: str | None = Field(
+        default=None, description="SHA-256 of the UTF-8 submitted prompt including edit markup."
+    )
+    request_options: dict[str, str | int | bool] = Field(
+        default_factory=dict,
+        description="Allowlisted submitted options and reference count; excludes prompt, media and identifiers. Omitted options use provider defaults.",
+    )
     images: list[SeedreamImageMetadata] = Field(
         default_factory=list, description="Image metadata in provider data order."
     )

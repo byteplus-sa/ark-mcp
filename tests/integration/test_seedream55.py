@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 from collections.abc import Iterator
+from io import BytesIO
 from typing import Any
 
 import httpx
@@ -11,6 +12,7 @@ import pytest
 import respx
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
+from PIL import Image
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import refresh_capability_registry
@@ -106,7 +108,10 @@ async def test_seedream55_transparent_dry_run_matches_example(configured: None) 
 async def test_seedream55_job_keeps_png_metadata_when_format_is_omitted(
     configured: None, variations: int, persist: bool
 ) -> None:
-    image_bytes = b"test-png-output"
+    buffer = BytesIO()
+    with Image.new("RGBA", (960, 960), (255, 0, 0, 0)) as image:
+        image.save(buffer, format="PNG")
+    image_bytes = buffer.getvalue()
     item = (
         {"b64_json": base64.b64encode(image_bytes).decode()}
         if persist
@@ -240,6 +245,7 @@ async def test_seedream55_preserves_actual_metadata_and_usage(
                 "size": "1776x2368",
                 "output_format": "png",
                 "background": background,
+                "inspection": None,
             }
         ]
         assert all(metadata["usage"][key] == value for key, value in usage.items())

@@ -31,7 +31,7 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot
 from ark_mcp.tools._asset_shared import resolve_asset_references
 from ark_mcp.tools._capability_checks import check_image_request, raise_on_violations
-from ark_mcp.tools._cost import estimate_cost, log_cost_estimate
+from ark_mcp.tools._cost import image_cost_estimate, log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._local_export import local_export, output_path_field, overwrite_field
 from ark_mcp.tools._local_export import needs_persist as _needs_persist
@@ -41,8 +41,10 @@ from ark_mcp.tools._seedream_shared import (
     MAX_PROMPT_CHARACTERS,
     EditBbox,
     EditCoordinate,
+    attach_image_inspection,
     build_seedream_request,
     edit_prompt,
+    generation_metadata,
     run_seedream_variations,
     store_response_images,
 )
@@ -119,7 +121,7 @@ class SeedreamGenerateInput(BaseModel):
         description="Output format. Defaults to png on 5.5 and for transparent backgrounds; otherwise provider default.",
     )
     response_format: Literal["url", "b64_json"] | None = Field(
-        None, description="Provider response format: URL or Base64 JSON."
+        None, description="Provider response format: URL or Base64 JSON (requires persist=true)."
     )
     watermark: bool | None = Field(None, description="Apply an AIGC watermark.")
     prompt_optimization: Literal["standard", "fast"] | None = Field(
@@ -169,6 +171,8 @@ class SeedreamGenerateInput(BaseModel):
     @model_validator(mode="after")
     def validate_request_shape(self) -> SeedreamGenerateInput:
         """Check prompt, edit and variation combinations that hold for every model."""
+        if self.response_format == "b64_json" and not self.persist:
+            raise ValueError("response_format='b64_json' requires persist=true; use url otherwise.")
         if self.variation_prompts is not None and len(self.variation_prompts) != self.variations:
             raise ValueError(
                 f"variation_prompts must have exactly {self.variations} entries; got "
@@ -211,7 +215,10 @@ class SeedreamGeneratePreview(BaseModel):
     )
     estimated_cost_usd: float = Field(
         ...,
-        description="Static estimate in USD from the server's price table; not a provider quote.",
+        description="Estimated USD using cached account pricing or built-in fallback; not billing.",
+    )
+    price_source: Literal["catalog", "builtin"] = Field(
+        "builtin", description="catalog: cached account image rate; builtin: fallback estimate."
     )
 
 
@@ -229,10 +236,11 @@ class SeedreamGenerateOutput(BaseModel):
         description="Images from a single call (variations=1). Empty for variations and dry runs.",
     )
     item_errors: list[SeedreamItemError] = Field(
-        default_factory=list, description="Per-image errors from a single provider batch."
+        default_factory=list,
+        description="Single-call image errors, including NO_OUTPUT and NO_DELIVERABLE_OUTPUT.",
     )
     usage: SeedreamUsage | None = Field(
-        None, description="Token usage of a single call; null for variations and dry runs."
+        None, description="Provider image/token usage; null for variations and dry runs."
     )
     summary: VariationSummary | None = Field(
         None,
@@ -240,7 +248,7 @@ class SeedreamGenerateOutput(BaseModel):
     )
     generations: list[SeedreamGenerationMetadata] = Field(
         default_factory=list,
-        description="Metadata for completed provider calls, including variations; empty for dry runs.",
+        description="Completed-call provenance, provider reports and byte checks; empty for dry runs.",
     )
     preview: SeedreamGeneratePreview | None = Field(
         None, description="Request bodies and cost estimate; set only for a dry run."
@@ -344,14 +352,24 @@ async def _generate_single(
     artifacts = await store_response_images(
         ctx, response, persist=input.persist, output_format=request.output_format
     )
-    metadata = service.extract_generation_metadata(response)
+    metadata = generation_metadata(response, request, request_id)
     output_indices = [
         index
         for index, item in enumerate(response.data)
         if item.url or (input.persist and item.b64_json)
     ]
     for index, artifact in zip(output_indices, artifacts, strict=True):
-        metadata.images[index].artifact_id = artifact.id
+        await attach_image_inspection(ctx, artifact, metadata.images[index], request)
+    item_errors = SeedreamService.extract_item_errors(response)
+    for index, item in enumerate(response.data):
+        if item.b64_json and not item.url and not input.persist:
+            item_errors.append(
+                SeedreamItemError(
+                    index=index,
+                    code="NO_DELIVERABLE_OUTPUT",
+                    message="Provider returned Base64 without persistence; output cannot be delivered.",
+                )
+            )
     await ctx.report_progress(progress=100, total=100)
     log_info(
         "seedream_complete",
@@ -363,7 +381,7 @@ async def _generate_single(
         model=caps.model_id,
         created_at=SeedreamService.get_created_at(response),
         artifacts=artifacts,
-        item_errors=SeedreamService.extract_item_errors(response),
+        item_errors=item_errors,
         usage=SeedreamService.extract_usage(response),
         generations=[metadata],
     )
@@ -384,14 +402,14 @@ def _preview(
         )
         for prompt, seed in zip(prompts, seeds, strict=True)
     ]
-    cost = estimate_cost(
-        product="image", variations=len(prompts) * (input.max_images or 1), model_id=caps.model_id
-    )
+    cost, source = image_cost_estimate(caps.model_id, len(prompts) * (input.max_images or 1))
     return SeedreamGenerateOutput(
         model=caps.model_id,
         created_at=datetime.now(UTC).isoformat(),
         dry_run=True,
-        preview=SeedreamGeneratePreview(requests=requests, estimated_cost_usd=cost),
+        preview=SeedreamGeneratePreview(
+            requests=requests, estimated_cost_usd=cost, price_source=source
+        ),
     )
 
 

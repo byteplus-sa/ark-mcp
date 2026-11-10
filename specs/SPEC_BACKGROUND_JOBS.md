@@ -4,7 +4,7 @@ type: spec
 status: accepted
 horizon: current
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-11-10
 tags: [mcp, fastmcp, background-jobs, tasks, security]
 source:
   - https://gofastmcp.com/servers/tasks
@@ -245,7 +245,7 @@ admissions: `status` is `accepted` or `rejected`, `path` is `compatibility`
 
 - **FastMCP internals.** The adapter imports `fastmcp_tasks.creation.create_task`
   and `fastmcp_tasks.handlers.tasks_get` / `tasks_cancel`, which are not public
-  API. The dependency is pinned to `fastmcp[tasks]>=4.0.3,<4.1`; only
+  API. The dependency is pinned to `fastmcp[tasks]>=4.1.6,<4.2`; only
   `BackgroundJobBridge` may import them.
 - **No listing or input API.** There is no `ark_job_list` and no
   `ark_job_update`; callers keep the job ID returned at submission.

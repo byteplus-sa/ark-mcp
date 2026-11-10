@@ -144,4 +144,12 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 
 ## Health
 
-**`seed-health://status`** is an MCP resource that needs no authentication and exposes no credentials. It prints the build stamp, a healthy status, which products are configured (ModelArk, Seed 3D, asset library, Seed Audio, VOD AI MediaKit, OmniHuman, TOS, S3, speech-to-text), the object-storage backend, the artifact backend, and the active transport. Over HTTP transport, `/health` (liveness), `/ready` (artifact storage writable, optional provider checks), and `/metrics` are also available. For per-service enablement and the setting that fixes a disabled one, prefer the `services` field of `ark_list_models`. Environment variables: [environment.md](environment.md).
+**`seed-health://status`** is an MCP resource that needs no authentication and
+exposes no credentials or output-root paths. It prints the build stamp, configured
+products, storage backends, transport, effective Seedream default model/family
+and background-job local-export configuration. These are configuration-only
+diagnostics, not provider authorization or filesystem readiness. A configured
+absolute `OUTPUT_ROOTS` entry still needs request preflight; client roots do not
+exist in jobs. Over HTTP, `/health` (liveness), `/ready` (storage readiness,
+optional provider checks) and `/metrics` are also available. For per-service
+enablement prefer `ark_list_models.services`. Settings: [environment.md](environment.md).

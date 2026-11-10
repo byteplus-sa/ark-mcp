@@ -82,8 +82,17 @@ Source: [Seedream 5.5 early-access API parameter description](https://bytedance.
 revision 579, accessed 2026-11-09, including the 2026-11-07 pixel-limit reduction.
 The document is subject to change; the
 [public image API](https://docs.byteplus.com/en/docs/modelark/image-generation-api)
-takes precedence after release. Authorized live generation and actual PNG-alpha
-verification remain pre-release checks.
+takes precedence after release. An authorized 70-case text-to-image benchmark
+completed generation and persistence for every case; visual acceptance was a
+separate review. It did not exercise live editing, point/bbox behavior or requested
+transparent PNG alpha. Those remain opt-in pre-release checks with
+`scripts/smoke_seedream55.py`; the script is offline by default.
+
+Per-call provenance records the provider request ID, submitted seed, final-prompt
+SHA-256 and allowlisted options. Advisory byte inspection measures format,
+dimensions and actual alpha without replacing provider reports. It does not
+prove prompt adherence or visual quality; see [artifacts](artifacts.md#seedream-image-inspection)
+and the [review/edit workflow](integration-guide.md#seedream-review-and-edit).
 
 > `default_prompt_optimization_mode` controls what 5.0 Pro sends as
 > `optimize_prompt_options.mode` when a caller omits `prompt_optimization`. It

@@ -485,7 +485,7 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `seed` | integer | No | — | -1 to 2147483647; the **base seed** when `variations > 1` (see below) |
 | `max_images` | integer | No | — | 1-15 images from **one provider call**; batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | `png` on 5.5 and transparent output; provider default otherwise | Model-dependent |
-| `response_format` | `"url"` \| `"b64_json"` | No | — | Provider response format |
+| `response_format` | `"url"` \| `"b64_json"` | No | — | Base64 requires `persist=true`; the unusable combination is rejected even for dry runs, before submission |
 | `watermark` | boolean | No | — | AIGC watermark |
 | `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.5; operator setting on Pro | 5.5 rejects `fast`; Pro accepts both. Omitted 5.5 mode uses the provider default |
 | `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | `auto` on 5.5; `opaque` otherwise | `auto` is 5.5-only; JPEG always opaque in auto mode. Transparent output requires PNG. 5.5 accepts text or references without alpha; Pro needs exactly one already-transparent PNG |
@@ -556,18 +556,37 @@ variations, and dry runs**:
 | `created_at` | string | ISO-8601 |
 | `dry_run` | boolean | `true` when nothing was generated; see `preview` |
 | `artifacts` | list[ArtifactRef] | Images from a single call (`variations=1`); an image that could not be stored is returned as a `provider-url` or `inline-fallback` reference with `persistence_error`. **Empty for variations and dry runs** |
-| `item_errors` | list[SeedreamItemError] | Per-image errors (`index`, `code`, `message`) from a single provider batch |
+| `item_errors` | list[SeedreamItemError] | Single-call errors (`index`, `code`, `message`): `NO_OUTPUT` for empty/missing output, `NO_DELIVERABLE_OUTPUT` for unexpected Base64-only output with `persist=false` |
 | `usage` | SeedreamUsage \| null | Single-call usage: legacy token fields plus `input_images`, `generated_images`, `output_tokens`; `null` for variations and dry runs |
 | `summary` | VariationSummary \| null | Per-variation `index`, `seed`, artifact or error, and `request_id` when `variations > 1` |
-| `generations` | list[SeedreamGenerationMetadata] | Completed provider calls ordered by `variation_index` (0 for single calls). Each has per-call `usage`, echoed `safety_identifier`, and `images`: provider-data `index`, matching `artifact_id`, actual `size`, `output_format`, and `background` (`opaque`/`transparent`). Absent provider values stay `null`; empty on dry runs |
+| `generations` | list[SeedreamGenerationMetadata] | Completed provider calls ordered by `variation_index` (0 for single calls); provenance, provider reports and advisory image inspections, described below. Empty on dry runs |
 | `preview` | SeedreamGeneratePreview \| null | Set only for a dry run |
+
+**Per-call provenance and image metadata:**
+
+| Field | Description |
+|---|---|
+| `request_id` | Provider request ID, or `null` when absent; available for single calls and variations |
+| `seed` | Submitted seed. Single-call `-1`/`null` means provider randomness, not a recovered actual seed |
+| `prompt_sha256` | SHA-256 of the exact UTF-8 submitted prompt, including server-added point/bbox markup |
+| `request_options` | Submitted size, formats, watermark, background, optimization and batch maximum when present, plus reference count. Excludes prompt, media and safety identifier; omitted options are not inferred |
+| `usage`, `safety_identifier` | Provider usage and identifier echo; absent values remain `null` |
+| `images[]` | Provider-data `index`, matching `artifact_id`, provider-reported `size`, `output_format`, `background` and independent `inspection` |
+| `images[].inspection` | `null` for URL-only delivery; otherwise `status`, decoded `width`/`height`, byte-detected `output_format`, actual `has_transparency` and safe `issues` |
+
+Inspection states are `verified`, `mismatch`, `invalid`, or `unavailable`.
+`verified` means byte checks passed, not visual approval. Mismatches and
+inspection failures retain billed artifacts and do not overwrite provider reports
+or trigger another generation. See [image inspection](artifacts.md#seedream-image-inspection).
+Variations report missing/undeliverable outputs as explicit errors in `summary`.
 
 **SeedreamGeneratePreview:**
 
 | Field | Type | Description |
 |---|---|---|
 | `requests` | list[object] | Provider request bodies, one per variation. Reference URLs are reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted |
-| `estimated_cost_usd` | number | Static estimate from the server's price table; **not a provider quote** |
+| `estimated_cost_usd` | number | Cached account rate or built-in fallback estimate; **not actual billing or a provider quote** |
+| `price_source` | `"catalog"` \| `"builtin"` | `catalog`: fresh cached account image rate; `builtin`: missing, stale or unsupported rate fallback. Dry runs never fetch pricing |
 
 ### Examples
 
@@ -679,7 +698,8 @@ variations, and dry runs**:
       { "model": "dola-seedream-5-0-pro-260628", "prompt": "A lighthouse at dusk", "seed": 7, "stream": false, "optimize_prompt_options": { "mode": "standard" } },
       { "model": "dola-seedream-5-0-pro-260628", "prompt": "A lighthouse at dusk", "seed": 8, "stream": false, "optimize_prompt_options": { "mode": "standard" } }
     ],
-    "estimated_cost_usd": 0.08
+    "estimated_cost_usd": 0.06,
+    "price_source": "builtin"
   }
 }
 ```
@@ -1845,7 +1865,11 @@ Returns persisted media by artifact ID with the correct MIME type.
 
 ### seed-health://status
 
-Returns server health and configuration status as plain text.
+Returns server health and configuration status as plain text, including the
+build stamp, effective Seedream default model/family and background-job local
+export configuration. It exposes neither credentials nor output-root paths.
+These diagnostics do not check provider authorization or filesystem readiness;
+`configured; needs request preflight` is not proof a destination is writable.
 
 ---
 

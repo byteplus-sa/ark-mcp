@@ -87,6 +87,15 @@ even when the Pro-only operator setting is `fast`. Omitted 5.5 optimization
 uses the provider's standard default. Background defaults to `auto` on 5.5.
 See [image model limits](models.md#image-capabilities-imagecapabilities).
 
+Read `seed-health://status` to confirm the effective Seedream default model and
+binding family. The resource also reports whether background-job local exports
+have an absolute `OUTPUT_ROOTS` entry (comma-separated paths). It never reveals
+root paths or credentials. These are configuration diagnostics only: they do not
+probe provider authorization, check filesystem readiness, or replace the
+request's destination preflight. Client MCP roots are unavailable inside jobs.
+Seedream dry-run `preview.price_source` distinguishes a cached account image
+rate (`catalog`) from the built-in fallback (`builtin`); neither is actual billing.
+
 ### Seedance default model upgrade note
 
 **`SEEDANCE_DEFAULT_MODEL` now defaults to Seedance 2.5

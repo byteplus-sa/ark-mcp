@@ -182,11 +182,17 @@ class SeedreamService:
         The provider may include partial failures in the ``data`` array.
         """
         errors: list[SeedreamItemError] = []
-        for item in response.data:
-            if item.b64_json is None and item.url is None:
+        if not response.data:
+            return [
+                SeedreamItemError(
+                    index=0, code="NO_OUTPUT", message="Image generation returned no images."
+                )
+            ]
+        for index, item in enumerate(response.data):
+            if not item.b64_json and not item.url:
                 errors.append(
                     SeedreamItemError(
-                        index=item.index if item.index is not None else 0,
+                        index=item.index if item.index is not None else index,
                         code="NO_OUTPUT",
                         message="Image generation produced no output.",
                     )

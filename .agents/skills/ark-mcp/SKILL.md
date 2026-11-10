@@ -125,9 +125,17 @@ flowchart LR
   optimization setting never applies to 5.5.
 - `safety_identifier` on 5.5/Pro must be a stable hashed user ID, 1-64 non-space
   printable ASCII characters; previews and logs redact it.
-- Read `generations` for provider-reported background, size, format, per-call
-  usage and identifier echo, mapped to artifacts and variation indices.
-  Absent metadata stays null. Layer-decomposition/OCR inputs are rejected.
+- `response_format="b64_json"` requires `persist=true`, including dry runs.
+  Missing output is an explicit error, not an artifact-less success.
+- Read `generations` for per-call request ID, submitted seed, exact final-prompt
+  SHA-256 and allowlisted options; provider background/size/format/usage and
+  identifier echo stay separate from local byte `images[].inspection`.
+  Inspection is advisory, preserves billed artifacts and never rerolls.
+  URL-only inspection and absent provider metadata stay null.
+- Delivery is not visual acceptance. Use the bounded
+  [generate/review/edit workflow](references/workflows.md#seedream-generate-review-edit)
+  for text, absence, counts and geometry. Reviewer refusal is `Not evaluated`,
+  not generation failure. Layer-decomposition/OCR inputs are rejected.
 
 ### Polling and persistence
 

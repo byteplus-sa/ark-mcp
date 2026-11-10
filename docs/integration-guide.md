@@ -110,6 +110,67 @@ augmentation instead; that path follows the official
 [FastMCP task documentation](https://gofastmcp.com/servers/tasks). The example
 under [Python Task Workflow](#python-task-workflow) uses it.
 
+## Seedream Review And Edit
+
+Generation delivery and visual acceptance are separate outcomes. This workflow
+uses existing tools; Seedream exposes no native OCR or layer decomposition.
+
+1. Discover the model and dry-run the intended request. Record an explicit
+   paid-attempt limit and USD estimate budget covering generation, any
+   `seed_understand` reviews and edits. `preview.price_source` is `catalog` or
+   `builtin`, not an actual charge. Stop when either limit is reached.
+2. Submit once through `ark_job_submit`. Keep the Ark job ID and completed
+   per-call `request_id`, submitted `seed`, final `prompt_sha256`,
+   `request_options`, usage, artifact ID and artifact SHA-256. Store the original
+   prompt and reference hashes in a private manifest; the hash is not the prompt.
+3. Check `item_errors` or variation errors, persistence and byte `inspection`.
+   A delivered PNG is not automatically a passing image. Inspection problems
+   do not cause paid rerolls.
+4. Review the immutable output visually, using an authorized human or
+   `seed_understand` through an ordinary job. Export/read a durable image or
+   upload it with `media_upload` for a provider-readable reference. Evaluate
+   exact spelling/case, forbidden text (including absence checks), object/person
+   counts, geometry, visibility, anatomy and composition against the brief.
+   An understanding response is fallible evidence, not authoritative OCR.
+5. Record `Pass`, `Partial`, `Fail`, or `Not evaluated` with evidence. A reviewer
+   refusal or unavailable review is `Not evaluated`, not a generation failure;
+   exclude it from assessed pass-rate denominators and do not bypass refusals.
+6. For an authorized correction, call `seedream_generate_image` with the source
+   in `images`, a focused edit instruction and optional structured `point`/`bbox`.
+   Preserve the original; record parent artifact/hash, edit instruction, submitted
+   markup hash, new request/artifact IDs and review as a new paid attempt.
+   A fixed seed helps reproduce request settings but does not guarantee identical
+   pixels or successful text/count/geometry.
+7. Select an output only after acceptance. Verify inline image previews after
+   publishing to a sheet or document; publishing/link repair belongs to the
+   consumer integration, not the Seedream adapter.
+
+Never resubmit after an ambiguous timeout simply to get another answer. Resume
+the existing job or reconcile its request ID first. Recovery of persisted media
+is distinct from another paid generation.
+
+### Opt-In Seedream Smoke Matrix
+
+`uv run python scripts/smoke_seedream55.py` prints offline help and makes no
+provider calls. Live execution requires both `--execute` and
+`--confirm-cost <positive USD estimate limit>`, configured local ModelArk
+credentials and an exact configured 5.5 model (use `--model` if Pro is the default).
+The script dry-runs every selected case and prints the aggregate estimate before
+submitting any billable generation. A rejected/ambiguous call stops the matrix;
+submissions are never retried.
+
+Default cases cover opaque JPEG, transparent PNG, reference edit, point edit and
+bbox edit, using synthetic local PNG references rather than paid setup images.
+`--case` selects a subset; `--max-cases` caps the count. Optional Pro compatibility
+requires an explicit `--pro-model` and sufficient case cap (`--max-cases 6` for
+the complete matrix). Results go to a fresh private run directory under
+`.artifacts` by default, with sanitized `report.json` and durable media.
+
+The script checks persistence, hashes, decode, dimensions, format and visible
+alpha. A byte-smoke pass does not prove the requested color change or region
+adherence: visually review editing semantics and composition separately. Polling
+is bounded; a timeout is not permission to rerun an accepted job.
+
 ## Python Task Workflow
 
 Run this from the repository using `uv run python`, with credentials configured

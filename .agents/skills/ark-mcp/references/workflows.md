@@ -135,10 +135,37 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
   previews/logs redact it, while `generations` preserves the provider echo.
 - To iterate on a generated image, pass its provider URL (valid 24 h) or
   re-upload via `media_upload` and use the presigned URL.
-- A fixed `seed` with the same prompt reproduces a single image. With
+- A fixed `seed` helps reproduce request settings, not guaranteed pixels. With
   `variations > 1`, `seed` is a base: `N` gives `N, N+1, ...`, `-1` picks a
   random recorded seed per variation, omitted leaves them unrecorded. On
   Seedream 5.5 and 5.0 Pro use `variations` instead of `max_images`.
+
+### Seedream generate, review, edit
+
+- Agree an explicit paid-attempt and estimated USD budget before iterating,
+  including `seed_understand` reviews. Stop at either limit; never reroll
+  automatically after byte-inspection or creative failures.
+- Keep the original prompt privately with reference hashes and a lineage
+  manifest. Record Ark job ID, `generations[].request_id`, submitted `seed`,
+  final `prompt_sha256` (including edit markup), `request_options`, usage,
+  artifact ID and SHA-256. Omitted/random seeds are not recovered provider seeds.
+- Check delivery errors, persistence and `images[].inspection` first.
+  `verified` means valid bytes and checked claims, not visual acceptance.
+  Provider reports and local measurements are separate; null is unknown.
+- Review exact text and absence of forbidden text, counts, geometry,
+  visibility, anatomy and composition with an authorized human or
+  `seed_understand` via `ark_job_submit`. Use exported bytes or `media_upload`
+  for a supported review reference; never assume understanding is perfect OCR.
+- Keep `Pass`, `Partial`, `Fail` and `Not evaluated` separate. A review refusal
+  or unavailable reviewer is not a generation failure; exclude it from assessed
+  denominators and do not bypass it.
+- Make an authorized focused edit with `images` and structured `point`/`bbox`;
+  retain the original and record parent artifact/hash, instruction, new request
+  and artifact IDs, cost estimate and review as a new attempt.
+- Only select outputs after acceptance. Check inline previews in published
+  documents/sheets; upload success alone is insufficient. Publishing/link repair
+  stays in the consumer integration. No native Seedream OCR/decomposition tool
+  is exposed. Full workflow: [integration guide](../../../../docs/integration-guide.md#seedream-review-and-edit).
 
 ### Asset-reference flow (Seedance `asset://`)
 
@@ -173,8 +200,9 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
   blindly; `persisting` means billed output was not stored.
 - Write image/audio variations to a directory path ending in `/`.
 - `dry_run: true` (Seedance, Seedream) validates against the model's limits
-  and returns request bodies plus `estimated_cost_usd`, a static estimate and
-  not a provider quote. Nothing is sent or billed.
+  and returns request bodies plus `estimated_cost_usd`, an estimate rather than
+  billing or a provider quote. Seedream `preview.price_source` is `catalog`
+  (fresh cached account image rate) or `builtin` (fallback). Nothing is sent or billed.
 
 ### Generation record lifecycle
 

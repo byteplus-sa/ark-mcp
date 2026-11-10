@@ -68,8 +68,14 @@ Key features:
   symlink-safe, no-silent-overwrite writes
 - **Parallel variations** — generate N independent variations in a single
   call, partial failures captured per variation with the failure phase
-- **Per-variation seeds** — Seedream supports reproducible variations: with
-  `variations > 1`, `seed` is the base seed and variation *i* uses `seed + i`
+- **Seedream provenance and byte checks** — single calls and variations record
+  request IDs, submitted seeds, final-prompt hashes and allowlisted options.
+  Advisory PNG/JPEG inspection measures dimensions, format and actual alpha
+  separately from provider reports; it preserves billed output without rerolls.
+  Base64 delivery requires persistence. See the bounded
+  [review/edit workflow](docs/integration-guide.md#seedream-review-and-edit)
+- **Per-variation seeds** — with `variations > 1`, Seedream `seed` is the base
+  seed and variation *i* uses `seed + i` (wrapped); identical pixels are not guaranteed
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
 - **Timeout-safe long operations** — generation, transcription, large upload,
@@ -488,6 +494,7 @@ ark-mcp/
 - [FastMCP v4](https://gofastmcp.com/) — MCP server framework
 - [httpx](https://www.python-httpx.org/) — async HTTP client
 - [Pydantic v2](https://docs.pydantic.dev/) — typed models and validation
+- [Pillow](https://pillow.readthedocs.io/) — bounded PNG/JPEG artifact inspection
 - [pydantic-settings](https://pydantic.dev/docs/validation/latest/concepts/pydantic_settings/) — environment configuration
 - [Starlette](https://www.starlette.io/) — HTTP middleware, body limits, and responses
 - [prometheus-client](https://github.com/prometheus/client_python) — `/metrics` and Prometheus exposition
@@ -501,8 +508,10 @@ See the project configuration for license details.
 
 ## Status
 
-All three provider surfaces and both transports are implemented. The local
-release gate passes 631 offline tests at 88% branch coverage, Ruff formatting
+All three provider surfaces and both transports are implemented. The release
+gate enforces the offline test suite with at least 85% coverage, Ruff formatting
 and lint, strict mypy, Bandit/secret scans, and package build. Dependency audit
-and container health are enforced by CI. Remote HTTP requires JWT configuration
-and is intentionally fail-closed.
+and container health are enforced by CI. Seedream's
+[live smoke matrix](docs/integration-guide.md#opt-in-seedream-smoke-matrix)
+is opt-in; editing/alpha and visual acceptance still require authorized checks.
+Remote HTTP requires JWT configuration and is intentionally fail-closed.
