@@ -13,6 +13,11 @@ is [docs/security.md](../../../../docs/security.md).
 want. Copy `.env.example` to `.env`; credentials are startup configuration and
 are never tool arguments.
 
+Use the repository's locked environment. The supported FastMCP range is
+`fastmcp[tasks]>=4.1.8,<4.2`; the lockfile includes security fixes absent from
+the former 4.0.x environment. Do not independently downgrade the framework or
+its task and MCP SDK dependencies.
+
 ```bash
 uv run python -m ark_mcp                       # stdio (default), local MCP clients
 MCP_TRANSPORT=http uv run python -m ark_mcp    # Streamable HTTP, 127.0.0.1:3000, path /mcp

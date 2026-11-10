@@ -267,7 +267,7 @@ enqueue the same FastMCP Docket worker and preserve the same typed tool result,
 ownership, scope, concurrency, and replay safeguards.
 
 Both paths are tested in-process, over subprocess stdio, and over authenticated
-Streamable HTTP with the locked FastMCP 4.0.x runtime. The ordinary path uses
+Streamable HTTP with the locked FastMCP 4.1.8 runtime. The ordinary path uses
 standard MCP tool calls and does not require a client-specific task transport.
 The named desktop/IDE snippets below remain connection templates because exact
 client releases and tool-selection behavior can change. See the
