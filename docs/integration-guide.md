@@ -42,7 +42,7 @@ with task metadata instead; that path is fully supported and unchanged. A
 foreground call made directly to a required-task tool is still rejected before
 provider submission.
 
-The repository tests both paths with the locked FastMCP **4.0.x** runtime. The
+The repository tests both paths with the locked FastMCP **4.1.8** runtime. The
 ordinary path is covered in-process, over a real subprocess stdio transport, and
 over authenticated Streamable HTTP without advertising the task extension.
 These tests use mocked providers and do not make billable generation calls.
@@ -190,7 +190,7 @@ asyncio.run(main())
 ```
 
 `task.result()` waits through `tasks/get` and returns the terminal tool result.
-In this single-process stdio example, FastMCP 4.0.3 automatically task-augments
+In this single-process stdio example, FastMCP 4.1.8 automatically task-augments
 `client.call_tool()` for the optional status tool as well; `persist_output=false`
 still prevents downloads. The standalone smoke scripts use modern and public
 `mode="legacy"` clients connected to the same in-process server lifespan to
