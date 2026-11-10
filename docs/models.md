@@ -226,7 +226,7 @@ missing required fields, and non-loopback HTTP without JWT.
 ## What the registry does not do
 
 - It is **not a cost table.** Cost estimation (see
-  [runtime.md](runtime.md#cost-estimation-toolscostpy)) is per product and
+  [runtime.md](runtime.md#cost-estimation-tools_costpy)) is per product and
   per variation; families do not affect cost.
 - It does **not** validate aspect ratios.
 - It does **not** call the provider — it is a local, pre-flight validation
