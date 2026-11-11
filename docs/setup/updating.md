@@ -15,13 +15,22 @@ The client launches the checkout or installed package recorded in its config.
 - Inspect the current checkout for changes. Never reset or clean a user's
   development tree as part of an upgrade.
 
-## Stage a Release
+## Stage a Patched Revision
 
-Query published stable releases rather than assuming `main` is stable.
-Create a separate checkout of the selected published
-release and run `uv sync --locked --no-dev` there. Use isolated temporary
-runtime and artifact state for preflight so validation does not mutate your
-active installation's database.
+Choose a reviewed revision containing the dependency security refresh and
+the supported `fastmcp[tasks]>=4.1.8,<4.2` runtime. As of 2026-11-10, the only
+published release, `v0.2.0`, is unpatched; do not stage it as an update or
+downgrade a patched installation to it. Until a suitable release exists,
+use the [pinned reviewed commit in the installation guide](install.md#choose-an-installation).
+
+For a newer release, verify its notes, `pyproject.toml`, and `uv.lock` rather
+than trusting the stable tag alone. This site tracks its reviewed `main`
+build, not every historical release. Do not label a commit checkout as stable.
+
+Create a separate checkout of the selected patched revision and run
+`uv sync --locked --no-dev` there. Use isolated temporary runtime and artifact
+state for preflight so validation does not mutate your active installation's
+database.
 
 Verify startup, tool discovery and job capabilities without paid generation.
 These checks do not prove key validity or provider entitlement. New env
@@ -42,7 +51,8 @@ worker jobs do not survive restarting the server.
 Restore the previous launch entry and reconnect. Keep credentials and media
 unchanged. Code rollback alone is not enough if an upgrade performed an
 irreversible database migration; assess backup and restoration requirements
-before activation.
+before activation. Select a patched rollback target rather than restoring a
+dependency set with known security issues.
 
 Do not automatically delete older checkouts, backups, objects or artifacts.
 For migration from the former per-model/per-operation tool surface, read

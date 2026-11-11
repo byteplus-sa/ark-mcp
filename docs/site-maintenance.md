@@ -5,6 +5,13 @@ lives in `docs/site/`; human-written pages remain in `docs/`, alongside the
 existing handbook. Tool pages are generated from the static MCP catalog and
 the exact FastMCP/Pydantic input and output schemas.
 
+The unversioned public site tracks the reviewed `main` revision used by its
+deployment workflow, not every published tag. Its generated contracts,
+runtime guidance, Python example and validation apply to that build revision.
+Historical releases can have different dependencies and capabilities. Keep
+the [installation revision guidance](setup/install.md#choose-an-installation)
+current when a suitable patched release is published.
+
 ## Develop Locally
 
 Requirements: the project's locked Python environment and Node.js 22.23.4+

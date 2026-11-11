@@ -7,6 +7,9 @@ Ark MCP is a Python MCP server that your AI client runs locally over stdio.
 You do not need ComfyUI. For remote access, use the protected
 [HTTP deployment](../self-hosting.md) instead.
 
+This unversioned site describes the reviewed `main` build. Generated tool
+contracts and the Python client example do not describe every historical tag.
+
 ## Prerequisites
 
 - Python 3.12 or newer.
@@ -19,23 +22,30 @@ generating media. A successful connection does not prove provider entitlement.
 
 ## Choose an Installation
 
-Inspect the
-[published releases](https://github.com/byteplus-sa/ark-mcp/releases) and
-select a reviewed release tag. Do not assume a package named `ark-mcp` on
-PyPI belongs to this repository.
+**Security notice, 2026-11-10:** the only published release, `v0.2.0`, predates
+the dependency security refresh and locks FastMCP/tasks to `4.0.3`. Do not
+select it for the current installation or update path. The supported range
+is `fastmcp[tasks]>=4.1.8,<4.2`; see [Dependency Security](../security.md#dependency-security).
+
+Until a suitable patched release is published, use this specific reviewed
+commit containing the security refresh:
 
 ```bash
 git clone https://github.com/byteplus-sa/ark-mcp.git
 cd ark-mcp
-git switch --detach <published-release-tag>
+git switch --detach 137a0c63c00be37b6d1e9bd9c021d3fd011d50d7
 uv sync --locked --no-dev
 ```
 
-Replace `<published-release-tag>` with an actual published tag before running
-the command. If no stable release is published, choose a specific reviewed
-commit explicitly, or use the default branch consciously for development.
-Do not label a branch checkout as a stable release. Never run these operations
-against an existing dirty checkout as an update shortcut.
+This is a pinned, reviewed `main` snapshot, not a stable release. For a newer
+[published release](https://github.com/byteplus-sa/ark-mcp/releases), inspect
+its release notes, `pyproject.toml`, and `uv.lock` before replacing the commit
+with its tag. Verify it contains the security refresh and supported runtime.
+A stable tag alone does not prove that it is patched. Do not assume a package
+named `ark-mcp` on PyPI belongs to this repository.
+
+Never run these operations against an existing dirty checkout as an update
+shortcut.
 
 ## Enter Credentials Privately
 

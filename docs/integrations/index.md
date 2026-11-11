@@ -29,9 +29,12 @@ replace an entire file or change project trust to make a template work.
 
 ## Prepare the Launch
 
-Follow [Getting Started](../getting-started.md) for installation and release
-selection. Prefer a dedicated, reviewed stable-release checkout; do not reset
-or update a dirty development checkout during client setup.
+Follow [Install Ark MCP](../setup/install.md#choose-an-installation) for
+patched revision selection. The historical `v0.2.0` release predates the
+security refresh; use the pinned reviewed commit until a suitable release is
+published. These guides describe the site's reviewed `main` build, not every
+historical tag. Prefer a dedicated patched checkout; do not reset or update a
+dirty development checkout during client setup.
 
 Replace all three placeholders in each guide with actual absolute paths on
 the machine that runs the server:
