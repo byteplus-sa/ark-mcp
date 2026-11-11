@@ -61,10 +61,13 @@ client-specific fallback snippets remain inside disclosures. Keep README and
 older handbook entry points linked to these canonical guides instead of
 duplicating commands or credential-bearing client examples.
 
-`onboarding.test.mjs` guards that separation. First-run and generated tool
-pages lead with client instructions; exact JSON remains available on demand.
+`onboarding.test.mjs` guards that separation. The first-run page leads with
+copyable generation prompts, without tool names or job orchestration in those
+prompts. No-charge discovery and request previews are optional, clearly
+separate from billable generation. Exact JSON stays in the generated tool
+reference; job/result contracts stay in the technical integration guide.
 Changing prose does not constitute end-to-end installation testing in every
-client edition.
+client edition or a live provider generation test.
 
 Audio, Understanding, 3D and Avatars have separate navigation groups and
 capability sections. Navigation tests ensure category membership and stable

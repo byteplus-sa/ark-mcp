@@ -41,8 +41,9 @@ See [Troubleshooting](troubleshooting.md) if the connection or tools are missing
 ## Using with MCP Clients
 
 Choose [your client guide](integrations/index.md), then try
-[Your First Tool Call](setup/first-run.md). You can ask in plain language;
-exact JSON envelopes are available as optional technical details.
+[Your First Tool Call](setup/first-run.md). Copy an example prompt into your
+agent and describe the image or video you want. Developers can find exact
+JSON envelopes in the [tool reference](api-reference.md).
 
 ## Technical Setup
 
