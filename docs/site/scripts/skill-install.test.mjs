@@ -99,6 +99,11 @@ test("skill installation prefers the scoped Skills CLI command over manual copyi
   assert.match(guide, /telemetry/i);
   assert.match(guide, /https:\/\/skills\.sh\/docs\/faq/);
   assert.match(readDoc("setup/install.md"), /Skills CLI/);
+  for (const scope of ["-g", "-p"]) {
+    for (const operation of ["check", "update"]) {
+      assert.ok(guide.includes(`npx skills ${operation} ark-mcp ${scope}`));
+    }
+  }
 });
 
 test("skill environment guidance defers setup to the private-file handbook", () => {

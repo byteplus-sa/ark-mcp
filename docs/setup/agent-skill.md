@@ -128,10 +128,18 @@ the skill does not make every documented product available.
 ## Updates
 
 The repository shorthand follows its default branch, not an immutable release.
-Keep the CLI's source/lock metadata. Ask your agent to check for updates with
-`npx skills check` and update only this skill with `npx skills update ark-mcp -g`
-when approved. Review changes and keep the current copy until its replacement
-is verified. Never overwrite local customizations without approval.
+Keep the CLI's source/lock metadata. Ask your agent to check and update only
+`ark-mcp` in the scope where it was installed:
+
+| Installation | Check | Update after approval |
+| --- | --- | --- |
+| User-wide | `npx skills check ark-mcp -g` | `npx skills update ark-mcp -g` |
+| Project-only | `npx skills check ark-mcp -p` | `npx skills update ark-mcp -p` |
+
+Run project-only commands from the intended project directory. Keep the scope
+explicit: a bare check can select project skills even when you intend to
+update a user-wide copy. Review changes and keep the current copy until its
+replacement is verified. Never overwrite local customizations without approval.
 Updating a skill must not silently upgrade the server or change its credentials.
 For older or customized servers, check compatibility against their live schemas.
 
