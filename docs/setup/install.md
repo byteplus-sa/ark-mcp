@@ -90,6 +90,25 @@ indicator alone is not enough. Discovery makes no provider calls and does not
 prove provider-key validity or account entitlement. If tools are missing,
 see [Troubleshooting](../troubleshooting.md).
 
+### 4. Add the Usage Skill (Optional)
+
+The **ark-mcp skill** teaches your agent the server's workflows, including
+progress checks and keeping generated results. In a file-capable coding
+agent, send:
+
+```text
+Install the ark-mcp usage skill for [my agent], user-wide:
+https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp
+Follow https://byteplus-sa.github.io/ark-mcp/setup/agent-skill/
+for the correct skill folder and verification. Preserve existing skills
+and ask before replacing anything. Do not read credentials, change my
+MCP connection, or run paid tests.
+```
+
+See [Install the Agent Skill](agent-skill.md) for `.agents/skills` and
+`.claude/skills` locations, project-only installs, and how to use it.
+The skill supplies instructions; it does not install or connect the server.
+
 Continue with [Your First Tool Call](first-run.md).
 
 <span id="prerequisites"></span>

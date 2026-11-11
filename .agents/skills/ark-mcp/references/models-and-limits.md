@@ -1,6 +1,6 @@
 # Models and limits
 
-Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed 3D, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [api-reference.md](../../../../docs/api-reference.md)).
+Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed 3D, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 ## Discovery with `ark_list_models`
 

@@ -3,7 +3,7 @@
 How to run work end to end: background jobs, the production workflows that
 need record-keeping, retry and error rules, and practices the tool schemas do
 not spell out. Parameters live in the tool schemas (see
-[docs/api-reference.md](../../../../docs/api-reference.md)); polling and
+[API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)); polling and
 artifact recovery are in [polling-and-artifacts.md](polling-and-artifacts.md).
 
 ## Background jobs

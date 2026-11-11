@@ -229,6 +229,15 @@ terminal server after setup. If your team already runs Ark,
 anything locally. [Manual installation](docs/setup/manual-install.md) remains
 available for users without a setup-capable agent.
 
+## Agent Skill
+
+Install the optional [ark-mcp usage skill](docs/setup/agent-skill.md) to teach
+your agent model discovery, background jobs, progress checks and artifact
+handling. The guide includes a copyable install prompt and user/project paths
+for Codex (`.agents/skills/ark-mcp/`) and Claude Code
+(`.claude/skills/ark-mcp/`). Copy the full skill folder, including its references.
+The skill is instructions, not a server installer or MCP connection.
+
 ## Configuration
 
 Only configure the products you use. [Provider Keys](docs/api-keys.md) explains

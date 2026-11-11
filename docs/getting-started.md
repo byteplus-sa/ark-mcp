@@ -45,6 +45,10 @@ Choose [your client guide](integrations/index.md), then try
 agent and describe the image or video you want. Developers can find exact
 JSON envelopes in the [tool reference](api-reference.md).
 
+For clients that support skills, [install the optional ark-mcp skill](setup/agent-skill.md)
+to give your agent workflow instructions. This is separate from connecting
+the MCP server.
+
 ## Technical Setup
 
 Installing without an agent? Use [Manual Installation](setup/manual-install.md).
