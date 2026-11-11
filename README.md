@@ -67,6 +67,8 @@ Key features:
   oversized URLs and video soundtracks, with temporary-upload cleanup.
 - **Organization self-hosting** - the [Compose kit](docs/self-hosting.md)
   packages TLS ingress, JWT authentication, internal Redis, and spending controls.
+  The [BytePlus Terraform starter](docs/byteplus-terraform.md) provisions one ECS
+  host with retained storage and explicit private configuration activation.
 - **Durable artifacts** — generated media is persisted locally so MCP
   resources remain usable after known provider URL lifetimes (2h audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at
@@ -368,6 +370,7 @@ make check-env     # Validate environment configuration
 | [Artifacts](docs/artifacts.md) | Durable artifact lifecycle and store |
 | [Transports](docs/transports.md) | stdio vs HTTP deployment |
 | [Deployment](docs/deployment.md) | Container, Kubernetes, and remote HTTP deployment |
+| [BytePlus Terraform](docs/byteplus-terraform.md) | ECS starter, retained disk, private activation, backups, and recovery |
 | [Troubleshooting](docs/troubleshooting.md) | Common errors and fixes |
 
 ## Project Layout

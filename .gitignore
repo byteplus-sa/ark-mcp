@@ -93,6 +93,16 @@ logs/
 .pr-body.md
 pr-reviews/
 
+# Terraform local state, plans, provider caches, and operator inputs
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+
 # OS
 Thumbs.db
 ehthumbs.db

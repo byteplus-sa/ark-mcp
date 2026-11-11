@@ -36,6 +36,15 @@ its task and MCP SDK dependencies.
 - For a single-organization deployment, use the Caddy/JWT/Redis Compose kit in
   the repository's `deploy/compose/` and the [self-hosting guide](https://byteplus-sa.github.io/ark-mcp/self-hosting/). Keep one
   replica and configure both spend and rate limits.
+- For BytePlus hosting, the repository's `deploy/terraform/byteplus/` provisions
+  one Ubuntu 24.04 AMD64 ECS host, HTTPS networking, a retained EBS state disk,
+  and optional private TOS. Follow the
+  [Terraform guide](https://byteplus-sa.github.io/ark-mcp/byteplus-terraform/):
+  mount verified storage at `/srv/ark-mcp`, install a root-owned mode-0600 private
+  `.env`, then activate. Never supply application secrets to Terraform or format
+  a recovered disk. Bootstrap changes plan VM replacement; deletion/storage
+  guards require operator-reviewed maintenance. Offline tests are not a live
+  deployment certification.
 - Releases use `vX.Y.Z` tags, GitHub wheel/source/checksum assets, and versioned
   GHCR images. `latest` is a release; `edge` is a main build. Prefer a digest
   pin for deployment. PyPI publishing is not configured. Release publication

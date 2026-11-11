@@ -8,6 +8,12 @@ and the [Docker Compose kit](../deploy/compose/README.md). The kit includes
 TLS ingress, an authenticated internal Redis job backend, and hardened
 application settings. Its guide identifies remaining live-deployment checks.
 
+For BytePlus infrastructure, use the
+[Terraform starter and operator guide](byteplus-terraform.md). It provisions
+one ECS host, a retained state disk, HTTPS networking, and optional private TOS
+storage. Disk mounting and private credential activation are explicit operator
+steps; a successful infrastructure apply is not application readiness.
+
 For a published build, use a versioned `ghcr.io/byteplus-sa/ark-mcp:vX.Y.Z`
 image or pin the digest from its GitHub Release. The registry's `latest`
 tracks releases, while `edge` tracks passing main builds. See

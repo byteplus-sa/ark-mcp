@@ -1,0 +1,16 @@
+[Unit]
+Description=Prepare Ark MCP host packages
+After=network-online.target cloud-final.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ark-mcp/install.sh
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

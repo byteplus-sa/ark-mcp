@@ -23,6 +23,11 @@ runs for developers and evaluation.
 For local setup see [Getting Started](getting-started.md). The rest of this
 page covers the hosted server.
 
+For a BytePlus-hosted deployment, the
+[Terraform starter](byteplus-terraform.md) provisions the ECS host and retained
+disk for this same Compose stack. One deployment can serve a team or an entire
+organization; each retains its own configuration, credentials, and state.
+
 ## Architecture
 
 ```mermaid

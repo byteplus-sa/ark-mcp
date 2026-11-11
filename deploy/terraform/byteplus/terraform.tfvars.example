@@ -1,0 +1,21 @@
+region        = "ap-southeast-1"
+zone_id       = "ap-southeast-1a"
+name          = "ark-mcp-team"
+project_name  = "default"
+image_id      = "image-REPLACE-WITH-UBUNTU-2404-AMD64"
+instance_type = "ecs.g4i.large"
+key_pair_name = "REPLACE-WITH-EXISTING-KEYPAIR"
+
+public_hostname = "mcp.example.com"
+ark_mcp_image   = "ghcr.io/byteplus-sa/ark-mcp:v0.2.0"
+
+create_vpc = true
+vpc_cidr   = "10.42.0.0/16"
+
+admin_cidrs        = ["203.0.113.10/32"]
+https_cidrs        = ["0.0.0.0/0"]
+data_disk_size_gib = 100
+volume_type       = "ESSD_PL0"
+eip_bandwidth_mbps = 20
+
+instance_deletion_protection = true
