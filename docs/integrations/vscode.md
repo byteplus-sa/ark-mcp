@@ -3,10 +3,25 @@ title: VS Code
 description: Select the correct VS Code MCP format and scope for a private local Ark connection.
 ---
 
-Use VS Code's MCP support for the selected chat harness/profile. These are
-connection templates, not universally verified latest-edition configurations.
-Newer official documentation distinguishes VS Code's compatibility format
-from portable Copilot configuration; do not treat them as interchangeable.
+Use VS Code's MCP support for your selected chat profile or harness.
+VS Code starts a configured local Ark server automatically.
+
+## Recommended Setup
+
+1. Give the [guided setup request](../setup/install.md#guided-local-setup)
+   to an agent with terminal and file-editing access. Name **VS Code** and
+   whether you are working locally, over SSH or in a Dev Container.
+2. Let it prepare Ark and the configuration for your installed MCP format;
+   enter keys in the private editor.
+3. Use **MCP: Add Server** or your edition's MCP settings when UI confirmation
+   is needed, select the intended user/profile scope, and approve `ark-seed`.
+
+If an entry was already added, review it rather than adding a duplicate.
+VS Code and portable Copilot formats differ; the fallback examples below are
+alternatives, not steps that everyone must complete.
+
+<details>
+<summary>Manual configuration formats and scope</summary>
 
 ## Choose Scope and Format
 
@@ -99,22 +114,14 @@ support because the server loads its private credentials itself.
 Preserve existing entries, avoid duplicate same-name definitions, and do
 not automatically commit machine-specific project configuration.
 
+</details>
+
 ## Verify
 
-Check active jobs before using start/restart controls. Use **MCP: List
-Servers** where available, or **Chat: Open Customizations > MCP Servers**
-in newer editions. Review trust prompts and enable tools in the chosen
-agent/harness. A registered server alone is not a verified tool connection.
-
-Request `ark_list_models` with `{"input": {}}` and
-`ark_job_capabilities` with `{}` only. Confirm actual results and expected
-services/targets without generation, understanding, transcription, uploads,
-or job submission. Both discovery calls make no provider calls; they do
-not establish key validity or provider entitlement.
-
-Ordinary `ark_job_*` tools are the default for long operations; do not assume
-native task augmentation. Poll the same process that accepted the job.
-Restart loses the default in-memory queue.
+Use **MCP: List Servers**, or the MCP/customizations panel available in your
+edition, and run the [discovery-only check](index.md#verify-without-paid-calls).
+Continue with [Your First Tool Call](../setup/first-run.md). Finish active
+jobs before restarting the connection.
 
 See [Integrations](index.md), [Cursor](cursor.md),
 [Getting Started](../getting-started.md), [Tools](../tools.md), and

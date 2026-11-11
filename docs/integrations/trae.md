@@ -3,10 +3,26 @@ title: TRAE
 description: Configure Ark in TRAE IDE or Work with explicit scope, local runtime paths, and private credentials.
 ---
 
-Identify **TRAE IDE versus TRAE Work** and **International versus CN** before
-configuring MCP. UI labels, scope support, and runtime choices vary. This is
-a repository-aligned connection template, not universal verification of the
-latest editions.
+TRAE can launch Ark automatically after its MCP connection is configured.
+Tell your setup agent whether you use **IDE or Work**, **International or CN**,
+and a **local or cloud** execution environment.
+
+## Recommended Setup
+
+1. In a coding session with terminal and file access, use the
+   [guided setup request](../setup/install.md#guided-local-setup) and name
+   your TRAE edition as the target.
+2. Let the agent prepare Ark and resolve the configuration paths. Enter
+   keys in the private editor, not in chat.
+3. If user-level registration requires the MCP settings UI, paste the
+   agent-prepared non-secret entry there and enable `ark-seed`.
+
+For local setup, select **local runtime**. A cloud runtime cannot use your
+computer's paths or credential file. Do not transfer keys to a cloud host
+without a separate, deliberate setup decision.
+
+<details>
+<summary>Manual configuration, scope and runtime options</summary>
 
 ## Scope and Runtime
 
@@ -62,22 +78,15 @@ project being edited; do not substitute `${workspaceFolder}` for its path
 unless that folder actually contains the prepared server checkout.
 Preserve existing servers and any same-name entry at a different scope.
 
+</details>
+
 ## Verify
 
-Check active jobs before reloading the server. Enable `ark-seed` in the
-edition's MCP/tool settings and select a chat/agent mode that can use it.
-
-Request `ark_list_models` with `{"input": {}}` and
-`ark_job_capabilities` with `{}` only. Confirm actual tool results and
-expected services/targets. Both calls make no provider calls; successful
-discovery does not verify provider credentials or whitelist access.
-Do not generate, understand, transcribe, upload, or submit jobs as a setup test.
-
-Use ordinary `ark_job_*` calls by default for long operations. Do not infer
-native MCP task support from the MCP connection indicator. Submit and poll
-through the same stdio process; restarting it loses the default in-memory jobs.
-If UI registration cannot be completed, record it as pending rather than
-calling setup verified.
+Choose a tool-enabled chat mode and run the
+[discovery-only check](index.md#verify-without-paid-calls). A pending UI
+step is not a completed installation. Once your tools appear, try
+[Your First Tool Call](../setup/first-run.md). Finish active jobs before
+reloading the connection.
 
 See [Integrations](index.md), [Codex](codex.md) for an embedded Codex agent,
 [Getting Started](../getting-started.md), [Tools](../tools.md), and

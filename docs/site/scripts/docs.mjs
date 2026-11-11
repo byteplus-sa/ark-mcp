@@ -120,6 +120,14 @@ export function toolPage(tool) {
       : tool.background === "optional"
         ? "Use a direct foreground call for lightweight operations. Submit through `ark_job_submit` when output persistence or a large download may take time. The full arguments still include the `input` wrapper."
         : "Call this tool directly. It is not a background-job target.";
+  const providerTasks = [
+    "seedance_",
+    "hyper3d_",
+    "hitem3d_",
+    "omnihuman_",
+    "vod_",
+    "gen_task_",
+  ].some((prefix) => name.startsWith(prefix));
   return `---
 title: ${JSON.stringify(name)}
 description: ${JSON.stringify(`Inputs, outputs, setup requirements and execution guidance for ${name}.`)}
@@ -140,20 +148,30 @@ This site lists the full configured capability surface, not the tools enabled on
 
 ## Usage
 
+Ask your connected AI client to use \`${name}\` for the operation you want.
+The client constructs the arguments and handles tool calls. Review its proposed
+operation before approving anything billable. For a non-billable introduction,
+start with [Your First Tool Call](${SITE_BASE}/setup/first-run/).
+
 ${execution}
 
 ${
   call
-    ? `The following is an MCP tool-call envelope, not a shell command. Example media URLs and identifiers must be replaced with your own accessible resources. Seedream and Seedance examples are non-billable dry runs; other provider operations may incur charges.
+    ? `<details>
+<summary>Exact MCP call (for developers)</summary>
+
+The following is an MCP tool-call envelope, not a shell command. Example media URLs and identifiers must be replaced with your own accessible resources. Seedream and Seedance examples are non-billable dry runs; other provider operations may incur charges.
 
 \`\`\`json
 ${JSON.stringify(call, null, 2)}
 \`\`\`
+
+</details>
 `
     : `Match the input fields below and the full JSON Schema. See the [worked examples](${SITE_BASE}/tools/) for this capability and the [first-run guide](${SITE_BASE}/setup/first-run/) for job/result handling.`
 }
 
-An Ark job ID is not a provider task ID. Video and 3D tasks use [gen_task_get](${SITE_BASE}/tool-reference/gen-task-get/), VOD tasks use [vod_get_task](${SITE_BASE}/tool-reference/vod-get-task/), and avatars use [omnihuman_get_task](${SITE_BASE}/tool-reference/omnihuman-get-task/). Save accepted provider task IDs and resume polling instead of submitting a second generation.
+${providerTasks ? `An Ark job ID is not a provider task ID. Video and 3D tasks use [gen_task_get](${SITE_BASE}/tool-reference/gen-task-get/), VOD tasks use [vod_get_task](${SITE_BASE}/tool-reference/vod-get-task/), and avatars use [omnihuman_get_task](${SITE_BASE}/tool-reference/omnihuman-get-task/). Save accepted provider task IDs and resume polling instead of submitting a second generation.` : ""}
 
 ## Inputs
 

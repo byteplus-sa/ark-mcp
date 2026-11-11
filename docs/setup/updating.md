@@ -6,6 +6,30 @@ description: Stage a reviewed Ark MCP release without overwriting credentials, a
 Updating the repository does not automatically update a client connection.
 The client launches the checkout or installed package recorded in its config.
 
+## Recommended Update
+
+For a shared server, ask its administrator to handle updates. For a local
+installation, use the same terminal-capable coding agent that performed
+[guided setup](install.md):
+
+```text
+Update my existing ark-seed connection for [my client].
+Read https://byteplus-sa.github.io/ark-mcp/setup/manual-install/
+and use a reviewed patched revision, not the old unpatched v0.2.0 release.
+Preserve my keys, client settings, projects, artifacts and runtime state.
+Stage and verify the update separately using discovery only.
+Do not read back credentials or run paid tests.
+Ask before switching the connection or restarting active jobs.
+Keep the previous patched installation available for rollback.
+```
+
+Review the version and any migration requirements before approving the
+switch. Afterward, run the [connection check](../integrations/index.md#verify-without-paid-calls).
+No separate server-start command is needed.
+
+<details>
+<summary>Manual update, activation and rollback details</summary>
+
 ## Before Updating
 
 - Check active worker jobs and provider tasks. Save provider task IDs.
@@ -57,3 +81,5 @@ dependency set with known security issues.
 Do not automatically delete older checkouts, backups, objects or artifacts.
 For migration from the former per-model/per-operation tool surface, read
 [Migrating to 0.2.0](../migration-0.2.md).
+
+</details>

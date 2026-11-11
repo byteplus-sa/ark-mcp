@@ -3,8 +3,21 @@ title: Claude Code
 description: Choose user, private-project, or shared-project scope for Ark in Claude Code.
 ---
 
-This is a Claude Code connection template, not a [Claude Desktop](claude-desktop.md)
-configuration or a guarantee for every latest CLI edition.
+Use Claude Code's terminal-enabled agent to prepare Ark for you. This guide is
+for the coding client, not [Claude Desktop](claude-desktop.md).
+
+## Recommended Setup
+
+1. Send the [guided setup request](../setup/install.md#guided-local-setup)
+   to Claude Code, naming **Claude Code** as the target.
+2. Approve setup changes and enter provider keys in the private editor.
+3. Open `/mcp`, review the connection and enable `ark-seed`.
+
+Claude Code starts the server automatically. You do not need to run the
+registration command below yourself if your setup agent has completed it.
+
+<details>
+<summary>Manual configuration and scope options</summary>
 
 ## Choose the Scope
 
@@ -75,22 +88,13 @@ These machine-specific paths are not portable team defaults. Each teammate
 needs their own private env file and installation. Do not commit populated
 credential files or automatically commit this configuration.
 
+</details>
+
 ## Verify
 
-After checking active jobs, reload the server/session and open `/mcp`.
-Review project-server approval prompts when using `.mcp.json`.
-
-Ask Claude Code to call `ark_list_models` with `{"input": {}}` and
-`ark_job_capabilities` with `{}` only. Verify actual enabled services and
-job targets, not just a registered entry. Both calls make no provider calls;
-they do not establish API-key validity or account entitlement. Do not use
-generation, understanding, transcription, or upload for this test.
-
-Ordinary `ark_job_*` tools are the default for long operations. Native task
-augmentation requires confirmed client support. Keep submission and polling
-on the same server process; a restart loses the default in-memory jobs.
-Treat CLI `list`/`get` output as potentially sensitive when unrelated servers
-have inline credentials.
+Use the [discovery-only check](index.md#verify-without-paid-calls), then try
+[Your First Tool Call](../setup/first-run.md). Confirm actual tool results,
+not just an entry in `/mcp`. Finish active jobs before restarting the connection.
 
 See [Integrations](index.md), [Getting Started](../getting-started.md),
 [Tools](../tools.md), and [Configuration](../configuration.md).

@@ -56,7 +56,8 @@ export default defineConfig({
         {
           label: "Get Started",
           items: [
-            { slug: "setup/install", label: "Install Ark MCP" },
+            { slug: "setup/install", label: "Set Up Ark MCP" },
+            { slug: "setup/shared-server", label: "Use a Shared Server" },
             { slug: "api-keys", label: "Provider Keys" },
             { slug: "setup/first-run", label: "Your First Tool Call" },
             { slug: "setup/updating", label: "Update and Roll Back" },
@@ -105,6 +106,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             "configuration",
+            "setup/manual-install",
             "self-hosting",
             "deployment",
             "runtime",

@@ -3,10 +3,22 @@ title: OpenCode
 description: Connect Ark to OpenCode using the MCP schema supported by your edition and a private env-file path.
 ---
 
-OpenCode configuration is edition-sensitive. The repository's existing
-integration uses the classic `mcp.ark-seed` shape; current official V2 docs
-use `mcp.servers.ark-seed`. The templates below are **alternatives**, not a
-combined configuration or universal verification of the latest release.
+OpenCode starts Ark from its saved MCP configuration. Let its coding agent
+choose the format supported by the version you have installed.
+
+## Recommended Setup
+
+1. Send the [guided setup request](../setup/install.md#guided-local-setup)
+   to an OpenCode session with terminal and file-editing access.
+2. Approve the setup changes and enter keys in the private editor.
+3. Review the `ark-seed` connection and tool permissions in OpenCode.
+
+The classic and V2 configuration shapes below are alternatives for manual
+setup. You do not need to choose or edit JSON yourself when the setup agent
+can verify your installed schema.
+
+<details>
+<summary>Manual configuration for classic and V2 editions</summary>
 
 ## Choose the Scope
 
@@ -97,21 +109,14 @@ contain only non-secret environment settings; Ark reads credentials from the
 private file. OpenCode may inherit other environment variables that override
 that file, so check presence/names without printing values.
 
+</details>
+
 ## Verify
 
-Check `opencode mcp --help` for supported diagnostics, then use
-`opencode mcp list` where available. Check active jobs before reloading the
-connection. Review trust/tool approvals in the actual client.
-
-Ask OpenCode to call `ark_list_models` with `{"input": {}}` and
-`ark_job_capabilities` with `{}` only. Confirm actual enabled services,
-model limits, and targets. These calls make no provider calls; registration
-and discovery do not prove API-key validity or entitlement.
-Do not generate, understand, transcribe, upload, or submit jobs for setup.
-
-Ordinary `ark_job_*` tools are the default for long work. Native MCP task
-support must be confirmed separately. Submit and poll through the same
-stdio process; the default queue is lost when it restarts.
+Run the [discovery-only check](index.md#verify-without-paid-calls), then
+[Your First Tool Call](../setup/first-run.md). Finish active jobs before
+reloading the connection. If you need troubleshooting commands, ask the
+agent to use the help for your installed OpenCode version.
 
 See [Integrations](index.md), [Python](python.md),
 [Getting Started](../getting-started.md), [Tools](../tools.md), and
