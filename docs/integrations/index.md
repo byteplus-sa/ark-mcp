@@ -77,8 +77,8 @@ There is no need for users to run a separate validation script.
 
 Ask your client to use Ark's ordinary background-job tools and report the
 result when ready. It handles submission and polling; you do not need to
-copy job JSON manually. Start with the [dry-run request](../setup/first-run.md)
-before approving paid generation.
+copy job JSON manually. For an optional no-charge check, use the
+[request preview](../setup/first-run.md#preview-an-image-request).
 
 Keep the connection open while work runs. Restarting loses default in-memory
 jobs, and another local client cannot poll them. Never repeat a generation

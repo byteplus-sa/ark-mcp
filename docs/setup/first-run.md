@@ -1,174 +1,103 @@
 ---
 title: Your First Tool Call
-description: Discover enabled tools, preview an image request without charges, and retrieve background results.
+description: Ask your agent to generate an image or video with a simple prompt.
 ---
 
-After [setup](install.md), ask your connected client in plain language.
-You do not need to write JSON or run commands in a terminal. Exact tool-call
-envelopes are available below for developers and troubleshooting.
+After [setup](install.md), **describe what you want to create in your agent's
+chat**. The agent handles model discovery, tool calls and progress checks.
+You do not need to write JSON, choose tool names or run terminal commands.
+
+## Generate an Image
+
+Copy this prompt into your connected agent:
+
+```text
+Use ark-seed to generate one image of a red ceramic cup on a wooden
+table beside a window. Warm morning light, realistic product photography,
+soft shadows, square composition. Show me the finished image and a
+download link.
+```
+
+<span id="generate-deliberately"></span>
+
+**Generation may incur charges.** Review the agent's proposed operation and
+any tool approval before proceeding. Each generation prompt is a separate
+request. If you only want to check setup without generating, use the
+[optional checks below](#discover-before-spending).
+
+Change the subject, style or composition to suit your idea. The agent should
+choose a supported model from your configured services. If image generation
+is unavailable, it should explain what is missing instead of substituting
+another service without asking.
+
+<span id="video-and-other-provider-tasks"></span>
+
+## Generate a Video
+
+When video generation is enabled, try:
+
+```text
+Use ark-seed to generate one 5-second landscape video of a red ceramic
+cup on a wooden table beside a window. The camera slowly moves closer
+as steam rises in warm morning light. Realistic, cinematic style.
+Show me the finished video and a download link.
+```
+
+This creates a new video from text; it does not reuse the image above.
+The agent should keep checking the existing request until it finishes.
+A job or task ID alone is not the finished video.
+
+<span id="retrieve-the-job-result"></span>
+
+## If the Agent Pauses
+
+Send a follow-up in the same chat:
+
+```text
+Continue checking my existing request and show me the result when it is
+ready. Do not submit a new generation request. If the existing request
+cannot be recovered, explain what happened before doing anything else.
+```
+
+Keep the same client connection open while it works. Restarting the server
+can lose in-memory jobs; a timeout does not mean generation failed.
+Repeating the generation prompt could create another charge.
+
+Download results you want to keep. Provider links expire, and inline previews
+depend on your client. If a preview is unavailable, use the returned download
+link. For persistent storage, see [Artifacts](../artifacts.md).
 
 ## Discover Before Spending
 
-Send this in your client:
+This optional check lists configured capabilities without creating media:
 
 ```text
-Use ark-seed to show the services, models and tools available to me.
-Call only ark_list_models and ark_job_capabilities. Do not generate,
-understand, transcribe, upload, or submit jobs.
+Use ark-seed discovery only to show which media services and models are
+configured for me. Do not generate media, analyze content, transcribe,
+upload files or submit jobs.
 ```
 
-Check that Seedream is available before trying the preview. Discovery makes
-no provider calls, but does not verify that your key or account can generate.
-
-<details>
-<summary>Exact discovery calls</summary>
-
-```json
-{
-  "name": "ark_list_models",
-  "arguments": {
-    "input": {}
-  }
-}
-```
-
-Read exact model IDs, capability limits, serving tools and enabled services.
-Models and gates come from server configuration. Discovery itself makes no
-provider calls; cached pricing may come from an optional background refresher.
-It does not validate the provider key or account whitelist.
-
-Next, discover long-running targets and their full input schemas:
-
-```json
-{
-  "name": "ark_job_capabilities",
-  "arguments": {}
-}
-```
-
-Unlike most Ark tools, `ark_job_capabilities` takes `{}` without an `input`
-wrapper. If `seedream_generate_image` is absent, enable ModelArk and reconnect
-before trying the next step.
-
-</details>
+Discovery makes no provider calls. It does not prove that your provider key
+or account is authorized to generate.
 
 ## Preview an Image Request
 
-Try a request preview, without creating a billable image:
+To check an image request without paying for generation:
 
 ```text
-Preview one Seedream request for a red ceramic cup on a wooden table.
-Use seedream_generate_image with dry_run=true through ark_job_submit.
-Poll that job and show the preview result and cost estimate.
-Do not generate an image or retry submission if the response is uncertain.
-If Seedream is unavailable, stop and tell me what is missing.
+Preview a text-only Seedream request for one image of a red ceramic cup
+on a wooden table. Show the request and estimated cost if available.
+Do not generate an image or make a billable request. If a no-charge
+preview is unavailable, stop and explain what is missing.
 ```
 
-Your client handles the background submission and polling. Check its tool
-approval prompt: the target must include `dry_run: true`. Approve no substitute
-generation call. The preview uses a text-only request.
+A request preview is not a generated image. Only approve a dry-run call
+with `dry_run: true`, never a substitute generation call. Seedream must be
+enabled even for a preview.
 
-<details>
-<summary>Exact dry-run request</summary>
+## Technical Reference
 
-```json
-{
-  "name": "ark_job_submit",
-  "arguments": {
-    "input": {
-      "tool_name": "seedream_generate_image",
-      "arguments": {
-        "input": {
-          "prompt": "A red ceramic cup on a wooden table.",
-          "dry_run": true
-        }
-      }
-    }
-  }
-}
-```
-
-Both `input` wrappers matter: the outer one belongs to job submission and the
-inner one to Seedream. This text-only dry run previews the request and cost
-without generating an image or making a billable generation request.
-Dry runs still require the target to be registered.
-
-</details>
-
-## Retrieve the Job Result
-
-The client should finish polling as part of the preview above. If it pauses,
-ask it to **continue checking the existing job**, not create a new request.
-Keep the same connection open. A restart loses default in-memory jobs.
-
-<details>
-<summary>Polling and result fields</summary>
-
-Save the returned `job_id`. Wait at least `poll_after_ms` milliseconds, then
-poll through the same client/server connection:
-
-```json
-{
-  "name": "ark_job_get",
-  "arguments": {
-    "input": {
-      "job_id": "example-job-id-replace-me"
-    }
-  }
-}
-```
-
-Continue while `status` is `working`, using each returned `poll_after_ms`.
-On a terminal response, inspect status and `result.is_error` before reading
-`result.structured_content`. A completed worker may contain an original tool
-error; completion alone is not generation success.
-
-Default in-memory jobs are lost on server restart. Another stdio client
-starts another process and cannot retrieve this process's jobs.
-An ambiguous submission or timeout is not permission to submit again.
-
-</details>
-
-## Generate Deliberately
-
-Only after reviewing the preview and approving possible charges, ask your
-client to generate the image. That is a new, billable request with
-`dry_run: false`, not another setup test.
-Choose model IDs and parameters from discovery, not from ComfyUI model lists:
-the two integrations can expose different models and options.
-
-Inspect returned variations individually. Billed outputs may include a
-provider URL and `persistence_error` if storage failed. Retrieve persisted
-media with the [artifact tools](../artifacts.md), or recover a URL through
-`seed_media_persist_url` before it expires.
-
-Explicit local output paths from background jobs require `OUTPUT_ROOTS`,
-because worker jobs have no client MCP roots. HTTP servers cannot write to
-the client machine.
-
-## Video and Other Provider Tasks
-
-Ask your client to submit the requested operation once, keep its IDs and
-report progress until the result is ready. It should never repeat a create
-call just to check progress.
-
-<details>
-<summary>How worker jobs and provider tasks differ</summary>
-
-A worker job and a provider task are different:
-
-1. Submit a create tool through `ark_job_submit`.
-2. Poll `ark_job_get` and save the provider task ID from its structured result.
-3. Poll `gen_task_get` for Seedance/3D, `vod_get_task` for MediaKit, or
-   `omnihuman_get_task` for avatars.
-4. Request output persistence through a background job when a large download
-   may take time. Never repeat a create call to check status.
-
-`ark_job_cancel` is cooperative local cancellation. It does not guarantee
-that upstream work already accepted by a provider is cancelled.
-
-</details>
-
-Continue with [Choose a Tool](../capabilities.md),
-[worked examples](../tools.md), or the
-[Python client](../integrations/python.md).
+Developers can find exact arguments in the
+[tool reference](../api-reference.md) and job/result handling in
+[Background Execution](../integration-guide.md#background-execution).
+For other capabilities, see [Choose a Tool](../capabilities.md).

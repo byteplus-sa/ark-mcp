@@ -17,6 +17,43 @@ test("primary onboarding offers guided setup without shell commands", () => {
   assert.match(install, /shared-server\.md/);
 });
 
+test("first use leads with a generation prompt rather than tool orchestration", () => {
+  const content = page("setup/first-run.md");
+  const prompts = [...content.matchAll(/```text\n([\s\S]*?)\n```/g)].map(
+    (match) => match[1],
+  );
+  assert.ok(prompts.length >= 2);
+  assert.match(prompts[0], /generate one image/i);
+  assert.match(prompts[0], /red ceramic cup/i);
+  assert.match(prompts[0], /download link/i);
+  for (const prompt of prompts) {
+    assert.doesNotMatch(
+      prompt,
+      /ark_job_|ark_list_models|seedream_generate_image|seedance_create_task|gen_task_|dry_run|structured_content|poll_after_ms/,
+    );
+  }
+  assert.doesNotMatch(content, /```(?:json|bash|sh|powershell|toml)\b/);
+  assert.match(content, /may incur charges/i);
+  assert.match(content, /Do not submit a new generation request/);
+  assert.match(content, /preview.*not.*generated image/i);
+  assert.match(content, /integration-guide\.md#background-execution/);
+  for (const anchor of [
+    "discover-before-spending",
+    "preview-an-image-request",
+    "retrieve-the-job-result",
+    "generate-deliberately",
+    "video-and-other-provider-tasks",
+  ]) {
+    assert.ok(
+      content.includes(`id="${anchor}"`) ||
+        [...content.matchAll(/^## (.+)$/gm)].some(
+          (match) => match[1].toLowerCase().replaceAll(" ", "-") === anchor,
+        ),
+      anchor,
+    );
+  }
+});
+
 test("client guides put optional manual configuration behind disclosure", () => {
   for (const client of [
     "claude-code",

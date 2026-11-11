@@ -151,7 +151,7 @@ This site lists the full configured capability surface, not the tools enabled on
 Ask your connected AI client to use \`${name}\` for the operation you want.
 The client constructs the arguments and handles tool calls. Review its proposed
 operation before approving anything billable. For a non-billable introduction,
-start with [Your First Tool Call](${SITE_BASE}/setup/first-run/).
+start with [discovery without generation](${SITE_BASE}/setup/first-run/#discover-before-spending).
 
 ${execution}
 
@@ -168,7 +168,7 @@ ${JSON.stringify(call, null, 2)}
 
 </details>
 `
-    : `Match the input fields below and the full JSON Schema. See the [worked examples](${SITE_BASE}/tools/) for this capability and the [first-run guide](${SITE_BASE}/setup/first-run/) for job/result handling.`
+    : `Match the input fields below and the full JSON Schema. See the [worked examples](${SITE_BASE}/tools/) for this capability and [Background Execution](${SITE_BASE}/integration-guide/#background-execution) for job/result handling.`
 }
 
 ${providerTasks ? `An Ark job ID is not a provider task ID. Video and 3D tasks use [gen_task_get](${SITE_BASE}/tool-reference/gen-task-get/), VOD tasks use [vod_get_task](${SITE_BASE}/tool-reference/vod-get-task/), and avatars use [omnihuman_get_task](${SITE_BASE}/tool-reference/omnihuman-get-task/). Save accepted provider task IDs and resume polling instead of submitting a second generation.` : ""}

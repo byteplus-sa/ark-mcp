@@ -69,8 +69,8 @@ Inspect terminal status and `result.is_error` before using
 `result.structured_content`; completion alone is not success. The
 [Python client guide](integrations/python.md) has a complete discovery and
 dry-run example with bounded polling and error checks. The
-[first-run guide](setup/first-run.md) provides chat requests and optional
-exact JSON calls.
+[first-run guide](setup/first-run.md) provides copyable generation prompts and
+optional no-charge checks.
 
 ### Native task workflow
 
