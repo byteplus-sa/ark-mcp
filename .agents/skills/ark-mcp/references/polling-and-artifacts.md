@@ -1,6 +1,6 @@
 # Polling and artifacts
 
-How to poll asynchronous provider tasks, what the persistence layer does with finished outputs, and how to recover or export them. Parameters and output fields are in the tool schemas ([docs/api-reference.md](../../../../docs/api-reference.md)); this file covers behaviour the schemas do not.
+How to poll asynchronous provider tasks, what the persistence layer does with finished outputs, and how to recover or export them. Parameters and output fields are in the tool schemas ([API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)); this file covers behaviour the schemas do not.
 
 ## Which poller for which task
 

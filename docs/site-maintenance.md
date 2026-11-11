@@ -69,6 +69,15 @@ reference; job/result contracts stay in the technical integration guide.
 Changing prose does not constitute end-to-end installation testing in every
 client edition or a live provider generation test.
 
+The optional [agent skill guide](setup/agent-skill.md) distinguishes installing
+workflow instructions from connecting the server. Install the complete
+`.agents/skills/ark-mcp/` folder, including its references and agent metadata.
+Keep links between bundled files relative and links to the handbook absolute,
+so standalone copies do not depend on an Ark source checkout.
+`skill-install.test.mjs` tests a relocated copy for identical contents and
+resolvable local references, as well as the guide's paths and setup boundary.
+Documentation CI also runs for changes to this skill.
+
 Audio, Understanding, 3D and Avatars have separate navigation groups and
 capability sections. Navigation tests ensure category membership and stable
 tool routes; uncategorized or duplicate catalog entries fail the build.
