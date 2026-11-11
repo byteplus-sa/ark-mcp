@@ -24,12 +24,19 @@ Seedance 2.5 is the default generation. Premium 4K needs a feature gate and
 provider whitelist; it is not a separate create tool. The models enabled on
 the ComfyUI node pack are not automatically available in Ark MCP.
 
-## Audio and Understanding
+<span id="audio-and-understanding"></span>
+
+## Audio
 
 | Task | Tool | Credential |
 | --- | --- | --- |
 | Generate full-scene audio | [seed_audio_generate](/ark-mcp/tool-reference/seed-audio-generate/) | Seed Speech key |
 | Transcribe speech | [speech_to_text](/ark-mcp/tool-reference/speech-to-text/) | Seed Speech key |
+
+## Understanding
+
+| Task | Tool | Credential |
+| --- | --- | --- |
 | Understand images/video | [seed_understand](/ark-mcp/tool-reference/seed-understand/) | ModelArk key |
 | Understand/transcribe/translate audio | [seed_audio_understand](/ark-mcp/tool-reference/seed-audio-understand/) | ModelArk key |
 
@@ -37,17 +44,26 @@ Seed Audio Understanding is not the Seed Speech ASR service. It uses a
 server-configured ModelArk model; do not pass an audio clip to `seed_understand`.
 Understanding and transcription are provider operations, not free setup tests.
 
-## 3D and Avatars
+<span id="3d-and-avatars"></span>
+
+## 3D
 
 | Task | Tool | Requirements |
 | --- | --- | --- |
 | Text/image to 3D | [hyper3d_create_task](/ark-mcp/tool-reference/hyper3d-create-task/) | ModelArk key and `BYTEPLUS_MODELARK_3D_ENABLED=true` |
 | Image to 3D | [hitem3d_create_task](/ark-mcp/tool-reference/hitem3d-create-task/) | Same 3D gate |
+
+3D results use the shared `gen_task_*` lifecycle. The 3D feature is disabled
+by default.
+
+## Avatars
+
+| Task | Tool | Requirements |
+| --- | --- | --- |
 | Image + audio to avatar video | [omnihuman_create_task](/ark-mcp/tool-reference/omnihuman-create-task/) | Vision AI key and `BYTEPLUS_OMNIHUMAN_ENABLED=true` |
 | Poll/cancel avatars | [omnihuman_get_task](/ark-mcp/tool-reference/omnihuman-get-task/), [omnihuman_cancel_task](/ark-mcp/tool-reference/omnihuman-cancel-task/) | Vision AI credentials and gate |
 
-3D results use the shared `gen_task_*` lifecycle. OmniHuman has its own
-poller and cancel tool. Neither is enabled by default.
+OmniHuman has its own poller and cancel tool. Avatars are disabled by default.
 
 ## Media Processing
 

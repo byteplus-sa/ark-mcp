@@ -3,7 +3,7 @@ title: BytePlus Ark MCP
 description: Connect your AI client to BytePlus image, video, audio, understanding and media tools.
 template: splash
 hero:
-  tagline: One MCP server. Your AI client. BytePlus images, video, audio and understanding, billed to your own account.
+  tagline: Images, video, audio, 3D and understanding.<br />One MCP server, in the AI client you already use.
   actions:
     - text: Get started
       link: /ark-mcp/setup/install/
@@ -19,36 +19,58 @@ editUrl: https://github.com/byteplus-sa/ark-mcp/edit/main/docs/index.mdx
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
+<nav className="client-strip" aria-label="Client integrations">
+  <a href="/ark-mcp/integrations/claude-desktop/">Claude Desktop</a>
+  <a href="/ark-mcp/integrations/claude-code/">Claude Code</a>
+  <a href="/ark-mcp/integrations/codex/">Codex</a>
+  <a href="/ark-mcp/integrations/trae/">TRAE</a>
+  <a href="/ark-mcp/integrations/cursor/">Cursor</a>
+  <a href="/ark-mcp/integrations/vscode/">VS Code</a>
+  <a href="/ark-mcp/integrations/opencode/">OpenCode</a>
+  <a href="/ark-mcp/integrations/python/">Python</a>
+</nav>
+
 <CardGrid>
   <Card title="__TOOL_COUNT__ tools" icon="puzzle">
-    Generate and edit media, understand images and audio, manage asynchronous tasks, and keep durable outputs. Each tool has its own input and output reference.
+    One tool per capability. Explore typed inputs, outputs and examples for every step of your media workflow.
   </Card>
-  <Card title="Your preferred client" icon="rocket">
-    Connect Claude Desktop, Claude Code, Codex, TRAE, Cursor, VS Code, OpenCode, or your own Python program.
+  <Card title="Your workflow, connected" icon="rocket">
+    Create, poll and retrieve results without leaving your AI client. Keep generated media as durable artifacts.
   </Card>
   <Card title="Your own credentials" icon="seti:lock">
-    Keep provider keys in a private local environment file. Client configurations contain paths, not secrets. Enable only the products you need.
+    Private keys stay on your server. Enable the products you need, with usage billed to your BytePlus account.
   </Card>
 </CardGrid>
 
-## Start Here
+## Start Building
+
+From a fresh installation to your first tool call.
 
 <CardGrid>
-  <LinkCard title="Install and configure" description="Prepare a locked Python environment, choose your release, and enter credentials privately." href="/ark-mcp/setup/install/" />
-  <LinkCard title="Choose an integration" description="Use the correct configuration format and scope for your AI client." href="/ark-mcp/integrations/" />
-  <LinkCard title="Make your first tool call" description="Discover enabled models, preview an image request, and learn background-job polling." href="/ark-mcp/setup/first-run/" />
-  <LinkCard title="Find the right tool" description="Browse image, video, audio, 3D, avatar, media-processing and asset capabilities." href="/ark-mcp/capabilities/" />
+  <LinkCard title="Install and configure" description="Choose a reviewed, patched revision and set up your private credentials." href="/ark-mcp/setup/install/" />
+  <LinkCard title="Connect your client" description="Find the right configuration, from Claude and Codex to your own Python app." href="/ark-mcp/integrations/" />
+  <LinkCard title="Make your first call" description="Discover models, preview a request and learn how background jobs work." href="/ark-mcp/setup/first-run/" />
+  <LinkCard title="Explore the reference" description="Find every tool's requirements, inputs, outputs and execution guidance." href="/ark-mcp/capabilities/" />
 </CardGrid>
 
-## What You Can Build
+## Create Across Modalities
 
+The BytePlus models you need, connected through one consistent interface.
+
+<div className="capability-grid">
 <CardGrid>
-  <LinkCard title="Images with Seedream" description="Generate, edit, create variations and preview costs before spending." href="/ark-mcp/tool-reference/seedream-generate-image/" />
-  <LinkCard title="Video with Seedance" description="Choose an enabled model, submit video tasks, and retrieve their results." href="/ark-mcp/tool-reference/seedance-create-task/" />
-  <LinkCard title="Audio and understanding" description="Create full-scene audio, transcribe speech, or analyze images, video and audio." href="/ark-mcp/capabilities/#audio-and-understanding" />
-  <LinkCard title="Media workflows" description="Enhance video, transcode, handle subtitles, separate audio, and persist outputs." href="/ark-mcp/capabilities/#media-processing" />
+  <LinkCard title="Images" description="Generate, edit and explore variations with Seedream." href="/ark-mcp/tool-reference/seedream-generate-image/" />
+  <LinkCard title="Video" description="Bring prompts and reference media to life with Seedance." href="/ark-mcp/tool-reference/seedance-create-task/" />
+  <LinkCard title="Audio" description="Create full-scene audio and transcribe speech with Seed Speech." href="/ark-mcp/capabilities/#audio" />
+  <LinkCard title="Understanding" description="Analyze images, video and audio with multimodal models." href="/ark-mcp/capabilities/#understanding" />
+  <LinkCard title="3D" description="Turn text and images into models with Hyper3D and Hitem3d." href="/ark-mcp/capabilities/#3d" />
+  <LinkCard title="Avatars" description="Create talking-avatar video from an image and audio with OmniHuman." href="/ark-mcp/capabilities/#avatars" />
 </CardGrid>
+</div>
 
-Tools are registered conditionally. The reference documents all catalog entries;
-your account, server credentials, feature flags and authorization determine
-which ones are available. Start with discovery, not a paid generation.
+Finish your workflow with [VOD AI MediaKit](/ark-mcp/capabilities/#media-processing),
+[object storage and artifacts](/ark-mcp/capabilities/#uploads-and-outputs),
+and the [private asset library](/ark-mcp/capabilities/#asset-library).
+
+Available tools depend on your credentials, feature flags and account access.
+Start with discovery before making a paid generation.
