@@ -76,7 +76,29 @@ test("skill installation is discoverable and uses agent-native paths", () => {
   assert.match(guide, /references\/.*agents\//s);
   assert.match(guide, /already exists.*ask/s);
   assert.match(guide, /Do not.*credentials/s);
-  assert.doesNotMatch(guide, /```(?:bash|sh|powershell|json|toml)\b/);
+  assert.doesNotMatch(guide, /```(?:sh|powershell|json|toml)\b/);
+});
+
+test("skill installation prefers the scoped Skills CLI command over manual copying", () => {
+  const guide = readDoc("setup/agent-skill.md");
+  const command = "npx skills add byteplus-sa/ark-mcp --skill ark-mcp -g";
+  const installPrompt = guide.match(/```text\n([\s\S]*?)\n```/)?.[1];
+  assert.ok(installPrompt);
+  assert.ok(installPrompt.includes(command));
+  assert.doesNotMatch(installPrompt, /--all|--yes|(?:^|\s)-y(?:\s|$)/);
+  assert.match(guide, /Node\.js 22\.20/);
+  const shellExamples = [...guide.matchAll(/```bash\n([\s\S]*?)\n```/g)];
+  assert.deepEqual(
+    shellExamples.map((match) => match[1]),
+    [command],
+  );
+  assert.ok(
+    guide.indexOf(command) < guide.indexOf("Manual folder installation"),
+  );
+  assert.match(guide, /DO_NOT_TRACK/);
+  assert.match(guide, /telemetry/i);
+  assert.match(guide, /https:\/\/skills\.sh\/docs\/faq/);
+  assert.match(readDoc("setup/install.md"), /Skills CLI/);
 });
 
 test("skill environment guidance defers setup to the private-file handbook", () => {

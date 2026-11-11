@@ -233,10 +233,17 @@ available for users without a setup-capable agent.
 
 Install the optional [ark-mcp usage skill](docs/setup/agent-skill.md) to teach
 your agent model discovery, background jobs, progress checks and artifact
-handling. The guide includes a copyable install prompt and user/project paths
-for Codex (`.agents/skills/ark-mcp/`) and Claude Code
-(`.claude/skills/ark-mcp/`). Copy the full skill folder, including its references.
-The skill is instructions, not a server installer or MCP connection.
+handling. Ask your agent to use the Skills CLI, or run:
+
+```bash
+npx skills add byteplus-sa/ark-mcp --skill ark-mcp -g
+```
+
+Requires Node.js 22.20+, npm/npx and Git. Select your agents and review the
+installation summary; omit `-g` for a project-only install. The CLI handles
+the skill directories. The [guide](docs/setup/agent-skill.md) covers existing
+skills, telemetry, verification and manual fallback. This installs instructions,
+not the MCP server or its connection.
 
 ## Configuration
 

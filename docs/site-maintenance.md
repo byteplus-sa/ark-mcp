@@ -70,8 +70,13 @@ Changing prose does not constitute end-to-end installation testing in every
 client edition or a live provider generation test.
 
 The optional [agent skill guide](setup/agent-skill.md) distinguishes installing
-workflow instructions from connecting the server. Install the complete
-`.agents/skills/ark-mcp/` folder, including its references and agent metadata.
+workflow instructions from connecting the server. Prefer the Skills CLI with
+`--skill ark-mcp` and an explicit scope; do not recommend all repository skills
+or silently replace existing ones. Manual copying is a fallback. Both methods
+install the complete `.agents/skills/ark-mcp/` bundle, including references and
+agent metadata. A skills.sh listing depends on directory indexing and is not
+proof of a tested install; do not promise immediate listing or generate fake
+installation activity.
 Keep links between bundled files relative and links to the handbook absolute,
 so standalone copies do not depend on an Ark source checkout.
 `skill-install.test.mjs` tests a relocated copy for identical contents and
