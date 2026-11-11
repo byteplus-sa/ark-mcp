@@ -1,6 +1,6 @@
 ---
 title: Install the Agent Skill
-description: Give your agent the Ark MCP workflow guide, with installs for Codex, Claude Code and other skill-capable clients.
+description: Install the Ark MCP workflow guide with the Skills CLI for Codex, Claude Code and other supported agents.
 ---
 
 The **ark-mcp skill** teaches your agent how to use the connected server:
@@ -15,37 +15,56 @@ Ark MCP does not have a tool that installs agent skills.
 
 ## Ask Your Agent to Install It
 
-Use a coding agent with permission to download files and write to the target
-agent's skill directory. Replace `[my agent]`, then send:
+Use the [Skills CLI](https://github.com/vercel-labs/skills), the installer for
+the [skills.sh directory](https://skills.sh/). It downloads the skill from
+GitHub and handles the selected agents' skill folders.
+
+In a coding agent with terminal and file access, replace `[my agent]` and send:
 
 ```text
-Install the official ark-mcp usage skill for [my agent], user-wide:
-https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp
+Install the official ark-mcp usage skill for [my agent], user-wide,
+using the Skills CLI:
+npx skills add byteplus-sa/ark-mcp --skill ark-mcp -g
 
-Confirm the skill directory supported by my agent before writing.
-Download and review the complete ark-mcp folder, including references/
-and agents/, from one source revision. Preserve its files and structure.
+Check prerequisites and ask before installing missing software.
+Target only my agent; preserve installation confirmations.
 If ark-mcp already exists, stop and ask before updating or replacing it.
 Do not read or change credentials, MCP settings, or the server installation.
 Verify the installed files match the source and the agent can discover
-the skill. Report the installed path, source revision and any remaining
-reload or approval step. Do not generate media or run paid tests.
+the skill. Report its path, source and any remaining approval or reload step.
+Do not generate media or run paid tests.
 ```
 
-The agent should install **the entire folder**, not just `SKILL.md`, a GitHub
-HTML page, or the whole repository inside a skills directory. Review downloaded
-instructions before enabling them; installing a skill does not authorize
-executing downloaded scripts. If the agent cannot access the source or write
-to the correct host, it should report that limitation rather than claim success.
+The CLI requires **Node.js 22.20 or newer**, npm/npx and Git for this GitHub
+source. These are skill-installer prerequisites, not additional MCP server
+requirements. Your agent can check them and prepare the install; complete any
+remaining interactive selection or approval yourself. It must report blocked
+or unfinished steps, not claim success.
 
-For a project-only install, replace `user-wide` with
-`in this project only: [absolute project path]`. A project-scoped skill is
-useful when a team wants reviewed instructions kept with its project.
+## Install Directly
+
+If you prefer a terminal, run:
+
+```bash
+npx skills add byteplus-sa/ark-mcp --skill ark-mcp -g
+```
+
+Select only the agents you use and review the installation summary.
+`--skill ark-mcp` selects the usage skill, not the other contributor skills
+in this repository. `-g` installs user-wide. For one project, omit `-g` and
+run from that project's directory. To preselect a client, add
+`--agent codex` or `--agent claude-code`.
+
+Review the skill before using it: its instructions run with the agent's
+permissions. Avoid `--all` and automatic confirmation when an existing skill
+might be replaced. The CLI installs the complete bundle, including
+`references/` and `agents/`; no manual folder copying is normally needed.
 
 ## Where the Skill Goes
 
 These are skill **folders**; each contains `SKILL.md` and its supporting files.
-They are not MCP configuration files.
+They are not MCP configuration files. The CLI can link client-specific paths
+to a canonical `.agents/skills` copy; `--copy` selects independent copies.
 
 | Agent | User-wide | Project-only |
 | --- | --- | --- |
@@ -64,10 +83,10 @@ skill installation for Claude Desktop or claude.ai.
 <details>
 <summary>Share one project skill between Codex and Claude Code</summary>
 
-Keep the canonical folder at `.agents/skills/ark-mcp/` and, where supported,
-have your agent create `.claude/skills/ark-mcp` as a relative symlink to
-`../../.agents/skills/ark-mcp`. This is the layout used by the Ark repository.
-Edit the canonical folder, not a second copy.
+Select both agents in the CLI and use its symlink installation mode.
+The canonical folder is `.agents/skills/ark-mcp/`; `.claude/skills/ark-mcp`
+can point to `../../.agents/skills/ark-mcp`. This is also the layout used by
+the Ark repository. Edit the canonical folder, not a second copy.
 
 Ask before replacing any existing folder or link. Verify the target resolves
 and both agents discover it. Where symlinks are unavailable or disallowed,
@@ -108,16 +127,59 @@ the skill does not make every documented product available.
 
 ## Updates
 
-The source link follows `main`, not an immutable release. Record the downloaded
-commit, review changes before updating, and keep the current copy until its
+The repository shorthand follows its default branch, not an immutable release.
+Keep the CLI's source/lock metadata. Ask your agent to check and update only
+`ark-mcp` in the scope where it was installed:
+
+| Installation | Check | Update after approval |
+| --- | --- | --- |
+| User-wide | `npx skills check ark-mcp -g` | `npx skills update ark-mcp -g` |
+| Project-only | `npx skills check ark-mcp -p` | `npx skills update ark-mcp -p` |
+
+Run project-only commands from the intended project directory. Keep the scope
+explicit: a bare check can select project skills even when you intend to
+update a user-wide copy. Review changes and keep the current copy until its
 replacement is verified. Never overwrite local customizations without approval.
 Updating a skill must not silently upgrade the server or change its credentials.
 For older or customized servers, check compatibility against their live schemas.
+
+## How skills.sh Listing Works
+
+GitHub remains the source of truth; there is no separate skill upload or
+publish command. According to the [skills.sh FAQ](https://skills.sh/docs/faq),
+public skills enter the directory through normal CLI installation telemetry.
+A successful install does not guarantee that a directory page is immediately
+visible, and directory visibility is not required to use the install command.
+
+The CLI enables anonymous install telemetry by default. You can opt out by
+setting `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1`; according to its
+[telemetry documentation](https://github.com/vercel-labs/skills/blob/main/docs/troubleshooting.md#telemetry),
+these settings also disable security-audit requests. Respect the user's
+preference: telemetry is not required to install or use the skill.
+
+<details>
+<summary>Manual folder installation (fallback)</summary>
+
+If the CLI is unavailable or unsupported for your agent, use the
+[official skill folder](https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp).
+Have your agent review and copy the entire folder from one source revision,
+including `SKILL.md`, `references/` and `agents/`, to the supported destination
+above. Do not copy a GitHub HTML page or the entire repository into a skills
+directory.
+
+Preserve existing files and ask before any replacement. Check that the installed
+files match the source, record the revision and confirm skill discovery.
+Installing a skill does not authorize executing downloaded scripts or reading
+credentials.
+
+</details>
 
 ## Sources
 
 Checked 2026-11-11:
 
 - [Official ark-mcp skill](https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp)
+- [Skills CLI commands](https://github.com/vercel-labs/skills/blob/main/docs/commands.md)
+- [skills.sh listing FAQ](https://skills.sh/docs/faq)
 - [Codex skill-root discovery](https://github.com/openai/codex/blob/main/codex-rs/ext/skills/src/host_roots.rs)
 - [Claude Code skills](https://code.claude.com/docs/en/skills)

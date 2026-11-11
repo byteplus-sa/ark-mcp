@@ -97,16 +97,17 @@ progress checks and keeping generated results. In a file-capable coding
 agent, send:
 
 ```text
-Install the ark-mcp usage skill for [my agent], user-wide:
-https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp
+Use the Skills CLI to install only the ark-mcp usage skill from
+byteplus-sa/ark-mcp for [my agent], user-wide.
 Follow https://byteplus-sa.github.io/ark-mcp/setup/agent-skill/
-for the correct skill folder and verification. Preserve existing skills
-and ask before replacing anything. Do not read credentials, change my
-MCP connection, or run paid tests.
+for the command, prerequisites and verification. Preserve existing skills
+and ask before installing missing software or replacing anything.
+Do not read credentials, change my MCP connection, or run paid tests.
 ```
 
-See [Install the Agent Skill](agent-skill.md) for `.agents/skills` and
-`.claude/skills` locations, project-only installs, and how to use it.
+The CLI handles `.agents/skills` and `.claude/skills` locations for supported
+clients. See [Install the Agent Skill](agent-skill.md) for agent selection,
+project-only installs, and the manual fallback.
 The skill supplies instructions; it does not install or connect the server.
 
 Continue with [Your First Tool Call](first-run.md).
