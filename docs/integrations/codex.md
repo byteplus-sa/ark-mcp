@@ -3,9 +3,21 @@ title: Codex
 description: Connect Codex to Ark using global or trusted-project MCP configuration and private env-file paths.
 ---
 
-These are Codex connection templates, not a guarantee for every latest CLI,
-IDE extension, or app edition. Check the installed client's MCP settings and
-CLI help before registration.
+Use a Codex session with terminal and file-editing access to prepare Ark.
+Ordinary chat without those permissions cannot perform local installation.
+
+## Recommended Setup
+
+1. Send the [guided setup request](../setup/install.md#guided-local-setup),
+   naming **Codex** and your actual execution host.
+2. Approve setup changes and enter keys privately when prompted.
+3. Review `ark-seed` in `/mcp` or your edition's MCP settings.
+
+The agent resolves paths and uses the installed client's registration
+mechanism. Once configured, Codex starts Ark automatically.
+
+<details>
+<summary>Manual configuration and scope options</summary>
 
 ## Choose the Scope
 
@@ -69,22 +81,14 @@ Preserve unrelated tables and comments. Never put provider keys in `env`.
 Project configuration with machine-specific absolute paths is not a portable
 team setup and should not be committed automatically.
 
+</details>
+
 ## Verify
 
-Check active jobs before reloading Codex's MCP connection. Use `/mcp` where
-available, or the client's MCP/tool-discovery panel.
-
-Request `ark_list_models` with `{"input": {}}` and
-`ark_job_capabilities` with `{}` only. Confirm returned enabled services,
-exact model IDs and limits, and available targets. These read-only calls make
-no provider calls and prove configuration loading, not key validity or
-entitlement. Do not generate, understand, transcribe, upload, or submit a
-job to verify connection.
-
-Ordinary `ark_job_*` calls are the default for long work; native MCP tasks
-require explicit client support. Jobs belong to the process that accepted
-them, not to every client using the same configuration. The default queue
-loses retained jobs when that process restarts.
+Run the [discovery-only check](index.md#verify-without-paid-calls) and confirm
+the tools you need appear. Continue with [Your First Tool Call](../setup/first-run.md).
+Finish active jobs before reconnecting; a new local process does not inherit
+the previous process's in-memory queue.
 
 See [Integrations](index.md), [Claude Code](claude-code.md),
 [Getting Started](../getting-started.md), [Tools](../tools.md), and

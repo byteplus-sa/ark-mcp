@@ -4,8 +4,24 @@ description: Register a local Ark stdio server in Claude Desktop without putting
 ---
 
 This guide is for **Claude Desktop**, not [Claude Code](claude-code.md).
-The configuration below is a connection template; verify the settings UI
-and local MCP support in your installed Desktop edition.
+Desktop launches the local Ark server automatically after setup.
+
+## Recommended Setup
+
+1. Use the [guided setup request](../setup/install.md#guided-local-setup)
+   in a separate coding agent with local terminal and file-editing access.
+   Name **Claude Desktop** as the target; Desktop chat alone is not assumed
+   to have installation access.
+2. Let it prepare your installation and Desktop configuration, and enter
+   your provider keys in the private editor.
+3. Finish active jobs, fully reopen Desktop, and approve the Ark connection.
+
+No setup-capable agent available? Use [manual installation](../setup/manual-install.md)
+or ask your administrator for help. For a team-hosted endpoint, follow the
+[shared-server guide](../setup/shared-server.md) instead.
+
+<details>
+<summary>Manual Desktop configuration</summary>
 
 ## Scope and Prerequisites
 
@@ -61,21 +77,14 @@ paths:
 The `env` values are non-secret. Desktop starts the server locally; this
 does not register a hosted Claude connector.
 
+</details>
+
 ## Verify
 
-Check active jobs before fully quitting and reopening Desktop. Review any
-server trust prompt, then locate `ark-seed` in the app's tools/connectors UI;
-labels and icons vary by edition.
-
-Ask Desktop to call `ark_list_models` with `{"input": {}}` and
-`ark_job_capabilities` with `{}` only. Confirm actual tool results, enabled
-services, and the targets you expected. Do not generate, upload, or run
-understanding as a connection test. These discovery calls make no provider
-calls and do not verify provider credentials or entitlement.
-
-For long operations, instruct Desktop to use ordinary `ark_job_submit`
-and `ark_job_get` calls by default. Native task support is not assumed.
-Restarting its stdio process loses the default in-memory job queue.
+Locate `ark-seed` in Desktop's tools/connectors settings and run the
+[discovery-only check](index.md#verify-without-paid-calls). UI labels vary
+by edition. Once your expected tools appear, try
+[Your First Tool Call](../setup/first-run.md).
 
 See [Integrations](index.md), [Getting Started](../getting-started.md),
 [Tools](../tools.md), and [Configuration](../configuration.md).

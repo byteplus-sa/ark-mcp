@@ -111,6 +111,11 @@ test("required background tools show the complete ordinary job wrapper", () => {
   assert.match(page, /result\.structured_content/);
   assert.match(page, /seed:image:generate/);
   assert.match(page, /Requires BYTEPLUS_MODELARK_API_KEY/);
+  assert.match(page, /Ask your connected AI client/);
+  assert.match(
+    page,
+    /<details>\s*<summary>Exact MCP call \(for developers\)<\/summary>/,
+  );
 });
 
 test("foreground tools do not advise submission through background jobs", () => {
@@ -126,4 +131,5 @@ test("foreground tools do not advise submission through background jobs", () => 
   assert.match(page, /Foreground/);
   assert.match(page, /"arguments": \{\}/);
   assert.doesNotMatch(page, /"tool_name": "ark_job_capabilities"/);
+  assert.doesNotMatch(page, /An Ark job ID is not a provider task ID/);
 });

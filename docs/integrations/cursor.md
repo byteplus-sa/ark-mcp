@@ -3,9 +3,20 @@ title: Cursor
 description: Add Ark to Cursor at user or project scope using an absolute stdio launch and private env file.
 ---
 
-This is a Cursor stdio connection template. Check your installed edition's
-MCP settings and official configuration docs; it is not a guarantee that
-every latest release has been tested end-to-end.
+Cursor starts Ark automatically from its saved MCP configuration.
+
+## Recommended Setup
+
+1. Use the [guided setup request](../setup/install.md#guided-local-setup)
+   in a Cursor agent with terminal and file-editing access.
+2. Approve installation/configuration changes and enter provider keys privately.
+3. Open Cursor's MCP settings, enable `ark-seed`, and review tool permissions.
+
+Use user-level setup unless only one project should see Ark. The agent should
+prepare the correct entry without replacing your other MCP servers.
+
+<details>
+<summary>Manual configuration and scope options</summary>
 
 ## Choose the Scope
 
@@ -54,21 +65,14 @@ this template deliberately uses literal absolute paths and only non-secret
 `env` settings. Remote workspaces need paths and an installation on the
 actual execution host.
 
+</details>
+
 ## Verify
 
-Open Cursor's MCP settings, enable `ark-seed`, and review server/tool
-approval prompts. Check active jobs before reloading its connection or
-restarting Cursor; UI labels vary by edition.
-
-Ask a tool-enabled agent to call `ark_list_models` with `{"input": {}}`
-and `ark_job_capabilities` with `{}` only. Confirm actual output and
-expected enabled services/model limits/targets. These calls make no provider
-calls and do not prove key validity or entitlement. Do not generate,
-understand, transcribe, upload, or submit jobs for verification.
-
-Use ordinary `ark_job_submit` and `ark_job_get` by default for long work.
-Native MCP task augmentation is not assumed. Jobs cannot be polled from
-another client's stdio process, and the default queue is lost on restart.
+Run the [discovery-only check](index.md#verify-without-paid-calls), then
+[Your First Tool Call](../setup/first-run.md). UI labels vary by edition;
+actual tool results matter more than the connection indicator. Finish active
+jobs before reconnecting or restarting Cursor.
 
 See [Integrations](index.md), [VS Code](vscode.md),
 [Getting Started](../getting-started.md), [Tools](../tools.md), and

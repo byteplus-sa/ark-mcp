@@ -2,6 +2,11 @@
 
 The server supports stdio and FastMCP Streamable HTTP.
 
+**Connecting as a user?** Use [guided local setup](setup/install.md) or
+[an existing shared server](setup/shared-server.md). The commands on this
+page are for developers and server operators, not extra steps after adding
+Ark to your client.
+
 ## stdio
 
 stdio is the secure local default. MCP JSON-RPC uses stdin/stdout; structured
@@ -15,6 +20,8 @@ uv run python -m ark_mcp
 
 Use this mode when an MCP client launches the server as a subprocess. The
 local principal owns artifacts and Seedance tasks created by that process.
+The client runs the saved command automatically. Starting a separate terminal
+process does not connect that process to your client's stdio session.
 
 ## Streamable HTTP
 

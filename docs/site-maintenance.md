@@ -9,7 +9,7 @@ The unversioned public site tracks the reviewed `main` revision used by its
 deployment workflow, not every published tag. Its generated contracts,
 runtime guidance, Python example and validation apply to that build revision.
 Historical releases can have different dependencies and capabilities. Keep
-the [installation revision guidance](setup/install.md#choose-an-installation)
+the [installation revision guidance](setup/manual-install.md#choose-an-installation)
 current when a suitable patched release is published.
 
 ## Develop Locally
@@ -53,6 +53,18 @@ the project environment is not at `.venv/`.
 | Navigation and theme | `docs/site/astro.config.mjs`, `docs/site/src/styles/custom.css` |
 | Tool-reference categories | `docs/site/scripts/navigation.mjs` |
 | BytePlus logo variants | `docs/site/src/assets/byteplus-mark-{light,dark}.svg` |
+
+The primary setup page offers a request for a terminal/file-capable coding
+agent and an existing shared-server route. It does not claim a one-click
+installer exists. Technical preparation lives in `setup/manual-install.md`;
+client-specific fallback snippets remain inside disclosures. Keep README and
+older handbook entry points linked to these canonical guides instead of
+duplicating commands or credential-bearing client examples.
+
+`onboarding.test.mjs` guards that separation. First-run and generated tool
+pages lead with client instructions; exact JSON remains available on demand.
+Changing prose does not constitute end-to-end installation testing in every
+client edition.
 
 Audio, Understanding, 3D and Avatars have separate navigation groups and
 capability sections. Navigation tests ensure category membership and stable

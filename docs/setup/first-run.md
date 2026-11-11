@@ -3,12 +3,25 @@ title: Your First Tool Call
 description: Discover enabled tools, preview an image request without charges, and retrieve background results.
 ---
 
-Complete [installation](install.md) and your
-[client integration](../integrations/index.md) first. Examples below are MCP
-tool-call envelopes: the `name` selects the tool and `arguments` contains its
-input. They are not shell commands.
+After [setup](install.md), ask your connected client in plain language.
+You do not need to write JSON or run commands in a terminal. Exact tool-call
+envelopes are available below for developers and troubleshooting.
 
 ## Discover Before Spending
+
+Send this in your client:
+
+```text
+Use ark-seed to show the services, models and tools available to me.
+Call only ark_list_models and ark_job_capabilities. Do not generate,
+understand, transcribe, upload, or submit jobs.
+```
+
+Check that Seedream is available before trying the preview. Discovery makes
+no provider calls, but does not verify that your key or account can generate.
+
+<details>
+<summary>Exact discovery calls</summary>
 
 ```json
 {
@@ -37,10 +50,26 @@ Unlike most Ark tools, `ark_job_capabilities` takes `{}` without an `input`
 wrapper. If `seedream_generate_image` is absent, enable ModelArk and reconnect
 before trying the next step.
 
+</details>
+
 ## Preview an Image Request
 
-Use the ordinary background-job tools by default. You do not need a client
-that supports native MCP task augmentation.
+Try a request preview, without creating a billable image:
+
+```text
+Preview one Seedream request for a red ceramic cup on a wooden table.
+Use seedream_generate_image with dry_run=true through ark_job_submit.
+Poll that job and show the preview result and cost estimate.
+Do not generate an image or retry submission if the response is uncertain.
+If Seedream is unavailable, stop and tell me what is missing.
+```
+
+Your client handles the background submission and polling. Check its tool
+approval prompt: the target must include `dry_run: true`. Approve no substitute
+generation call. The preview uses a text-only request.
+
+<details>
+<summary>Exact dry-run request</summary>
 
 ```json
 {
@@ -64,7 +93,16 @@ inner one to Seedream. This text-only dry run previews the request and cost
 without generating an image or making a billable generation request.
 Dry runs still require the target to be registered.
 
+</details>
+
 ## Retrieve the Job Result
+
+The client should finish polling as part of the preview above. If it pauses,
+ask it to **continue checking the existing job**, not create a new request.
+Keep the same connection open. A restart loses default in-memory jobs.
+
+<details>
+<summary>Polling and result fields</summary>
 
 Save the returned `job_id`. Wait at least `poll_after_ms` milliseconds, then
 poll through the same client/server connection:
@@ -89,10 +127,13 @@ Default in-memory jobs are lost on server restart. Another stdio client
 starts another process and cannot retrieve this process's jobs.
 An ambiguous submission or timeout is not permission to submit again.
 
+</details>
+
 ## Generate Deliberately
 
-Once you have reviewed the preview and approved possible charges, change
-`dry_run` to `false` and submit a new job. Generation is billable.
+Only after reviewing the preview and approving possible charges, ask your
+client to generate the image. That is a new, billable request with
+`dry_run: false`, not another setup test.
 Choose model IDs and parameters from discovery, not from ComfyUI model lists:
 the two integrations can expose different models and options.
 
@@ -107,6 +148,13 @@ the client machine.
 
 ## Video and Other Provider Tasks
 
+Ask your client to submit the requested operation once, keep its IDs and
+report progress until the result is ready. It should never repeat a create
+call just to check progress.
+
+<details>
+<summary>How worker jobs and provider tasks differ</summary>
+
 A worker job and a provider task are different:
 
 1. Submit a create tool through `ark_job_submit`.
@@ -118,6 +166,8 @@ A worker job and a provider task are different:
 
 `ark_job_cancel` is cooperative local cancellation. It does not guarantee
 that upstream work already accepted by a provider is cancelled.
+
+</details>
 
 Continue with [Choose a Tool](../capabilities.md),
 [worked examples](../tools.md), or the
