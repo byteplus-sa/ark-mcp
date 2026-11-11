@@ -44,7 +44,9 @@ SQLite or in-process limiters.
 ## Prerequisites
 
 - Terraform `>=1.9, <2.0`. The starter pins `byteplus-sdk/bytepluscc` to
-  `0.0.63` and includes its dependency lockfile.
+  `0.0.63` and includes verified dependency lockfile checksums for Linux AMD64
+  and macOS ARM64. Maintainers adding platforms should regenerate checksums
+  with `terraform providers lock -platform=...`, not disable lock verification.
 - A BytePlus account/project authorized for Cloud Control and the listed
   resource operations. Use scoped infrastructure credentials, preferably
   temporary credentials, not the application's ModelArk Bearer key.
@@ -314,3 +316,5 @@ Verified 2026-11-11:
   supports `gz+b64` file payloads used to stay under the ECS user-data limit.
 - [Terraform lifecycle](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle)
   and [mock-provider tests](https://developer.hashicorp.com/terraform/language/tests/mocking).
+- [Multi-platform provider locking](https://developer.hashicorp.com/terraform/cli/commands/providers/lock):
+  records verified checksums for each specified CLI platform.

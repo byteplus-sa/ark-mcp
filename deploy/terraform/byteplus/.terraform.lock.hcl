@@ -5,6 +5,7 @@ provider "registry.terraform.io/byteplus-sdk/bytepluscc" {
   version     = "0.0.63"
   constraints = "0.0.63"
   hashes = [
+    "h1:IyVMa0QOnRrfMhYpTTnsEtUfWEirkQGHTQWylK6HEA0=",
     "h1:qzRgi0yjKhWjCDybVo0kO4PGbVNZp6wc5YRlcKolqm0=",
     "zh:0919dfff85efeb7aa57980c8de1b77c31687ff3ca5e63324fbe80c2ec744aeff",
     "zh:2db855b1aabf398f4d9d18fab63fc694d80c88a133011a6dd858a1e5705b0e31",
