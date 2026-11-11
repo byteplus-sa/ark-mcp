@@ -265,13 +265,16 @@ def test_installer_is_retryable_but_does_not_start_unconfigured_stack() -> None:
     assert "systemctl start ark-mcp" not in installer
 
 
-def test_terraform_ci_runs_mocked_plans_with_job_scoped_provider_cache() -> None:
+def test_terraform_ci_runs_mocked_plans_with_runner_scoped_provider_cache() -> None:
     content = (ROOT / ".github" / "workflows" / "terraform.yml").read_text()
     workflow = yaml.load(content, Loader=yaml.BaseLoader)
     assert all("runner." not in value for value in workflow["env"].values())
     job = workflow["jobs"]["validate"]
-    assert job["env"]["TF_DATA_DIR"] == "${{ runner.temp }}/ark-terraform"
+    assert all("runner." not in value for value in job.get("env", {}).values())
     commands = "\n".join(step.get("run", "") for step in job["steps"])
+    assert 'printf \'TF_DATA_DIR=%s/ark-terraform\\n\' "$RUNNER_TEMP" >> "$GITHUB_ENV"' in (
+        commands
+    )
     assert "terraform -chdir=deploy/terraform/byteplus test -no-color" in commands
     assert "init -backend=false -input=false -lockfile=readonly" in commands
     assert "sha256sum --check" in commands

@@ -32,8 +32,6 @@ jobs:
   validate:
     name: Offline Terraform and bootstrap
     runs-on: ubuntu-latest
-    env:
-      TF_DATA_DIR: ${{ runner.temp }}/ark-terraform
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -52,6 +50,7 @@ jobs:
           printf '%s  %s\n' "$TF_SHA256" "$RUNNER_TEMP/terraform.zip" | sha256sum --check
           unzip -q "$RUNNER_TEMP/terraform.zip" -d "$RUNNER_TEMP/terraform-bin"
           printf '%s\n' "$RUNNER_TEMP/terraform-bin" >> "$GITHUB_PATH"
+          printf 'TF_DATA_DIR=%s/ark-terraform\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
 
       - name: Check Terraform and mocked plans
         run: |
