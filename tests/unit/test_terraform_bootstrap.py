@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "deploy" / "terraform" / "byteplus" / "scripts"
@@ -262,3 +263,19 @@ def test_installer_is_retryable_but_does_not_start_unconfigured_stack() -> None:
     assert "24.04" in installer
     assert "amd64" in installer
     assert "systemctl start ark-mcp" not in installer
+
+
+def test_terraform_ci_runs_mocked_plans_with_job_scoped_provider_cache() -> None:
+    content = (ROOT / ".github" / "workflows" / "terraform.yml").read_text()
+    workflow = yaml.load(content, Loader=yaml.BaseLoader)
+    assert all("runner." not in value for value in workflow["env"].values())
+    job = workflow["jobs"]["validate"]
+    assert job["env"]["TF_DATA_DIR"] == "${{ runner.temp }}/ark-terraform"
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "terraform -chdir=deploy/terraform/byteplus test -no-color" in commands
+    assert "init -backend=false -input=false -lockfile=readonly" in commands
+    assert "sha256sum --check" in commands
+    assert "secrets." not in content
+    for event in ("pull_request", "push"):
+        assert "deploy/terraform/**" in workflow["on"][event]["paths"]
+        assert "deploy/compose/**" in workflow["on"][event]["paths"]
