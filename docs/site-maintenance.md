@@ -51,6 +51,20 @@ the project environment is not at `.venv/`.
 | Tool contracts | Handler docstrings, Pydantic models and `src/ark_mcp/tools/_catalog.py` |
 | Page generation and link rewriting | `docs/site/scripts/` |
 | Navigation and theme | `docs/site/astro.config.mjs`, `docs/site/src/styles/custom.css` |
+| Tool-reference categories | `docs/site/scripts/navigation.mjs` |
+| BytePlus logo variants | `docs/site/src/assets/byteplus-mark-{light,dark}.svg` |
+
+Audio, Understanding, 3D and Avatars have separate navigation groups and
+capability sections. Navigation tests ensure category membership and stable
+tool routes; uncategorized or duplicate catalog entries fail the build.
+The BytePlus logo uses the original light/dark SVGs from the reference site
+in the header, with the same mark above the landing-page title. Its header
+alternative text is empty because the adjacent site title already names
+BytePlus; the hero mark is decorative.
+
+`rehype-tables.mjs` wraps tables in focusable scroll regions, keeping native
+table semantics and full-width columns without overflowing narrow screens.
+Theme styles preserve visible keyboard focus and respect reduced motion.
 
 `prepare-docs.mjs` calls `scripts/export_tool_docs.py` in an isolated Python
 process. The exporter bypasses the package's eager server entrypoint, clears

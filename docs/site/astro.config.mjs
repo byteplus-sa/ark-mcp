@@ -4,56 +4,32 @@ import starlight from "@astrojs/starlight";
 import { unified } from "@astrojs/markdown-remark";
 import starlightLinksValidator from "starlight-links-validator";
 import remarkLinks from "./scripts/remark-links.mjs";
+import { toolReferenceGroups } from "./scripts/navigation.mjs";
+import rehypeTables from "./scripts/rehype-tables.mjs";
 
 const { tools } = JSON.parse(
   readFileSync(new URL("./src/data/tools.json", import.meta.url), "utf8"),
 );
-const groups = [
-  [
-    "Discovery and background jobs",
-    (name) => name.startsWith("ark_job_") || name === "ark_list_models",
-  ],
-  [
-    "Images and video",
-    (name) =>
-      name.startsWith("seedream_") ||
-      name.startsWith("seedance_") ||
-      name.startsWith("gen_task_"),
-  ],
-  [
-    "Audio and understanding",
-    (name) =>
-      [
-        "seed_audio_generate",
-        "seed_understand",
-        "seed_audio_understand",
-        "speech_to_text",
-      ].includes(name),
-  ],
-  [
-    "3D and avatars",
-    (name) =>
-      name.startsWith("hyper3d_") ||
-      name.startsWith("hitem3d_") ||
-      name.startsWith("omnihuman_"),
-  ],
-  ["VOD AI MediaKit", (name) => name.startsWith("vod_")],
-  ["Asset library", (name) => name.startsWith("ark_asset_")],
-  [
-    "Uploads and artifacts",
-    (name) => name.startsWith("media_") || name.startsWith("seed_media_"),
-  ],
-];
 
 export default defineConfig({
   site: "https://byteplus-sa.github.io",
   base: "/ark-mcp",
   trailingSlash: "always",
   outDir: "../../out/docs-site",
-  markdown: { processor: unified({ remarkPlugins: [remarkLinks] }) },
+  markdown: {
+    processor: unified({
+      remarkPlugins: [remarkLinks],
+      rehypePlugins: [rehypeTables],
+    }),
+  },
   integrations: [
     starlight({
       title: "BytePlus Ark MCP",
+      logo: {
+        light: "./src/assets/byteplus-mark-light.svg",
+        dark: "./src/assets/byteplus-mark-dark.svg",
+        alt: "",
+      },
       description:
         "Set up Ark MCP in your AI client and use BytePlus image, video, audio, understanding and media tools.",
       social: [
@@ -73,6 +49,7 @@ export default defineConfig({
         styleOverrides: {
           borderRadius: "8px",
           borderColor: "var(--sl-color-hairline)",
+          codeBackground: "var(--sl-color-gray-6)",
         },
       },
       sidebar: [
@@ -107,16 +84,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { slug: "capabilities", label: "Choose a Tool" },
-            ...groups.map(([label, matches]) => ({
-              label,
-              collapsed: true,
-              items: tools
-                .filter((tool) => matches(tool.name))
-                .map((tool) => ({
-                  label: tool.name,
-                  slug: `tool-reference/${tool.name.replaceAll("_", "-")}`,
-                })),
-            })),
+            ...toolReferenceGroups(tools),
           ],
         },
         {
