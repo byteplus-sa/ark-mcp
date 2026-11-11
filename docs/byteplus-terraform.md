@@ -210,6 +210,13 @@ sudo docker compose --env-file /srv/ark-mcp/config/.env \
 
 Activation validates the mount and configuration, creates data directories
 (application state uses UID/GID 1001), and starts the stack with health waiting.
+Both Docker daemon startup and the application unit check the mount and private
+configuration, in that order, before starting. This also gates Docker's automatic
+restart of saved containers after an unclean reboot. It does not halt already
+running containers when configuration is edited or deleted: stop and drain the
+stack while the old configuration is valid, then edit and activate deliberately.
+If a startup guard fails, restore the verified mount and valid configuration,
+run `sudo systemctl reset-failed docker.service ark-mcp.service`, then activate.
 
 ## Verify before inviting users
 
@@ -229,6 +236,10 @@ Paid generation requires an explicitly approved test budget.
 Reboot during an approved maintenance window and confirm the expected EBS UUID
 mounts, Docker/Ark MCP resume, and SQLite/Redis data remains accessible. Include
 a restore drill and your workload's concurrency/large-upload tests.
+On a disposable Linux deployment, also test an unclean restart with missing or
+invalid private configuration: saved containers must not become available.
+Restore valid configuration and confirm recovery. Graceful shutdown alone can
+mask this path because it explicitly stops the containers.
 
 ## Backup, upgrade, and recovery
 
@@ -279,6 +290,11 @@ real identity login, disk/EIP replacement, or live Redis failover is certified.
 The pinned provider documents nested set/list update limitations; review
 security-group and other nested changes carefully and inspect convergence
 after every real apply.
+
+The `BytePlus Terraform` GitHub workflow runs formatting, checksum-verified CLI
+installation, provider validation, all mocked plans, and bootstrap checks for
+Terraform/Compose changes. It has no cloud account credentials and performs no
+real infrastructure apply.
 
 ## Research sources
 

@@ -241,6 +241,13 @@ def test_docker_and_application_wait_for_persistent_storage() -> None:
         content = (SCRIPTS / filename).read_text()
         assert "RequiresMountsFor=/srv/ark-mcp" in content
         assert "ExecStartPre=/usr/bin/mountpoint -q /srv/ark-mcp" in content
+        assert (
+            "ExecStartPre=/usr/bin/python3 /opt/ark-mcp/check_env.py /srv/ark-mcp/config/.env"
+            in content
+        )
+        assert content.index("ExecStartPre=/usr/bin/mountpoint") < content.index(
+            "ExecStartPre=/usr/bin/python3"
+        )
     content = (SCRIPTS / "ark-mcp.service").read_text()
     assert "--no-build" in content
     assert "TimeoutStopSec=720" in content
