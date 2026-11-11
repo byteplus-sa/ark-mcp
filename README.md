@@ -4,6 +4,18 @@ A Python [Model Context Protocol](https://modelcontextprotocol.io) server
 built on [FastMCP](https://gofastmcp.com) that exposes BytePlus multimodal
 generation through a typed, safe tool surface.
 
+## Documentation
+
+Read the [Ark MCP documentation](https://byteplus-sa.github.io/ark-mcp/) for
+installation, client integrations, worked examples, and generated input/output
+schemas for every catalog tool.
+
+The source guides cover [installation](docs/setup/install.md),
+[client integrations](docs/integrations/index.md),
+[your first tool call](docs/setup/first-run.md), and
+[choosing a tool](docs/capabilities.md). See
+[site maintenance](docs/site-maintenance.md) for local development and deployment.
+
 > **Upgrading from 0.1.x?** 0.2.0 consolidates the tool surface and removes
 > the old per-model, per-variation and per-operation tools with no
 > compatibility layer. See the [migration guide](docs/migration-0.2.md).

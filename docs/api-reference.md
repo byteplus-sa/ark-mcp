@@ -332,7 +332,7 @@ Each `ModelInfo` also has nullable `pricing` with `catalog_name`, `display_name`
 `available`, and `charge_items` (`charge_type`, `price`, `list_price`, `unit`).
 Prices are account-specific catalog rates populated by the background refresher
 when AK/SK is configured. Discovery makes no network calls; stale or unmatched
-prices are null. See [Runtime](runtime.md#cost-estimation-toolscostpy).
+prices are null. See [Runtime](runtime.md#cost-estimation-tools_costpy).
 
 Understanding modalities and media limits describe the named `tool`, not
 every possible use of the underlying model. The `seed_audio_understand`
