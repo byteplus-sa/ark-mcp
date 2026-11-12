@@ -56,7 +56,10 @@ test("image and video tables distinguish defaults, custom IDs and gated models",
   assert.match(video, /dreamina-seedance-2-5-flash-261115/);
   assert.match(video, /seedance_2_5_flash/);
   assert.doesNotMatch(video, /premium/i);
-  assert.match(video, /Seedance 2\.5 \|[^\n]*480p\/720p\/1080p\/4K on the same model/);
+  assert.match(
+    video,
+    /Seedance 2\.5 \|[^\n]*480p\/720p\/1080p\/4K on the same model/,
+  );
   assert.match(video, /Seedance 2\.5 Flash \|[^\n]*480p\/720p;[^\n]*no Draft/);
   assert.match(video, /explicit lists must add/);
   assert.match(video, /discovery does not verify entitlement/);
