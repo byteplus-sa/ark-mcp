@@ -20,7 +20,7 @@ with an actionable `ValueError`.
 | `SEEDANCE_2_FAST` | `seedance_2_fast` |
 | `SEEDANCE_2_MINI` | `seedance_2_mini` |
 | `SEEDANCE_2_5` | `seedance_2_5` |
-| `SEEDANCE_2_5_PREMIUM` | `seedance_2_5_premium` |
+| `SEEDANCE_2_5_FLASH` | `seedance_2_5_flash` |
 | `SEED_2_1_PRO` | `seed_2_1_pro` |
 | `SEED_2_1_TURBO` | `seed_2_1_turbo` |
 | `SEED3D_HYPER3D` | `seed3d_hyper3d` |
@@ -30,7 +30,7 @@ The binding enums (`config/env.py`):
 
 - `SeedreamFamily`: `SEEDREAM_5_5 = "seedream_5_5"`, `PRO = "pro"`, `LITE = "lite"`, `V4X = "4x"`.
 - `SeedanceFamily`: `STANDARD = "standard"`, `FAST = "fast"`, `MINI = "mini"`,
-  `SEEDANCE_2_5 = "seedance_2_5"`, `SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"`.
+  `SEEDANCE_2_5 = "seedance_2_5"`, `SEEDANCE_2_5_FLASH = "seedance_2_5_flash"`.
 - `SeedUnderstandingFamily`: `PRO = "pro"`, `TURBO = "turbo"`.
 - `Seed3DFamily`: `HYPER3D = "hyper3d"`, `HITEM3D = "hitem3d"`.
 
@@ -127,8 +127,8 @@ Only `supported_resolutions` differs:
 
 | Family | `supported_resolutions` |
 |---|---|
-| `seedance_2_5_premium` | `("480p", "720p", "1080p", "4k")` |
-| `seedance_2_5` | `("480p", "720p", "1080p")` |
+| `seedance_2_5` | `("480p", "720p", "1080p", "4k")` |
+| `seedance_2_5_flash` | `("480p", "720p")` |
 | `MINI` | `("480p", "720p")` |
 | `FAST` | `("480p", "720p")` |
 | `STANDARD` | `("480p", "720p", "1080p", "4k")` |
@@ -136,22 +136,20 @@ Only `supported_resolutions` differs:
 > Seedance 2.5 differs from the 2.0 families in duration
 > (`duration_range=(4, 30)` versus `(4, 15)`; `-1` for auto is accepted
 > separately) and reference counts (`max_reference_images=30`,
-> `max_reference_videos=10`, `max_reference_audios=10`); `4k` is not
-> supported on 2.5. Only the 2.5 families set `supports_draft=True`,
-> `supports_audio_only_input=True`,
+> `max_reference_videos=10`, `max_reference_audios=10`). All four resolutions,
+> including `4k`, use the same regular 2.5 model. Flash shares the 2.5 duration
+> and reference limits but supports only 480p/720p and no Draft mode.
+> Both 2.5 families set `supports_audio_only_input=True`,
 > `supported_task_types=("auto", "reference", "edit", "extend")`, and
 > `supported_output_formats=("mp4", "mov")`.
 >
-> Seedance 2.5 Premium (`seedance_2_5_premium`) is a separate, whitelist-only
-> family with the same 2.5 limits plus `4k`. Its binding exists only when
-> `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`, which adds
-> `SEEDANCE_2_5_PREMIUM_MODEL` (default `dreamina-seedance-2-5-premium-260915`)
-> unless `SEEDANCE_MODEL_BINDINGS` already has a Premium binding. A Premium
-> binding with the flag off fails startup validation.
+> No additional model or feature flag is required for 4K. Custom endpoints
+> bound to `seedance_2_5` share these same resolution limits.
 >
 > Draft mode is described by `supports_draft` and `draft_final_resolution`:
-> Drafts are always `480p`, and a final rendered from a Draft is `1080p` on
-> `seedance_2_5` and `4k` on `seedance_2_5_premium`.
+> Only regular 2.5 sets `supports_draft=True`; Flash sets it to `False` with
+> `draft_final_resolution=None`. Drafts are always `480p`, and a final rendered
+> from a Draft is `1080p`. 4K Draft promotion is not advertised or accepted.
 
 **Every Seedance model is called through one tool, `seedance_create_task`.**
 Its input schema advertises the widest limits; at runtime the tool checks the
@@ -216,7 +214,7 @@ custom endpoint IDs without a catalog match retain built-in estimates.
 | Env var | Format | Default |
 |---|---|---|
 | `SEEDREAM_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "seedream_5_5"\|"pro"\|"lite"\|"4x"}` | `[]` |
-| `SEEDANCE_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "standard"\|"fast"\|"mini"\|"seedance_2_5"\|"seedance_2_5_premium"}` | `[]` |
+| `SEEDANCE_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "standard"\|"fast"\|"mini"\|"seedance_2_5"\|"seedance_2_5_flash"}` | `[]` |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | JSON array of `{"model_id": str, "family": "pro"\|"turbo"}` | `[]` |
 | `SEEDREAM_MODEL_FAMILY` | single family string | `""` |
 | `SEEDANCE_MODEL_FAMILY` | single family string | `""` |
@@ -241,11 +239,17 @@ from the model ID string):
    `SEEDANCE_MODEL_FAMILY`) is non-empty, a single binding is synthesized
    from the default model ID + that family.
 3. If both are empty and the default model ID equals a recognized built-in
-   ID, the hard-coded family is used (Seedream `SEEDREAM_5_5` or legacy `PRO`, Seedance `STANDARD`,
+   ID, its known family is used (Seedream `SEEDREAM_5_5` or legacy `PRO`,
+   Seedance `STANDARD`, `SEEDANCE_2_5`, or `SEEDANCE_2_5_FLASH`,
    Seed understanding `TURBO` for the default `dola-seed-2-1-turbo-260628`,
    and `PRO` for `dola-seed-evolving` when explicitly opted in).
 4. Otherwise (custom default model, no family, no bindings) → startup fails
    with `ValueError`.
+
+When synthesizing Seedance bindings from an empty list, the server also adds
+`dreamina-seedance-2-5-flash-261115` as `seedance_2_5_flash`, unless it is already
+the default. Explicit non-empty binding lists are never augmented. Regular
+2.5 remains the default when `SEEDANCE_DEFAULT_MODEL` is omitted.
 
 ## Validation rules
 
@@ -280,7 +284,8 @@ missing required fields, and non-loopback HTTP without JWT.
 
 - It is **not a cost table.** Cost estimation (see
   [runtime.md](runtime.md#cost-estimation-tools_costpy)) is per product and
-  per variation; families do not affect cost.
+  per variation; video families select a static per-task fallback, not a
+  resolution-, duration-, or token-based provider quote.
 - It does **not** infer size or ratio limits for families without configured bounds.
 - It does **not** call the provider — it is a local, pre-flight validation
   layer built entirely from configuration.

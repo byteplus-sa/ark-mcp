@@ -55,7 +55,6 @@ and `seed-health://status` report what is on.
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | `seed_audio_generate`, `speech_to_text` (one key, both products) |
 | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `vod_get_task` |
 | `BYTEPLUS_MODELARK_3D_ENABLED=true` + ModelArk key | `hyper3d_create_task`, `hitem3d_create_task` (default off; reuses the ModelArk key) |
-| `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` + ModelArk key | Binds the whitelist-only Premium (4K) model so `seedance_create_task` accepts it as `model`. **No extra tools**; default off; ID from `SEEDANCE_2_5_PREMIUM_MODEL` |
 | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task`. Separate Vision AI Bearer key; default off. Overrides: `BYTEPLUS_CV_BASE_URL`, `BYTEPLUS_OMNIHUMAN_REQ_KEY` |
 | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result` (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP...` keys) |
 | `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` + AK/SK | Additionally registers the irreversible `ark_asset_delete` (default off) |
@@ -87,6 +86,9 @@ Gotchas that follow from the gates:
 - A custom model ID must be bound (`SEEDREAM_MODEL_BINDINGS`,
   `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`,
   `SEED3D_MODEL_BINDINGS`); see [models-and-limits.md](models-and-limits.md).
+- Empty Seedance bindings add Flash alongside the selected default; explicit
+  lists remain authoritative. Use `seedance_2_5_flash` for Flash endpoints.
+  Regular 2.5 remains the default; there is no separate Flash tool or flag.
 
 ### Provider hosts and timeouts
 

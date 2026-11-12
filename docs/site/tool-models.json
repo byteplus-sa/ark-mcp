@@ -35,13 +35,13 @@
         "name": "Seedance 2.5",
         "id": "`dreamina-seedance-2-5-260628`",
         "availability": "Built-in default.",
-        "capabilities": "480p/720p/1080p; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; Draft final at 1080p."
+        "capabilities": "480p/720p/1080p/4K on the same model; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; Draft final at 1080p, not 4K."
       },
       {
-        "name": "Seedance 2.5 Premium",
-        "id": "`dreamina-seedance-2-5-premium-260915`",
-        "availability": "Whitelist only; `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`; ID overridable with `SEEDANCE_2_5_PREMIUM_MODEL`.",
-        "capabilities": "2.5 features plus 4K; 4-30 s or auto; 30 images / 10 videos / 10 audios; Draft final at 4K."
+        "name": "Seedance 2.5 Flash",
+        "id": "`dreamina-seedance-2-5-flash-261115`",
+        "availability": "Added alongside the selected default when bindings are empty; explicit lists must add `seedance_2_5_flash`. Account activation required; discovery does not verify entitlement.",
+        "capabilities": "480p/720p; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; no Draft. Static cost previews reuse the 2.5 fallback, not token pricing."
       },
       {
         "name": "Seedance 2.0",

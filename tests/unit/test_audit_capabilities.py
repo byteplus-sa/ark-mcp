@@ -29,7 +29,7 @@ def _load_script() -> ModuleType:
 audit_script = _load_script()
 
 SEEDANCE_2_5_PARAMS = [
-    {"name": "resolution", "support": True, "enum": ["480p", "720p", "1080p"]},
+    {"name": "resolution", "support": True, "enum": ["480p", "720p", "1080p", "4k"]},
     {
         "name": "ratio",
         "support": True,

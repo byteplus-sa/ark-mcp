@@ -35,18 +35,16 @@ def register_video_cost_override(model_id: str, cost_per_task: float) -> None:
     _VIDEO_COST_OVERRIDES[model_id] = cost_per_task
 
 
-_SEEDANCE_2_5_FAMILIES = frozenset({"seedance_2_5", "seedance_2_5_premium"})
-
-
 def _video_cost_for_model(model_id: str | None, family: str | None = None) -> float:
     """Return the cost-per-task for a video model, keyed on its registry family.
 
     A model-specific override wins. Pricing follows the family so that a
-    custom endpoint ID bound to Seedance 2.5 is priced as 2.5.
+    custom endpoint bound to Seedance 2.5 or Flash uses the static 2.5 fallback,
+    not a token-based provider quote.
     """
     if model_id and model_id in _VIDEO_COST_OVERRIDES:
         return _VIDEO_COST_OVERRIDES[model_id]
-    if family in _SEEDANCE_2_5_FAMILIES:
+    if family in ("seedance_2_5", "seedance_2_5_flash"):
         return COST_PER_VIDEO_TASK_2_5
     return COST_PER_VIDEO_TASK
 

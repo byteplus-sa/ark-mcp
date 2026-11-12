@@ -26,9 +26,12 @@ editing, and transparent PNG generation without an already-transparent input.
 Explicit operator defaults remain unchanged. Layer decomposition and native OCR
 are not supported by the MCP integration.
 
-Seedance 2.5 is the default generation. Premium 4K needs a feature gate and
-provider whitelist; it is not a separate create tool. The models enabled on
-the ComfyUI node pack are not automatically available in Ark MCP.
+Regular Seedance 2.5 is the default and supports `resolution="4k"` on the
+same model, with no separate model or feature gate. Flash uses the same create
+tool at 480p/720p without Draft. Empty bindings add Flash alongside the selected
+default; explicit lists remain authoritative. Discovery does not prove account
+entitlement. The models enabled on the ComfyUI node pack are not automatically
+available in Ark MCP.
 
 <span id="audio-and-understanding"></span>
 
