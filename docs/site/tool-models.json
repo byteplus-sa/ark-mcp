@@ -1,0 +1,149 @@
+{
+  "seedream_generate_image": {
+    "selection": "Pass an exact configured ID as `model`, or omit it for `SEEDREAM_DEFAULT_MODEL`. Custom IDs require an explicit family binding in `SEEDREAM_MODEL_BINDINGS`. Explicit operator defaults remain unchanged.",
+    "models": [
+      {
+        "name": "Seedream 5.5",
+        "id": "`dola-seedream-5-5-261028`",
+        "availability": "Built-in default; account authorization required.",
+        "capabilities": "10 references; `1K`, `1.5K`, `2K` (default); PNG (default) or JPEG; text-to-transparent PNG; `auto`, `opaque`, `transparent` backgrounds; `standard` optimization only; independent variations, no provider batch."
+      },
+      {
+        "name": "Seedream 5.0 Pro",
+        "id": "`dola-seedream-5-0-pro-260628`",
+        "availability": "Opt-in default or configured binding (`pro`).",
+        "capabilities": "10 references; PNG/JPEG; transparent edits require one already-transparent PNG; `standard`/`fast` optimization; independent variations, no provider batch."
+      },
+      {
+        "name": "Seedream Lite",
+        "id": "Authorized custom ID; no built-in ID",
+        "availability": "Configure a `lite` family binding.",
+        "capabilities": "14 references; PNG/JPEG; provider batch supported; no transparent background."
+      },
+      {
+        "name": "Seedream 4.x",
+        "id": "Authorized custom ID; no built-in ID",
+        "availability": "Configure a `4x` family binding.",
+        "capabilities": "14 references; JPEG only; provider batch supported; no transparent background."
+      }
+    ]
+  },
+  "seedance_create_task": {
+    "selection": "Pass an exact configured ID as `model`, or omit it for `SEEDANCE_DEFAULT_MODEL`. Custom IDs require an explicit family binding in `SEEDANCE_MODEL_BINDINGS`. Limits below are family limits; discovery is authoritative for your server.",
+    "models": [
+      {
+        "name": "Seedance 2.5",
+        "id": "`dreamina-seedance-2-5-260628`",
+        "availability": "Built-in default.",
+        "capabilities": "480p/720p/1080p; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; Draft final at 1080p."
+      },
+      {
+        "name": "Seedance 2.5 Premium",
+        "id": "`dreamina-seedance-2-5-premium-260915`",
+        "availability": "Whitelist only; `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`; ID overridable with `SEEDANCE_2_5_PREMIUM_MODEL`.",
+        "capabilities": "2.5 features plus 4K; 4-30 s or auto; 30 images / 10 videos / 10 audios; Draft final at 4K."
+      },
+      {
+        "name": "Seedance 2.0",
+        "id": "`dreamina-seedance-2-0-260128`",
+        "availability": "Opt-in default or configured binding (`standard`).",
+        "capabilities": "480p/720p/1080p/4K; 4-15 s or auto; 9 images / 3 videos / 3 audios; audio references require image/video; no Draft or native edit/extend."
+      },
+      {
+        "name": "Seedance 2.0 Fast",
+        "id": "Authorized custom ID; no built-in ID",
+        "availability": "Configure a `fast` family binding.",
+        "capabilities": "480p/720p; 4-15 s or auto; 9 images / 3 videos / 3 audios; audio references require image/video; no Draft or native edit/extend."
+      },
+      {
+        "name": "Seedance 2.0 Mini",
+        "id": "Authorized custom ID; no built-in ID",
+        "availability": "Configure a `mini` family binding.",
+        "capabilities": "480p/720p; 4-15 s or auto; 9 images / 3 videos / 3 audios; audio references require image/video; no Draft or native edit/extend."
+      }
+    ]
+  },
+  "seed_audio_generate": {
+    "selection": "This tool has no per-call `model` argument. The Seed Speech adapter uses the fixed model below; this is not a ModelArk model binding.",
+    "models": [
+      {
+        "name": "Seed Audio 1.0",
+        "id": "`seed-audio-1.0`",
+        "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` required.",
+        "capabilities": "Full-scene speech, music and sound generation; text, audio references or image reference; image and audio references are mutually exclusive; 1-5 independent variations."
+      }
+    ]
+  },
+  "seed_understand": {
+    "selection": "Pass an exact configured ID as `model`, or omit it for `SEED_UNDERSTANDING_DEFAULT_MODEL`. Custom IDs require an explicit `turbo` or `pro` binding in `SEED_UNDERSTANDING_MODEL_BINDINGS`.",
+    "models": [
+      {
+        "name": "Seed 2.1 Turbo",
+        "id": "`dola-seed-2-1-turbo-260628`",
+        "availability": "Built-in default.",
+        "capabilities": "Images/video; 32 combined media parts; 256K context; deep thinking; text, JSON object or JSON Schema output."
+      },
+      {
+        "name": "Seed-series Pro",
+        "id": "`dola-seed-evolving`",
+        "availability": "Opt-in default or configured `pro` binding; account activation required.",
+        "capabilities": "Images/video; 32 combined media parts; 256K context; deep thinking; text, JSON object or JSON Schema output."
+      }
+    ]
+  },
+  "seed_audio_understand": {
+    "selection": "This tool has no per-call `model` argument. `SEED_AUDIO_UNDERSTANDING_MODEL` selects a ModelArk model supporting Chat Completions `input_audio` with deep thinking; other compatible, authorized IDs may be configured.",
+    "models": [
+      {
+        "name": "Seed 2.0 Lite (audio understanding)",
+        "id": "`seed-2-0-lite-260428`",
+        "availability": "Server-configured default; `BYTEPLUS_MODELARK_API_KEY` required.",
+        "capabilities": "1-8 audio clips; transcription, translation, analysis and Q&A; JSON Schema for structured output; oversized URL inputs can use the Files API (up to 512 MB)."
+      }
+    ]
+  },
+  "hyper3d_create_task": {
+    "selection": "Omit `model` for `HYPER3D_DEFAULT_MODEL`, or pass an exact ID bound to `hyper3d` in `SEED3D_MODEL_BINDINGS`.",
+    "models": [
+      {
+        "name": "Hyper3D Gen 2",
+        "id": "`hyper3d-gen2-260112`",
+        "availability": "`BYTEPLUS_MODELARK_3D_ENABLED=true` and ModelArk key; disabled by default.",
+        "capabilities": "Text and/or up to 5 reference images; seed support; GLB/OBJ/USDZ/FBX/STL; asynchronous tasks polled with `gen_task_get`."
+      }
+    ]
+  },
+  "hitem3d_create_task": {
+    "selection": "Omit `model` for `HITEM3D_DEFAULT_MODEL`, or pass an exact ID bound to `hitem3d` in `SEED3D_MODEL_BINDINGS`.",
+    "models": [
+      {
+        "name": "Hitem3d 2.0",
+        "id": "`hitem3d-2-0-251223`",
+        "availability": "`BYTEPLUS_MODELARK_3D_ENABLED=true` and ModelArk key; disabled by default.",
+        "capabilities": "1-4 reference images required; no text-only generation or seed; OBJ/GLB/STL/FBX/USDZ; asynchronous tasks polled with `gen_task_get`."
+      }
+    ]
+  },
+  "omnihuman_create_task": {
+    "selection": "This tool has no per-call `model` argument. The identifier is a Vision AI service `req_key`, configurable with `BYTEPLUS_OMNIHUMAN_REQ_KEY`, not a ModelArk model ID.",
+    "models": [
+      {
+        "name": "OmniHuman 2.0",
+        "id": "`realman_avatar_picture_omni20_cv`",
+        "availability": "`BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY`; disabled by default.",
+        "capabilities": "Image plus audio to talking-avatar video; asynchronous tasks polled with `omnihuman_get_task`."
+      }
+    ]
+  },
+  "speech_to_text": {
+    "selection": "This tool has no per-call `model` argument. It uses the Seed Speech ASR service rather than a selectable ModelArk model.",
+    "models": [
+      {
+        "name": "Seed Speech ASR",
+        "id": "Service-managed; no selectable model ID",
+        "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` required.",
+        "capabilities": "Background transcription with utterance/word timings when returned by the provider; asynchronous provider submission and polling handled inside the Ark job."
+      }
+    ]
+  }
+}

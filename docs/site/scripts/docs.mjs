@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { posix } from "node:path";
 import examples from "../tool-examples.json" with { type: "json" };
+import toolModels from "../tool-models.json" with { type: "json" };
 
 export const SITE_BASE = "/ark-mcp";
 export const SOURCE_BASE = "https://github.com/byteplus-sa/ark-mcp/blob/main/";
@@ -102,6 +103,29 @@ export function schemaTable(schema) {
 
 export const EXAMPLES = examples;
 
+function supportedModels(name) {
+  const entry = toolModels[name];
+  if (!entry) return "";
+  const rows = entry.models.map(
+    (model) =>
+      `| ${cell(model.name)} | ${cell(model.id)} | ${cell(model.availability)} | ${cell(model.capabilities)} |`,
+  );
+  const anchor =
+    name === "seedream_generate_image"
+      ? '<span id="seedream-5-5"></span>\n<span id="seedream-55"></span>\n\n'
+      : "";
+  return `${anchor}## Supported Models
+
+These are supported families and built-in model or service IDs for this site revision, not provider account access or a guarantee that every row is enabled on your server. Check [model discovery](${SITE_BASE}/tool-reference/ark-list-models/) for configured bindings and service availability.
+
+| Model | Model or service ID | Availability | Capabilities |
+| --- | --- | --- | --- |
+${rows.join("\n")}
+
+${entry.selection}
+`;
+}
+
 export function toolPage(tool) {
   const name = tool.name;
   const mode =
@@ -155,6 +179,8 @@ ${tool.description}
 | JWT scope | ${tool.scope ? `\`${tool.scope}\`` : "No fixed per-tool scope; HTTP authentication and target-tool authorization still apply."} |
 
 This site lists the full configured capability surface, not the tools enabled on your particular server. Use [model discovery](${SITE_BASE}/tool-reference/ark-list-models/) and [job discovery](${SITE_BASE}/tool-reference/ark-job-capabilities/) to check your connection. Credentials are server configuration, never tool arguments.
+
+${supportedModels(name)}
 
 ## Usage
 
