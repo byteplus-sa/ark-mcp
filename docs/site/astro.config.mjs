@@ -94,6 +94,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { slug: "models" },
+            { slug: "seedream-5-5", label: "Seedream 5.5" },
             { slug: "tools", label: "Worked Tool Examples" },
             { slug: "artifacts" },
             { slug: "multi-generation" },

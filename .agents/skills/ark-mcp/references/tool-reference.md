@@ -26,7 +26,7 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 - **No per-variation timeout.** Queue wait never counts; one batch deadline bounds the call. A deadline or storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry), `generating` (may have completed, **do not retry blindly**), `persisting` (billed output not stored; the provider URL may still be in the result).
 - **`variation_prompts`** must have exactly `variations` entries and replaces `prompt` (and satisfies "prompt required").
 - **Local export:** image and audio variations need an `output_path` directory ending in `/`. Video variations are polled together with **one** `gen_task_get` call over all non-null `task_id`s.
-- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is a static estimate, not a provider quote. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
+- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is an estimate, not billing or a provider quote. Seedream adds `price_source`: `catalog` for a fresh cached image rate, otherwise `builtin`. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
 - **Runtime validation reports everything at once.** Per-model limits are checked from the capability registry before any provider call, and all violations come back in one error ending with `Call ark_list_models(kind=...) for per-model limits.` Fix them together.
 
 ## Seedance
@@ -110,13 +110,13 @@ Needs `BYTEPLUS_MODELARK_API_KEY`. **`seedream_generate_image` is the only Seedr
 
 ### `max_images` versus `variations`
 
-- **`max_images`** is one provider call returning up to 15 images: one request, one `usage`, results in `artifacts` and `item_errors`. Only on batch-capable families (Lite, 4.x); **Seedream 5.0 Pro does not support it**.
+- **`max_images`** is one provider call returning up to 15 images: one request, one `usage`, results in `artifacts` and `item_errors`. Only on batch-capable families (Lite, 4.x); **Seedream 5.5 and 5.0 Pro do not support it**.
 - **`variations`** is separate parallel calls: works on every model, supports `variation_prompts` and per-variation seeds, results in `summary` (`artifacts` and `usage` stay empty).
-- **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On Pro, use `variations`.
+- **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On 5.5 and Pro, use `variations`.
 
 ### Seeds
 
-A fixed `seed` with the same prompt reproduces a single image. With `variations > 1`, `seed` is the **base seed**:
+A fixed `seed` reproduces request settings, not guaranteed identical pixels. Single-call `-1` or omitted seed remains provider randomness, not a recovered actual seed. With `variations > 1`, `seed` is the **base seed**:
 
 | `seed` | Per-variation seeds |
 |---|---|
@@ -126,10 +126,29 @@ A fixed `seed` with the same prompt reproduces a single image. With `variations 
 
 ### Transparent background
 
-`background="transparent"` **edits exactly one PNG input that already has transparent pixels and keeps that transparency**. It does **not** cut a subject out of an opaque image. Requires Seedream 5.0 Pro and `output_format` omitted or `png`. A Base64 input whose `mime_type` is not `image/png` is rejected locally; an opaque PNG fails at the provider with HTTP 400 ("transparent background requires a PNG input with at least one transparent pixel"). To get transparency from an opaque image, remove the background with another tool first.
+`background="transparent"` requires `output_format` omitted or `png`.
+Seedream 5.5 (default) accepts text-only prompts and reference images
+without alpha. It defaults to PNG even for ordinary generation.
+`prompt_optimization="standard"` is accepted (provider default); `fast` is rejected.
+`background="auto"` is the 5.5 default and follows the prompt; JPEG is always opaque.
+
+Use 5.5 size tiers `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT`
+with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive.
+Optional `safety_identifier` on 5.5/Pro must be a stable hashed user ID,
+1-64 non-space printable ASCII characters. Previews and logs redact it.
+`generations` preserves per-call usage, identifier echo, and provider-reported
+image size, format and actual background, with image/variation indices and
+matching artifact IDs. Missing values stay null; successful provider metadata
+survives partial variation failures. Decomposition/OCR inputs are rejected.
+
+On Seedream 5.0 Pro, transparency **edits exactly one PNG input that already has
+transparent pixels**. It does not remove an opaque background. Non-PNG Base64
+input is rejected locally; an opaque PNG fails at the provider with HTTP 400.
+The following example selects Pro, which must be bound by the operator:
 
 ```json
 {
+  "model": "dola-seedream-5-0-pro-260628",
   "prompt": "Turn the circle into a glossy ceramic button, keep the background transparent",
   "images": [{ "kind": "url", "url": "https://cdn.example.com/circle-rgba.png" }],
   "background": "transparent",
@@ -141,6 +160,17 @@ A fixed `seed` with the same prompt reproduces a single image. With `variations 
 
 - `persist=true` (default) stores each image as a durable artifact. **A storage failure never drops a billed image**: the result carries the 24-hour provider URL (id `provider-url`) with `persistence_error`, or, for Base64 output, `fallback_data` inline up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`. Check each artifact's `persistence_error` and download from `source_url`/`uri` before it expires. Details: [polling-and-artifacts.md](polling-and-artifacts.md).
 - `persist=false` returns provider-URL references only.
+- Explicit `response_format="b64_json"` with `persist=false` is rejected before
+  submission, even for dry runs. Missing output yields `NO_OUTPUT`; unexpected
+  Base64-only delivery without persistence yields `NO_DELIVERABLE_OUTPUT`.
+- `generations` includes single/variation request IDs, submitted seeds,
+  final-prompt hashes and allowlisted options excluding private media and
+  identifiers. `images[].inspection` independently measures decoded format,
+  dimensions and actual alpha: `verified`, `mismatch`, `invalid`, `unavailable`,
+  or null for URL-only delivery. It preserves artifacts, never overwrites
+  provider reports, and does not establish visual quality or trigger paid retries.
+- Use the bounded [review/edit workflow](workflows.md#seedream-generate-review-edit)
+  before accepting text, counts or geometry; publishing previews are a separate check.
 - `output_path` (stdio local export) needs `persist=true` and **must be a directory ending in `/`** when `variations > 1` or `max_images > 1`.
 - `asset://` references are **not** accepted by Seedream natively: rejected unless `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental; sends the asset's temporary download URL and only works for assets this account can look up).
 - Dry-run cost covers `variations x max_images` images.

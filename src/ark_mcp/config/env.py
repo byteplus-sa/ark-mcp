@@ -70,6 +70,7 @@ def _warn_if_http_body_limit_blocks_media_upload(body_bytes: int) -> None:
 
 
 class SeedreamFamily(StrEnum):
+    SEEDREAM_5_5 = "seedream_5_5"
     PRO = "pro"
     LITE = "lite"
     V4X = "4x"
@@ -325,7 +326,7 @@ class Settings(BaseSettings):
         ),
     )
     seedream_default_model: str = Field(
-        default="dola-seedream-5-0-pro-260628",
+        default="dola-seedream-5-5-261028",
         validation_alias="SEEDREAM_DEFAULT_MODEL",
     )
     seedance_default_model: str = Field(
@@ -335,7 +336,7 @@ class Settings(BaseSettings):
     seedream_model_family: str = Field(
         default="",
         validation_alias="SEEDREAM_MODEL_FAMILY",
-        description="Explicit family: 'pro', 'lite', or '4x'. Empty = infer from model ID.",
+        description="Explicit family: 'seedream_5_5', 'pro', 'lite', or '4x'. Empty = infer from model ID.",
     )
     seedance_model_family: str = Field(
         default="",
@@ -804,7 +805,9 @@ class Settings(BaseSettings):
         if not self.seedream_model_bindings:
             family = self.seedream_model_family.strip().lower()
             if not family:
-                if self.seedream_default_model == "dola-seedream-5-0-pro-260628":
+                if self.seedream_default_model == "dola-seedream-5-5-261028":
+                    family = SeedreamFamily.SEEDREAM_5_5
+                elif self.seedream_default_model == "dola-seedream-5-0-pro-260628":
                     family = SeedreamFamily.PRO
                 else:
                     raise ValueError(

@@ -13,7 +13,13 @@ from ark_mcp.config.model_capabilities import (
     Seed3DCapabilities,
     VideoCapabilities,
     get_capability_registry,
+    refresh_capability_registry,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_capabilities() -> None:
+    refresh_capability_registry()
 
 
 class TestCapabilityRegistry:
@@ -24,6 +30,7 @@ class TestCapabilityRegistry:
         caps = registry.get_image_capabilities()
         assert isinstance(caps, ImageCapabilities)
         assert caps.family in (
+            ModelFamily.SEEDREAM_5_5,
             ModelFamily.SEEDREAM_PRO,
             ModelFamily.SEEDREAM_LITE,
             ModelFamily.SEEDREAM_4X,
@@ -402,8 +409,9 @@ class TestExactModelResolution:
 
     def test_image_default_supports_transparent_background(self) -> None:
         caps = get_capability_registry().resolve_image_model(None)
-        assert caps.family is ModelFamily.SEEDREAM_PRO
+        assert caps.family is ModelFamily.SEEDREAM_5_5
         assert caps.supports_transparent_background is True
+        assert caps.supports_transparent_generation is True
 
     def test_understanding_routes_audio_to_audio_model(self) -> None:
         from ark_mcp.config.env import get_settings

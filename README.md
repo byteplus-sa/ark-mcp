@@ -36,7 +36,7 @@ products plus artifact access and an optional media upload helper:
 | Product | Tools | Description |
 |---|---|---|
 | **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech; one clip or 1-5 parallel variations |
-| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: text-to-image, reference editing, point/box edits, transparency-preserving PNG edits (5.0 Pro), provider batches, 1-10 parallel variations, and `dry_run` request and cost previews |
+| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: [Seedream 5.5](docs/seedream-5-5.md) by default, generation/reference and point/box editing, native transparent PNGs, auto backgrounds, standard-only optimization, validated 1K/1.5K/2K or custom sizes, hashed safety IDs, provider image metadata, 1-10 variations and dry runs. Pro retains transparency-preserving edits; batches are Lite/4.x only. Layer decomposition/OCR are not exposed |
 | **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (2.0, 2.5 by default, and whitelist-only 2.5 Premium with 4K when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`): pick the model from `ark_list_models(kind='video')`, create 1-5 variations, use Draft mode on 2.5, or `dry_run` for a free request and cost preview; poll with the shared generation task tools |
 | **Hyper3D / Hitem3d** | `hyper3d_create_task`, `hitem3d_create_task` | Background-task 3D submission through ModelArk; poll with the shared generation task tools (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
 | **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | One lifecycle for every ModelArk generation task (Seedance video and 3D): batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
@@ -83,8 +83,14 @@ Key features:
   symlink-safe, no-silent-overwrite writes
 - **Parallel variations** — generate N independent variations in a single
   call, partial failures captured per variation with the failure phase
-- **Per-variation seeds** — Seedream supports reproducible variations: with
-  `variations > 1`, `seed` is the base seed and variation *i* uses `seed + i`
+- **Seedream provenance and byte checks** — single calls and variations record
+  request IDs, submitted seeds, final-prompt hashes and allowlisted options.
+  Advisory PNG/JPEG inspection measures dimensions, format and actual alpha
+  separately from provider reports; it preserves billed output without rerolls.
+  Base64 delivery requires persistence. See the bounded
+  [review/edit workflow](docs/integration-guide.md#seedream-review-and-edit)
+- **Per-variation seeds** — with `variations > 1`, Seedream `seed` is the base
+  seed and variation *i* uses `seed + i` (wrapped); identical pixels are not guaranteed
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
 - **Timeout-safe long operations** — generation, transcription, large upload,
@@ -111,7 +117,7 @@ accepts as reference input:
 
 | Tool | Modality | URL | Base64 | Speaker ID | Roles | Max | Constraints |
 |---|---|:---:|:---:|:---:|---|:---:|---|
-| `seedream_generate_image` | Image | ✓ | ✓ | — | reference | 10 PRO / 14 LITE·4X | — |
+| `seedream_generate_image` | Image | ✓ | ✓ | — | reference | 10 5.5·PRO / 14 LITE·4X | — |
 | `seedance_create_task` (2.0 models) | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 9 | — |
 | `seedance_create_task` (2.0 models) | Video | ✓ | — | — | `reference_video` | 3 | URL only |
 | `seedance_create_task` (2.0 models) | Audio | ✓ | ✓ | — | `reference_audio` | 3 | Not sole input |
@@ -408,6 +414,7 @@ ark-mcp/
 - [FastMCP v4](https://gofastmcp.com/) — MCP server framework
 - [httpx](https://www.python-httpx.org/) — async HTTP client
 - [Pydantic v2](https://docs.pydantic.dev/) — typed models and validation
+- [Pillow](https://pillow.readthedocs.io/) — bounded PNG/JPEG artifact inspection
 - [pydantic-settings](https://pydantic.dev/docs/validation/latest/concepts/pydantic_settings/) — environment configuration
 - [Starlette](https://www.starlette.io/) — HTTP middleware, body limits, and responses
 - [prometheus-client](https://github.com/prometheus/client_python) — `/metrics` and Prometheus exposition
@@ -435,3 +442,6 @@ retired `MCP_JWT_*`, `MCP_TENANT_CLAIM` and `MCP_PUBLIC_BASE_URL` settings are
 not used. Ownership is not transferred automatically. Preserve SQLite, Redis,
 artifacts and the encryption key; follow the
 [migration guide](docs/self-hosting.md#breaking-change-migration).
+
+Seedream's [live smoke matrix](docs/integration-guide.md#opt-in-seedream-smoke-matrix)
+is opt-in; editing/alpha and visual acceptance still require authorized checks.

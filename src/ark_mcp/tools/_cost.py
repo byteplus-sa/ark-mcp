@@ -7,6 +7,8 @@ variation tool handler.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.pricing import get_price_book
 
@@ -66,6 +68,15 @@ def _live_cost_per_image(model_id: str | None) -> float | None:
     return item.price_per_piece if item is not None else None
 
 
+def image_cost_estimate(
+    model_id: str | None, count: int
+) -> tuple[float, Literal["catalog", "builtin"]]:
+    """Return amount and source from one cached price lookup, never a billing quote."""
+    rate = _live_cost_per_image(model_id)
+    source: Literal["catalog", "builtin"] = "builtin" if rate is None else "catalog"
+    return round(count * (COST_PER_IMAGE if rate is None else rate), 4), source
+
+
 def _live_understanding_rates(model_id: str | None) -> tuple[float, float] | None:
     pricing = get_price_book().lookup(model_id)
     if pricing is None:
@@ -117,8 +128,7 @@ def estimate_cost(
         Estimated cost in USD.
     """
     if product == "image":
-        per_image = _live_cost_per_image(model_id)
-        return round(variations * (COST_PER_IMAGE if per_image is None else per_image), 4)
+        return image_cost_estimate(model_id, variations)[0]
     if product == "audio":
         return round(variations * max(duration_seconds, 10) * COST_PER_AUDIO_SECOND, 2)
     if product == "video":

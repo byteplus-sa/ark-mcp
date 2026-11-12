@@ -115,12 +115,35 @@ flowchart LR
 
 ### Seedream
 
+- Default: Seedream 5.5 (`dola-seedream-5-5-261028`; requires
+  account authorization). Explicit operator defaults remain unchanged.
 - `images` plus optional `point` or `bbox` (0-999, on the first image) edits;
   without images it is text-to-image.
-- `background="transparent"` needs Seedream 5.0 Pro, **exactly one PNG input
-  that already has transparent pixels**, and `output_format` omitted or `png`.
-  It edits that image and keeps the transparency; it does not cut a subject out
-  of an opaque image.
+- `background="transparent"` on 5.5 accepts text-only prompts or references
+  without existing alpha. On 5.0 Pro it requires **exactly one PNG input that
+  already has transparent pixels** and preserves that transparency.
+  Both require `output_format` omitted or `png`. 5.5 defaults to PNG.
+- Use `variations`, not provider batches, on 5.5 and 5.0 Pro.
+- 5.5 sizes: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with
+  921600-4624220 pixels and width/height ratio 1/16-16, inclusive. No `auto` size.
+- 5.5 `prompt_optimization` accepts `standard` only (provider default);
+  `background` defaults to `auto` (JPEG always opaque). Pro's operator
+  optimization setting never applies to 5.5.
+- `safety_identifier` on 5.5/Pro must be a stable hashed user ID, 1-64 non-space
+  printable ASCII characters; previews and logs redact it.
+- `response_format="b64_json"` requires `persist=true`, including dry runs.
+  Missing output is an explicit error, not an artifact-less success.
+- Read `generations` for per-call request ID, submitted seed, exact final-prompt
+  SHA-256 and allowlisted options; provider background/size/format/usage and
+  identifier echo stay separate from local byte `images[].inspection`.
+  Inspection is advisory, preserves billed artifacts and never rerolls.
+  URL-only inspection and absent provider metadata stay null.
+- Delivery is not visual acceptance. Use the bounded
+  [generate/review/edit workflow](references/workflows.md#seedream-generate-review-edit)
+  for text, absence, counts and geometry. Reviewer refusal is `Not evaluated`,
+  not generation failure. Layer-decomposition/OCR inputs are rejected.
+- For transparent-image prompts, previews and upgrade guidance, see the
+  [Seedream 5.5 guide](https://byteplus-sa.github.io/ark-mcp/seedream-5-5/).
 
 ### Polling and persistence
 

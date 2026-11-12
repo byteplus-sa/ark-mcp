@@ -731,7 +731,8 @@ Three takes written to a local directory:
 ## seedream_generate_image
 
 **The only Seedream tool**: text-to-image, image-to-image and reference
-editing, point or box edits, editing PNGs while keeping their transparency, provider batches
+editing, point or box edits, transparent PNG generation (5.5), transparency-preserving
+edits (5.0 Pro), provider batches
 (`max_images`), and parallel variations. Registered when
 `BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedream:generate` scope in `api_key` mode.
 
@@ -754,9 +755,14 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 
 | Family | Max reference images | `max_images` batch | `output_format` | `background="transparent"` |
 |---|---|---|---|---|
-| Seedream 5.0 Pro (default) | 10 | No (use `variations`) | `png`, `jpeg` | Yes |
+| Seedream 5.5 (default) | 10 | No (use `variations`) | `png` (default), `jpeg` | Text-only or reference-based generation |
+| Seedream 5.0 Pro | 10 | No (use `variations`) | `png`, `jpeg` | Existing transparent PNG only |
 | Seedream Lite | 14 | Yes | `png`, `jpeg` | No |
 | Seedream 4.x | 14 | Yes | `jpeg` | No |
+
+5.5's model ID is `dola-seedream-5-5-261028`; account authorization is required.
+Explicit existing defaults stay unchanged. See the
+[upgrade note](configuration.md#seedream-default-model-upgrade-note).
 
 ### Input
 
@@ -767,14 +773,15 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 | `point` | EditCoordinate | No | Edit mode: `{x, y}` in normalized `0..999` space on the **first** image. Requires `images` |
 | `bbox` | EditBbox | No | Edit mode: `{x1, y1, x2, y2}` in normalized `0..999` space (`x1 <= x2`, `y1 <= y2`) on the **first** image. Requires `images` |
 | `model` | string | No | Exact configured model ID; omit for the default |
-| `size` | string | No | Image dimensions (e.g. `"2048x2048"`); validated against the model |
+| `size` | string | No | 5.5: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive. `auto` is not a generation size. Older families remain provider-validated |
 | `seed` | integer | No | `-1` to `2147483647`. For a single call it is sent as is. **With `variations > 1` it is the base seed**: omitted lets the provider randomize each variation, `-1` picks a random seed per variation (recorded in `summary`), and `N` uses `N`, `N+1`, `N+2`, ... |
 | `max_images` | integer | No | Images from one provider call (1-15), batch-capable models only. **Cannot be combined with `variations > 1`** |
-| `output_format` | `"png"` \| `"jpeg"` | No | Output format; per-model set checked at runtime |
-| `response_format` | `"url"` \| `"b64_json"` | No | Provider response format |
+| `output_format` | `"png"` \| `"jpeg"` | No | Defaults to `png` on 5.5 and for transparent output; otherwise provider default |
+| `response_format` | `"url"` \| `"b64_json"` | No | Base64 requires `persist=true`; invalid combinations are rejected before submission, even for dry runs |
 | `watermark` | boolean | No | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | Prompt optimization mode; 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
-| `background` | `"opaque"` \| `"transparent"` | No | `transparent` edits an image and keeps its transparency. It needs a supported model (Seedream 5.0 Pro), **exactly one PNG input image that already has transparent pixels**, and `output_format` omitted or `png`. **It does not remove the background of an opaque image**: the provider rejects an input without transparent pixels (HTTP 400), and the server rejects a Base64 input whose `mime_type` is not `image/png` before calling the provider |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | 5.5: `standard` only (provider default); `fast` rejected. 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
+| `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | 5.5 defaults to `auto` (prompt decides; JPEG always opaque). `auto` is 5.5-only. `transparent` requires PNG output; 5.5 accepts text or references without alpha; Pro requires exactly one already-transparent PNG |
+| `safety_identifier` | string | No | 5.5/Pro: stable hashed end-user ID, 1-64 non-space printable ASCII characters. Never send raw personal data; redacted from previews and logs |
 | `variations` | integer | No | Independent generations to run in parallel (1-10, default 1); partial failures are reported per variation |
 | `variation_prompts` | list[string] | No | One prompt per variation, overriding `prompt`; must have exactly `variations` entries |
 | `persist` | boolean | No | Whether to persist output (default: true) |
@@ -783,6 +790,10 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 | `overwrite` | boolean | No | Allow `output_path` to replace an existing file (default: false) |
 
 \* Either `prompt` or `variation_prompts` must be provided.
+
+Unknown fields, including `layer_decomposition` and
+`layer_decomposition_options`, are rejected before job submission.
+Layer decomposition and rich-text OCR are not exposed.
 
 With `point` or `bbox`, the tool prepends coordinate markup to every prompt
 (`Image 1<bbox>x1 y1 x2 y2</bbox>` and/or `Image 1<point>x y</point>`), so
@@ -797,10 +808,20 @@ Returns `SeedreamGenerateOutput`:
 | `provider`, `model`, `created_at` | Provider (`byteplus-modelark`), model ID used, and ISO-8601 timestamp |
 | `dry_run` | `true` when nothing was generated; see `preview` |
 | `artifacts` | Images from a single call (`variations=1`); empty for variations and dry runs |
-| `item_errors` | Per-image errors from a single provider batch |
-| `usage` | Token usage of a single call; `null` for variations and dry runs |
+| `item_errors` | Single-call image errors: `NO_OUTPUT` for empty/missing output, `NO_DELIVERABLE_OUTPUT` for unexpected Base64-only output without persistence |
+| `usage` | Single-call usage, including provider-reported `input_images`, `generated_images`, `output_tokens`, and legacy token fields; `null` for variations and dry runs |
 | `summary` | `VariationSummary` when `variations > 1`: `total`, `succeeded`, `failed`, and per-variation `index`, `seed`, artifact or error |
-| `preview` | Dry run only: `requests` (provider bodies, one per variation, with reference image URLs reduced to scheme and host and inline Base64 to its size) and `estimated_cost_usd` (a static estimate, not a provider quote) |
+| `generations` | Completed calls ordered by `variation_index`, with `request_id`, submitted `seed`, final `prompt_sha256` and allowlisted `request_options`; per-call provider usage/identifier echo and `images` with artifact mapping, provider reports and independent `inspection`. Absent provider values stay null; empty for dry runs |
+| `preview` | Dry run only: redacted `requests`, `estimated_cost_usd` and `price_source` (`catalog`: fresh cached account image rate, `builtin`: fallback). Neither billing nor a provider quote; no pricing fetch |
+
+Image inspection reports decoded dimensions, format and actual alpha separately
+from provider claims: `verified`, `mismatch`, `invalid` or `unavailable`, or null
+for URL-only delivery. It retains billed artifacts without rerolls; verified
+bytes do not establish visual acceptance. A single-call seed of `-1` or null is
+provider randomness, not a recovered actual seed. Full contracts:
+[API reference](api-reference.md#3-seedream_generate_image),
+[image inspection](artifacts.md#seedream-image-inspection) and
+[bounded review/edit](integration-guide.md#seedream-review-and-edit).
 
 A storage failure does not fail the call. Each image degrades on its own:
 URL outputs come back as `id="provider-url"` references to the temporary
@@ -826,7 +847,21 @@ Box edit of the first image:
 }
 ```
 
-Edit an image with transparency on Seedream 5.0 Pro (the input PNG must
+Generate a transparent PNG from text with Seedream 5.5 (`arguments.input`):
+
+```json
+{
+  "model": "dola-seedream-5-5-261028",
+  "prompt": "Realistic embroidered heart and daisy stickers, cream stitched borders, transparent background",
+  "size": "2K",
+  "response_format": "url",
+  "output_format": "png",
+  "background": "transparent",
+  "watermark": true
+}
+```
+
+Edit an image with transparency on Seedream 5.0 Pro (bind/select Pro; the input PNG must
 already have transparent pixels):
 
 ```json
