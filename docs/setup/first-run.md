@@ -31,7 +31,8 @@ is unavailable, it should explain what is missing instead of substituting
 another service without asking.
 
 For transparent PNGs, reference edits and a no-charge request preview, see
-[Seedream 5.5](../seedream-5-5.md). It is the built-in image default in the
+[the Seedream tool reference](/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5).
+Seedream 5.5 is the built-in image default in the
 server revision documented here; older installations and explicit operator
 defaults may select a different model.
 

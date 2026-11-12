@@ -1,47 +1,90 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
-import { resolveDocLink } from "./docs.mjs";
+import { toolPage } from "./docs.mjs";
+import { toolReferenceGroups } from "./navigation.mjs";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const model = "dola-seedream-5-5-261028";
-
-test("Seedream 5.5 guide provides a safe transparent-image job preview", () => {
-  const guide = read("../../seedream-5-5.md");
-  const examples = [...guide.matchAll(/```json\n([\s\S]*?)\n```/g)].map(
-    (match) => JSON.parse(match[1]),
-  );
-  assert.equal(examples.length, 1);
-  const job = examples[0].input;
-  assert.equal(job.tool_name, "seedream_generate_image");
-  assert.deepEqual(job.arguments.input, {
-    model,
-    prompt:
-      "Embroidered heart and daisy patches with raised stitching and off-white borders, transparent background.",
-    size: "2K",
-    response_format: "url",
-    output_format: "png",
-    background: "transparent",
-    watermark: true,
-    persist: true,
-    dry_run: true,
-  });
-  assert.match(guide, /layer_decomposition/);
-  assert.match(guide, /not supported/i);
-  assert.match(guide, /account access/i);
-  assert.match(guide, /may incur charges/i);
-  assert.match(guide, /has_transparency/);
+const route = "/ark-mcp/tool-reference/seedream-generate-image/";
+const tool = (name) => ({
+  name,
+  description: "Create media.",
+  background: "required",
+  registration_gate: "Requires BYTEPLUS_MODELARK_API_KEY.",
+  scope: null,
+  inputSchema: { properties: {} },
+  outputSchema: { properties: {} },
 });
 
-test("Seedream 5.5 guide is reachable from navigation and capability entry points", () => {
-  assert.match(read("../astro.config.mjs"), /slug: "seedream-5-5"/);
-  assert.match(read("../../index.mdx"), /\/ark-mcp\/seedream-5-5\//);
-  assert.match(read("../../capabilities.md"), /seedream-5-5\.md/);
-  assert.match(read("../../setup/first-run.md"), /seedream-5-5\.md/);
-  assert.equal(
-    resolveDocLink("models.md", "seedream-5-5.md"),
-    "/ark-mcp/seedream-5-5/",
+test("Seedream tool reference includes model guidance and a safe image preview", () => {
+  const page = toolPage(tool("seedream_generate_image"));
+  const examples = [...page.matchAll(/```json\n([\s\S]*?)\n```/g)].map(
+    (match) => JSON.parse(match[1]),
   );
+  const job = examples.find((example) => example.name === "ark_job_submit")
+    .arguments.input;
+  assert.equal(job.tool_name, "seedream_generate_image");
+  assert.equal(job.arguments.input.model, model);
+  assert.equal(job.arguments.input.background, "transparent");
+  assert.equal(job.arguments.input.output_format, "png");
+  assert.equal(job.arguments.input.dry_run, true);
+  assert.match(page, /id="seedream-5-5"/);
+  assert.match(page, /## Seedream 5\.5/);
+  assert.match(page, /layer_decomposition/);
+  assert.match(page, /not supported/i);
+  assert.match(page, /account access/i);
+  assert.match(page, /may incur charges/i);
+  assert.match(page, /has_transparency/);
+  assert.match(page, /921,600-4,624,220/);
+  assert.match(page, /already-transparent PNG/);
+});
+
+test("Seedream guidance stays scoped to its tool within Images and video", () => {
+  const tools = [
+    tool("seedream_generate_image"),
+    tool("seedance_create_task"),
+    tool("ark_list_models"),
+  ];
+  const group = toolReferenceGroups(tools).find(
+    (group) => group.label === "Images and video",
+  );
+  assert.deepEqual(
+    group.items.map((item) => item.slug),
+    [
+      "tool-reference/seedream-generate-image",
+      "tool-reference/seedance-create-task",
+    ],
+  );
+  for (const name of [
+    "seedance_create_task",
+    "ark_list_models",
+    "unknown_tool",
+  ]) {
+    assert.doesNotMatch(toolPage(tool(name)), /## Seedream 5\.5/);
+  }
+  assert.deepEqual(toolReferenceGroups([]), []);
+});
+
+test("entry points use the tool reference instead of a standalone guide", () => {
+  assert.equal(
+    existsSync(new URL("../../seedream-5-5.md", import.meta.url)),
+    false,
+  );
+  assert.doesNotMatch(read("../astro.config.mjs"), /slug: "seedream-5-5"/);
+  for (const path of [
+    "../../index.mdx",
+    "../../capabilities.md",
+    "../../setup/first-run.md",
+    "../../models.md",
+    "../../../README.md",
+    "../../../.agents/skills/ark-mcp/SKILL.md",
+  ]) {
+    const content = read(path);
+    assert.ok(content.includes(route), path);
+    assert.doesNotMatch(content, /seedream-5-5\/|seedream-5-5\.md/);
+  }
+  assert.ok(read("../astro.config.mjs").includes(`${route}#seedream-5-5`));
 });
 
 test("generated Seedream tool example previews the launch model without billing", () => {

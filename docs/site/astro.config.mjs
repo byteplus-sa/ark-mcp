@@ -16,6 +16,10 @@ export default defineConfig({
   base: "/ark-mcp",
   trailingSlash: "always",
   outDir: "../../out/docs-site",
+  redirects: {
+    "/seedream-5-5/":
+      "https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5",
+  },
   markdown: {
     processor: unified({
       remarkPlugins: [remarkLinks],
@@ -94,7 +98,6 @@ export default defineConfig({
           collapsed: true,
           items: [
             { slug: "models" },
-            { slug: "seedream-5-5", label: "Seedream 5.5" },
             { slug: "tools", label: "Worked Tool Examples" },
             { slug: "artifacts" },
             { slug: "multi-generation" },

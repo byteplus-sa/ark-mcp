@@ -56,7 +56,8 @@ The binding enums (`config/env.py`):
 | `supports_safety_identifier` | `True` | `True` | `False` | `False` |
 
 **Seedream 5.5 is the built-in image default.** Start with the
-[Seedream 5.5 guide](seedream-5-5.md) for transparent images and request previews.
+[Seedream tool reference](/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5)
+for transparent images and request previews.
 This integration covers generation and editing,
 not layer decomposition or OCR; those input fields are rejected. `background="transparent"` supports a text-only
 prompt or up to ten references without requiring existing alpha. 5.0 Pro retains
