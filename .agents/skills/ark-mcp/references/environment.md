@@ -4,35 +4,43 @@ Operator-side setup an agent occasionally needs: how the server is started,
 which setting turns on which tools, how HTTP auth and scopes work, the runtime
 services behind the tools, and the provider design. Model IDs and limits are
 in [models-and-limits.md](models-and-limits.md). The full variable reference
-is [docs/configuration.md](../../../../docs/configuration.md); security detail
-is [docs/security.md](../../../../docs/security.md).
+is [Configuration](https://byteplus-sa.github.io/ark-mcp/configuration/); security detail
+is [Security](https://byteplus-sa.github.io/ark-mcp/security/).
 
 ## Quick start
 
-**Prerequisites:** Python 3.12+, `uv`, and a BytePlus key for each product you
-want. Copy `.env.example` to `.env`; credentials are startup configuration and
-are never tool arguments.
+For a new connection, follow [Set Up Ark MCP](https://byteplus-sa.github.io/ark-mcp/setup/install/).
+The skill does not install or configure the server. A local connection needs
+the reviewed locked environment and the provider keys for requested products;
+an existing shared server is configured by its operator.
 
-```bash
-uv run python -m ark_mcp                       # stdio (default), local MCP clients
-MCP_TRANSPORT=http uv run python -m ark_mcp    # Streamable HTTP, 127.0.0.1:3000, path /mcp
-```
+Keep credentials in a private file outside repositories and shared folders.
+The user enters them in a local non-AI editor; do not read back that file or
+put its values in chat or client configuration. The client receives only the
+non-secret `ARK_MCP_ENV_FILE` path and starts the local server automatically.
+For exact preparation and launch details, use
+[Manual Installation](https://byteplus-sa.github.io/ark-mcp/setup/manual-install/).
+
+Use the repository's locked environment. The supported FastMCP range is
+`fastmcp[tasks]>=4.1.8,<4.2`; the lockfile includes security fixes absent from
+the former 4.0.x environment. Do not independently downgrade the framework or
+its task and MCP SDK dependencies.
 
 - **HTTP is stateless Streamable HTTP** with Host/Origin protection on
-  (`MCP_ALLOWED_HOSTS`, `MCP_ALLOWED_ORIGINS`). `fastmcp run
-  src/ark_mcp/server.py:mcp` also works and applies the same hardening.
+  (`MCP_ALLOWED_HOSTS`, `MCP_ALLOWED_ORIGINS`). Operator launch instructions
+  are in [Transports](https://byteplus-sa.github.io/ark-mcp/transports/).
 - **Verify** with the `seed-health://status` resource or, on HTTP, `GET /health`,
   `/ready`, `/metrics`.
 - Output-path arguments (`output_path`, `output_dir`, `save_to`) work on stdio
   only, inside MCP roots or `OUTPUT_ROOTS` ([polling-and-artifacts.md](polling-and-artifacts.md)).
 - For a single-organization deployment, use the Caddy/JWT/Redis Compose kit in
-  `deploy/compose/` and the repository's `docs/self-hosting.md` guide. Keep one
+  the repository's `deploy/compose/` and the [self-hosting guide](https://byteplus-sa.github.io/ark-mcp/self-hosting/). Keep one
   replica and configure both spend and rate limits.
 - Releases use `vX.Y.Z` tags, GitHub wheel/source/checksum assets, and versioned
   GHCR images. `latest` is a release; `edge` is a main build. Prefer a digest
   pin for deployment. PyPI publishing is not configured. Release publication
   does not update a source checkout or restart an MCP client; see the
-  repository's `docs/releases.md`.
+  [release guide](https://byteplus-sa.github.io/ark-mcp/releases/).
 
 ## What enables what
 
@@ -211,4 +219,4 @@ flowchart LR
 
 Inputs are validated against a model-capability registry before quota is spent
 ([models-and-limits.md](models-and-limits.md)). For tool inputs and outputs see
-the tool schemas and [docs/api-reference.md](../../../../docs/api-reference.md).
+the tool schemas and [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/).

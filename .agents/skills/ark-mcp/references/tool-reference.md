@@ -1,6 +1,6 @@
 # Create-tool reference
 
-Per-product behaviour of the create tools that the tool schemas do not spell out: flows, cross-field rules, gotchas, and recovery. Parameters, ranges and output fields are in each tool's schema (also [docs/api-reference.md](../../../../docs/api-reference.md)); per-model limits are in [models-and-limits.md](models-and-limits.md); polling, persistence and artifact handling are in [polling-and-artifacts.md](polling-and-artifacts.md); background-job mechanics are in [workflows.md](workflows.md).
+Per-product behaviour of the create tools that the tool schemas do not spell out: flows, cross-field rules, gotchas, and recovery. Parameters, ranges and output fields are in each tool's schema (also [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)); per-model limits are in [models-and-limits.md](models-and-limits.md); polling, persistence and artifact handling are in [polling-and-artifacts.md](polling-and-artifacts.md); background-job mechanics are in [workflows.md](workflows.md).
 
 **Universal rules for every create tool below:** run it through `ark_job_submit` (or native task augmentation), read the task IDs from the job result, and poll those IDs. **Never resubmit a create tool to poll or to retry an ambiguous failure: every submit is billed and none is idempotent.** Take exact model IDs from `ark_list_models`; `model` accepts exact IDs only.
 
@@ -127,7 +127,7 @@ A fixed `seed` reproduces request settings, not guaranteed identical pixels. Sin
 ### Transparent background
 
 `background="transparent"` requires `output_format` omitted or `png`.
-Seedream 5.5 (early-access default) accepts text-only prompts and reference images
+Seedream 5.5 (default) accepts text-only prompts and reference images
 without alpha. It defaults to PNG even for ordinary generation.
 `prompt_optimization="standard"` is accepted (provider default); `fast` is rejected.
 `background="auto"` is the 5.5 default and follows the prompt; JPEG is always opaque.

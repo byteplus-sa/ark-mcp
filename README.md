@@ -4,6 +4,18 @@ A Python [Model Context Protocol](https://modelcontextprotocol.io) server
 built on [FastMCP](https://gofastmcp.com) that exposes BytePlus multimodal
 generation through a typed, safe tool surface.
 
+## Documentation
+
+Read the [Ark MCP documentation](https://byteplus-sa.github.io/ark-mcp/) for
+installation, client integrations, worked examples, and generated input/output
+schemas for every catalog tool.
+
+The source guides cover [installation](docs/setup/install.md),
+[client integrations](docs/integrations/index.md),
+[your first tool call](docs/setup/first-run.md), and
+[choosing a tool](docs/capabilities.md). See
+[site maintenance](docs/site-maintenance.md) for local development and deployment.
+
 > **Upgrading from 0.1.x?** 0.2.0 consolidates the tool surface and removes
 > the old per-model, per-variation and per-operation tools with no
 > compatibility layer. See the [migration guide](docs/migration-0.2.md).
@@ -24,7 +36,7 @@ products plus artifact access and an optional media upload helper:
 | Product | Tools | Description |
 |---|---|---|
 | **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech; one clip or 1-5 parallel variations |
-| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: Seedream 5.5 (early-access default), generation/reference and point/box editing, native transparent PNGs, auto backgrounds, standard-only optimization, validated 1K/1.5K/2K or custom sizes, hashed safety IDs, provider image metadata, 1-10 variations and dry runs. Pro retains transparency-preserving edits; batches are Lite/4.x only. Layer decomposition/OCR are not exposed |
+| **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: [Seedream 5.5](docs/seedream-5-5.md) by default, generation/reference and point/box editing, native transparent PNGs, auto backgrounds, standard-only optimization, validated 1K/1.5K/2K or custom sizes, hashed safety IDs, provider image metadata, 1-10 variations and dry runs. Pro retains transparency-preserving edits; batches are Lite/4.x only. Layer decomposition/OCR are not exposed |
 | **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (2.0, 2.5 by default, and whitelist-only 2.5 Premium with 4K when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`): pick the model from `ark_list_models(kind='video')`, create 1-5 variations, use Draft mode on 2.5, or `dry_run` for a free request and cost preview; poll with the shared generation task tools |
 | **Hyper3D / Hitem3d** | `hyper3d_create_task`, `hitem3d_create_task` | Background-task 3D submission through ModelArk; poll with the shared generation task tools (gated by `BYTEPLUS_MODELARK_3D_ENABLED`, disabled by default) |
 | **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | One lifecycle for every ModelArk generation task (Seedance video and 3D): batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
@@ -91,8 +103,8 @@ Key features:
 - **Runtime controls** — shared provider/principal concurrency, daily budget
   reservations, safe retries, task ownership, readiness with optional provider
   health checks, per-IP HTTP rate limiting, metrics, and tracing
-- **1,155 offline tests** — unit, contract, integration, HTTP security, E2E, and
-  MCP conformance with 86% combined statement/branch coverage
+- **Offline regression coverage** — unit, contract, integration, HTTP security,
+  E2E, and MCP conformance tests, plus documentation build/link checks
 
 ## Supported Input Modalities
 
@@ -206,38 +218,46 @@ sequenceDiagram
 
 ## Quick Start
 
-```bash
-# Clone the repository
-git clone <repo-url> ark-mcp
-cd ark-mcp
+1. Open [guided setup](docs/setup/install.md). A coding agent with terminal
+   and file access can prepare the reviewed installation and client entry.
+2. Enter the provider keys you need in the private local editor, not in chat.
+3. Enable `ark-seed` in your client and ask:
 
-# Install dependencies
-uv sync
-
-# Configure credentials
-cp .env.example .env
-# Edit .env and fill in your BytePlus API keys
-
-# Run the server
-make start
-
-# Or validate your environment configuration
-make check-env
+```text
+Check Ark with ark_list_models and ark_job_capabilities.
+Tell me which services and tools are available. Do not generate,
+understand, transcribe, upload, or submit jobs.
 ```
+
+The client starts the local server automatically; do not run a separate
+terminal server after setup. If your team already runs Ark,
+[connect to its endpoint](docs/setup/shared-server.md) without installing
+anything locally. [Manual installation](docs/setup/manual-install.md) remains
+available for users without a setup-capable agent.
+
+## Agent Skill
+
+Install the optional [ark-mcp usage skill](docs/setup/agent-skill.md) to teach
+your agent model discovery, background jobs, progress checks and artifact
+handling. Ask your agent to use the Skills CLI, or run:
+
+```bash
+npx skills add byteplus-sa/ark-mcp --skill ark-mcp -g
+```
+
+Requires Node.js 22.20+, npm/npx and Git. Select your agents and review the
+installation summary; omit `-g` for a project-only install. The CLI handles
+the skill directories. The [guide](docs/setup/agent-skill.md) covers existing
+skills, telemetry, verification and manual fallback. This installs instructions,
+not the MCP server or its connection.
 
 ## Configuration
 
-Edit `.env` with your BytePlus credentials:
-
-```dotenv
-BYTEPLUS_MODELARK_API_KEY=your_modelark_key
-BYTEPLUS_SEED_SPEECH_API_KEY=your_seed_speech_key  # pragma: allowlist secret
-BYTEPLUS_VOD_MEDIAKIT_API_KEY=your_vod_mediakit_key
-BYTEPLUS_CV_API_KEY=your_vision_ai_key
-BYTEPLUS_OMNIHUMAN_ENABLED=true
-SEEDREAM_DEFAULT_MODEL=dola-seedream-5-5-261028
-SEEDANCE_DEFAULT_MODEL=dreamina-seedance-2-5-260628
-```
+Only configure the products you use. [Provider Keys](docs/api-keys.md) explains
+which key each product needs. Store keys in a private file outside the
+repository; the client receives only its `ARK_MCP_ENV_FILE` path. Guided setup
+prepares the blank file and configuration; optional flags remain off unless
+requested.
 
 > [!IMPORTANT]
 > **Upgrading:** `SEEDANCE_DEFAULT_MODEL` now defaults to Seedance 2.5. If
@@ -273,155 +293,51 @@ enqueue the same FastMCP Docket worker and preserve the same typed tool result,
 ownership, scope, concurrency, and replay safeguards.
 
 Both paths are tested in-process, over subprocess stdio, and over authenticated
-Streamable HTTP with the locked FastMCP 4.1.6 runtime. The ordinary path uses
+Streamable HTTP with the locked FastMCP 4.1.8 runtime. The ordinary path uses
 standard MCP tool calls and does not require a client-specific task transport.
 The named desktop/IDE snippets below remain connection templates because exact
 client releases and tool-selection behavior can change. See the
 [background execution workflows](docs/integration-guide.md#background-execution).
 
-The server runs as a `stdio` process. Configure it in your MCP client:
+Use the client-specific guides below. Each starts with guided setup and keeps
+manual configuration as an optional fallback.
 
 ### Claude Desktop
 
-```json
-{
-  "mcpServers": {
-    "ark-seed": {
-      "command": "uv",
-      "args": ["--directory", "/path/to/ark-mcp", "run", "python", "-m", "ark_mcp"],
-      "env": {
-        "BYTEPLUS_MODELARK_API_KEY": "your_modelark_key",
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "your_seed_speech_key"
-      }
-    }
-  }
-}
-```
+Follow [Claude Desktop setup](docs/integrations/claude-desktop.md).
+A separate coding agent can configure Desktop; Desktop chat alone is not
+assumed to have local installation tools.
 
 ### Codex CLI
 
-Codex reads MCP servers from `~/.codex/config.toml` (global) or
-`.codex/config.toml` (project-scoped, trusted projects). The format is TOML
-with one `[mcp_servers.<name>]` table per server:
-
-```toml
-[mcp_servers.ark-seed]
-command = "uv"
-args = ["--directory", "/path/to/ark-mcp", "run", "python", "-m", "ark_mcp"]
-
-[mcp_servers.ark-seed.env]
-BYTEPLUS_MODELARK_API_KEY = "your_modelark_key"
-BYTEPLUS_SEED_SPEECH_API_KEY = "your_seed_speech_key"
-```
+Follow [Codex setup](docs/integrations/codex.md), or
+[Claude Code setup](docs/integrations/claude-code.md) for that coding client.
 
 ### OpenCode
 
-OpenCode reads MCP servers from `opencode.json` / `opencode.jsonc` at the
-project root, or `~/.config/opencode/opencode.json` globally. Use the
-top-level `mcp` key with `type: "local"` and `command` as an array:
+Follow [OpenCode setup](docs/integrations/opencode.md). Its configuration
+format depends on the installed edition.
 
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "ark-seed": {
-      "type": "local",
-      "command": ["uv", "--directory", "/path/to/ark-mcp", "run", "python", "-m", "ark_mcp"],
-      "enabled": true,
-      "environment": {
-        "BYTEPLUS_MODELARK_API_KEY": "your_modelark_key",
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "your_seed_speech_key"
-      }
-    }
-  }
-}
-```
-
-**Shared server (multiple agents).** `stdio` starts one server process per
-client, so background jobs (`ark_job_*`) are process-local and cannot be polled
-across agents. To share them, run one loopback HTTP server in local auth mode
-(`make shared-http`) and connect every client over HTTP instead:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "ark-seed": {
-      "type": "remote",
-      "url": "http://127.0.0.1:3000/mcp",
-      "oauth": false,
-      "timeout": 600000
-    }
-  }
-}
-```
-
-See [docs/transports.md](docs/transports.md) for the caveats (restart loses
-in-memory jobs; Redis retention is single-replica).
+For multiple clients sharing jobs, see the operator's
+[shared-server transport guide](docs/transports.md). Separate local stdio
+processes do not share their in-memory jobs.
 
 ### TRAE IDE
 
-TRAE uses the standard `mcpServers` JSON shape, added either via
-**Settings → MCP → Add → Manual** in the IDE, or declared in a project-level
-`.trae/mcp.json` (enable project-level MCP in Settings → MCP). The
-`${workspaceFolder}` variable resolves to the project root:
-
-```json
-{
-  "mcpServers": {
-    "ark-seed": {
-      "command": "uv",
-      "args": ["--directory", "${workspaceFolder}", "run", "python", "-m", "ark_mcp"],
-      "env": {
-        "BYTEPLUS_MODELARK_API_KEY": "your_modelark_key",
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "your_seed_speech_key"
-      }
-    }
-  }
-}
-```
-
-> The same `mcpServers` JSON can be pasted directly into TRAE's **Manual
-> configuration** window if you already run this server in another IDE.
+Follow [TRAE setup](docs/integrations/trae.md). Let the agent resolve paths
+and prepare the entry, then complete any required settings-screen confirmation.
 
 ### TRAE Work
 
-[TRAE Work](https://www.trae.cn/work) is the standalone AI-native workspace
-(web, desktop, mobile) with Work and Code dual modes. It reads the same
-`mcpServers` JSON shape as TRAE IDE and resolves `${workspaceFolder}` to the
-project root. On the desktop app you also pick a **runtime environment** —
-**本地 (local)** or **云端 (cloud)** — when adding the server.
-
-Add the server via **Avatar → Settings → MCP → Create → Manual configuration**,
-then paste:
-
-```json
-{
-  "mcpServers": {
-    "ark-seed": {
-      "command": "uv",
-      "args": ["--directory", "${workspaceFolder}", "run", "python", "-m", "ark_mcp"],
-      "env": {
-        "BYTEPLUS_MODELARK_API_KEY": "your_modelark_key",
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "your_seed_speech_key"
-      }
-    }
-  }
-}
-```
-
-> **Runtime environment.** Pick **本地** to run the server on your machine
-> (the repo must be cloned locally, as above). Pick **云端** to run it in a
-> TRAE-managed cloud sandbox; in that case sync the repository to the cloud
-> environment first (for example via the GitHub integration) so
-> `${workspaceFolder}` resolves to a path that actually contains the project.
-> See the official
-> [TRAE Work MCP guide](https://docs.trae.cn/work/remote-mcp-server).
+Use the Work notes in the [TRAE guide](docs/integrations/trae.md), checking
+edition and local/cloud runtime. A cloud host cannot use local paths or
+credentials without a separate setup decision.
 
 ### Cursor, VS Code, MCP Inspector
 
-See the [Integration Guide](docs/integration-guide.md) for configuration
-snippets for Cursor IDE, VS Code MCP extension, and the MCP Inspector.
+See [Cursor](docs/integrations/cursor.md) and [VS Code](docs/integrations/vscode.md).
+The [MCP Inspector](docs/integration-guide.md#mcp-inspector) is an optional
+developer tool, not an onboarding requirement.
 
 ## Available Make Targets
 
@@ -508,10 +424,10 @@ See the project configuration for license details.
 
 ## Status
 
-All three provider surfaces and both transports are implemented. The release
-gate enforces the offline test suite with at least 85% coverage, Ruff formatting
-and lint, strict mypy, Bandit/secret scans, and package build. Dependency audit
-and container health are enforced by CI. Seedream's
-[live smoke matrix](docs/integration-guide.md#opt-in-seedream-smoke-matrix)
+The provider surfaces and both transports are implemented. CI enforces offline
+regression tests and coverage, formatting/lint, strict typing, security scans,
+package builds, dependency auditing, and container health. Remote HTTP requires
+JWT configuration and is intentionally fail-closed.
+
+Seedream's [live smoke matrix](docs/integration-guide.md#opt-in-seedream-smoke-matrix)
 is opt-in; editing/alpha and visual acceptance still require authorized checks.
-Remote HTTP requires JWT configuration and is intentionally fail-closed.

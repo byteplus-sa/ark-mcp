@@ -1,13 +1,14 @@
 # Integration Guide
 
-How to connect the Ark Seed MCP server to popular MCP clients.
+This is the technical reference for background execution. For everyday setup,
+start with [Set Up Ark MCP](setup/install.md) and [your client guide](integrations/index.md).
+Users can ask their client in plain language; the client handles tool calls.
 
 ## Prerequisites
 
-- [uv](https://docs.astral.sh/uv/) installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- Python 3.12+
-- BytePlus account with ModelArk API key and/or Seed Audio API key
-- This repository cloned locally
+Complete guided setup or connect to an existing shared server first.
+Developers preparing the server themselves can use
+[Manual Installation](setup/manual-install.md).
 
 ## Server Overview
 
@@ -42,13 +43,12 @@ with task metadata instead; that path is fully supported and unchanged. A
 foreground call made directly to a required-task tool is still rejected before
 provider submission.
 
-The repository tests both paths with the locked FastMCP **4.1.6** runtime. The
+The repository tests both paths with the locked FastMCP **4.1.8** runtime. The
 ordinary path is covered in-process, over a real subprocess stdio transport, and
 over authenticated Streamable HTTP without advertising the task extension.
 These tests use mocked providers and do not make billable generation calls.
 Exact desktop/IDE releases and their automatic tool-selection behavior can
-change, so the connection snippets below are templates; the standard
-`ark_job_*` protocol surface is the portable contract.
+change; the standard `ark_job_*` protocol surface is the portable contract.
 
 ### Ordinary-tool workflow (default)
 
@@ -65,43 +65,12 @@ change, so the connection snippets below are templates; the standard
    cooperative and does not guarantee cancellation of provider work already
    accepted upstream.
 
-```python
-import asyncio
-
-from fastmcp import Client
-
-
-async def run_without_task_extension(server):
-    async with Client(server, mode="legacy") as client:
-        submitted = await client.call_tool(
-            "ark_job_submit",
-            {
-                "input": {
-                    "tool_name": "seed_understand",
-                    "arguments": {
-                        "input": {
-                            "prompt": "Analyze this video",
-                            "videos": [
-                                {
-                                    "kind": "url",
-                                    "url": "https://example.com/video.mp4",
-                                }
-                            ],
-                        }
-                    },
-                }
-            },
-        )
-        job_id = submitted.structured_content["job_id"]
-        while True:
-            snapshot = await client.call_tool(
-                "ark_job_get", {"input": {"job_id": job_id}}
-            )
-            state = snapshot.structured_content
-            if state["status"] != "working":
-                return state["result"]
-            await asyncio.sleep(state["poll_after_ms"] / 1000)
-```
+Inspect terminal status and `result.is_error` before using
+`result.structured_content`; completion alone is not success. The
+[Python client guide](integrations/python.md) has a complete discovery and
+dry-run example with bounded polling and error checks. The
+[first-run guide](setup/first-run.md) provides copyable generation prompts and
+optional no-charge checks.
 
 ### Native task workflow
 
@@ -113,7 +82,8 @@ under [Python Task Workflow](#python-task-workflow) uses it.
 ## Seedream Review And Edit
 
 Generation delivery and visual acceptance are separate outcomes. This workflow
-uses existing tools; Seedream exposes no native OCR or layer decomposition.
+uses existing tools; the Ark MCP integration exposes no native OCR or layer
+decomposition, even when the provider API supports those operations.
 
 1. Discover the model and dry-run the intended request. Record an explicit
    paid-attempt limit and USD estimate budget covering generation, any
@@ -173,12 +143,16 @@ is bounded; a timeout is not permission to rerun an accepted job.
 
 ## Python Task Workflow
 
-Run this from the repository using `uv run python`, with credentials configured
-in `.env` and `SMOKE_REFERENCE_IMAGE_URL` pointing to an accessible reference
+This optional developer example is not needed for setup. Run it in the
+reviewed environment with `ARK_MCP_ENV_FILE` pointing to your private file
+and `SMOKE_REFERENCE_IMAGE_URL` pointing to an accessible reference
 image. **This example submits one billable video generation.** The provider ID
 is saved before polling; if polling fails, use that ID to resume retrieval rather
 than repeating submission. The MCP task ID identifies the worker operation,
 while the provider ID identifies the video generation.
+
+<details>
+<summary>Native-task Python example (billable)</summary>
 
 ```python
 import asyncio
@@ -194,7 +168,14 @@ from fastmcp_tasks import call_tool_task
 
 async def main():
     transport = StdioTransport(
-        command=sys.executable, args=["-m", "ark_mcp"]
+        command=sys.executable,
+        args=["-m", "ark_mcp"],
+        env={
+            "ARK_MCP_ENV_FILE": os.environ["ARK_MCP_ENV_FILE"],
+            "MCP_TRANSPORT": "stdio",
+            "MCP_AUTH_MODE": "local",
+        },
+        keep_alive=False,
     )
     async with Client(transport) as client:
         submission = await call_tool_task(
@@ -251,7 +232,7 @@ asyncio.run(main())
 ```
 
 `task.result()` waits through `tasks/get` and returns the terminal tool result.
-In this single-process stdio example, FastMCP 4.1.6 automatically task-augments
+In this single-process stdio example, FastMCP 4.1.8 automatically task-augments
 `client.call_tool()` for the optional status tool as well; `persist_output=false`
 still prevents downloads. The standalone smoke scripts use modern and public
 `mode="legacy"` clients connected to the same in-process server lifespan to
@@ -262,149 +243,41 @@ fails; inspect the result before treating the artifact as delivered. The same
 submit/status/persistence sequence is tested offline by the smoke-workflow tests;
 `tests/e2e/test_stdio_tasks.py` separately verifies a real subprocess task result.
 
+</details>
+
 ## Providing Credentials
 
-Two options:
-
-1. **`.env` file** at the repository root (recommended for local dev):
-   ```bash
-   cp .env.example .env
-   # Edit .env and fill in your API keys
-   ```
-
-2. **Inline in the client config** (recommended for shared configs):
-   Pass the keys in the `env` block of the client's MCP server configuration.
-
-The `.env` approach is simplest because the server automatically loads it.
-Inline env vars take precedence.
+Use a private file outside the repository, referenced by `ARK_MCP_ENV_FILE`.
+Enter keys locally, never in chat, client JSON or shared configuration.
+[Guided setup](setup/install.md) prepares that file; [Provider Keys](api-keys.md)
+explains which fields you need. Inherited environment variables can override
+the file, so investigate shadowing without displaying values.
 
 ## Claude Desktop
 
-Add the server to your `claude_desktop_config.json`:
-
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "ark-seed": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/ark-mcp",
-        "run",
-        "python",
-        "-m",
-        "ark_mcp"
-      ],
-      "env": {
-        "BYTEPLUS_MODELARK_API_KEY": "your_ark_api_key"  # pragma: allowlist secret,
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "your_seed_speech_key"  # pragma: allowlist secret
-      }
-    }
-  }
-}
-```
-
-Replace `/path/to/ark-mcp` with the absolute path to your repository.
-
-Fully quit and restart Claude Desktop. The tools appear under the hammer
-icon. If you use the `.env` file approach, you can omit the `env` block.
+Use the [Claude Desktop guide](integrations/claude-desktop.md). A separate
+coding agent can prepare local setup; Desktop then starts Ark automatically.
 
 ## Cursor IDE
 
-Create `.cursor/mcp.json` in your project root (or
-`~/.cursor/mcp.json` for global config):
-
-```json
-{
-  "mcpServers": {
-    "ark-seed": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/ark-mcp",
-        "run",
-        "python",
-        "-m",
-        "ark_mcp"
-      ],
-      "env": {
-        "BYTEPLUS_MODELARK_API_KEY": "your_ark_api_key"  # pragma: allowlist secret,
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "your_seed_speech_key"  # pragma: allowlist secret
-      }
-    }
-  }
-}
-```
-
-Alternatively, use `${env:VAR}` interpolation to reference shell
-environment variables:
-
-```json
-{
-  "mcpServers": {
-    "ark-seed": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/ark-mcp",
-        "run",
-        "python",
-        "-m",
-        "ark_mcp"
-      ],
-      "env": {
-        "BYTEPLUS_MODELARK_API_KEY": "${env:BYTEPLUS_MODELARK_API_KEY}",
-        "BYTEPLUS_SEED_SPEECH_API_KEY": "${env:BYTEPLUS_SEED_SPEECH_API_KEY}"
-      }
-    }
-  }
-}
-```
-
-Fully quit and restart Cursor. A green dot in Settings → Features → MCP
-confirms the connection.
+Use the [Cursor guide](integrations/cursor.md). Prefer guided setup and check
+actual discovery results, not just a connection indicator.
 
 ## VS Code (MCP Extension)
 
-Create `.vscode/mcp.json` in your workspace root:
-
-```json
-{
-  "servers": {
-    "ark-seed": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/ark-mcp",
-        "run",
-        "python",
-        "-m",
-        "ark_mcp"
-      ],
-      "envFile": "${workspaceFolder}/.env"
-    },
-    "inputs": []
-  }
-}
-```
-
-VS Code uses `"servers"` (not `"mcpServers"`). The `envFile` field loads
-the repo's `.env` directly — no need to inline keys.
-
-Run the **MCP: List Servers** command to verify the server is running.
-Start/stop/restart controls appear as code lenses.
+Use the [VS Code guide](integrations/vscode.md). It distinguishes the
+profile/workspace `servers` format from portable Copilot configuration.
 
 ## MCP Inspector
 
-The MCP Inspector provides a web UI for testing tools interactively.
+The MCP Inspector is an optional developer tool, not a setup requirement.
+The ordinary [connection check](integrations/index.md#verify-without-paid-calls)
+runs inside your AI client.
 
-**Option 1: Makefile (easiest)**
+<details>
+<summary>Developer Inspector launch</summary>
+
+From an already prepared checkout, with the private env-file path configured:
 
 ```bash
 make inspect
@@ -413,27 +286,11 @@ make inspect
 This launches `fastmcp inspect src/ark_mcp/server.py:mcp`; the server
 module injects `truststore` before provider clients are created.
 
-**Option 2: npx inspector (recommended for macOS)**
+For HTTP inspection, use an existing protected server and your authorized
+connection credentials. Never export provider keys into shell history or
+disable authentication to connect.
 
-```bash
-export BYTEPLUS_MODELARK_API_KEY=your_key  # pragma: allowlist secret
-export BYTEPLUS_SEED_SPEECH_API_KEY=your_key  # pragma: allowlist secret
-
-npx @modelcontextprotocol/inspector \
-  uv --directory /path/to/ark-mcp run python -m ark_mcp
-```
-
-The browser UI opens—select **STDIO** transport and click **Connect**.
-
-**Option 3: HTTP transport**
-
-Start the server in HTTP mode:
-
-```bash
-make start-http
-```
-
-Then connect the Inspector to `http://127.0.0.1:3000/mcp`.
+</details>
 
 ## Troubleshooting
 
@@ -444,22 +301,17 @@ start through `python -m ark_mcp` so the complete entrypoint runs.
 
 ### "API key not configured" Error
 
-The server skips registering tools for products without credentials. Check:
-
-1. `.env` file exists at the repository root with the correct key names
-2. Keys are spelled exactly: `BYTEPLUS_MODELARK_API_KEY`,
-   `BYTEPLUS_SEED_SPEECH_API_KEY`
-3. No leading/trailing whitespace in values
-4. Run `make check-env` to validate
+Check the private `ARK_MCP_ENV_FILE` path, requested credential names and
+feature flags, then reconnect after finishing active jobs. Do not print the
+file or raw settings-validation exceptions. See
+[missing tools](troubleshooting.md#ark_job_capabilities-returns-no-targets).
 
 ### Server Not Discovered by Client
 
-1. Verify `uv` is on the client's PATH (or use a full path:
-   `/Users/yourname/.local/bin/uv`)
-2. Verify the `--directory` path is correct and absolute
-3. Check the client's logs for stderr output from the server
-4. Test manually: `uv --directory /path/to/ark-mcp run python -m ark_mcp`
-   (should start and wait for stdin)
+Have the setup agent check the resolved executable, checkout, locked
+environment and any unfinished UI approvals. It should inspect private
+diagnostics locally, not dump complete logs into chat. See
+[Manual Installation](setup/manual-install.md#verify-without-spending).
 
 ### Tools Missing
 
@@ -482,7 +334,7 @@ If only some products' tools are registered:
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | For audio | — | Seed Speech X-Api-Key |
 | `BYTEPLUS_MODELARK_BASE_URL` | No | `https://ark.ap-southeast.bytepluses.com/api/v3` | ModelArk region endpoint |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | No | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech endpoint |
-| `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-5-261028` | Seedream model ID (5.5 early access; retain an explicit 5.0 Pro default if not authorized) |
+| `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-5-261028` | Seedream 5.5 model ID; retain an explicit 5.0 Pro default if not authorized |
 | `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-5-260628` | Default Seedance model ID for `seedance_create_task` (Seedance 2.5) |
 | `MCP_TRANSPORT` | No | `stdio` | `stdio` or `http` |
 | `MCP_HOST` | No | `127.0.0.1` | HTTP bind address |

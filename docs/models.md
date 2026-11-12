@@ -55,7 +55,9 @@ The binding enums (`config/env.py`):
 | `supports_auto_background` | `True` | `False` | `False` | `False` |
 | `supports_safety_identifier` | `True` | `True` | `False` | `False` |
 
-**Seedream 5.5 is early access.** This integration covers generation and editing,
+**Seedream 5.5 is the built-in image default.** Start with the
+[Seedream 5.5 guide](seedream-5-5.md) for transparent images and request previews.
+This integration covers generation and editing,
 not layer decomposition or OCR; those input fields are rejected. `background="transparent"` supports a text-only
 prompt or up to ten references without requiring existing alpha. 5.0 Pro retains
 its requirement for exactly one already-transparent PNG. Transparent output
@@ -78,15 +80,14 @@ ASCII characters on 5.5 and Pro. Use a stable hashed user identifier, not raw
 personal data. Dry-run previews and structured logs redact it; generation
 metadata preserves the provider's echo.
 
-Source: [Seedream 5.5 early-access API parameter description](https://bytedance.larkoffice.com/wiki/K2VlwdRaqifHvwkFQufc94m1nug),
-revision 579, accessed 2026-11-09, including the 2026-11-07 pixel-limit reduction.
-The document is subject to change; the
+The generation controls match the launch request examples supplied on
+2026-11-12. Size and reference bounds retain the prelaunch API revision 579
+(accessed 2026-11-09, including its 2026-11-07 pixel-limit reduction); the
 [public image API](https://docs.byteplus.com/en/docs/modelark/image-generation-api)
-takes precedence after release. An authorized 70-case text-to-image benchmark
-completed generation and persistence for every case; visual acceptance was a
-separate review. It did not exercise live editing, point/bbox behavior or requested
-transparent PNG alpha. Those remain opt-in pre-release checks with
-`scripts/smoke_seedream55.py`; the script is offline by default.
+is the provider reference. The request examples do not establish live editing
+quality, output alpha or account access. Use the opt-in
+`scripts/smoke_seedream55.py` checks and review the results before release;
+the script is offline by default.
 
 Per-call provenance records the provider request ID, submitted seed, final-prompt
 SHA-256 and allowlisted options. Advisory byte inspection measures format,
@@ -277,7 +278,7 @@ missing required fields, and non-loopback HTTP without JWT.
 ## What the registry does not do
 
 - It is **not a cost table.** Cost estimation (see
-  [runtime.md](runtime.md#cost-estimation-toolscostpy)) is per product and
+  [runtime.md](runtime.md#cost-estimation-tools_costpy)) is per product and
   per variation; families do not affect cost.
 - It does **not** infer size or ratio limits for families without configured bounds.
 - It does **not** call the provider — it is a local, pre-flight validation

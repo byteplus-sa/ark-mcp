@@ -748,7 +748,7 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 
 | Family | Max reference images | `max_images` batch | `output_format` | `background="transparent"` |
 |---|---|---|---|---|
-| Seedream 5.5 (early-access default) | 10 | No (use `variations`) | `png` (default), `jpeg` | Text-only or reference-based generation |
+| Seedream 5.5 (default) | 10 | No (use `variations`) | `png` (default), `jpeg` | Text-only or reference-based generation |
 | Seedream 5.0 Pro | 10 | No (use `variations`) | `png`, `jpeg` | Existing transparent PNG only |
 | Seedream Lite | 14 | Yes | `png`, `jpeg` | No |
 | Seedream 4.x | 14 | Yes | `jpeg` | No |

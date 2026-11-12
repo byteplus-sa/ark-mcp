@@ -1,6 +1,6 @@
 # Models and limits
 
-Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed 3D, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [api-reference.md](../../../../docs/api-reference.md)).
+Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed 3D, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 ## Discovery with `ark_list_models`
 
@@ -58,7 +58,7 @@ Family values: Seedream `seedream_5_5` / `pro` / `lite` / `4x`; Seedance `standa
 
 | Product | Default model ID | Family |
 |---|---|---|
-| Seedream 5.5 (early-access default) | `dola-seedream-5-5-261028` | `seedream_5_5` |
+| Seedream 5.5 (default) | `dola-seedream-5-5-261028` | `seedream_5_5` |
 | Seedream 5.0 Pro (opt-in) | `dola-seedream-5-0-pro-260628` | Pro |
 | Seedance | `dreamina-seedance-2-5-260628` | 2.5 |
 | Seedance 2.0 (opt-in) | `dreamina-seedance-2-0-260128` | Standard |
@@ -73,7 +73,7 @@ Seedream Lite, Seedream 4.x, Seedance 2.0 Fast, and Seedance 2.0 Mini have no bu
 ### Rules that fail startup
 
 - **The default model must be one of the bound IDs, and bound IDs must be unique.** Startup fails with `... default model '<id>' is missing from its bindings. Set the default model env var to one of the bound IDs: [...]`.
-- **5.5 is the image default and requires early-access authorization.** Existing explicit defaults are unchanged. A bindings list containing only older models needs an explicit default or a 5.5 entry. Set `SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628` to retain Pro; discovery does not prove provider access.
+- **5.5 is the image default and requires account authorization.** Existing explicit defaults are unchanged. A bindings list containing only older models needs an explicit default or a 5.5 entry. Set `SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628` to retain Pro; discovery does not prove provider access.
 - **`SEEDANCE_DEFAULT_MODEL` defaults to Seedance 2.5.** A `SEEDANCE_MODEL_BINDINGS` that lists only a 2.0 model therefore fails startup unless `SEEDANCE_DEFAULT_MODEL` is set to that 2.0 ID (to keep 2.0 as the default) or a 2.5 binding is added.
 - A custom default model ID with no family, no bindings, and no built-in match also fails startup (set the matching `*_MODEL_FAMILY` or bindings).
 
@@ -105,7 +105,7 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 
 | Family | Max references | `max_images` batch | `output_format` | Prompt optimization | Transparent background |
 |---|---|---|---|---|---|
-| 5.5 (early-access default) | 10 | No | `png` (default), `jpeg` | `standard` only (provider default) | Text-only or references without alpha |
+| 5.5 (default) | 10 | No | `png` (default), `jpeg` | `standard` only (provider default) | Text-only or references without alpha |
 | Pro (5.0 Pro) | 10 | No | `png`, `jpeg` | Yes; omitted value uses `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | Existing transparent PNG only |
 | Lite | 14 | Yes | `png`, `jpeg` | Yes; provider default when omitted | No |
 | 4.x | 14 | Yes | `jpeg` only | Yes; provider default when omitted | No |
@@ -115,7 +115,7 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 - **`background="transparent"`** requires `output_format` omitted or `png`. 5.5 supports text-only and reference-based generation without existing alpha. Pro edits exactly one already-transparent PNG; it does not remove an opaque background.
 - **5.5 background:** `auto` (default), `opaque`, `transparent`; JPEG in auto mode is always opaque. Pro accepts only `opaque` and `transparent`.
 - **Safety IDs:** optional `safety_identifier` on 5.5/Pro, 1-64 non-space printable ASCII characters; use a stable hash, not personal data.
-- Discovery reports transparency, named/custom size limits, `background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`. Source and remaining live-alpha validation: [docs/models.md](../../../../docs/models.md#image-capabilities-imagecapabilities). Layer-decomposition/OCR inputs are rejected.
+- Discovery reports transparency, named/custom size limits, `background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`. Source and remaining live-alpha validation: [model capabilities](https://byteplus-sa.github.io/ark-mcp/models/#image-capabilities-imagecapabilities). Layer-decomposition/OCR inputs are rejected.
 
 ## Seed 3D (`kind: 3d`, requires `BYTEPLUS_MODELARK_3D_ENABLED=true`)
 

@@ -332,7 +332,7 @@ Each `ModelInfo` also has nullable `pricing` with `catalog_name`, `display_name`
 `available`, and `charge_items` (`charge_type`, `price`, `list_price`, `unit`).
 Prices are account-specific catalog rates populated by the background refresher
 when AK/SK is configured. Discovery makes no network calls; stale or unmatched
-prices are null. See [Runtime](runtime.md#cost-estimation-toolscostpy).
+prices are null. See [Runtime](runtime.md#cost-estimation-tools_costpy).
 
 Understanding modalities and media limits describe the named `tool`, not
 every possible use of the underlying model. The `seed_audio_understand`
@@ -532,7 +532,7 @@ Built-in family limits (**`ark_list_models(kind='image')` is authoritative**):
 
 | Family | Max references | `max_images` batch | `output_format` | `prompt_optimization` | Transparent background |
 |---|---|---|---|---|---|
-| 5.5 (early-access default `dola-seedream-5-5-261028`) | 10 | No (use `variations`) | png (default), jpeg | `standard` only (provider default) | Text-only and reference-based |
+| 5.5 (default `dola-seedream-5-5-261028`) | 10 | No (use `variations`) | png (default), jpeg | `standard` only (provider default) | Text-only and reference-based |
 | Pro (Seedream 5.0 Pro, `dola-seedream-5-0-pro-260628`) | 10 | No (use `variations`) | png, jpeg | Yes (default `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Existing transparent PNG only |
 | Lite | 14 | Yes | png, jpeg | Yes | No |
 | 4.x | 14 | Yes | jpeg | Yes | No |

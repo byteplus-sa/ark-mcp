@@ -9,7 +9,7 @@ Typed MCP tools for BytePlus multimodal generation, over `stdio` or Streamable
 HTTP. The server already publishes every tool's description and schema, so this
 skill covers only what the schemas cannot tell you: the flow, the rules that
 span tools, and where to look things up. **Parameters live in the tool
-schemas** (full reference: [docs/api-reference.md](../../../docs/api-reference.md)).
+schemas** (full reference: [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 | Product | Create tool | Poll / result | Enabled by |
 |---|---|---|---|
@@ -109,7 +109,7 @@ flowchart LR
 
 ### Seedream
 
-- Default: Seedream 5.5 (`dola-seedream-5-5-261028`, early access; requires
+- Default: Seedream 5.5 (`dola-seedream-5-5-261028`; requires
   account authorization). Explicit operator defaults remain unchanged.
 - `images` plus optional `point` or `bbox` (0-999, on the first image) edits;
   without images it is text-to-image.
@@ -136,6 +136,8 @@ flowchart LR
   [generate/review/edit workflow](references/workflows.md#seedream-generate-review-edit)
   for text, absence, counts and geometry. Reviewer refusal is `Not evaluated`,
   not generation failure. Layer-decomposition/OCR inputs are rejected.
+- For transparent-image prompts, previews and upgrade guidance, see the
+  [Seedream 5.5 guide](https://byteplus-sa.github.io/ark-mcp/seedream-5-5/).
 
 ### Polling and persistence
 
@@ -235,4 +237,4 @@ Read these only when you need the detail:
 - [workflows.md](references/workflows.md): background jobs in depth, production workflows, retry policy, common issues.
 - [environment.md](references/environment.md): credentials, flags, transport, auth, architecture.
 - [background-job-output.md](references/background-job-output.md): local-write options inside `ark_job_submit`.
-- [docs/api-reference.md](../../../docs/api-reference.md): every tool's parameters and outputs.
+- [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/): every tool's parameters and outputs.

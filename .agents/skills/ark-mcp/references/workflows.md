@@ -3,7 +3,7 @@
 How to run work end to end: background jobs, the production workflows that
 need record-keeping, retry and error rules, and practices the tool schemas do
 not spell out. Parameters live in the tool schemas (see
-[docs/api-reference.md](../../../../docs/api-reference.md)); polling and
+[API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)); polling and
 artifact recovery are in [polling-and-artifacts.md](polling-and-artifacts.md).
 
 ## Background jobs
@@ -165,7 +165,7 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
 - Only select outputs after acceptance. Check inline previews in published
   documents/sheets; upload success alone is insufficient. Publishing/link repair
   stays in the consumer integration. No native Seedream OCR/decomposition tool
-  is exposed. Full workflow: [integration guide](../../../../docs/integration-guide.md#seedream-review-and-edit).
+  is exposed. Full workflow: [integration guide](https://byteplus-sa.github.io/ark-mcp/integration-guide/#seedream-review-and-edit).
 
 ### Asset-reference flow (Seedance `asset://`)
 
