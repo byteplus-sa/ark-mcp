@@ -20,7 +20,7 @@ execution guidance. The tables below help you choose a starting point.
 | Poll video/3D tasks | [gen_task_get](/ark-mcp/tool-reference/gen-task-get/) | Batch status checks; lightweight calls can skip output persistence |
 | List or cancel/delete tasks | [gen_task_list](/ark-mcp/tool-reference/gen-task-list/), [gen_task_cancel_or_delete](/ark-mcp/tool-reference/gen-task-cancel-or-delete/) | Owned-task lifecycle; cancellation/deletion has provider-specific semantics |
 
-[Seedream 5.5](seedream-5-5.md) is the built-in image default
+[Seedream 5.5](/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5) is the built-in image default
 (`dola-seedream-5-5-261028`). It supports text-to-image, reference and point/bbox
 editing, and transparent PNG generation without an already-transparent input.
 Explicit operator defaults remain unchanged. Layer decomposition and native OCR

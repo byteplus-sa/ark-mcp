@@ -137,7 +137,7 @@ flowchart LR
   for text, absence, counts and geometry. Reviewer refusal is `Not evaluated`,
   not generation failure. Layer-decomposition/OCR inputs are rejected.
 - For transparent-image prompts, previews and upgrade guidance, see the
-  [Seedream 5.5 guide](https://byteplus-sa.github.io/ark-mcp/seedream-5-5/).
+  [Seedream tool reference](https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5).
 
 ### Polling and persistence
 

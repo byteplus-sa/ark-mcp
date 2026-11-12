@@ -1,8 +1,18 @@
+import { readFileSync } from "node:fs";
 import { posix } from "node:path";
 import examples from "../tool-examples.json" with { type: "json" };
 
 export const SITE_BASE = "/ark-mcp";
 export const SOURCE_BASE = "https://github.com/byteplus-sa/ark-mcp/blob/main/";
+const toolNotes = new Map([
+  [
+    "seedream_generate_image",
+    readFileSync(
+      new URL("../tool-notes/seedream-generate-image.md", import.meta.url),
+      "utf8",
+    ),
+  ],
+]);
 
 export function handbookPage(source, content, toolCount) {
   content = content.replaceAll("\r\n", "\n");
@@ -172,6 +182,8 @@ ${JSON.stringify(call, null, 2)}
 }
 
 ${providerTasks ? `An Ark job ID is not a provider task ID. Video and 3D tasks use [gen_task_get](${SITE_BASE}/tool-reference/gen-task-get/), VOD tasks use [vod_get_task](${SITE_BASE}/tool-reference/vod-get-task/), and avatars use [omnihuman_get_task](${SITE_BASE}/tool-reference/omnihuman-get-task/). Save accepted provider task IDs and resume polling instead of submitting a second generation.` : ""}
+
+${toolNotes.get(name) || ""}
 
 ## Inputs
 

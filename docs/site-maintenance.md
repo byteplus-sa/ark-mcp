@@ -49,6 +49,7 @@ the project environment is not at `.venv/`.
 | Capability overview | `docs/capabilities.md` |
 | Existing handbook | Other `docs/*.md` files |
 | Tool contracts | Handler docstrings, Pydantic models and `src/ark_mcp/tools/_catalog.py` |
+| Tool-specific usage guidance | `docs/site/tool-notes/`, injected by `docs/site/scripts/docs.mjs` into the relevant tool page only |
 | Page generation and link rewriting | `docs/site/scripts/` |
 | Navigation and theme | `docs/site/astro.config.mjs`, `docs/site/src/styles/custom.css` |
 | Tool-reference categories | `docs/site/scripts/navigation.mjs` |
@@ -112,6 +113,13 @@ Update tool examples in `docs/site/tool-examples.json` when tool contracts
 change. Examples use synthetic URLs/IDs, not real customer media, signed URLs,
 credentials or private assets. Discovery is not a provider-entitlement test.
 Never enable optional services or perform paid generation during a site build.
+
+Model-specific guidance belongs in the relevant generated tool reference, not
+a separate product guide. Seedream 5.5 guidance is injected into
+`seedream_generate_image` under **Tool Reference > Images and video**.
+Source notes under `docs/site/tool-notes/` are not standalone site pages.
+The former `/seedream-5-5/` URL is an Astro static redirect to that tool section,
+so previously shared links continue to work.
 
 ## GitHub Pages
 
