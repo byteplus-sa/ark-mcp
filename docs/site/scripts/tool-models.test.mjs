@@ -84,6 +84,14 @@ test("fixed-service tools do not advertise a per-call model selector", () => {
   );
 });
 
+test("the ASR model table describes returned timings without promising diarization", () => {
+  const page = toolPage(tool("speech_to_text"));
+  const table = page.split("## Supported Models")[1].split("## Usage")[0];
+  assert.match(table, /utterance\/word timings when returned by the provider/i);
+  assert.match(table, /submission and polling handled inside the Ark job/);
+  assert.doesNotMatch(table, /diarization|optional word timestamps/i);
+});
+
 test("utility and unknown tools do not inherit unrelated model tables", () => {
   for (const name of [
     "ark_list_models",

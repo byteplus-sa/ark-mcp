@@ -142,7 +142,7 @@
         "name": "Seed Speech ASR",
         "id": "Service-managed; no selectable model ID",
         "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` required.",
-        "capabilities": "Background transcription; optional word timestamps and speaker diarization; asynchronous provider submission and polling handled inside the Ark job."
+        "capabilities": "Background transcription with utterance/word timings when returned by the provider; asynchronous provider submission and polling handled inside the Ark job."
       }
     ]
   }
