@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import secrets
+import shlex
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,6 +20,7 @@ from typing import Any
 
 import httpx
 import pytest
+import yaml
 from fastmcp import FastMCP
 from fastmcp.server.auth import require_scopes
 
@@ -200,6 +203,38 @@ async def test_shared_key_http_rejects_missing_wrong_and_query_credentials(
             headers=_HEADERS,
             json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
         )
+        assert response.status_code == 401
+
+
+async def test_container_ci_probe_reaches_bearer_authentication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
+    workflow = yaml.load(workflow_path.read_text(), Loader=yaml.BaseLoader)
+    step = next(
+        step
+        for step in workflow["jobs"]["container"]["steps"]
+        if step.get("name") == "Exercise health endpoint"
+    )
+    command = step["run"].replace("\\\n", "")
+    match = re.search(r"\bcurl\s+([^\n]*?)\s+http://127\.0\.0\.1:3000/mcp", command)
+    assert match is not None
+    arguments = shlex.split(match.group(1))
+    method = None
+    headers = {}
+    content = None
+    for index, argument in enumerate(arguments):
+        if argument in ("--request", "-X"):
+            method = arguments[index + 1]
+        elif argument in ("--header", "-H"):
+            name, value = arguments[index + 1].split(":", 1)
+            headers[name] = value.strip()
+        elif argument in ("--data", "--data-raw", "-d"):
+            content = arguments[index + 1]
+    method = method or ("POST" if content is not None else "GET")
+    async with _shared_http_server(tmp_path, monkeypatch, auth_mode="api_key") as (_, client, _):
+        client.headers.pop("Authorization")
+        response = await client.request(method, "/mcp", headers=headers, content=content)
         assert response.status_code == 401
 
 

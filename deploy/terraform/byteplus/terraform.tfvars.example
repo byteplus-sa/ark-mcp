@@ -7,7 +7,7 @@ instance_type = "ecs.g4i.large"
 key_pair_name = "REPLACE-WITH-EXISTING-KEYPAIR"
 
 public_hostname = "mcp.example.com"
-ark_mcp_image   = "ghcr.io/byteplus-sa/ark-mcp:v0.2.0"
+ark_mcp_image   = "REPLACE-WITH-VERIFIED-SHARED-KEY-IMAGE-DIGEST"
 
 create_vpc = true
 vpc_cidr   = "10.42.0.0/16"

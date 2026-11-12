@@ -20,4 +20,4 @@ docker compose --env-file /srv/ark-mcp/config/.env -f /opt/ark-mcp/compose.yaml 
 systemctl enable docker.service ark-mcp.service
 systemctl start docker.service
 systemctl restart ark-mcp.service
-printf '%s\n' 'Stack started. Verify HTTPS /health and unauthenticated /mcp returns 401.'
+printf '%s\n' 'Stack started. Verify HTTPS /health and unauthenticated POST /mcp returns 401.'

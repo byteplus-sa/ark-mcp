@@ -25,7 +25,7 @@ variables {
   instance_type   = "ecs.g4i.large"
   key_pair_name   = "test-public-keypair"
   public_hostname = "mcp.team.test"
-  ark_mcp_image   = "ghcr.io/byteplus-sa/ark-mcp:v0.2.0"
+  ark_mcp_image   = "registry.test/ark-mcp@sha256:${sha256("mock-only-image-not-for-deployment")}"
 }
 
 run "dedicated_network" {
@@ -101,6 +101,14 @@ run "reject_public_ssh" {
 run "reject_unpinned_image" {
   command = plan
   variables { ark_mcp_image = "ghcr.io/byteplus-sa/ark-mcp:latest" }
+  expect_failures = [var.ark_mcp_image]
+}
+
+run "reject_unconfigured_example_image" {
+  command = plan
+  variables {
+    ark_mcp_image = regex("(?m)^ark_mcp_image\\s*=\\s*\"([^\"]+)\"", file("terraform.tfvars.example"))[0]
+  }
   expect_failures = [var.ark_mcp_image]
 }
 

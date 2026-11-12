@@ -55,9 +55,13 @@ SQLite or in-process limiters.
   Start with at least 2 vCPU/4 GiB RAM; load-test large concurrent uploads.
 - A publicly resolvable hostname you control and clients supporting bearer
   headers. See [shared-key generation and client setup](self-hosting.md#shared-mcp-key).
-- A publicly pullable, versioned Linux AMD64 Ark MCP image. Prefer a release
-  digest; `latest` and `edge` are rejected. Check availability in
-  [release artifacts](releases.md) before applying.
+- A publicly pullable, versioned Linux AMD64 Ark MCP image **verified to support
+  `MCP_AUTH_MODE=api_key`**. Prefer a release digest; `latest` and `edge` are
+  rejected. The published `v0.2.0` image is JWT-only and is not compatible.
+  Check [release artifacts](releases.md) for a compatible image before applying.
+  Until one is published and verified, do not apply this starter. The example
+  deliberately contains an invalid image placeholder so planning fails until
+  you select an image; mock plans use a synthetic digest, not a usable release.
 
 The infrastructure `region` does not change the ModelArk endpoint region.
 Choose application provider hosts and keys together.
@@ -80,9 +84,11 @@ terraform -chdir=deploy/terraform/byteplus validate
 terraform -chdir=deploy/terraform/byteplus test
 ```
 
-Edit `terraform.tfvars`: replace the image/key-pair placeholders, verify zone
-and instance availability, set your actual hostname, and choose an unused
-private CIDR. The example SSH source `203.0.113.10/32` is documentation-only;
+Edit `terraform.tfvars`: replace the ECS `image_id` and `key_pair_name`
+placeholders, and replace `ark_mcp_image` with a verified shared-key-capable
+image digest or release tag. Verify zone and instance availability, set your
+actual hostname, and choose an unused private CIDR.
+The example SSH source `203.0.113.10/32` is documentation-only;
 replace it with your administrator public IP, or use `admin_cidrs=[]` and
 arrange a working console/bastion access method. Terraform never creates an
 SSH password or private key.
@@ -196,8 +202,9 @@ sudo python3 /opt/ark-mcp/generate_mcp_key.py /root/ark-mcp-team.key
 Set the emitted `MCP_API_KEY_SHA256` assignment in the private `.env`.
 The raw key goes only to members through a secret manager, not into Terraform
 or server configuration. See [shared-key setup and rotation](self-hosting.md#shared-mcp-key).
-Use an application image containing shared-key support; earlier images reject
-`api_key` mode. Former JWT deployments must follow the
+Use the shared-key-capable application image selected before applying;
+`v0.2.0` and earlier JWT-only images reject `api_key` mode.
+Former JWT deployments must follow the
 [breaking-change migration](self-hosting.md#breaking-change-migration);
 there is no automatic ownership transfer.
 
@@ -241,10 +248,16 @@ run `sudo systemctl reset-failed docker.service ark-mcp.service`, then activate.
 ```bash
 curl --fail --silent --show-error https://YOUR_HOSTNAME/health
 curl --silent --output /dev/null --write-out '%{http_code}\n' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --header 'Accept: application/json, text/event-stream' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' \
   https://YOUR_HOSTNAME/mcp
 ```
 
-Expect healthy JSON and an unauthenticated `401`. Public `/ready` and `/metrics`
+Expect healthy JSON and an unauthenticated POST `401`. Stateless MCP disables
+GET `/mcp`, which returns `405` instead of testing bearer authentication.
+Public `/ready` and `/metrics`
 must remain blocked by Caddy. Then test the shared key through an actual MCP
 client, confirm model discovery, and run a supported `dry_run` through
 `ark_job_submit`/`ark_job_get`. Separately verify a permitted generation,

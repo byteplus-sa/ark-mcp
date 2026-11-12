@@ -151,12 +151,12 @@ variable "public_hostname" {
 
 variable "ark_mcp_image" {
   type        = string
-  description = "Publicly pullable Linux AMD64 container image pinned to a sha256 digest or numeric release tag. Never latest or edge."
+  description = "Publicly pullable Linux AMD64 image verified to support shared-key authentication, pinned to a sha256 digest or numeric release tag. Never latest or edge."
   nullable    = false
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9./:_-]*(@sha256:[a-f0-9]{64}|:v?[0-9]+\\.[0-9]+\\.[0-9]+)$", var.ark_mcp_image))
-    error_message = "Pin the image to a sha256 digest or numeric release tag such as ghcr.io/byteplus-sa/ark-mcp:v0.2.0."
+    error_message = "Replace the example placeholder with a shared-key-capable image pinned to a sha256 digest or numeric release tag; verify compatibility before applying."
   }
 }
 
