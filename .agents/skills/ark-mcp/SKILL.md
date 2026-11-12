@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), audio (Seed Audio), video (Seedance 2.0, 2.5, 2.5 Premium), 3D (Hyper3D, Hitem3d) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll, then seed_media_* for artifacts.
+description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), audio (Seed Audio), video (Seedance 2.0, regular 2.5 with 4K, and 2.5 Flash at 480p/720p), 3D (Hyper3D, Hitem3d) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll, then seed_media_* for artifacts.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -13,7 +13,7 @@ schemas** (full reference: [API reference](https://byteplus-sa.github.io/ark-mcp
 
 | Product | Create tool | Poll / result | Enabled by |
 |---|---|---|---|
-| **Seedance** video (2.0, 2.5, 2.5 Premium) | `seedance_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_API_KEY` (Premium model also needs `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`) |
+| **Seedance** video (2.0, regular 2.5 with 4K, and 2.5 Flash) | `seedance_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_API_KEY` |
 | **Seedream** images (generate and edit) | `seedream_generate_image` | artifacts in the result | `BYTEPLUS_MODELARK_API_KEY` |
 | **Seed Audio** | `seed_audio_generate` | artifact in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
 | **Seed 3D** (Hyper3D, Hitem3d) | `hyper3d_create_task`, `hitem3d_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_3D_ENABLED=true` + ModelArk key |
@@ -88,20 +88,26 @@ flowchart LR
 - Per-model limits (resolutions, durations, reference counts, Draft support,
   formats) are checked at runtime. **All violations come back in one error**
   that points to `ark_list_models`; fix them all, or use `dry_run`.
-- `SEEDANCE_DEFAULT_MODEL` is Seedance 2.5. **Premium is a model ID**, present
-  only when its flag is on; there are no Premium tools.
+- `SEEDANCE_DEFAULT_MODEL` is Seedance 2.5. **4K is a resolution**:
+  use `resolution="4k"` on the same model, with no separate binding or flag.
+- **Flash** uses `model="dreamina-seedance-2-5-flash-261115"` on the same tool,
+  with 480p/720p and no Draft. Empty bindings include it automatically;
+  explicit binding lists must add it themselves. Discovery does not prove
+  account activation; custom Flash endpoints use family `seedance_2_5_flash`.
 - `variations`: Seedance 1-5 (separate billed tasks, `tasks[]`), Seedream 1-10
   (`summary`), Seed Audio 1-5 (`summary`). Failures are per variation. Seedream
   `seed` is the base seed (`N, N+1, ...`); `max_images` and `variations > 1`
   are mutually exclusive.
 - `dry_run` returns `preview` (request bodies, cost estimate) and bills nothing.
+  Video estimates are static and do not account for resolution or duration.
+  Flash currently reuses the static 2.5 per-task fallback, not its token price.
 
 ### Seedance
 
-- **Draft (2.5 models only):** `draft=true` makes a cheap 480p preview; once it
+- **Draft (regular 2.5 only, not Flash):** `draft=true` makes a cheap 480p preview; once it
   has `succeeded` (at most 7 days old), call again with only `draft_task_id`
   (plus `return_last_frame`, `watermark`, `output_format` and similar) to render
-  the final video. The Draft's model, prompt, media, duration and ratio are
+  the final video at 1080p, not 4K. The Draft's model, prompt, media, duration and ratio are
   reused and must be omitted; `variations` must be 1.
 - Video references must be public HTTPS URLs (or `asset://`); use
   `media_upload` for local files.

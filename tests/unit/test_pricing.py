@@ -68,7 +68,7 @@ class TestCatalogName:
         ("model_id", "expected"),
         [
             ("dreamina-seedance-2-5-260628", "dreamina-seedance-2-5"),
-            ("dreamina-seedance-2-5-premium-260915", "dreamina-seedance-2-5-premium"),
+            ("example-model-pro-260915", "example-model-pro"),
             ("hitem3d-2-0-251223", "hitem3d-2-0"),
             ("hyper3d-gen2-260112", "hyper3d-gen2"),
             ("dola-seed-evolving", "dola-seed-evolving"),

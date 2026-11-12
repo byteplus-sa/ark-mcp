@@ -98,8 +98,8 @@ labels). All Histograms use the `prometheus_client` default buckets
 > Seedance create tools or the per-product task pollers) stop receiving data;
 > switch them to the replacements listed in
 > [Migrating to 0.2.0](migration-0.2.md).
-> The merged `seedance_create_task` no longer separates Seedance 2.0, 2.5, and
-> 2.5 Premium by label, and metrics carry no model label. To split by model,
+> The merged `seedance_create_task` does not separate Seedance 2.0, regular 2.5,
+> and 2.5 Flash by label, and metrics carry no model label. To split by model,
 > use the `model` field in the structured logs: `seedance_task_created` (and
 > `seedance_create_task_complete`) for a single task, and
 > `seedance_variations_complete` for a variations call.

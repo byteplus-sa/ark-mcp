@@ -53,9 +53,13 @@ test("image and video tables distinguish defaults, custom IDs and gated models",
   }
   assert.match(video, /dreamina-seedance-2-5-260628/);
   assert.match(video, /dreamina-seedance-2-0-260128/);
-  assert.match(video, /dreamina-seedance-2-5-premium-260915/);
-  assert.match(video, /BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED/);
-  assert.match(video, /whitelist/i);
+  assert.match(video, /dreamina-seedance-2-5-flash-261115/);
+  assert.match(video, /seedance_2_5_flash/);
+  assert.doesNotMatch(video, /premium/i);
+  assert.match(video, /Seedance 2\.5 \|[^\n]*480p\/720p\/1080p\/4K on the same model/);
+  assert.match(video, /Seedance 2\.5 Flash \|[^\n]*480p\/720p;[^\n]*no Draft/);
+  assert.match(video, /explicit lists must add/);
+  assert.match(video, /discovery does not verify entitlement/);
   assert.match(video, /Seedance 2\.0 Fast/);
   assert.match(video, /Seedance 2\.0 Mini/);
   assert.match(image, /no built-in ID/i);
