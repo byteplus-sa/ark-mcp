@@ -136,8 +136,11 @@ flowchart LR
   [generate/review/edit workflow](references/workflows.md#seedream-generate-review-edit)
   for text, absence, counts and geometry. Reviewer refusal is `Not evaluated`,
   not generation failure. Layer-decomposition/OCR inputs are rejected.
-- For transparent-image prompts, previews and upgrade guidance, see the
-  [Seedream tool reference](https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5).
+- Published tool pages list supported models in one table per capability,
+  including defaults, configuration gates and key limits. See the
+  [Seedream tool reference](https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#supported-models)
+  for the image model table and shared editing guidance; discovery remains
+  authoritative for your connection.
 
 ### Polling and persistence
 

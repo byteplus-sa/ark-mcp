@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import mermaid from "astro-mermaid";
 import { unified } from "@astrojs/markdown-remark";
 import starlightLinksValidator from "starlight-links-validator";
 import remarkLinks from "./scripts/remark-links.mjs";
@@ -27,6 +28,13 @@ export default defineConfig({
     }),
   },
   integrations: [
+    mermaid({
+      autoTheme: true,
+      enableLog: false,
+      mermaidConfig: {
+        securityLevel: "strict",
+      },
+    }),
     starlight({
       title: "BytePlus Ark MCP",
       logo: {

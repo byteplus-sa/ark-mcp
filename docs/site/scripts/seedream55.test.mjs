@@ -30,7 +30,8 @@ test("Seedream tool reference includes model guidance and a safe image preview",
   assert.equal(job.arguments.input.output_format, "png");
   assert.equal(job.arguments.input.dry_run, true);
   assert.match(page, /id="seedream-5-5"/);
-  assert.match(page, /## Seedream 5\.5/);
+  assert.match(page, /## Supported Models/);
+  assert.doesNotMatch(page, /^## Seedream 5\.5$/m);
   assert.match(page, /layer_decomposition/);
   assert.match(page, /not supported/i);
   assert.match(page, /account access/i);
