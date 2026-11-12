@@ -52,8 +52,12 @@ run "dedicated_network" {
     error_message = "Object storage must remain optional."
   }
   assert {
-    condition     = local.compose.services["ark-mcp"].environment.MCP_AUTH_MODE == "jwt" && !contains(keys(local.compose.services["ark-mcp"]), "build")
-    error_message = "Use the pinned image without a local build, always with JWT."
+    condition     = local.compose.services["ark-mcp"].environment.MCP_AUTH_MODE == "$${MCP_AUTH_MODE:-api_key}" && !contains(keys(local.compose.services["ark-mcp"]), "build")
+    error_message = "Use the pinned image with shared-key HTTP authentication."
+  }
+  assert {
+    condition     = contains(keys(local.bootstrap_files), "/opt/ark-mcp/generate_mcp_key.py") && strcontains(local.environment_example, "MCP_API_KEY_SHA256=\n")
+    error_message = "Include key generation but never generate or store keys in Terraform."
   }
   assert {
     condition     = alltrue([for name, volume in local.compose.volumes : volume.driver_opts.device == "/srv/ark-mcp/${name}"])

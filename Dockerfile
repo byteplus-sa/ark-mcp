@@ -18,7 +18,7 @@ FROM python:3.12.13-slim AS runtime
 ENV MCP_TRANSPORT=http \
     MCP_HOST=0.0.0.0 \
     MCP_PORT=3000 \
-    MCP_AUTH_MODE=jwt \
+    MCP_AUTH_MODE=api_key \
     ARTIFACT_DIR=/app/.artifacts \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

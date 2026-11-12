@@ -143,8 +143,9 @@ presigned GET `url` and an `object_key` per item, in request order.
 ### `media_presign`
 
 Mints fresh URLs for 1-100 `object_keys` without re-uploading. Read-only,
-foreground. **Only keys you uploaded work**, and each key fails on its own, so
-check `failed` and per-key `code`:
+foreground. Authenticated HTTP requires keys owned by the calling principal;
+all shared-key members share that owner and can presign team uploads. Each
+key fails on its own, so check `failed` and per-key `code`:
 
 | `code` | Meaning and fix |
 |---|---|
@@ -171,6 +172,9 @@ Lets Seedance use real people, your own virtual characters, and copyright IP
 
 ### Prerequisites and rules
 
+- **Shared-key HTTP excludes all asset administration.** Use a trusted local
+  setup for these management tools. Existing authorized `asset://` references
+  still work in Seedance over HTTP without granting asset-management access.
 - **AK/SK are required** (`BYTEPLUS_MODELARK_ACCESS_KEY` +
   `BYTEPLUS_MODELARK_SECRET_KEY`, independent of the API key); without them no
   `ark_asset_*` tool is registered. **`ark_asset_delete` is the eighth tool and

@@ -16,7 +16,8 @@ website is not an MCP server. Without an existing managed endpoint, use
 Ask your administrator for:
 
 - The exact HTTPS MCP endpoint, including its path.
-- The connection/authentication instructions for your client.
+- The shared MCP key through a private secret-sharing channel and
+  bearer-header configuration instructions for your client.
 - Access to the tools you intend to use.
 
 Use only a server you trust: it receives your prompts and media references,
@@ -32,7 +33,12 @@ Connecting to a server does not mean generation is free.
 4. Review the server/tool permissions and enable the connection.
 
 Labels and remote-auth support differ by client and edition. This server
-verifies Bearer JWTs; do not assume a URL alone supplies an OAuth login flow.
+accepts only an administrator-issued shared MCP key for hosted HTTP. Use your
+client's private `Authorization: Bearer <shared MCP key>` configuration.
+There is no OAuth login or discovery flow. All members use the fixed
+`shared-team` identity and ordinary permissions, share data and spending limits,
+and must update their clients when the administrator rotates the key.
+Account-wide asset and moderation administration is unavailable.
 If your client cannot send the required credentials securely, ask the
 administrator for a supported integration. Do not disable authentication
 or paste tokens into chat to get connected.
@@ -50,7 +56,7 @@ ark_job_capabilities, and report my available services and tools.
 Do not generate, understand, transcribe, upload, or submit jobs.
 ```
 
-Missing tools may reflect your permissions or the server's configuration.
+Missing tools may reflect the fixed team permissions or server configuration.
 Ask the administrator rather than changing your local environment. Discovery
 does not validate provider entitlement.
 
@@ -66,5 +72,5 @@ downloads. Do not send a private file until you understand where it goes.
 
 Deploying a server is separate from connecting to one. See
 [Self-Hosting](../self-hosting.md) for the protected deployment kit and
-[Transports](../transports.md) for JWT, TLS, scopes, Host/Origin guards and
+[Transports](../transports.md) for shared-key auth, TLS, scopes, Host/Origin guards and
 shared-process behavior. Do not expose local-auth mode to a network.

@@ -405,10 +405,8 @@ async def test_http_principal_comes_from_verified_claims(
     settings = Settings(
         _env_file=None,
         MCP_TRANSPORT="http",
-        MCP_AUTH_MODE="jwt",
-        MCP_JWT_JWKS_URI="https://identity.example.com/jwks.json",
-        MCP_JWT_ISSUER="https://identity.example.com",
-        MCP_JWT_AUDIENCE="ark-mcp",
+        MCP_AUTH_MODE="api_key",
+        MCP_API_KEY_SHA256="a" * 64,
         ARTIFACT_DIR=str(tmp_path / "artifacts"),
     )
     runtime = await create_runtime_services(settings)

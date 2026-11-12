@@ -108,29 +108,28 @@ not contain embedded credentials.
 | `RATE_LIMIT_RPM` | `0` | Max HTTP requests per minute per client IP; 0 disables |
 | `RATE_LIMIT_BURST` | `0` | Token bucket burst size; 0 defaults to `RATE_LIMIT_RPM` |
 | `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | Trust the first `X-Forwarded-For` entry for rate-limit keys; enable only behind a trusted proxy |
-| `MCP_AUTH_MODE` | `local` | `local` or `jwt` |
-| `MCP_JWT_JWKS_URI` | empty | HTTPS JWKS endpoint for JWT verification |
-| `MCP_JWT_ISSUER` | empty | Required token issuer |
-| `MCP_JWT_AUDIENCE` | empty | Required token audience |
-| `MCP_TENANT_CLAIM` | `tenant_id` | Claim used for tenant isolation |
-| `MCP_JWT_CLOCK_SKEW_SECONDS` | `30` | Tolerated clock skew (seconds) for JWT `nbf` (not-before) validation |
-| `MCP_JWT_PROVIDE_DISCOVERY` | `false` | When true in JWT mode, serve RFC 9728 OAuth Protected Resource Metadata so MCP clients can discover the authorization server |
-| `MCP_PUBLIC_BASE_URL` | empty | Public HTTPS base URL of this server; required when `MCP_JWT_PROVIDE_DISCOVERY=true` |
-| `MCP_JWT_SCOPES_SUPPORTED` | empty | Comma-separated scopes advertised in Protected Resource Metadata |
+| `MCP_AUTH_MODE` | `local` | `local` or `api_key`; Docker, Compose and Terraform default to `api_key` |
+| `MCP_API_KEY_SHA256` | empty | Required for `api_key`: lowercase SHA-256 hex digest of the shared MCP key, never the raw key |
 
 `FASTMCP_TRANSPORT`, `FASTMCP_HOST`, and `FASTMCP_PORT` are accepted as
 aliases for the corresponding `MCP_*` transport settings.
 
 `local` auth is accepted only for stdio or loopback HTTP. Binding HTTP to a
-non-loopback address fails closed unless JWT mode and all verifier settings are
-present. JWT tokens must contain a principal (`sub`) and the configured tenant
-claim. Tool scopes are enforced by FastMCP:
+non-loopback address fails closed unless `api_key` mode and a valid digest
+are configured. API key mode assigns one `shared-team` tenant/principal
+with ordinary tool permissions, a shared budget and shared data access, excluding
+account-wide admin scopes. See [shared-key setup and rotation](self-hosting.md#shared-mcp-key).
+The internal tenant claim key is fixed to `tenant_id`, not an operator setting.
+FastMCP enforces the fixed ordinary scope allowlist:
 
 - `seed:audio:generate`
 - `seedream:generate`
 - `seedance:create`
 - `gen:read`, `gen:delete` (`gen_task_*` tools for Seedance and 3D tasks)
+- `seed:asr:transcribe`
 - `understanding:read`
+- `hyper3d:create`, `hitem3d:create`
+- `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`
 - `vod:enhance`
 - `vod:transcode`
 - `vod:subtitle:add`
@@ -140,6 +139,12 @@ claim. Tool scopes are enforced by FastMCP:
 - `media:upload`
 - `media:presign`
 - `artifacts:read`
+
+**Breaking change:** `jwt` mode is rejected. Retired `MCP_JWT_*`,
+`MCP_TENANT_CLAIM` and `MCP_PUBLIC_BASE_URL` settings are not used.
+There is no automatic ownership transfer. Preserve SQLite, Redis, artifacts
+and the snapshot encryption key; follow
+[the migration procedure](self-hosting.md#breaking-change-migration).
 
 ## Seed Speech ASR (STT)
 
@@ -158,7 +163,7 @@ URL, Base64, or a local file path (stdio only).
 | `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` | `3.0` | Seconds between ASR query polls |
 | `SEED_SPEECH_ASR_POLL_MAX_SECONDS` | `600.0` | Maximum total seconds to wait for ASR result |
 
-JWT tool scope for speech-to-text:
+Fixed team scope for speech-to-text:
 
 - `seed:asr:transcribe`
 
@@ -232,7 +237,9 @@ only the API key. See [assets.md](assets.md).
 | `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE` | `off` | Seedream / Seed Audio `asset://` handling: `off` rejects, `resolve` swaps in the temporary asset URL (experimental; needs AK/SK) |
 | `SEEDANCE_ASSET_PREFLIGHT` | `true` | With AK/SK, check `asset://` references with `GetAsset` before a billed Seedance submit |
 
-JWT tool scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
+Account-wide asset scopes (`assets:read`, `assets:write`, `assets:verify`,
+`assets:delete`) are excluded from shared-key HTTP. Use trusted local stdio
+for asset administration; configuring AK/SK does not grant remote access.
 
 ## Object storage (TOS or S3, optional)
 
@@ -291,8 +298,8 @@ S3-compatible storage.
 | `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` | `3` | Attempts (1-10) for a retryable output download (timeouts, network errors, 408/429/5xx), with 1s, 2s, 4s, ... backoff. Expired, untrusted, or oversized sources are never retried |
 | `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` | `8388608` (8 MiB) | When inline Base64 output (Seed Audio, Seedream `b64_json`) cannot be stored, return it inline in `ArtifactRef.fallback_data` up to this decoded size; `0` disables |
 | `PROVIDER_MAX_CONCURRENCY` | `5` | Process-wide slots per provider |
-| `PRINCIPAL_MAX_CONCURRENCY` | `3` | Shared slots per authenticated principal |
-| `DAILY_BUDGET_USD` | `0` | Per-principal UTC daily estimate limit; zero records only |
+| `PRINCIPAL_MAX_CONCURRENCY` | `3` | Shared slots across the whole team on authenticated HTTP; skipped in local mode |
+| `DAILY_BUDGET_USD` | `0` | Per-principal UTC daily estimate limit, team-wide on shared-key HTTP; zero records only |
 | `PERSISTENCE_CACHE_MAX_SIZE` | `10000` | Max cached provider task IDs in artifact-resolution cache |
 | `PERSISTENCE_CACHE_TTL_SECONDS` | `86400` | TTL for cached task-to-artifact mappings (seconds) |
 
@@ -325,7 +332,7 @@ jobs should write files.** Path writing is stdio-only. See
 | `BYTEPLUS_REQUEST_TIMEOUT_MS` | `600000` | Full provider request timeout |
 | `SEED_UNDERSTANDING_TIMEOUT_MS` | unset (uses `BYTEPLUS_REQUEST_TIMEOUT_MS`) | Request timeout for `seed_understand` and `seed_audio_understand` chat completions. Deep thinking is always on, so long analyses may need more than the general request timeout |
 | `FASTMCP_DOCKET_URL` | `memory://` | FastMCP background-task backend used by generation, transcription, upload, provider submission, understanding, and optional media-persistence calls; Redis can retain task state across restarts of the same single-replica deployment; it does not make SQLite state horizontally scalable |
-| `FASTMCP_TASKS_ENCRYPTION_KEY` | unset | Required for JWT-authenticated Redis task backends; use at least 32 random characters and keep the same key across restarts |
+| `FASTMCP_TASKS_ENCRYPTION_KEY` | unset | Required for API-key-authenticated Redis task backends; use at least 32 random characters and keep the same key across restarts |
 | `FASTMCP_DOCKET_CONCURRENCY` | `10` | Maximum active background tasks per worker; provider/principal limits still apply |
 | `ARK_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
 
@@ -337,9 +344,10 @@ server restart discards active and retained task state.
 ### Background task ownership and recovery
 
 **Keep the runtime database with the queue.** MCP task ownership is persisted in
-`runtime.sqlite3` using the configured tenant claim and principal. Every
+`runtime.sqlite3` using the fixed `tenant_id` claim key and principal. Every
 `tasks/get`, `tasks/update`, and `tasks/cancel` request checks that owner.
-Missing identity or ownership fails closed in JWT mode.
+Missing identity or ownership fails closed in `api_key` mode. All shared-key
+members use the same `shared-team` owner, including after key rotation.
 
 One shared server process gives all of its clients one queue: in local auth
 mode every loopback client is the same `local`/`local` principal, so a job

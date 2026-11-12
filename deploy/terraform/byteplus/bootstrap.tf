@@ -51,6 +51,9 @@ locals {
     "/opt/ark-mcp/check_env.py" = {
       content = file("${path.module}/scripts/check_env.py"), permissions = "0644"
     }
+    "/opt/ark-mcp/generate_mcp_key.py" = {
+      content = file("${path.module}/../../../scripts/generate_mcp_key.py"), permissions = "0700"
+    }
     "/opt/ark-mcp/install.sh" = {
       content = file("${path.module}/scripts/install.sh"), permissions = "0700"
     }

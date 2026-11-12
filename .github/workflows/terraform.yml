@@ -5,6 +5,7 @@ on:
     paths:
       - "deploy/terraform/**"
       - "deploy/compose/**"
+      - "scripts/generate_mcp_key.py"
       - "tests/unit/test_terraform_bootstrap.py"
       - ".github/workflows/terraform.yml"
   push:
@@ -12,6 +13,7 @@ on:
     paths:
       - "deploy/terraform/**"
       - "deploy/compose/**"
+      - "scripts/generate_mcp_key.py"
       - "tests/unit/test_terraform_bootstrap.py"
       - ".github/workflows/terraform.yml"
   workflow_dispatch:

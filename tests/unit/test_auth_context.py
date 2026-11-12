@@ -12,7 +12,7 @@ class TestPrincipalContextIsLocal:
     def test_local_principal_over_http_is_not_local(self) -> None:
         assert PrincipalContext(principal_id="local", transport="http").is_local is False
 
-    def test_spoofed_jwt_principal_is_not_local(self) -> None:
+    def test_spoofed_remote_principal_is_not_local(self) -> None:
         spoofed = PrincipalContext(
             principal_id="local",
             tenant_id="tenant-a",

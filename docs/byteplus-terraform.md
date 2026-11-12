@@ -2,8 +2,8 @@
 
 This starter provisions **one team or organization per deployment**, with one
 Ubuntu ECS host running the existing Caddy, Ark MCP, and private Redis Compose
-stack. Users authenticate individually with your identity provider; BytePlus
-product keys remain on the server. No GPU is needed.
+stack. Members authenticate with one shared MCP key and use a fixed
+`shared-team` identity; BytePlus product keys remain on the server. No GPU is needed.
 
 The configuration is in [`deploy/terraform/byteplus/`](../deploy/terraform/byteplus/).
 It is an offline-tested starter, not a live-certified deployment or an HA
@@ -23,8 +23,8 @@ activate an unconfigured application.
 | Guest bootstrap | Installs Ubuntu Docker/Compose packages and deployment files; never formats disks or embeds application secrets |
 
 Only Caddy publishes ports. Application port 3000 and Redis port 6379 are
-private. Egress permits HTTP/HTTPS, DNS, and NTP. Public DNS records, identity
-provider setup, snapshots, monitoring, and secret delivery are operator tasks.
+private. Egress permits HTTP/HTTPS, DNS, and NTP. Public DNS records,
+snapshots, monitoring, and private key delivery are operator tasks.
 
 The application uses SQLite **inside its Python process**, at
 `/app/.artifacts/runtime.sqlite3`. Bind-backed Docker volumes place state on
@@ -53,8 +53,8 @@ SQLite or in-process limiters.
 - A verified regional Ubuntu 24.04 **AMD64** ECS image with cloud-init, an
   available AMD64 instance type, and an existing regional SSH key pair.
   Start with at least 2 vCPU/4 GiB RAM; load-test large concurrent uploads.
-- A publicly resolvable hostname you control and an RS256 identity provider.
-  See [identity requirements and client setup](self-hosting.md#identity-provider).
+- A publicly resolvable hostname you control and clients supporting bearer
+  headers. See [shared-key generation and client setup](self-hosting.md#shared-mcp-key).
 - A publicly pullable, versioned Linux AMD64 Ark MCP image. Prefer a release
   digest; `latest` and `edge` are rejected. Check availability in
   [release artifacts](releases.md) before applying.
@@ -184,8 +184,24 @@ sudo install -m 0600 -o root -g root /opt/ark-mcp/.env.example \
 sudoedit /srv/ark-mcp/config/.env
 ```
 
-Do not overwrite an existing recovered `.env`. Populate real JWKS, issuer,
-audience, tenant claim, and the product API keys you use. Generate **two
+Do not overwrite an existing recovered `.env`. Use `MCP_AUTH_MODE=api_key`,
+the default in Docker, Compose and Terraform.
+Generate the key on the host (or use the repository's
+`scripts/generate_mcp_key.py` on a trusted POSIX workstation):
+
+```bash
+sudo python3 /opt/ark-mcp/generate_mcp_key.py /root/ark-mcp-team.key
+```
+
+Set the emitted `MCP_API_KEY_SHA256` assignment in the private `.env`.
+The raw key goes only to members through a secret manager, not into Terraform
+or server configuration. See [shared-key setup and rotation](self-hosting.md#shared-mcp-key).
+Use an application image containing shared-key support; earlier images reject
+`api_key` mode. Former JWT deployments must follow the
+[breaking-change migration](self-hosting.md#breaking-change-migration);
+there is no automatic ownership transfer.
+
+Populate the product API keys you use. For a new deployment, generate **two
 independent** secrets through your secret manager or a private host workflow:
 a 64-character random hex Redis password and at least 32 random characters
 for `FASTMCP_TASKS_ENCRYPTION_KEY`. Retain the encryption key securely;
@@ -193,7 +209,7 @@ changing it makes existing job snapshots unreadable.
 
 Use literal, one-line `KEY=value` assignments. The checker rejects duplicates,
 interpolation (`$`/backticks), nonregular/symlink files, wrong owner/mode, and
-incomplete identity, secrets, or positive spend/rate/concurrency limits.
+incomplete shared-key configuration, secrets, or positive spend/rate/concurrency limits.
 It is a preflight check, not proof that credentials work or secrets are random.
 Never source `.env`, print it, or render the full Compose configuration into logs.
 
@@ -229,10 +245,13 @@ curl --silent --output /dev/null --write-out '%{http_code}\n' \
 ```
 
 Expect healthy JSON and an unauthenticated `401`. Public `/ready` and `/metrics`
-must remain blocked by Caddy. Then test a valid scoped JWT through an actual MCP
+must remain blocked by Caddy. Then test the shared key through an actual MCP
 client, confirm model discovery, and run a supported `dry_run` through
 `ark_job_submit`/`ark_job_get`. Separately verify a permitted generation,
-cross-user ownership rejection, and artifact retrieval before production use.
+artifact retrieval, and the shared ownership policy before production use:
+members must be able to access the same
+team jobs, while account-wide admin operations remain denied. Verify a wrong key
+returns `401`, and repeat after rotation to prove the old key is rejected.
 Paid generation requires an explicitly approved test budget.
 
 Reboot during an approved maintenance window and confirm the expected EBS UUID
@@ -288,7 +307,7 @@ ongoing retained-disk, EIP, TOS, snapshot, and traffic charges afterward.
 Current validation covers provider schema, mocked new/existing-network plans,
 negative inputs, compressed cloud-init rendering, Compose parsing, and host
 preflight behavior. No BytePlus apply, guest package installation, ACME issuance,
-real identity login, disk/EIP replacement, or live Redis failover is certified.
+client shared-key access/rotation, disk/EIP replacement, or live Redis failover is certified.
 The pinned provider documents nested set/list update limitations; review
 security-group and other nested changes carefully and inspect convergence
 after every real apply.

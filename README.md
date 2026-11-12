@@ -66,7 +66,8 @@ Key features:
 - **Large audio inputs** - audio understanding supports Files API delivery for
   oversized URLs and video soundtracks, with temporary-upload cleanup.
 - **Organization self-hosting** - the [Compose kit](docs/self-hosting.md)
-  packages TLS ingress, JWT authentication, internal Redis, and spending controls.
+  packages TLS ingress, [shared MCP key authentication](docs/self-hosting.md#shared-mcp-key),
+  internal Redis, and spending controls.
   The [BytePlus Terraform starter](docs/byteplus-terraform.md) provisions one ECS
   host with retained storage and explicit private configuration activation.
 - **Durable artifacts** — generated media is persisted locally so MCP
@@ -95,7 +96,7 @@ Key features:
   operator-configured model IDs; validates resolutions, formats, and
   batch support per model
 - **Security** — DNS-pinned SSRF-safe downloads, tenant/principal ownership,
-  scoped JWT auth for network HTTP, Host/Origin protection, and body limits
+  shared-team API key auth for network HTTP, Host/Origin protection, and body limits
 - **Runtime controls** — shared provider/principal concurrency, daily budget
   reservations, safe retries, task ownership, readiness with optional provider
   health checks, per-IP HTTP rate limiting, metrics, and tracing
@@ -160,7 +161,7 @@ flowchart TB
     Domain["Domain layer<br/>models · capability registry · errors"]
     Runtime["Runtime services<br/>concurrency · budget · ownership · retry"]
     Store["Artifact store<br/>filesystem + .meta.json"]
-    Sec["Security<br/>JWT · SSRF-safe downloads · body limits"]
+    Sec["Security: shared-key auth, SSRF-safe downloads, body limits"]
     Obs["Observability<br/>structured logs · metrics · traces"]
   end
   subgraph Providers["BytePlus"]
@@ -387,7 +388,7 @@ ark-mcp/
 │   ├── tools/                 # 9 tool handlers + parallel helpers + cost estimation
 │   ├── artifacts/             # Tenant-aware filesystem artifact store
 │   ├── observability/         # Structured logging and Prometheus metrics
-│   └── security/              # JWT, URL/media policy, safe downloader, HTTP limits
+│   └── security/              # Shared-key auth, URL/media policy, safe downloader, HTTP limits
 ├── tests/
 │   ├── unit/                  # Model validators, URL policy, media policy, helpers
 │   ├── contract/              # Provider gateway + adapter contract tests
@@ -423,4 +424,14 @@ See the project configuration for license details.
 The provider surfaces and both transports are implemented. CI enforces offline
 regression tests and coverage, formatting/lint, strict typing, security scans,
 package builds, dependency auditing, and container health. Remote HTTP requires
-JWT configuration and is intentionally fail-closed.
+a shared MCP key hash (`MCP_API_KEY_SHA256`) and is intentionally fail-closed.
+All key holders use the fixed `shared-team` tenant/principal, shared data and
+budget, and ordinary scopes excluding asset and moderation administration.
+Python defaults to `MCP_AUTH_MODE=local` for stdio/loopback; Docker, Compose and
+Terraform default to `api_key`.
+
+**Breaking authentication change:** the former `jwt` mode is rejected and
+retired `MCP_JWT_*`, `MCP_TENANT_CLAIM` and `MCP_PUBLIC_BASE_URL` settings are
+not used. Ownership is not transferred automatically. Preserve SQLite, Redis,
+artifacts and the encryption key; follow the
+[migration guide](docs/self-hosting.md#breaking-change-migration).

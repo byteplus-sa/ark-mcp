@@ -62,13 +62,14 @@ bounded only by the provider limit. Without this, the default
 `PRINCIPAL_MAX_CONCURRENCY=3` would silently cap *all* concurrent calls across
 every provider at 3 — below the per-provider limit of 5 — making parallel
 local generation appear to "serialize under load." The per-principal bound
-applies only to authenticated (JWT) HTTP principals, where distinct tenants
-must not starve each other.
+applies to authenticated shared-key HTTP. Every member is principal and tenant
+`shared-team`, so the default is three concurrent billable calls across the
+whole team and all providers, not three per member.
 
 | Env var | Default | Constraint | Used as |
 |---|---|---|---|
 | `PROVIDER_MAX_CONCURRENCY` | `5` | `ge=1` | per-bucket provider limit |
-| `PRINCIPAL_MAX_CONCURRENCY` | `3` | `ge=1` | per-principal limit (JWT HTTP principals only) |
+| `PRINCIPAL_MAX_CONCURRENCY` | `3` | `ge=1` | whole-team principal limit on shared-key HTTP; skipped in local mode |
 
 The per-principal semaphore cache defaults to `maxsize=10_000` and
 `ttl=86_400` (24h); idle principal semaphores expire after 24h. A `TTLCache`
@@ -153,6 +154,8 @@ Three-state lifecycle: `reserved` → `committed` (charged) **or**
 | `DAILY_BUDGET_USD` | `0.0` | Per-principal UTC daily limit. `0.0` (and any falsy value) normalizes to `None` → **record-only mode** (no rejection; the ledger still records everything). A positive value enables **reject mode**. |
 
 The daily window is the UTC calendar date, scoped per `(principal_id, tenant_id)`.
+On shared-key HTTP, every member uses `shared-team` for both values, so this is
+one team-wide cap. Rotating the MCP key does not reset the budget history.
 
 ### Cost estimation (`tools/_cost.py`)
 

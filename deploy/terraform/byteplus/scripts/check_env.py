@@ -8,7 +8,6 @@ import re
 import stat
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
 
 
 def load_environment(path: Path, *, expected_uid: int = 0) -> dict[str, str]:
@@ -42,29 +41,20 @@ def load_environment(path: Path, *, expected_uid: int = 0) -> dict[str, str]:
     return values
 
 
+def validate_authentication(values: dict[str, str]) -> None:
+    if (values.get("MCP_AUTH_MODE") or "api_key") != "api_key":
+        raise ValueError("Hosted MCP_AUTH_MODE must be api_key.")
+    if not re.fullmatch(r"[a-f0-9]{64}", values.get("MCP_API_KEY_SHA256", "")):
+        raise ValueError("MCP_API_KEY_SHA256 must be a lowercase SHA-256 hex digest.")
+
+
 def validate_environment(values: dict[str, str]) -> None:
     host = values.get("MCP_PUBLIC_HOST", "")
     if not re.fullmatch(r"([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}", host):
         raise ValueError("MCP_PUBLIC_HOST must be a DNS hostname.")
     if host == "example.com" or host.endswith(".example.com"):
         raise ValueError("Replace the example MCP_PUBLIC_HOST.")
-    for key in ("MCP_JWT_JWKS_URI", "MCP_JWT_ISSUER"):
-        try:
-            parsed = urlsplit(values.get(key, ""))
-        except ValueError:
-            raise ValueError(f"{key} must be a valid HTTPS URL.") from None
-        if (
-            parsed.scheme != "https"
-            or not parsed.hostname
-            or parsed.username
-            or parsed.password
-            or parsed.hostname == "example.com"
-            or parsed.hostname.endswith(".example.com")
-        ):
-            raise ValueError(f"Configure a real HTTPS {key} without URL credentials.")
-    for key in ("MCP_JWT_AUDIENCE", "MCP_TENANT_CLAIM"):
-        if not values.get(key):
-            raise ValueError(f"{key} is required.")
+    validate_authentication(values)
     if not re.fullmatch(r"[a-fA-F0-9]{64}", values.get("REDIS_PASSWORD", "")):
         raise ValueError("REDIS_PASSWORD must be 64 hex characters generated on the host.")
     if len(values.get("FASTMCP_TASKS_ENCRYPTION_KEY", "")) < 32:

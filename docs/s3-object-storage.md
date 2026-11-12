@@ -302,10 +302,12 @@ if input.file_path is not None:
         )
 ```
 
-### JWT scope
+### Shared-team access
 
-In JWT auth mode, `media_upload` requires the `media:upload` scope and
-`media_presign` requires the `media:presign` scope. See
+In `api_key` mode, `media_upload` checks `media:upload` and `media_presign`
+checks `media:presign`, both included in the fixed ordinary team scopes.
+All members use tenant/principal `shared-team` and can presign one another's
+team-owned uploads. Clients cannot request different scopes or identities. See
 [security.md](security.md#scope-taxonomy).
 
 ## Setup guide

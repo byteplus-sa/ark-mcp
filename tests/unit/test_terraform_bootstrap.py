@@ -30,10 +30,7 @@ def configured_environment() -> dict[str, str]:
     provider_key = "test-key"
     return {
         "MCP_PUBLIC_HOST": "mcp.team.test",
-        "MCP_JWT_JWKS_URI": "https://identity.team.test/jwks",
-        "MCP_JWT_ISSUER": "https://identity.team.test/",
-        "MCP_JWT_AUDIENCE": "ark-mcp",
-        "MCP_TENANT_CLAIM": "tenant_id",
+        "MCP_API_KEY_SHA256": "a" * 64,
         "REDIS_PASSWORD": "a" * 64,
         "FASTMCP_TASKS_ENCRYPTION_KEY": "test-key-" * 8,
         "BYTEPLUS_MODELARK_API_KEY": provider_key,
@@ -56,13 +53,40 @@ def test_valid_environment_round_trip(
     validator.validate_environment(values)
 
 
+def test_shared_key_environment_is_the_host_default(
+    validator: ModuleType, configured_environment: dict[str, str]
+) -> None:
+    assert "MCP_AUTH_MODE" not in configured_environment
+    validator.validate_environment(configured_environment)
+
+
+@pytest.mark.parametrize(
+    ("mode", "digest"),
+    [
+        ("local", "a" * 64),
+        ("jwt", "a" * 64),
+        ("unknown", "a" * 64),
+        ("api_key", ""),
+        ("api_key", "invalid"),
+        ("api_key", "A" * 64),
+    ],
+)
+def test_host_rejects_unsafe_auth_configuration(
+    validator: ModuleType,
+    configured_environment: dict[str, str],
+    mode: str,
+    digest: str,
+) -> None:
+    configured_environment.update(MCP_AUTH_MODE=mode, MCP_API_KEY_SHA256=digest)
+    with pytest.raises(ValueError):
+        validator.validate_environment(configured_environment)
+
+
 @pytest.mark.parametrize(
     ("key", "value"),
     [
         ("MCP_PUBLIC_HOST", "mcp.example.com"),
-        ("MCP_JWT_JWKS_URI", "http://identity.team.test/jwks"),
-        ("MCP_JWT_ISSUER", "https://user@identity.team.test/"),
-        ("MCP_JWT_AUDIENCE", ""),
+        ("MCP_API_KEY_SHA256", ""),
         ("REDIS_PASSWORD", "invalid:/"),
         ("FASTMCP_TASKS_ENCRYPTION_KEY", "short"),
         ("BYTEPLUS_MODELARK_API_KEY", ""),
@@ -138,13 +162,14 @@ def test_environment_rejects_ambiguous_or_oversized_input(
         validator.load_environment(path, expected_uid=os.getuid())
 
 
-def test_malformed_identity_url_does_not_echo_credentials(
+def test_malformed_key_hash_does_not_echo_credentials(
     validator: ModuleType, configured_environment: dict[str, str]
 ) -> None:
-    configured_environment["MCP_JWT_ISSUER"] = "https://[private-value]/"
+    invalid_value = "private-value"
+    configured_environment["MCP_API_KEY_SHA256"] = invalid_value
     with pytest.raises(ValueError) as error:
         validator.validate_environment(configured_environment)
-    assert "private-value" not in str(error.value)
+    assert invalid_value not in str(error.value)
 
 
 def test_activate_runs_only_after_preflight_checks(tmp_path: Path) -> None:

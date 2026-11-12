@@ -1,5 +1,9 @@
 # Changelog
 
+Release entries below are historical records, not current setup instructions.
+For the removal of JWT authentication and migration to shared-key HTTP, see
+[breaking-change migration](self-hosting.md#breaking-change-migration).
+
 ## 0.2.0 (2026-10-20)
 
 

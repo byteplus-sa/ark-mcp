@@ -229,13 +229,13 @@ class TestSettings:
         with pytest.raises(ValueError):
             Settings(_env_file=None, MCP_TRANSPORT="invalid")
 
-    def test_non_loopback_http_requires_jwt(self) -> None:
-        with pytest.raises(ValueError, match="requires MCP_AUTH_MODE=jwt"):
+    def test_non_loopback_http_requires_api_key(self) -> None:
+        with pytest.raises(ValueError, match="requires MCP_AUTH_MODE=api_key"):
             Settings(_env_file=None, MCP_TRANSPORT="http", MCP_HOST="0.0.0.0")
 
-    def test_jwt_requires_verifier_configuration(self) -> None:
-        with pytest.raises(ValueError, match="JWT auth requires"):
-            Settings(_env_file=None, MCP_AUTH_MODE="jwt")
+    def test_api_key_requires_verifier_configuration(self) -> None:
+        with pytest.raises(ValueError, match="API key auth requires"):
+            Settings(_env_file=None, MCP_AUTH_MODE="api_key")
 
     def test_timeout_defaults(self) -> None:
         settings = Settings(_env_file=None)

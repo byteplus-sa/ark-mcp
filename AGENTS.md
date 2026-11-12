@@ -61,7 +61,14 @@ separate tools. The flow is discovery → create → poll:
 - **Durable artifacts** — MCP resources for generated media whose provider URLs
   expire (2h for audio, 24h for image/video/3D).
 - **Transports** — local `stdio` first, with protected Streamable HTTP as a
-  deployable option (both natively supported by FastMCP).
+  deployable option (both natively supported by FastMCP). Hosted HTTP uses only
+  `MCP_AUTH_MODE=api_key` with `MCP_API_KEY_SHA256`, never the raw key.
+  All holders use fixed tenant/principal `shared-team`, one budget and one
+  ownership boundary; fixed ordinary scopes exclude assets/moderation admin.
+  Python defaults to `local` (stdio/loopback only); Docker, Compose and Terraform
+  default to `api_key`. Generic bearer claims remain internal for ownership
+  tests, with the tenant claim key fixed to `tenant_id`. See
+  `docs/self-hosting.md` for generation and rotation.
 
 Seedance, Seedream, Seed 3D, Seed 2.1 Understanding, and Seed Audio
 Understanding share the ModelArk data-plane host and Bearer authentication.

@@ -1,7 +1,8 @@
 # Deployment
 
-Remote deployment uses FastMCP Streamable HTTP with fail-closed JWT
-authentication. Local stdio remains the simplest operating mode.
+Remote deployment uses FastMCP Streamable HTTP with fail-closed
+[shared MCP key authentication](self-hosting.md#shared-mcp-key).
+Local stdio remains the simplest operating mode.
 
 For a single-organization deployment, see [Self-Hosting](self-hosting.md)
 and the [Docker Compose kit](../deploy/compose/README.md). The kit includes
@@ -27,10 +28,18 @@ docker build --tag ark-mcp:latest .
 
 The image uses pinned Python and uv versions, installs the locked production
 environment, runs as UID/GID 1001, and probes `/health` with Python's standard
-library. The image intentionally defaults to JWT mode; verifier settings must
-be supplied at runtime.
+library. Docker, Compose and Terraform default to `MCP_AUTH_MODE=api_key`;
+supply `MCP_API_KEY_SHA256` through protected runtime configuration. Python
+settings default to `local` for stdio or loopback HTTP only. Use a build
+containing shared-key support; older images reject this mode. Upgrading a
+former JWT deployment requires the
+[breaking-change migration](self-hosting.md#breaking-change-migration).
 
 ## Run one protected instance
+
+Generate the key with `scripts/generate_mcp_key.py` and load the emitted digest
+into the operator's environment privately. The server receives only the hash;
+the raw key belongs in each member's private client bearer-header configuration.
 
 ```bash
 docker run --detach \
@@ -38,9 +47,8 @@ docker run --detach \
   --publish 127.0.0.1:3000:3000 \
   --env BYTEPLUS_MODELARK_API_KEY \
   --env BYTEPLUS_SEED_SPEECH_API_KEY \
-  --env MCP_JWT_JWKS_URI=https://id.example.com/.well-known/jwks.json \
-  --env MCP_JWT_ISSUER=https://id.example.com/ \
-  --env MCP_JWT_AUDIENCE=ark-mcp \
+  --env MCP_AUTH_MODE=api_key \
+  --env MCP_API_KEY_SHA256 \
   --env MCP_ALLOWED_HOSTS=mcp.example.com,127.0.0.1 \
   --env MCP_ALLOWED_ORIGINS=https://client.example.com \
   --volume ark-mcp-artifacts:/app/.artifacts \
@@ -84,10 +92,12 @@ containers:
     env:
       - {name: MCP_TRANSPORT, value: http}
       - {name: MCP_HOST, value: 0.0.0.0}
-      - {name: MCP_AUTH_MODE, value: jwt}
-      - {name: MCP_JWT_JWKS_URI, value: "https://id.example.com/.well-known/jwks.json"}
-      - {name: MCP_JWT_ISSUER, value: "https://id.example.com/"}
-      - {name: MCP_JWT_AUDIENCE, value: ark-mcp}
+      - {name: MCP_AUTH_MODE, value: api_key}
+      - name: MCP_API_KEY_SHA256
+        valueFrom:
+          secretKeyRef:
+            name: ark-mcp-auth
+            key: mcp-api-key-sha256
       - {name: MCP_ALLOWED_HOSTS, value: mcp.example.com}
       - {name: MCP_ALLOWED_ORIGINS, value: "https://client.example.com"}
     readinessProbe:
@@ -129,8 +139,10 @@ provider credentials from a Secret rather than literal manifest values.
 
 ## Security checklist
 
-- Use HTTPS and JWT mode for every non-loopback bind.
-- Pin issuer, audience, and JWKS URI; issue least-privilege tool scopes.
+- Use HTTPS and `api_key` mode for every non-loopback bind.
+- Store only the MCP key's hash on the server; distribute the raw key privately.
+- Treat all members as one `shared-team` owner with a shared budget and fixed
+  ordinary scopes. Account-wide asset and moderation administration is denied.
 - Set explicit Host and Origin allowlists.
 - Set `RATE_LIMIT_RPM` to cap per-client-IP request frequency when exposed
   to untrusted clients. Behind a reverse proxy, set
@@ -154,7 +166,7 @@ ownership, execution claims, artifact state and concurrency controls still use
 single-instance services. Keep `runtime.sqlite3` on durable storage when using
 `FASTMCP_DOCKET_URL=redis://...` or `rediss://...`, and preserve it with the queue.
 
-JWT-authenticated Redis task deployments must set
+API-key-authenticated Redis task deployments must set
 `FASTMCP_TASKS_ENCRYPTION_KEY` through the secret manager. Startup rejects an
 unencrypted backend. Use at least 32 random characters, the same key for all
 retained snapshots, TLS for the connection, and restricted Redis access.

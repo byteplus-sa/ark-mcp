@@ -18,7 +18,7 @@ Server as shipped today. For the original design rationale, see
   to a local store and re-exposed as stable `seed-media://artifacts/{id}` MCP
   resources. MediaKit persistence is best-effort.
 - **Safe by default** — local `stdio` requires no auth; remote HTTP requires
-  JWT verification, Host/Origin protection, and body limits.
+  shared-key hash verification, Host/Origin protection, and body limits.
 - **Observable and budget-aware** — structured logs, Prometheus metrics, and a
   per-principal daily budget ledger.
 - **Timeout-safe long operations** — generation, transcription, upload, and
@@ -207,12 +207,17 @@ removes entries after the last holder or waiter exits, and needs no close step.
 
 ## Request flow for a billable tool
 
+The identity path is implemented by `security/http_auth.py` and
+`runtime.py::get_principal`. HTTP authentication rejects an invalid key before
+tool dispatch; generic internal bearer claims remain available for ownership
+tests, not as a configurable remote identity mechanism.
+
 ```mermaid
 flowchart TD
     A["MCP tool invoked"] --> B{"local mode?"}
     B -->|yes| C["PrincipalContext()\nlocal/local"]
-    B -->|no| D["get_access_token()\nverify sub + tenant claim"]
-    D --> C2["PrincipalContext(principal, tenant, scopes)"]
+    B -->|no| D["Read verified shared-key context: sub and fixed tenant_id"]
+    D --> C2["PrincipalContext: shared-team/shared-team, fixed ordinary scopes"]
     C --> E["reserve budget\n(BudgetLedger.reserve)"]
     C2 --> E
     E -->|"over limit"| F["BudgetExceededError\n(pre-dispatch)"]
@@ -228,15 +233,21 @@ flowchart TD
 
 Three layers of control compose on a single billable call: the provider
 bucket semaphore (per provider, global, default 5), the principal semaphore
-(per `(tenant, principal)`, default 3), and — for parallel variation tools — a
-per-batch local semaphore (`max_concurrent=5`). See [runtime.md](runtime.md).
+(per `(tenant, principal)`, default 3; skipped in local mode), and — for parallel
+variation tools — a per-batch local semaphore (`max_concurrent=5`). All
+shared-key members share that principal semaphore and budget. See [runtime.md](runtime.md).
 
 ## Transports
 
 | Transport | When | Auth |
 |---|---|---|
 | `stdio` | local default | none (single trusted principal `local`) |
-| Streamable HTTP | remote / shared | JWT verification required for non-loopback hosts |
+| Streamable HTTP | remote / shared | `api_key` required off loopback; one fixed `shared-team` identity with ordinary scopes |
+
+`local` is the Python default and is restricted to stdio/loopback HTTP.
+Docker, Compose and Terraform default to `api_key`. Shared HTTP excludes
+account-wide asset and moderation administration; it does not isolate members
+of a team.
 
 `truststore.inject_into_ssl()` runs at module import in both `server.py` and
 `__main__.py`, so every run path loads the macOS system Keychain for TLS.

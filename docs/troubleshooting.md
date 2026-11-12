@@ -8,7 +8,7 @@ run server commands manually.
 | Ark is not listed in your client | Review the client-specific MCP setup and unfinished approval steps |
 | Connected, but tools are missing | Reconnect after finishing active jobs; check requested services and private-file configuration |
 | A request is still working | Ask the client to poll the existing job/task, not submit it again |
-| A shared server rejects access | Ask its administrator to check your connection credentials and tool scopes |
+| A shared server rejects access | Ask its administrator to check the shared key, enabled products and fixed team permissions |
 | You need help diagnosing local setup | Ask your setup agent to inspect paths and settings metadata without printing secrets |
 
 Use the [discovery-only check](integrations/index.md#verify-without-paid-calls)
@@ -42,7 +42,7 @@ tools — it does not register a broken tool.
 
 An empty `targets` list means your connection has no visible background
 targets. Locally, provider credentials or feature flags may be missing;
-on a shared server, your JWT scopes can also hide tools.
+on a shared server, fixed team scopes also exclude administrative tools.
 
 1. **Finish active jobs, then reconnect `ark-seed` in the client you are using.**
    Configuration is read at startup. Another editor's running server does not
@@ -54,7 +54,8 @@ on a shared server, your JWT scopes can also hide tools.
    a feature flag. Use [Provider Keys](api-keys.md) and [Configuration](configuration.md).
 4. **Check inherited settings or shared-server permissions.** An environment
    value can override the private file. Inspect names/presence without printing
-   values; for shared deployments, ask the operator to check your scopes.
+   values; for shared deployments, ask the operator to check enabled products
+   and the fixed team permissions.
 
 Then repeat discovery. A startup warning about missing credentials is useful
 evidence, but absence of a warning is not proof that the right file was loaded.
@@ -230,12 +231,13 @@ required-task provider tool directly and do not switch it to foreground mode.
 This remains a real background task on the same worker. For a Seedance, Seed 3D,
 or VOD submission, the provider task ID appears inside the completed original
 result and must be retained separately. A missing target usually means its
-provider credential, feature flag, or JWT scope is unavailable.
+provider credential or feature flag is unavailable, or the target is excluded
+from the fixed shared-team scopes.
 
 ### Background job is not available
 
 `Background job is not available in this server instance` (local auth) or
-`Background job is not available to this principal` (JWT auth) means the server
+`Background job is not available to this principal` (shared-key auth) means the server
 answering the request cannot resolve the job ID. In local auth mode the caller is
 always the `local` principal, so the cause is process locality, not permissions:
 
@@ -246,9 +248,12 @@ always the `local` principal, so the cause is process locality, not permissions:
   retained jobs. Redis retention is the durability path.
 - The job ID is wrong, or its retained result expired.
 
-In JWT mode the same message also covers a genuine cross-principal or
-cross-tenant job ID. The server deliberately does not distinguish missing,
-expired, and not-owned IDs, so do not use the error to probe for job existence.
+In shared-key mode, the same message also covers jobs not owned by
+`shared-team`, including former user-owned or local jobs. Members of one team
+are not isolated from each other. Rotation keeps the team identity; changing
+auth modes does not transfer ownership. Preserve SQLite, Redis and the task
+encryption key when upgrading. The server deliberately does not distinguish
+missing, expired, and not-owned IDs, so do not probe for job existence.
 
 ## Artifacts Not Persisting
 
@@ -267,16 +272,30 @@ Run `make check-env` to validate configuration.
 ## HTTP Server Refuses to Start
 
 A non-loopback HTTP bind is rejected in `local` auth mode. Set
-`MCP_AUTH_MODE=jwt` and configure `MCP_JWT_JWKS_URI`, `MCP_JWT_ISSUER`, and
-`MCP_JWT_AUDIENCE`. Add the public hostname to `MCP_ALLOWED_HOSTS` and browser
-origins to `MCP_ALLOWED_ORIGINS`.
+`MCP_AUTH_MODE=api_key` and configure the lowercase SHA-256 digest
+`MCP_API_KEY_SHA256` from `scripts/generate_mcp_key.py`. Do not put the raw key
+in server configuration. Add the public hostname to `MCP_ALLOWED_HOSTS` and
+browser origins to `MCP_ALLOWED_ORIGINS`.
+
+The old `jwt` mode is rejected and its retired settings are not used. See
+[breaking-change migration](self-hosting.md#breaking-change-migration).
+
+## HTTP Authentication Fails
+
+An HTTP `401` means the MCP key is missing, wrong or rotated out. Configure the
+current key privately as `Authorization: Bearer <shared MCP key>`; a BytePlus
+provider key is not a substitute. There is no login or discovery flow. After
+rotation, all clients need the new key, and the application must be recreated
+to load its new digest. Never paste either key into chat or logs.
 
 ## Unknown Tool over HTTP
 
-FastMCP hides tools whose required scopes are absent. Verify the Bearer token
-has the appropriate `seed:audio:generate`, `seedream:generate`,
-`seedance:create`, `gen:read`, `gen:delete`, `vod:read`, `media:upload`, or
-`artifacts:read` scope and contains both a principal (`sub`) and configured tenant claim.
+Check `ark_list_models.services` and `ark_job_capabilities` for configured
+products and allowed background targets. The shared key's ordinary scopes are
+fixed; clients cannot add scopes or select another identity. Account-wide
+asset and moderation tools are intentionally unavailable over shared HTTP,
+even if AK/SK or feature flags register them. Use a trusted local setup for
+administration rather than trying to grant a remote role.
 
 ## Running Tests
 

@@ -142,7 +142,7 @@ ${tool.description}
 | --- | --- |
 | Registration | ${cell(tool.registration_gate)} |
 | Execution | ${mode} |
-| JWT scope | ${tool.scope ? `\`${tool.scope}\`` : "No fixed per-tool scope; HTTP authentication and target-tool authorization still apply."} |
+| Required permission | ${tool.scope ? `\`${tool.scope}\`` : "No fixed per-tool scope; HTTP authentication and target-tool authorization still apply."} |
 
 This site lists the full configured capability surface, not the tools enabled on your particular server. Use [model discovery](${SITE_BASE}/tool-reference/ark-list-models/) and [job discovery](${SITE_BASE}/tool-reference/ark-job-capabilities/) to check your connection. Credentials are server configuration, never tool arguments.
 

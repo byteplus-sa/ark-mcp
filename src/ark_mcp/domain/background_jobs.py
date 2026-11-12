@@ -153,7 +153,7 @@ class BackgroundJobTarget(BaseModel):
     )
     required_scope: str = Field(
         ...,
-        description="OAuth scope required to submit this target in JWT mode.",
+        description="Tool permission required to submit this target in shared-key HTTP mode.",
     )
     description: str = Field(
         ...,

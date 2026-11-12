@@ -1,6 +1,6 @@
 # Ark Seed Multimodal MCP Server: single-organization self-hosted stack.
 #
-#   Caddy (TLS, public :443) -> ark-mcp (JWT, :3000, not published) -> BytePlus
+#   Caddy (TLS, public :443) -> ark-mcp (bearer auth, :3000, not published) -> BytePlus
 #                                  |
 #                                  +-> Redis (background jobs, internal network only)
 #
@@ -23,7 +23,7 @@ services:
       MCP_TRANSPORT: http
       MCP_HOST: 0.0.0.0
       MCP_PORT: "3000"
-      MCP_AUTH_MODE: jwt
+      MCP_AUTH_MODE: ${MCP_AUTH_MODE:-api_key}
       # Public hostname for clients plus the in-network name for internal scrapers.
       # Loopback hosts are always allowed for the container health check.
       MCP_ALLOWED_HOSTS: ${MCP_PUBLIC_HOST:?Set MCP_PUBLIC_HOST in .env},ark-mcp
@@ -91,7 +91,7 @@ services:
       - edge
 
 networks:
-  # Caddy <-> ark-mcp, with outbound internet for BytePlus and the JWKS endpoint.
+  # Caddy <-> ark-mcp, with outbound internet for BytePlus.
   edge: {}
   # ark-mcp <-> Redis only; no route to or from the outside.
   data:

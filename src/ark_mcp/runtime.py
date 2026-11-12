@@ -958,13 +958,11 @@ def get_principal(ctx: Context) -> PrincipalContext:
         raise PermissionError("An authenticated access token is required.")
     claims = token.claims or {}
     principal_id = claims.get("sub") or token.subject or token.client_id
-    tenant_id = claims.get(settings.mcp_tenant_claim)
+    tenant_id = claims.get("tenant_id")
     if not isinstance(principal_id, str) or not principal_id:
         raise PermissionError("The access token is missing a principal identity.")
     if not isinstance(tenant_id, str) or not tenant_id:
-        raise PermissionError(
-            f"The access token is missing tenant claim '{settings.mcp_tenant_claim}'."
-        )
+        raise PermissionError("The access token is missing tenant claim 'tenant_id'.")
     return PrincipalContext(
         principal_id=principal_id,
         tenant_id=tenant_id,

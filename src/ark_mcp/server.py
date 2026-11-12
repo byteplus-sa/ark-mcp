@@ -176,7 +176,7 @@ class HardenedFastMCP(FastMCP):
 
 
 def _disabled_http_guardrails(settings: Settings) -> list[str]:
-    if settings.mcp_transport != "http" or settings.mcp_auth_mode is not AuthMode.JWT:
+    if settings.mcp_transport != "http" or settings.mcp_auth_mode is AuthMode.LOCAL:
         return []
     disabled = []
     if not settings.daily_budget_usd:

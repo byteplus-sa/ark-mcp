@@ -39,7 +39,7 @@ class TenantTasksExtension(TasksExtension):
     def __init__(self, settings: Settings) -> None:
         super().__init__()
         if (
-            settings.mcp_auth_mode.value == "jwt"
+            settings.mcp_auth_mode.value != "local"
             and self.docket_settings.url.startswith(("redis://", "rediss://"))
             and not snapshot_codec().protected
         ):

@@ -1,5 +1,10 @@
 # API Keys Guide
 
+For the separate key members use to connect to a hosted MCP server, see
+[shared MCP key generation](self-hosting.md#shared-mcp-key).
+That key is not a BytePlus provider key. The credentials below stay on the
+server and must not be distributed to shared-server members.
+
 This server calls several BytePlus services. Each uses a distinct credential
 and auth scheme — they are **not interchangeable**. You only need the keys for
 the products you want to use; absent credentials simply skip registering that

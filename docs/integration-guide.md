@@ -277,15 +277,18 @@ If only some products' tools are registered:
 | `MCP_TRANSPORT` | No | `stdio` | `stdio` or `http` |
 | `MCP_HOST` | No | `127.0.0.1` | HTTP bind address |
 | `MCP_PORT` | No | `3000` | HTTP port |
-| `MCP_AUTH_MODE` | No | `local` | Set `jwt` for non-loopback HTTP |
-| `MCP_JWT_JWKS_URI` | For JWT | — | HTTPS JSON Web Key Set URL |
-| `MCP_JWT_ISSUER` | For JWT | — | Required token issuer |
-| `MCP_JWT_AUDIENCE` | For JWT | — | Required token audience |
-| `MCP_TENANT_CLAIM` | No | `tenant_id` | Tenant-isolation claim |
+| `MCP_AUTH_MODE` | No | `local` | Set `api_key` for non-loopback HTTP; Docker, Compose and Terraform already default to `api_key` |
+| `MCP_API_KEY_SHA256` | For `api_key` | — | Lowercase SHA-256 digest of the shared MCP key; never the raw key |
 | `MCP_ALLOWED_HOSTS` | For HTTP | loopback | Accepted Host headers |
 | `MCP_ALLOWED_ORIGINS` | For browser HTTP | — | Accepted browser origins |
 | `ARTIFACT_DIR` | No | `.artifacts` | Local artifact storage |
 | `ARTIFACT_TTL_SECONDS` | No | `604800` (7 days) | Artifact retention |
+
+Clients send the shared MCP key in a private bearer header; provider keys stay
+on the server. Every member uses tenant/principal `shared-team` with fixed
+ordinary scopes, shared ownership and one budget. Asset and moderation
+administration is excluded. For key generation, rotation and migration without
+automatic ownership transfer, see [Self-Hosting](self-hosting.md#shared-mcp-key).
 
 See [Configuration](configuration.md) for model bindings, body limits,
 concurrency, and budget settings.
