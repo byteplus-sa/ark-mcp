@@ -30,6 +30,11 @@ choose a supported model from your configured services. If image generation
 is unavailable, it should explain what is missing instead of substituting
 another service without asking.
 
+For transparent PNGs, reference edits and a no-charge request preview, see
+[Seedream 5.5](../seedream-5-5.md). It is the built-in image default in the
+server revision documented here; older installations and explicit operator
+defaults may select a different model.
+
 <span id="video-and-other-provider-tasks"></span>
 
 ## Generate a Video

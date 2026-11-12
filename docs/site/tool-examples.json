@@ -5,7 +5,13 @@
   "ark_job_cancel": { "input": { "job_id": "example-job-id-replace-me" } },
   "seedream_generate_image": {
     "input": {
-      "prompt": "A red ceramic cup on a wooden table.",
+      "model": "dola-seedream-5-5-261028",
+      "prompt": "Embroidered heart and daisy patches, transparent background.",
+      "size": "2K",
+      "response_format": "url",
+      "output_format": "png",
+      "background": "transparent",
+      "watermark": true,
       "dry_run": true
     }
   },

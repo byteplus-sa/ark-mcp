@@ -133,6 +133,9 @@ class ImageRequest(Protocol):
     @property
     def prompt_optimization(self) -> str | None: ...
 
+    @property
+    def safety_identifier(self) -> str | None: ...
+
 
 def check_image_request(request: ImageRequest, caps: ImageCapabilities) -> list[str]:
     """Return every way the request exceeds the image model's capabilities."""
@@ -147,29 +150,35 @@ def check_image_request(request: ImageRequest, caps: ImageCapabilities) -> list[
             f"output_format '{request.output_format}' is not supported; allowed: "
             f"{list(caps.supported_output_formats)}"
         )
-    if (
-        caps.supported_sizes is not None
-        and request.size
-        and request.size not in caps.supported_sizes
-    ):
-        violations.append(
-            f"size '{request.size}' is not supported; allowed: {list(caps.supported_sizes)}"
-        )
+    violations.extend(caps.image_size_violations(request.size))
     if (request.max_images or 1) > 1 and not caps.supports_batch:
         violations.append("max_images > 1 (batch generation) is not supported; use variations")
     if request.prompt_optimization and not caps.supports_prompt_optimization:
         violations.append("prompt_optimization is not supported")
+    elif (
+        request.prompt_optimization
+        and request.prompt_optimization not in caps.prompt_optimization_modes
+    ):
+        violations.append(
+            f"prompt_optimization '{request.prompt_optimization}' is not supported; "
+            f"allowed: {list(caps.prompt_optimization_modes)}"
+        )
+    if request.background == "auto" and not caps.supports_auto_background:
+        violations.append("background='auto' is not supported")
+    if request.safety_identifier is not None and not caps.supports_safety_identifier:
+        violations.append("safety_identifier is not supported")
     if request.background == "transparent":
         if not caps.supports_transparent_background:
             violations.append("background='transparent' is not supported")
-        if image_count != 1:
-            violations.append(
-                "background='transparent' needs exactly one input image with an alpha channel"
-            )
+        if not caps.supports_transparent_generation:
+            if image_count != 1:
+                violations.append(
+                    "background='transparent' needs exactly one input image with an alpha channel"
+                )
+            if any(_is_non_png_base64(image) for image in request.images or []):
+                violations.append("background='transparent' needs a PNG input image (image/png)")
         if request.output_format not in (None, "png"):
             violations.append("background='transparent' requires output_format omitted or 'png'")
-        if any(_is_non_png_base64(image) for image in request.images or []):
-            violations.append("background='transparent' needs a PNG input image (image/png)")
     return violations
 
 

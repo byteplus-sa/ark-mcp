@@ -481,14 +481,15 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `point` | EditCoordinate | No | — | `x`, `y` in 0-999 (normalized) on the **first** image; requires `images` |
 | `bbox` | EditBbox | No | — | `x1`, `y1`, `x2`, `y2` in 0-999 on the **first** image, `x1 <= x2`, `y1 <= y2`; requires `images` |
 | `model` | string | No | `SEEDREAM_DEFAULT_MODEL` | Exact configured ID from `ark_list_models(kind='image')` |
-| `size` | string | No | — | e.g. `"2048x2048"`; checked against the model's size list when it has one |
+| `size` | string | No | `2K` on 5.5 | 5.5: `1K`, `1.5K`, `2K`, or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and ratio 1/16-16, inclusive. No generation `auto`; older families remain provider-validated |
 | `seed` | integer | No | — | -1 to 2147483647; the **base seed** when `variations > 1` (see below) |
 | `max_images` | integer | No | — | 1-15 images from **one provider call**; batch-capable models only. **Cannot be combined with `variations > 1`** |
-| `output_format` | `"png"` \| `"jpeg"` | No | — | Model-dependent |
-| `response_format` | `"url"` \| `"b64_json"` | No | — | Provider response format |
+| `output_format` | `"png"` \| `"jpeg"` | No | `png` on 5.5 and transparent output; provider default otherwise | Model-dependent |
+| `response_format` | `"url"` \| `"b64_json"` | No | — | Base64 requires `persist=true`; the unusable combination is rejected even for dry runs, before submission |
 | `watermark` | boolean | No | — | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` on 5.0 Pro; provider default otherwise | Rejected if the model does not support it |
-| `background` | `"opaque"` \| `"transparent"` | No | — | `transparent` edits **exactly one PNG input image that already has transparent pixels** and keeps that transparency (png output); it does **not** remove the background of an opaque image. Rules: supported model (Seedream 5.0 Pro), exactly one PNG input image with transparent pixels, `output_format` omitted or `png`. A Base64 input whose `mime_type` is not `image/png` is rejected before the provider call; the provider returns 400 for an input without transparent pixels |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | `standard` on 5.5; operator setting on Pro | 5.5 rejects `fast`; Pro accepts both. Omitted 5.5 mode uses the provider default |
+| `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | `auto` on 5.5; `opaque` otherwise | `auto` is 5.5-only; JPEG always opaque in auto mode. Transparent output requires PNG. 5.5 accepts text or references without alpha; Pro needs exactly one already-transparent PNG |
+| `safety_identifier` | string | No | — | 5.5/Pro: 1-64 non-space printable ASCII characters; use a stable hashed user ID, not personal data. Redacted in previews and logs |
 | `variations` | integer | No | `1` | **1-10** independent parallel generations |
 | `variation_prompts` | list[string] | No | — | Exactly `variations` entries (each 1-4000 chars); overrides `prompt` |
 | `persist` | boolean | No | `true` | Persist as durable MCP resources |
@@ -497,6 +498,9 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `overwrite` | boolean | No | `false` | Replace existing files at `output_path` |
 
 \* Provide `prompt` or `variation_prompts`.
+
+Unknown input fields are rejected, including layer-decomposition/OCR controls;
+only generation and editing are supported.
 
 **Point and bbox edits.** The tool prepends coordinate markup to every prompt
 (including each variation prompt): `Image 1<bbox>x1 y1 x2 y2</bbox>` and/or
@@ -528,9 +532,17 @@ Built-in family limits (**`ark_list_models(kind='image')` is authoritative**):
 
 | Family | Max references | `max_images` batch | `output_format` | `prompt_optimization` | Transparent background |
 |---|---|---|---|---|---|
-| Pro (Seedream 5.0 Pro, default `dola-seedream-5-0-pro-260628`) | 10 | No (use `variations`) | png, jpeg | Yes (default `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Yes |
+| 5.5 (default `dola-seedream-5-5-261028`) | 10 | No (use `variations`) | png (default), jpeg | `standard` only (provider default) | Text-only and reference-based |
+| Pro (Seedream 5.0 Pro, `dola-seedream-5-0-pro-260628`) | 10 | No (use `variations`) | png, jpeg | Yes (default `SEEDREAM_PROMPT_OPTIMIZATION_MODE`) | Existing transparent PNG only |
 | Lite | 14 | Yes | png, jpeg | Yes | No |
 | 4.x | 14 | Yes | jpeg | Yes | No |
+
+Discovery's image limits include `supports_transparent_generation` and
+`supports_prompt_optimization`, named size tiers, custom pixel/ratio bounds,
+`background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`.
+5.5 requires account authorization; see the
+[default upgrade note](configuration.md#seedream-default-model-upgrade-note).
+Examples below that return a 5.0 Pro model ID assume Pro is configured explicitly.
 
 ### Output
 
@@ -544,17 +556,37 @@ variations, and dry runs**:
 | `created_at` | string | ISO-8601 |
 | `dry_run` | boolean | `true` when nothing was generated; see `preview` |
 | `artifacts` | list[ArtifactRef] | Images from a single call (`variations=1`); an image that could not be stored is returned as a `provider-url` or `inline-fallback` reference with `persistence_error`. **Empty for variations and dry runs** |
-| `item_errors` | list[SeedreamItemError] | Per-image errors (`index`, `code`, `message`) from a single provider batch |
-| `usage` | SeedreamUsage \| null | Token usage of a single call; `null` for variations and dry runs |
+| `item_errors` | list[SeedreamItemError] | Single-call errors (`index`, `code`, `message`): `NO_OUTPUT` for empty/missing output, `NO_DELIVERABLE_OUTPUT` for unexpected Base64-only output with `persist=false` |
+| `usage` | SeedreamUsage \| null | Single-call usage: legacy token fields plus `input_images`, `generated_images`, `output_tokens`; `null` for variations and dry runs |
 | `summary` | VariationSummary \| null | Per-variation `index`, `seed`, artifact or error, and `request_id` when `variations > 1` |
+| `generations` | list[SeedreamGenerationMetadata] | Completed provider calls ordered by `variation_index` (0 for single calls); provenance, provider reports and advisory image inspections, described below. Empty on dry runs |
 | `preview` | SeedreamGeneratePreview \| null | Set only for a dry run |
+
+**Per-call provenance and image metadata:**
+
+| Field | Description |
+|---|---|
+| `request_id` | Provider request ID, or `null` when absent; available for single calls and variations |
+| `seed` | Submitted seed. Single-call `-1`/`null` means provider randomness, not a recovered actual seed |
+| `prompt_sha256` | SHA-256 of the exact UTF-8 submitted prompt, including server-added point/bbox markup |
+| `request_options` | Submitted size, formats, watermark, background, optimization and batch maximum when present, plus reference count. Excludes prompt, media and safety identifier; omitted options are not inferred |
+| `usage`, `safety_identifier` | Provider usage and identifier echo; absent values remain `null` |
+| `images[]` | Provider-data `index`, matching `artifact_id`, provider-reported `size`, `output_format`, `background` and independent `inspection` |
+| `images[].inspection` | `null` for URL-only delivery; otherwise `status`, decoded `width`/`height`, byte-detected `output_format`, actual `has_transparency` and safe `issues` |
+
+Inspection states are `verified`, `mismatch`, `invalid`, or `unavailable`.
+`verified` means byte checks passed, not visual approval. Mismatches and
+inspection failures retain billed artifacts and do not overwrite provider reports
+or trigger another generation. See [image inspection](artifacts.md#seedream-image-inspection).
+Variations report missing/undeliverable outputs as explicit errors in `summary`.
 
 **SeedreamGeneratePreview:**
 
 | Field | Type | Description |
 |---|---|---|
-| `requests` | list[object] | Provider request bodies, one per variation. Reference image URLs are reduced to scheme and host, inline Base64 to its size |
-| `estimated_cost_usd` | number | Static estimate from the server's price table; **not a provider quote** |
+| `requests` | list[object] | Provider request bodies, one per variation. Reference URLs are reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted |
+| `estimated_cost_usd` | number | Cached account rate or built-in fallback estimate; **not actual billing or a provider quote** |
+| `price_source` | `"catalog"` \| `"builtin"` | `catalog`: fresh cached account image rate; `builtin`: missing, stale or unsupported rate fallback. Dry runs never fetch pricing |
 
 ### Examples
 
@@ -607,6 +639,7 @@ variations, and dry runs**:
 ```json
 // Edit an image with transparency on Seedream 5.0 Pro (arguments.input)
 {
+  "model": "dola-seedream-5-0-pro-260628",
   "prompt": "Turn the circle into a glossy ceramic button, keep the background transparent",
   "images": [{ "kind": "url", "url": "https://example.com/circle-transparent.png", "mime_type": "image/png" }],
   "background": "transparent",
@@ -665,7 +698,8 @@ variations, and dry runs**:
       { "model": "dola-seedream-5-0-pro-260628", "prompt": "A lighthouse at dusk", "seed": 7, "stream": false, "optimize_prompt_options": { "mode": "standard" } },
       { "model": "dola-seedream-5-0-pro-260628", "prompt": "A lighthouse at dusk", "seed": 8, "stream": false, "optimize_prompt_options": { "mode": "standard" } }
     ],
-    "estimated_cost_usd": 0.08
+    "estimated_cost_usd": 0.06,
+    "price_source": "builtin"
   }
 }
 ```
@@ -1831,7 +1865,11 @@ Returns persisted media by artifact ID with the correct MIME type.
 
 ### seed-health://status
 
-Returns server health and configuration status as plain text.
+Returns server health and configuration status as plain text, including the
+build stamp, effective Seedream default model/family and background-job local
+export configuration. It exposes neither credentials nor output-root paths.
+These diagnostics do not check provider authorization or filesystem readiness;
+`configured; needs request preflight` is not proof a destination is writable.
 
 ---
 
