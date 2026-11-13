@@ -262,7 +262,7 @@ class TestSeedance25VariationsInput:
 
 
 class TestSeedance25DraftModeInput:
-    """Draft mode validators shared by the Seedance 2.5 and Premium create tools."""
+    """Draft mode validators for the unified Seedance 2.5 tool."""
 
     def test_draft_defaults_resolution_to_480p(self) -> None:
         inp = SeedanceCreateTaskInput(prompt="test", draft=True)
@@ -321,7 +321,7 @@ class TestSeedance25DraftModeInput:
         )
         assert inp.watermark is True
 
-    def test_premium_draft_still_480p(self) -> None:
+    def test_4k_is_rejected_for_draft_previews(self) -> None:
         with pytest.raises(ValidationError, match="only support resolution '480p'"):
             SeedanceCreateTaskInput(prompt="test", draft=True, resolution="4k")
 

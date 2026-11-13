@@ -7,27 +7,29 @@ tool set.
 
 | Service | Env var | Auth header | Tools it enables |
 |---|---|---|---|
-| ModelArk | `BYTEPLUS_MODELARK_API_KEY` | `Authorization: Bearer <key>` | Seedream (image), Seedance (video) |
+| ModelArk | `BYTEPLUS_MODELARK_API_KEY` | `Authorization: Bearer <key>` | Seedream, Seedance, image/video/audio understanding, and gated 3D tools |
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | `X-Api-Key: <key>` | Seed Audio (speech generation), Speech-to-Text (ASR) |
 | VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `Authorization: Bearer <key>` | Enhancement, transcode, subtitle burn-in/removal, audio separation, and poll tools |
 | Vision AI (OmniHuman) | `BYTEPLUS_CV_API_KEY` | `Authorization: Bearer <key>` | `omnihuman_*` tools (also needs `BYTEPLUS_OMNIHUMAN_ENABLED=true`) |
 | TOS | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
 | S3 | `S3_ACCESS_KEY` + `S3_SECRET_KEY` + `S3_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
 
-Copy `.env.example` to `.env` and fill in the keys you need.
+With [guided setup](setup/install.md), your agent prepares a private blank
+credential file and opens it for you. **Enter keys there, not in chat or MCP
+client JSON.** You do not need to copy the full example configuration or
+configure services you do not use. If using a shared server, its operator
+manages provider keys; your client uses the operator's connection credentials.
 
-```bash
-cp .env.example .env
-```
-
-All keys below are **startup configuration** — they are never accepted as tool
-arguments. Keep your `.env` file out of version control (it is already in
-`.gitignore`).
+All keys below are **startup configuration**, never tool arguments. The
+examples are field-name references for that private file, not shell commands.
+Preserve existing files and keep credentials outside repositories and shared
+folders. See [manual credential setup](setup/manual-install.md#prepare-private-credentials)
+only when preparing the file yourself.
 
 ## ModelArk
 
-ModelArk is the data-plane host for **Seedream** (image generation/editing) and
-**Seedance** (video generation). The key is sent as a Bearer token.
+ModelArk provides **Seedream**, **Seedance**, multimodal understanding and
+the gated 3D tools. The key is sent as a Bearer token.
 
 **Env vars:**
 
@@ -112,7 +114,7 @@ not the credential.
 
 BytePlus VOD AI MediaKit is a single Bearer-authenticated convenience surface
 that powers video enhancement, video transcoding, subtitle burn-in/removal, and
-voice + background audio separation. All ten tools share the same API key.
+voice + background audio separation. All six `vod_*` tools share the same API key.
 
 **Env vars:**
 
@@ -228,23 +230,22 @@ S3-compatible storage (MinIO, R2, TOS-via-boto3).
 
 ## Verifying your setup
 
-After filling in `.env`, start the server and check the health resource — it
-reports which providers are configured:
-
-```bash
-make dev
-```
+After saving the private file, reconnect Ark through your client's MCP
+settings, taking care to finish active jobs first. The client starts the
+server automatically. Use the [discovery-only connection check](integrations/index.md#verify-without-paid-calls);
+do not start development mode just to test keys.
 
 The `seed-health://status` MCP resource reports `ModelArk configured`,
 `Seed Audio configured`, `STT configured`, `TOS configured`, `S3 configured`,
 and `Object storage backend` values per
 provider. The separate `/health` HTTP route is a liveness probe that returns
-only `{"status": "healthy"}`. Any provider reported `false` means its key was
-not loaded — check the env var spelling and that the `.env` file is in the
-project root.
+only `{"status": "healthy"}`. A disabled service may have a missing key or
+feature flag. Ask your setup agent to check names and the configured
+`ARK_MCP_ENV_FILE` path without reading or printing key values.
 
 If a tool is missing entirely, its provider credentials were absent at startup.
 Tools are registered conditionally based on which keys are present.
+Discovery confirms configuration, not provider-key validity or account access.
 
 ## Quick reference
 

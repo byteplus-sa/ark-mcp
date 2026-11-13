@@ -5,6 +5,23 @@ This document consolidates the server's security model. See
 [transports.md](transports.md) for transport setup, and
 [deployment.md](deployment.md) for remote-deployment hardening.
 
+## Dependency Security
+
+Use `uv sync --locked` to install the reviewed dependency set. FastMCP is
+bounded to `fastmcp[tasks]>=4.1.8,<4.2`; older 4.0.x environments do not contain
+the current upstream security fixes. The framework, task extension and MCP SDK
+must be upgraded together through the lockfile rather than independently.
+
+On 2026-11-10, `bash scripts/audit_dependencies.sh` reported no known
+vulnerabilities for the refreshed lockfile. This is a point-in-time result,
+not a guarantee against future disclosures. CI and the commit hook run this
+audit without vulnerability exemptions.
+
+Upstream release details:
+[FastMCP 4.1.8](https://github.com/PrefectHQ/fastmcp/releases/tag/v4.1.8).
+Stage upgrades separately, finish active jobs before restarting, and preserve
+runtime state, artifact storage and any task-snapshot encryption key.
+
 ## Auth modes
 
 `AuthMode` (`config/env.py`) is a `StrEnum`: `LOCAL = "local"` and

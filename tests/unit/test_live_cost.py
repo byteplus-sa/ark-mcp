@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from ark_mcp.domain.pricing import ChargeItem, ModelPricing
 from ark_mcp.providers.modelark.pricing import get_price_book
-from ark_mcp.tools._cost import estimate_cost, log_cost_estimate, price_source
+from ark_mcp.tools._cost import estimate_cost, image_cost_estimate, log_cost_estimate, price_source
 
 
 def _populate(*items: tuple[str, float, str], max_age: float = 60) -> None:
@@ -58,6 +58,23 @@ def test_unrecognized_unit_does_not_change_estimate() -> None:
 def test_free_image_rate_is_not_replaced_by_builtin_price() -> None:
     _populate(("ToICompletion", 0, "Piece"))
     assert estimate_cost(product="image", variations=1, model_id="model") == 0
+
+
+@pytest.mark.parametrize("price", [0, 0.045])
+def test_image_estimate_returns_catalog_source_from_one_lookup(price: float) -> None:
+    _populate(("ToICompletion", price, "Piece"))
+    book = get_price_book()
+    with patch.object(book, "lookup", wraps=book.lookup) as lookup:
+        amount, source = image_cost_estimate("model-260101", 2)
+    assert amount == round(price * 2, 4)
+    assert source == "catalog"
+    lookup.assert_called_once_with("model-260101")
+
+
+@pytest.mark.parametrize("model_id", [None, "unknown", "model"])
+def test_image_estimate_reports_builtin_for_missing_or_stale_price(model_id: str | None) -> None:
+    _populate(("ToICompletion", 0.045, "Piece"), max_age=-1)
+    assert image_cost_estimate(model_id, 2) == (0.06, "builtin")
 
 
 def test_understanding_converts_both_token_rates() -> None:

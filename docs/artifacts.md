@@ -175,6 +175,36 @@ an `export_error` asking you to persist it first. A failed local write never
 affects the durable artifact or fails the call. See
 [Security](security.md#local-output-paths) for the path policy.
 
+## Seedream image inspection
+
+`generations[].images[].inspection` measures persisted bytes or inline fallback
+bytes independently of provider metadata. URL-only references are not downloaded
+just for inspection and have `inspection=null`. Explicit
+`response_format="b64_json"` requires `persist=true`, including dry runs.
+
+The inspector allows static PNG/JPEG only, verifies and decodes within the image
+byte limit (10 MiB) and a 36-million-pixel cap, and reports decoded dimensions,
+format and whether any pixel has alpha below 255. An RGBA image with all-opaque
+pixels is not transparent. Inspection runs off the event loop, with a 10-second
+wait bound; cancellation cannot forcibly stop an already-running decoder thread.
+
+| Status | Meaning |
+|---|---|
+| `verified` | Valid bytes; checked claims agree |
+| `mismatch` | Valid bytes disagree with requested/provider/artifact format, custom dimensions or explicit background |
+| `invalid` | Malformed, truncated, animated, unsupported or over-limit image |
+| `unavailable` | Artifact retrieval or inspection did not finish successfully |
+
+`issues` contains safe codes, not private URLs or raw exception messages.
+Requested size tiers and `background="auto"` are not exact pixel/alpha claims.
+Provider-reported fields remain unchanged, absent values remain null, and billed
+artifacts are retained without automatic regeneration. Inspection is advisory:
+it is neither content moderation nor text, count, geometry or aesthetic review.
+
+Publishing is a separate consumer responsibility. After embedding an image in a
+document or sheet, verify its inline preview in that destination; a successful
+upload or attachment token does not establish that the viewer renders it.
+
 ## Artifact ownership (`.meta.json`)
 
 `ArtifactMetadata` (versioned, `schema_version: Literal[2] = 2`) is written

@@ -29,19 +29,17 @@ client is missing tools and that warning is absent, look at
 | `BYTEPLUS_MODELARK_BASE_URL` | AP Southeast ModelArk URL | HTTPS data-plane base URL |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | AP Southeast Seed Speech URL | HTTPS service base URL |
 | `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | HTTPS VOD AI MediaKit convenience-endpoint base URL |
-| `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-0-pro-260628` | Default image model/endpoint ID |
+| `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-5-261028` | Default image model/endpoint ID (Seedream 5.5; account authorization required) |
 | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | `standard` | Mode 5.0 Pro sends when a caller omits `prompt_optimization`: `standard` (prompt-following quality) or `fast` (lower latency). Both are provider-accepted; an explicit per-call value wins |
 | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-5-260628` | Default video model/endpoint ID used by `seedance_create_task` when `model` is omitted (Seedance 2.5; was 2.0 before the tool consolidation, see the [upgrade note](#seedance-default-model-upgrade-note)) |
 | `SEED_UNDERSTANDING_DEFAULT_MODEL` | `dola-seed-2-1-turbo-260628` | Default understanding model/endpoint ID. Set to `dola-seed-evolving` to use the latest Pro-tier model (auto-resolves to family `pro`, no `SEED_UNDERSTANDING_MODEL_FAMILY` needed) |
-| `SEEDREAM_MODEL_FAMILY` | empty | Family for a custom default: `pro`, `lite`, or `4x` |
-| `SEEDANCE_MODEL_FAMILY` | empty | Family for a custom default: `standard`, `fast`, `mini`, `seedance_2_5`, or `seedance_2_5_premium` |
+| `SEEDREAM_MODEL_FAMILY` | empty | Family for a custom default: `seedream_5_5`, `pro`, `lite`, or `4x` |
+| `SEEDANCE_MODEL_FAMILY` | empty | Family for a custom default: `standard`, `fast`, `mini`, `seedance_2_5` (through 4K), or `seedance_2_5_flash` (480p/720p, no Draft) |
 | `SEED_UNDERSTANDING_MODEL_FAMILY` | empty | Family for a custom default: `pro` or `turbo` |
 | `SEEDREAM_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEEDANCE_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | Model/endpoint ID used by `seed_audio_understand`. Any ModelArk model that accepts Chat Completions `input_audio` parts with deep thinking works; change it when a newer audio-capable model ships |
-| `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` | `false` | Feature flag for whitelist-only Seedance 2.5 Premium (4K). Binds the Premium model ID so `seedance_create_task` accepts it as `model`; reuses the ModelArk key. When false, `seedance_2_5_premium` bindings are rejected at startup |
-| `SEEDANCE_2_5_PREMIUM_MODEL` | `dreamina-seedance-2-5-premium-260915` | Premium model/endpoint ID bound automatically when the flag is on and `SEEDANCE_MODEL_BINDINGS` has no `seedance_2_5_premium` binding |
 | `BYTEPLUS_MODELARK_3D_ENABLED` | `false` | Feature flag for 3D generation (Hyper3D + Hitem3d); reuses the ModelArk key, disabled by default |
 | `HYPER3D_DEFAULT_MODEL` | `hyper3d-gen2` | Default Hyper3D model/endpoint ID |
 | `HITEM3D_DEFAULT_MODEL` | `hitem3d-2-0` | Default Hitem3d model/endpoint ID |
@@ -50,7 +48,7 @@ client is missing tools and that warning is absent, look at
 | `BYTEPLUS_CV_BASE_URL` | `https://openapi.cv.bytepluses.com` | HTTPS Vision AI base URL |
 | `BYTEPLUS_OMNIHUMAN_REQ_KEY` | `realman_avatar_picture_omni20_cv` | Service identifier sent as `req_key`; change only if BytePlus issues a new one |
 
-The two built-in default IDs have known families. A custom ID must be bound
+The recognized built-in IDs have known families. A custom ID must be bound
 explicitly; the server does not infer capabilities from substrings in an ID.
 For example:
 
@@ -58,6 +56,43 @@ For example:
 SEEDREAM_DEFAULT_MODEL=my-image-endpoint
 SEEDREAM_MODEL_BINDINGS=[{"model_id":"my-image-endpoint","family":"pro"}]
 ```
+
+### Seedream default model upgrade note
+
+The default is now **Seedream 5.5 (`dola-seedream-5-5-261028`)**.
+This changes only deployments that omit `SEEDREAM_DEFAULT_MODEL`; existing
+explicit defaults stay unchanged. Discovery reflects configured models, not
+provider authorization. Accounts without 5.5 access should retain 5.0 Pro:
+
+```dotenv
+SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628
+```
+
+Both built-in IDs resolve without a family setting. For a custom 5.5 endpoint,
+set `SEEDREAM_MODEL_FAMILY=seedream_5_5`. If `SEEDREAM_MODEL_BINDINGS` contains
+only older models and no explicit default, startup fails until the default is
+set to a bound ID or a 5.5 binding is added. To offer both:
+
+```dotenv
+SEEDREAM_DEFAULT_MODEL=dola-seedream-5-5-261028
+SEEDREAM_MODEL_BINDINGS=[{"model_id":"dola-seedream-5-5-261028","family":"seedream_5_5"},{"model_id":"dola-seedream-5-0-pro-260628","family":"pro"}]
+```
+
+5.5 uses PNG output when omitted and accepts transparent text-to-image.
+`SEEDREAM_PROMPT_OPTIMIZATION_MODE` remains specific to 5.0 Pro; explicit
+`prompt_optimization="standard"` is accepted on 5.5, while `fast` is rejected
+even when the Pro-only operator setting is `fast`. Omitted 5.5 optimization
+uses the provider's standard default. Background defaults to `auto` on 5.5.
+See [image model limits](models.md#image-capabilities-imagecapabilities).
+
+Read `seed-health://status` to confirm the effective Seedream default model and
+binding family. The resource also reports whether background-job local exports
+have an absolute `OUTPUT_ROOTS` entry (comma-separated paths). It never reveals
+root paths or credentials. These are configuration diagnostics only: they do not
+probe provider authorization, check filesystem readiness, or replace the
+request's destination preflight. Client MCP roots are unavailable inside jobs.
+Seedream dry-run `preview.price_source` distinguishes a cached account image
+rate (`catalog`) from the built-in fallback (`builtin`); neither is actual billing.
 
 ### Seedance default model upgrade note
 
@@ -68,8 +103,8 @@ must be one of the bound IDs.
 
 | Your configuration | Result after upgrading |
 |---|---|
-| No `SEEDANCE_MODEL_BINDINGS`, no `SEEDANCE_DEFAULT_MODEL` | Seedance 2.5 is bound automatically and is the default |
-| `SEEDANCE_DEFAULT_MODEL` set explicitly | Unchanged |
+| No `SEEDANCE_MODEL_BINDINGS`, no `SEEDANCE_DEFAULT_MODEL` | Regular Seedance 2.5 and Flash are bound automatically; regular 2.5 is the default |
+| `SEEDANCE_DEFAULT_MODEL` set explicitly, bindings empty | The selected model remains the default; Flash is also bound unless it is the selected default |
 | `SEEDANCE_MODEL_BINDINGS` lists only a Seedance 2.0 model and `SEEDANCE_DEFAULT_MODEL` is unset | **Startup fails** with `Seedance default model 'dreamina-seedance-2-5-260628' is missing from its bindings. Set the default model env var to one of the bound IDs: [...]` |
 
 **Fix** for the failing case: set `SEEDANCE_DEFAULT_MODEL` to the bound 2.0 ID
@@ -86,6 +121,44 @@ SEEDANCE_MODEL_BINDINGS=[{"model_id":"dreamina-seedance-2-0-260128","family":"st
 
 Callers then choose a model per request with `model`, taking an exact ID from
 `ark_list_models(kind='video')`.
+
+### Seedance 2.5 4K
+
+All resolutions use `dreamina-seedance-2-5-260628` and family `seedance_2_5`.
+Select `resolution="4k"` on `seedance_create_task`; no extra feature flag,
+model binding, or tool is needed.
+
+The separate Premium model, family, service entry, and configuration settings
+have been removed without a compatibility layer. Remove
+`BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED` and `SEEDANCE_2_5_PREMIUM_MODEL`
+from configuration and replace any `seedance_2_5_premium` binding with the
+current 2.5 model and family. There is no automatic alias or rerouting of old
+model IDs.
+
+Draft previews remain 480p and Draft-to-final rendering remains 1080p;
+4K currently applies to ordinary generation, not Draft promotion. Static
+video cost previews do not account for resolution or duration.
+
+### Seedance 2.5 Flash
+
+Flash uses `dreamina-seedance-2-5-flash-261115`, family `seedance_2_5_flash`,
+through the same `seedance_create_task` tool, ModelArk key, host, and task
+lifecycle. It supports 480p/720p, 4-30 seconds, 30 image / 10 video / 10 audio
+references, audio-only input, reference/edit/extend task types, and MP4/MOV.
+It does not support 1080p, 4K, `draft`, or `draft_task_id`.
+
+With empty bindings, Flash is added alongside the selected default. Regular
+2.5 remains the default for omitted `model`. A non-empty
+`SEEDANCE_MODEL_BINDINGS` remains authoritative; add Flash explicitly there:
+
+```dotenv
+SEEDANCE_MODEL_BINDINGS=[{"model_id":"dreamina-seedance-2-5-260628","family":"seedance_2_5"},{"model_id":"dreamina-seedance-2-5-flash-261115","family":"seedance_2_5_flash"}]
+```
+
+To use a custom Flash endpoint, bind its ID to `seedance_2_5_flash`. Listing
+the model does not prove provider activation or account entitlement. No new
+feature flag is required. Flash cost previews currently reuse the static
+2.5 per-task fallback, not its token-based provider price.
 
 Credentials are startup-only. If a provider key is absent, its tools are not
 registered. Specifically, `vod_enhance_video` is registered independently

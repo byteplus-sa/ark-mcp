@@ -25,6 +25,7 @@ _REDACT_KEYS: frozenset[str] = frozenset(
         "token",
         "secret",
         "password",
+        "safety_identifier",
         "b64_json",
         "audio_data",
         "image_data",

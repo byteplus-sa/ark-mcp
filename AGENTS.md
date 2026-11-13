@@ -20,10 +20,14 @@ separate tools. The flow is discovery → create → poll:
   transparent background, variations, dry run).
 - **Seedance** — asynchronous video generation through ModelArk with one
   create tool, `seedance_create_task`. Supports two model generations: 2.0
-  (legacy, 15s, 4K) and 2.5 (default, 30s, 1080p, structured editing, native
-  extension). Seedance 2.5 Premium (`dreamina-seedance-2-5-premium-260915`,
-  adds 4K) is a whitelist-only model selected through `model`, gated by
-  `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`; disabled by default.
+  (legacy, 15s, 4K) and 2.5 (default, 30s, 4K, structured editing, native
+  extension). Seedance 2.5 uses `dreamina-seedance-2-5-260628` for all supported
+  resolutions, including `resolution="4k"`; no separate model or feature gate.
+  Seedance 2.5 Flash (`dreamina-seedance-2-5-flash-261115`, family
+  `seedance_2_5_flash`) uses the same tool, supports 480p/720p and 4-30s with
+  the same reference/edit/extend features, but no Draft mode. Empty bindings
+  add Flash alongside the selected default; explicit binding lists remain
+  authoritative. Regular 2.5 remains the default.
 - **Seed 3D** — asynchronous 3D model generation through ModelArk (Hyper3D
   text-to-3D and Hitem3d image-to-3D). Gated by `BYTEPLUS_MODELARK_3D_ENABLED`;
   disabled by default.

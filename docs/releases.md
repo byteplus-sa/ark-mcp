@@ -55,6 +55,12 @@ pre-stable even though they are ordinary GitHub Releases.
 
 ## Installing a release
 
+For ordinary client setup, start with [guided setup](setup/install.md).
+**The historical `v0.2.0` release predates the security refresh.** Follow the
+[reviewed revision guidance](setup/manual-install.md#choose-an-installation)
+until a suitable patched release is published. The artifact instructions
+below describe the release mechanism, not an endorsement of an unpatched tag.
+
 Download the wheel and `SHA256SUMS` from the
 [GitHub Releases page](https://github.com/byteplus-sa/ark-mcp/releases).
 Check the downloaded file's SHA-256 against the checksum entry, then install

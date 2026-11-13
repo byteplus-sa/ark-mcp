@@ -4,35 +4,43 @@ Operator-side setup an agent occasionally needs: how the server is started,
 which setting turns on which tools, how HTTP auth and scopes work, the runtime
 services behind the tools, and the provider design. Model IDs and limits are
 in [models-and-limits.md](models-and-limits.md). The full variable reference
-is [docs/configuration.md](../../../../docs/configuration.md); security detail
-is [docs/security.md](../../../../docs/security.md).
+is [Configuration](https://byteplus-sa.github.io/ark-mcp/configuration/); security detail
+is [Security](https://byteplus-sa.github.io/ark-mcp/security/).
 
 ## Quick start
 
-**Prerequisites:** Python 3.12+, `uv`, and a BytePlus key for each product you
-want. Copy `.env.example` to `.env`; credentials are startup configuration and
-are never tool arguments.
+For a new connection, follow [Set Up Ark MCP](https://byteplus-sa.github.io/ark-mcp/setup/install/).
+The skill does not install or configure the server. A local connection needs
+the reviewed locked environment and the provider keys for requested products;
+an existing shared server is configured by its operator.
 
-```bash
-uv run python -m ark_mcp                       # stdio (default), local MCP clients
-MCP_TRANSPORT=http uv run python -m ark_mcp    # Streamable HTTP, 127.0.0.1:3000, path /mcp
-```
+Keep credentials in a private file outside repositories and shared folders.
+The user enters them in a local non-AI editor; do not read back that file or
+put its values in chat or client configuration. The client receives only the
+non-secret `ARK_MCP_ENV_FILE` path and starts the local server automatically.
+For exact preparation and launch details, use
+[Manual Installation](https://byteplus-sa.github.io/ark-mcp/setup/manual-install/).
+
+Use the repository's locked environment. The supported FastMCP range is
+`fastmcp[tasks]>=4.1.8,<4.2`; the lockfile includes security fixes absent from
+the former 4.0.x environment. Do not independently downgrade the framework or
+its task and MCP SDK dependencies.
 
 - **HTTP is stateless Streamable HTTP** with Host/Origin protection on
-  (`MCP_ALLOWED_HOSTS`, `MCP_ALLOWED_ORIGINS`). `fastmcp run
-  src/ark_mcp/server.py:mcp` also works and applies the same hardening.
+  (`MCP_ALLOWED_HOSTS`, `MCP_ALLOWED_ORIGINS`). Operator launch instructions
+  are in [Transports](https://byteplus-sa.github.io/ark-mcp/transports/).
 - **Verify** with the `seed-health://status` resource or, on HTTP, `GET /health`,
   `/ready`, `/metrics`.
 - Output-path arguments (`output_path`, `output_dir`, `save_to`) work on stdio
   only, inside MCP roots or `OUTPUT_ROOTS` ([polling-and-artifacts.md](polling-and-artifacts.md)).
 - For a single-organization deployment, use the Caddy/JWT/Redis Compose kit in
-  `deploy/compose/` and the repository's `docs/self-hosting.md` guide. Keep one
+  the repository's `deploy/compose/` and the [self-hosting guide](https://byteplus-sa.github.io/ark-mcp/self-hosting/). Keep one
   replica and configure both spend and rate limits.
 - Releases use `vX.Y.Z` tags, GitHub wheel/source/checksum assets, and versioned
   GHCR images. `latest` is a release; `edge` is a main build. Prefer a digest
   pin for deployment. PyPI publishing is not configured. Release publication
   does not update a source checkout or restart an MCP client; see the
-  repository's `docs/releases.md`.
+  [release guide](https://byteplus-sa.github.io/ark-mcp/releases/).
 
 ## What enables what
 
@@ -47,7 +55,6 @@ and `seed-health://status` report what is on.
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | `seed_audio_generate`, `speech_to_text` (one key, both products) |
 | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `vod_get_task` |
 | `BYTEPLUS_MODELARK_3D_ENABLED=true` + ModelArk key | `hyper3d_create_task`, `hitem3d_create_task` (default off; reuses the ModelArk key) |
-| `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` + ModelArk key | Binds the whitelist-only Premium (4K) model so `seedance_create_task` accepts it as `model`. **No extra tools**; default off; ID from `SEEDANCE_2_5_PREMIUM_MODEL` |
 | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task`. Separate Vision AI Bearer key; default off. Overrides: `BYTEPLUS_CV_BASE_URL`, `BYTEPLUS_OMNIHUMAN_REQ_KEY` |
 | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result` (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP...` keys) |
 | `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` + AK/SK | Additionally registers the irreversible `ark_asset_delete` (default off) |
@@ -79,6 +86,9 @@ Gotchas that follow from the gates:
 - A custom model ID must be bound (`SEEDREAM_MODEL_BINDINGS`,
   `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`,
   `SEED3D_MODEL_BINDINGS`); see [models-and-limits.md](models-and-limits.md).
+- Empty Seedance bindings add Flash alongside the selected default; explicit
+  lists remain authoritative. Use `seedance_2_5_flash` for Flash endpoints.
+  Regular 2.5 remains the default; there is no separate Flash tool or flag.
 
 ### Provider hosts and timeouts
 
@@ -211,4 +221,4 @@ flowchart LR
 
 Inputs are validated against a model-capability registry before quota is spent
 ([models-and-limits.md](models-and-limits.md)). For tool inputs and outputs see
-the tool schemas and [docs/api-reference.md](../../../../docs/api-reference.md).
+the tool schemas and [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/).

@@ -13,7 +13,13 @@ from ark_mcp.config.model_capabilities import (
     Seed3DCapabilities,
     VideoCapabilities,
     get_capability_registry,
+    refresh_capability_registry,
 )
+
+
+@pytest.fixture(autouse=True)
+def reset_capabilities() -> None:
+    refresh_capability_registry()
 
 
 class TestCapabilityRegistry:
@@ -24,6 +30,7 @@ class TestCapabilityRegistry:
         caps = registry.get_image_capabilities()
         assert isinstance(caps, ImageCapabilities)
         assert caps.family in (
+            ModelFamily.SEEDREAM_5_5,
             ModelFamily.SEEDREAM_PRO,
             ModelFamily.SEEDREAM_LITE,
             ModelFamily.SEEDREAM_4X,
@@ -38,7 +45,7 @@ class TestCapabilityRegistry:
             ModelFamily.SEEDANCE_2_FAST,
             ModelFamily.SEEDANCE_2_MINI,
             ModelFamily.SEEDANCE_2_5,
-            ModelFamily.SEEDANCE_2_5_PREMIUM,
+            ModelFamily.SEEDANCE_2_5_FLASH,
         )
 
     def test_invalid_image_model_raises(self) -> None:
@@ -216,7 +223,7 @@ class TestSeedance25Capabilities:
             assert caps.max_reference_images == 30
             assert caps.max_reference_videos == 10
             assert caps.max_reference_audios == 10
-            assert caps.supported_resolutions == ("480p", "720p", "1080p")
+            assert caps.supported_resolutions == ("480p", "720p", "1080p", "4k")
         finally:
             os.environ["SEEDANCE_MODEL_BINDINGS"] = old_bindings
             os.environ["SEEDANCE_DEFAULT_MODEL"] = old_default
@@ -250,7 +257,7 @@ class TestSeedance25Capabilities:
             refresh_capability_registry()
 
     def test_seedance_2_5_resolution_validation(self) -> None:
-        """2.5 model accepts 480p/720p/1080p but not 4k."""
+        """2.5 model accepts every resolution, including 4K."""
         import os
 
         from ark_mcp.config.env import refresh_settings
@@ -267,8 +274,9 @@ class TestSeedance25Capabilities:
             assert registry.validate_resolution("dreamina-seedance-2-5-260628", "480p") == "480p"
             assert registry.validate_resolution("dreamina-seedance-2-5-260628", "720p") == "720p"
             assert registry.validate_resolution("dreamina-seedance-2-5-260628", "1080p") == "1080p"
+            assert registry.validate_resolution("dreamina-seedance-2-5-260628", "4k") == "4k"
             with pytest.raises(ValueError, match="not supported"):
-                registry.validate_resolution("dreamina-seedance-2-5-260628", "4k")
+                registry.validate_resolution("dreamina-seedance-2-5-260628", "8k")
         finally:
             os.environ["SEEDANCE_DEFAULT_MODEL"] = old_default
             refresh_settings()
@@ -309,44 +317,6 @@ class TestSeed3DCapabilities:
         registry = get_capability_registry()
         with pytest.raises(ValueError, match="Did you mean 'hyper3d-gen2-260112'"):
             registry.get_seed3d_capabilities("hyper3d-gen2")
-
-
-class TestSeedance25PremiumCapabilities:
-    """Tests for whitelist-only Seedance 2.5 Premium capabilities."""
-
-    @pytest.fixture(autouse=True)
-    def _premium_enabled(self, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-        from ark_mcp.config.env import refresh_settings
-        from ark_mcp.config.model_capabilities import refresh_capability_registry
-
-        monkeypatch.setenv(
-            "SEEDANCE_MODEL_BINDINGS",
-            '[{"model_id":"dreamina-seedance-2-0-260128","family":"standard"},'
-            '{"model_id":"dreamina-seedance-2-5-260628","family":"seedance_2_5"}]',
-        )
-        monkeypatch.setenv("BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED", "true")
-        refresh_settings()
-        refresh_capability_registry()
-        yield
-        monkeypatch.undo()
-        refresh_settings()
-        refresh_capability_registry()
-
-    def test_premium_capabilities(self) -> None:
-        registry = get_capability_registry()
-        caps = registry.get_video_capabilities("dreamina-seedance-2-5-premium-260915")
-        assert caps.family is ModelFamily.SEEDANCE_2_5_PREMIUM
-        assert caps.supported_resolutions == ("480p", "720p", "1080p", "4k")
-        assert caps.duration_range == (4, 30)
-        assert caps.max_reference_images == 30
-        assert caps.max_reference_videos == 10
-        assert caps.max_reference_audios == 10
-
-    def test_premium_accepts_4k_regular_2_5_does_not(self) -> None:
-        registry = get_capability_registry()
-        assert registry.validate_resolution("dreamina-seedance-2-5-premium-260915", "4k") == "4k"
-        with pytest.raises(ValueError, match="not supported"):
-            registry.validate_resolution("dreamina-seedance-2-5-260628", "4k")
 
 
 @pytest.fixture
@@ -402,8 +372,9 @@ class TestExactModelResolution:
 
     def test_image_default_supports_transparent_background(self) -> None:
         caps = get_capability_registry().resolve_image_model(None)
-        assert caps.family is ModelFamily.SEEDREAM_PRO
+        assert caps.family is ModelFamily.SEEDREAM_5_5
         assert caps.supports_transparent_background is True
+        assert caps.supports_transparent_generation is True
 
     def test_understanding_routes_audio_to_audio_model(self) -> None:
         from ark_mcp.config.env import get_settings
