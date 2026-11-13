@@ -32,6 +32,7 @@ class SeedreamProviderRequest(BaseModel):
     watermark: bool | None = None
     optimize_prompt_options: dict[str, str] | None = None
     background: str | None = None
+    safety_identifier: str | None = None
 
 
 class SeedreamImageData(BaseModel):
@@ -40,6 +41,8 @@ class SeedreamImageData(BaseModel):
     url: str | None = None
     b64_json: str | None = None
     output_format: str | None = None
+    size: str | None = None
+    background: Literal["opaque", "transparent"] | None = None
     index: int | None = None
     revised_prompt: str | None = None
 
@@ -50,6 +53,7 @@ class SeedreamProviderResponse(BaseModel):
     created: int | None = None
     data: list[SeedreamImageData] = Field(default_factory=list)
     usage: dict[str, Any] | None = None
+    safety_identifier: str | None = None
 
 
 class SeedreamItemErrorData(BaseModel):

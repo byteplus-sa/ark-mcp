@@ -47,6 +47,7 @@ async def test_lists_every_configured_kind(configured: None) -> None:
     assert seedance_2_5["video"]["duration_seconds"] == [4, 30]
     assert seedance_2_5["video"]["supports_draft"] is True
     assert seedance_2_5["video"]["task_types"] == ["auto", "reference", "edit", "extend"]
+    assert seedance_2_5["video"]["resolutions"] == ["480p", "720p", "1080p", "4k"]
     seedance_2 = models["dreamina-seedance-2-0-260128"]
     assert seedance_2["is_default"] is True
     assert seedance_2["video"]["task_types"] == []
@@ -105,9 +106,7 @@ async def test_understanding_discovery_matches_named_tool_schema(
 async def test_disabled_services_explain_how_to_enable_them(configured: None) -> None:
     services = {item["service"]: item for item in (await _list_models({}))["services"]}
     assert services["modelark"] == {"service": "modelark", "enabled": True, "reason": None}
-    premium = services["seedance_2_5_premium"]
-    assert premium["enabled"] is False
-    assert "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED" in premium["reason"]
+    assert "seedance_2_5_premium" not in services
     assert services["seed3d"]["enabled"] is False
 
 

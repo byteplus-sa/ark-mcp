@@ -40,6 +40,16 @@ def test_empty_manifest_only_allowed_before_first_release(release_tree: Path) ->
         read_version(release_tree)
 
 
+def test_bootstrap_override_cannot_freeze_future_releases(release_tree: Path) -> None:
+    (release_tree / "release-please-config.json").write_text(
+        json.dumps({"packages": {".": {"release-as": "0.2.0"}}})
+    )
+    with pytest.raises(ValueError, match="one-time release-as"):
+        read_version(release_tree)
+    (release_tree / ".release-please-manifest.json").write_text("{}")
+    assert read_version(release_tree, allow_bootstrap=True) == "0.2.0"
+
+
 @pytest.mark.parametrize("tag", ["", "v01.2.0", "0.2.0", "v0.2.0rc1", "v0.2.0;echo bad", "v1.0.0"])
 def test_invalid_or_mismatched_tag_is_rejected(tag: str) -> None:
     with pytest.raises(ValueError):

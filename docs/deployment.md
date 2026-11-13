@@ -167,7 +167,7 @@ Offline regression coverage includes encrypted snapshot round trips, wrong-key
 failure, and a simulated interrupted provider operation across a reopened runtime
 database. Live Redis failover and named desktop-client task support require
 validation in the target environment; the supported protocol test uses FastMCP
-4.0.3 over a real stdio subprocess with a mocked provider.
+4.1.8 over a real stdio subprocess with a mocked provider.
 
 ## Single shared loopback server (local multi-client)
 

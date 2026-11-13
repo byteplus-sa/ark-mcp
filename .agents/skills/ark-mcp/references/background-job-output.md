@@ -14,6 +14,17 @@ nothing is billed; fix the setting or omit the option and resubmit.
 ends in an error, read the error from `ark_job_get.result`, and record the
 failed Ark job ID beside the operation before resubmitting.
 
+`seed-health://status` reports the effective Seedream default model/family and
+background-export configuration without revealing paths or credentials. A
+configured absolute root is not a writable-destination guarantee; request
+preflight remains authoritative. The resource makes no provider authorization
+or filesystem-readiness probe.
+
+For Seedream, explicit `response_format="b64_json"` requires `persist=true`,
+including dry runs. Returned `generations` preserve per-call provenance and
+separate advisory byte inspection from delivery, provider metadata and visual
+acceptance. Inspection does not regenerate paid images.
+
 ## Large results
 
 `ark_job_capabilities` returns about 120k characters, more than a tool result

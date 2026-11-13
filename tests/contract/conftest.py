@@ -18,7 +18,6 @@ def all_services_enabled(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "BYTEPLUS_CV_API_KEY": "test-cv-key",  # pragma: allowlist secret
         "BYTEPLUS_OMNIHUMAN_ENABLED": "true",
         "BYTEPLUS_MODELARK_3D_ENABLED": "true",
-        "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED": "true",
         "BYTEPLUS_MODELARK_ACCESS_KEY": "AKLTtestopenapi",
         "BYTEPLUS_MODELARK_SECRET_KEY": "test-openapi-secret",  # pragma: allowlist secret
         "BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE": "true",
