@@ -4,6 +4,19 @@ Release entries below are historical records, not current setup instructions.
 For the removal of JWT authentication and migration to shared-key HTTP, see
 [breaking-change migration](self-hosting.md#breaking-change-migration).
 
+## [0.4.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.3.0...v0.4.0) (2026-11-13)
+
+
+### Features
+
+* add portable agent-guided MCP setup skill ([ca28509](https://github.com/byteplus-sa/ark-mcp/commit/ca2850965171b8e4f4069d55805993752e883a52))
+* make BytePlus deployment and provider-key maintenance resumable ([9e23392](https://github.com/byteplus-sa/ark-mcp/commit/9e23392c43bad895c8820c49969ae7b0f56e9f5d))
+
+
+### Dependencies
+
+* allow uv-build 0.13 releases ([c503fda](https://github.com/byteplus-sa/ark-mcp/commit/c503fdaae943a0cfc689d6a57f04f5571502e27b))
+
 ## [0.3.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.2.0...v0.3.0) (2026-11-12)
 
 
