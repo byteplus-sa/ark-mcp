@@ -6,6 +6,7 @@ on:
     paths:
       - "docs/**"
       - ".agents/skills/ark-mcp/**"
+      - ".agents/skills/ark-mcp-setup/**"
       - "src/ark_mcp/**"
       - "scripts/export_tool_docs.py"
       - "tests/unit/test_export_tool_docs.py"
@@ -16,6 +17,7 @@ on:
     paths:
       - "docs/**"
       - ".agents/skills/ark-mcp/**"
+      - ".agents/skills/ark-mcp-setup/**"
       - "src/ark_mcp/**"
       - "scripts/export_tool_docs.py"
       - "tests/unit/test_export_tool_docs.py"

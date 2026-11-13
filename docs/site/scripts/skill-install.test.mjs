@@ -16,6 +16,25 @@ const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const skill = join(repository, ".agents/skills/ark-mcp");
 const readDoc = (path) => readFileSync(join(repository, "docs", path), "utf8");
 
+test("documentation CI covers standalone skill changes on pushes and pull requests", () => {
+  const workflow = readFileSync(
+    join(repository, ".github/workflows/docs.yml"),
+    "utf8",
+  );
+  for (const event of ["push", "pull_request"]) {
+    const paths = workflow.match(
+      new RegExp(`^  ${event}:\\n([\\s\\S]*?)(?=^  \\w+:)`, "m"),
+    )?.[1];
+    assert.ok(paths, `${event} trigger is missing`);
+    for (const name of ["ark-mcp", "ark-mcp-setup"]) {
+      assert.ok(
+        paths.includes(`- ".agents/skills/${name}/**"`),
+        `${event} must cover ${name} entry points and references`,
+      );
+    }
+  }
+});
+
 for (const name of ["ark-mcp", "ark-mcp-setup"]) {
   test(`${name} keeps its local references after standalone installation`, () => {
     const sourceSkill = join(repository, ".agents/skills", name);
