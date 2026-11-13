@@ -40,7 +40,7 @@ SEEDANCE_2_5 = replace(
     max_reference_images=30,
     max_reference_videos=10,
     max_reference_audios=10,
-    supported_resolutions=("480p", "720p", "1080p"),
+    supported_resolutions=("480p", "720p", "1080p", "4k"),
     duration_range=(4, 30),
     supports_draft=True,
     draft_final_resolution="1080p",
@@ -73,7 +73,12 @@ def test_empty_request_is_valid_for_every_family() -> None:
 
 @pytest.mark.parametrize(
     ("caps", "resolution", "valid"),
-    [(SEEDANCE_2, "4k", True), (SEEDANCE_2_5, "4k", False), (SEEDANCE_2_5, "1080p", True)],
+    [
+        (SEEDANCE_2, "4k", True),
+        (SEEDANCE_2_5, "4k", True),
+        (SEEDANCE_2_5, "1080p", True),
+        (SEEDANCE_2_5, "8k", False),
+    ],
 )
 def test_resolution_is_checked_per_model(
     caps: VideoCapabilities, resolution: str, valid: bool
@@ -158,7 +163,7 @@ def test_unsupported_ratio_is_rejected() -> None:
 
 def test_every_violation_is_reported_at_once() -> None:
     violations = check_video_request(
-        Request(resolution="4k", duration=31, priority=10, images=[object()] * 31),
+        Request(resolution="8k", duration=31, priority=10, images=[object()] * 31),
         SEEDANCE_2_5,
     )
     assert len(violations) == 4
@@ -200,6 +205,7 @@ class ImageRequest:
     max_images: int | None = None
     background: str | None = None
     prompt_optimization: str | None = None
+    safety_identifier: str | None = None
 
 
 @dataclass
@@ -223,20 +229,6 @@ def test_transparent_background_needs_png_input(image: Image, valid: bool) -> No
     assert (not any("PNG input" in violation for violation in violations)) is valid
 
 
-SEEDANCE_2_5_PREMIUM = replace(
-    SEEDANCE_2_5,
-    family=ModelFamily.SEEDANCE_2_5_PREMIUM,
-    model_id="dreamina-seedance-2-5-premium-260915",
-    supported_resolutions=("4k",),
-    draft_final_resolution="4k",
-)
-
-
-@pytest.mark.parametrize("resolution", ["480p", "720p", "1080p"])
-def test_premium_rejects_resolutions_below_4k(resolution: str) -> None:
-    violations = check_video_request(Request(resolution=resolution), SEEDANCE_2_5_PREMIUM)
-    assert any("resolution" in violation for violation in violations)
-
-
 def test_draft_resolution_is_not_checked_against_final_resolutions() -> None:
-    assert check_video_request(Request(resolution="480p", draft=True), SEEDANCE_2_5_PREMIUM) == []
+    caps = replace(SEEDANCE_2_5, supported_resolutions=("1080p",))
+    assert check_video_request(Request(resolution="480p", draft=True), caps) == []

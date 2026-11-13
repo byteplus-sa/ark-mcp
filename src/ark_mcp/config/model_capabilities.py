@@ -12,6 +12,7 @@ each logical family via environment variables.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from difflib import get_close_matches
 from enum import StrEnum
@@ -33,6 +34,7 @@ from ark_mcp.config.env import (
 class ModelFamily(StrEnum):
     """Logical product family for capability lookup."""
 
+    SEEDREAM_5_5 = "seedream_5_5"
     SEEDREAM_PRO = "seedream_pro"
     SEEDREAM_LITE = "seedream_lite"
     SEEDREAM_4X = "seedream_4x"
@@ -40,7 +42,7 @@ class ModelFamily(StrEnum):
     SEEDANCE_2_FAST = "seedance_2_fast"
     SEEDANCE_2_MINI = "seedance_2_mini"
     SEEDANCE_2_5 = "seedance_2_5"
-    SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"
+    SEEDANCE_2_5_FLASH = "seedance_2_5_flash"
     SEED_2_1_PRO = "seed_2_1_pro"
     SEED_2_1_TURBO = "seed_2_1_turbo"
     SEED_AUDIO_UNDERSTANDING = "seed_audio_understanding"
@@ -62,11 +64,50 @@ class ImageCapabilities:
     supports_batch: bool
     supports_streaming: bool
     supported_output_formats: tuple[str, ...]
-    supported_sizes: tuple[str, ...] | None = None  # None = accept any
+    supported_sizes: tuple[str, ...] | None = None
+    custom_size_pixels_range: tuple[int, int] | None = None
+    custom_size_aspect_ratio_range: tuple[float, float] | None = None
     supports_watermark: bool = True
     supports_prompt_optimization: bool = True
+    prompt_optimization_modes: tuple[str, ...] = ("standard", "fast")
     default_prompt_optimization_mode: str | None = None
     supports_transparent_background: bool = False
+    supports_transparent_generation: bool = False
+    supports_auto_background: bool = False
+    supports_safety_identifier: bool = False
+    default_output_format: str | None = None
+
+    def image_size_violations(self, size: str | None) -> list[str]:
+        """Check named tiers and optional custom dimensions against this model's limits."""
+        if size is None or self.supported_sizes is None or size in self.supported_sizes:
+            return []
+        dimensions = re.fullmatch(r"([1-9][0-9]{0,6})x([1-9][0-9]{0,6})", size)
+        if self.custom_size_pixels_range is None or dimensions is None:
+            suffix = " or positive WIDTHxHEIGHT dimensions" if self.custom_size_pixels_range else ""
+            return [f"size must be one of {list(self.supported_sizes)}{suffix}"]
+        width, height = map(int, dimensions.groups())
+        minimum, maximum = self.custom_size_pixels_range
+        violations = []
+        if not minimum <= width * height <= maximum:
+            violations.append(f"size pixel count must be within [{minimum}, {maximum}]")
+        if self.custom_size_aspect_ratio_range is not None:
+            low, high = self.custom_size_aspect_ratio_range
+            if not low <= width / height <= high:
+                violations.append(f"size width/height ratio must be within [{low}, {high}]")
+        return violations
+
+    @property
+    def background_modes(self) -> tuple[str, ...]:
+        """Return accepted explicit background values."""
+        return (
+            ("opaque",)
+            + (("transparent",) if self.supports_transparent_background else ())
+            + (("auto",) if self.supports_auto_background else ())
+        )
+
+    def resolve_output_format(self, requested: str | None, background: str | None) -> str | None:
+        """Resolve the format for both the provider request and artifact metadata."""
+        return requested or ("png" if background == "transparent" else self.default_output_format)
 
     def resolve_prompt_optimization(self, requested: str | None) -> str | None:
         """Return the effective prompt optimization mode for a request.
@@ -148,7 +189,25 @@ def _seedream_capabilities() -> dict[str, ImageCapabilities]:
     settings = get_settings()
     capabilities: dict[str, ImageCapabilities] = {}
     for binding in settings.seedream_model_bindings:
-        if binding.family is SeedreamFamily.PRO:
+        if binding.family is SeedreamFamily.SEEDREAM_5_5:
+            caps = ImageCapabilities(
+                family=ModelFamily.SEEDREAM_5_5,
+                model_id=binding.model_id,
+                max_references=10,
+                supports_batch=False,
+                supports_streaming=False,
+                supported_output_formats=("png", "jpeg"),
+                supported_sizes=("1K", "1.5K", "2K"),
+                custom_size_pixels_range=(921600, 4624220),
+                custom_size_aspect_ratio_range=(1 / 16, 16),
+                prompt_optimization_modes=("standard",),
+                supports_transparent_background=True,
+                supports_transparent_generation=True,
+                supports_auto_background=True,
+                supports_safety_identifier=True,
+                default_output_format="png",
+            )
+        elif binding.family is SeedreamFamily.PRO:
             caps = ImageCapabilities(
                 family=ModelFamily.SEEDREAM_PRO,
                 model_id=binding.model_id,
@@ -158,6 +217,7 @@ def _seedream_capabilities() -> dict[str, ImageCapabilities]:
                 supported_output_formats=("png", "jpeg"),
                 default_prompt_optimization_mode=settings.seedream_prompt_optimization_mode,
                 supports_transparent_background=True,
+                supports_safety_identifier=True,
             )
         elif binding.family is SeedreamFamily.LITE:
             caps = ImageCapabilities(
@@ -186,13 +246,15 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
     settings = get_settings()
     capabilities: dict[str, VideoCapabilities] = {}
     for binding in settings.seedance_model_bindings:
+        is_flash = binding.family is SeedanceFamily.SEEDANCE_2_5_FLASH
+        is_2_5 = binding.family in (
+            SeedanceFamily.SEEDANCE_2_5,
+            SeedanceFamily.SEEDANCE_2_5_FLASH,
+        )
         resolutions: tuple[str, ...]
-        if binding.family is SeedanceFamily.SEEDANCE_2_5_PREMIUM:
-            family = ModelFamily.SEEDANCE_2_5_PREMIUM
-            resolutions = ("480p", "720p", "1080p", "4k")
-        elif binding.family is SeedanceFamily.SEEDANCE_2_5:
-            family = ModelFamily.SEEDANCE_2_5
-            resolutions = ("480p", "720p", "1080p")
+        if is_2_5:
+            family = ModelFamily.SEEDANCE_2_5_FLASH if is_flash else ModelFamily.SEEDANCE_2_5
+            resolutions = ("480p", "720p") if is_flash else ("480p", "720p", "1080p", "4k")
         elif binding.family is SeedanceFamily.MINI:
             family = ModelFamily.SEEDANCE_2_MINI
             resolutions = ("480p", "720p")
@@ -203,7 +265,7 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
             family = ModelFamily.SEEDANCE_2
             resolutions = ("480p", "720p", "1080p", "4k")
 
-        if binding.family in (SeedanceFamily.SEEDANCE_2_5, SeedanceFamily.SEEDANCE_2_5_PREMIUM):
+        if is_2_5:
             capabilities[binding.model_id] = VideoCapabilities(
                 family=family,
                 model_id=binding.model_id,
@@ -218,10 +280,8 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
                 duration_range=(4, 30),
                 priority_range=(0, 9),
                 execution_expires_after_range=(3600, 259200),
-                supports_draft=True,
-                draft_final_resolution="4k"
-                if family is ModelFamily.SEEDANCE_2_5_PREMIUM
-                else "1080p",
+                supports_draft=not is_flash,
+                draft_final_resolution=None if is_flash else "1080p",
                 supports_audio_only_input=True,
                 supported_task_types=SEEDANCE_2_5_TASK_TYPES,
                 supported_output_formats=("mp4", "mov"),
@@ -420,13 +480,8 @@ class CapabilityRegistry:
     def validate_image_size(self, model_id: str | None, size: str | None) -> str | None:
         """Validate that the size is supported by the model, if sizes are restricted."""
         caps = self.get_image_capabilities(model_id)
-        if caps.supported_sizes is None or size is None:
-            return size
-        if size not in caps.supported_sizes:
-            raise ValueError(
-                f"Size '{size}' is not supported by model '{caps.model_id}'. "
-                f"Supported: {caps.supported_sizes}"
-            )
+        if violations := caps.image_size_violations(size):
+            raise ValueError(f"Invalid size for model '{caps.model_id}': {'; '.join(violations)}")
         return size
 
     def validate_output_format(self, model_id: str | None, output_format: str | None) -> str | None:

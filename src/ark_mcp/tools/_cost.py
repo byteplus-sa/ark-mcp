@@ -7,6 +7,8 @@ variation tool handler.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.pricing import get_price_book
 
@@ -33,18 +35,16 @@ def register_video_cost_override(model_id: str, cost_per_task: float) -> None:
     _VIDEO_COST_OVERRIDES[model_id] = cost_per_task
 
 
-_SEEDANCE_2_5_FAMILIES = frozenset({"seedance_2_5", "seedance_2_5_premium"})
-
-
 def _video_cost_for_model(model_id: str | None, family: str | None = None) -> float:
     """Return the cost-per-task for a video model, keyed on its registry family.
 
     A model-specific override wins. Pricing follows the family so that a
-    custom endpoint ID bound to Seedance 2.5 is priced as 2.5.
+    custom endpoint bound to Seedance 2.5 or Flash uses the static 2.5 fallback,
+    not a token-based provider quote.
     """
     if model_id and model_id in _VIDEO_COST_OVERRIDES:
         return _VIDEO_COST_OVERRIDES[model_id]
-    if family in _SEEDANCE_2_5_FAMILIES:
+    if family in ("seedance_2_5", "seedance_2_5_flash"):
         return COST_PER_VIDEO_TASK_2_5
     return COST_PER_VIDEO_TASK
 
@@ -64,6 +64,15 @@ def _live_cost_per_image(model_id: str | None) -> float | None:
         return None
     item = pricing.charge_item("ToICompletion", "T2ICompletion", "I2ICompletion")
     return item.price_per_piece if item is not None else None
+
+
+def image_cost_estimate(
+    model_id: str | None, count: int
+) -> tuple[float, Literal["catalog", "builtin"]]:
+    """Return amount and source from one cached price lookup, never a billing quote."""
+    rate = _live_cost_per_image(model_id)
+    source: Literal["catalog", "builtin"] = "builtin" if rate is None else "catalog"
+    return round(count * (COST_PER_IMAGE if rate is None else rate), 4), source
 
 
 def _live_understanding_rates(model_id: str | None) -> tuple[float, float] | None:
@@ -117,8 +126,7 @@ def estimate_cost(
         Estimated cost in USD.
     """
     if product == "image":
-        per_image = _live_cost_per_image(model_id)
-        return round(variations * (COST_PER_IMAGE if per_image is None else per_image), 4)
+        return image_cost_estimate(model_id, variations)[0]
     if product == "audio":
         return round(variations * max(duration_seconds, 10) * COST_PER_AUDIO_SECOND, 2)
     if product == "video":

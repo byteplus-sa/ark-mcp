@@ -3,7 +3,7 @@
 Behaviour and gotchas for `seed_understand`, `seed_audio_understand`,
 `speech_to_text`, `media_upload`, `media_presign`, and the `ark_asset_*` tools.
 For parameters see the tool schema and
-[docs/api-reference.md](../../../../docs/api-reference.md). Per-model limits:
+[API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/). Per-model limits:
 [models-and-limits.md](models-and-limits.md); env vars:
 [environment.md](environment.md); submitting and polling background work:
 [workflows.md](workflows.md), [polling-and-artifacts.md](polling-and-artifacts.md).
@@ -167,7 +167,7 @@ bed) feed many shots, **upload once, then presign per shot**:
 ## Private asset library (`ark_asset_*`)
 
 Lets Seedance use real people, your own virtual characters, and copyright IP
-(Advanced Creation Rights). Operator guide: [docs/assets.md](../../../../docs/assets.md).
+(Advanced Creation Rights). Operator guide: [Assets](https://byteplus-sa.github.io/ark-mcp/assets/).
 
 ### Prerequisites and rules
 

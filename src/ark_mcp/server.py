@@ -186,6 +186,32 @@ def _disabled_http_guardrails(settings: Settings) -> list[str]:
     return disabled
 
 
+def _background_local_export_status(settings: Settings) -> str:
+    if settings.mcp_transport != "stdio":
+        return "disabled (stdio only)"
+    roots = settings.output_root_paths
+    if not roots:
+        return "not configured (set OUTPUT_ROOTS; background jobs cannot use client MCP roots)"
+    for root in roots:
+        if "\0" in root:
+            continue
+        try:
+            absolute = Path(root).expanduser().is_absolute()
+        except (RuntimeError, ValueError):
+            continue
+        if absolute:
+            return "configured; needs request preflight"
+    return "not configured (OUTPUT_ROOTS has no usable absolute roots)"
+
+
+def _seedream_default_family(settings: Settings) -> str:
+    return next(
+        binding.family.value
+        for binding in settings.seedream_model_bindings
+        if binding.model_id == settings.seedream_default_model
+    )
+
+
 def create_server(
     settings: Settings | None = None,
     *,
@@ -238,13 +264,17 @@ def create_server(
 
     @server.resource("seed-health://status")
     async def health_status() -> str:
-        """Return a credential-free MCP health summary."""
+        """Return credential-free configuration diagnostics, not authorization or readiness."""
         stamp = _build_stamp()
         return (
             "Ark Seed MCP Server\n"
             f"Build: {stamp}\n"
             "Status: healthy\n"
+            "Diagnostics: configuration only; provider authorization is not checked; "
+            "filesystem readiness is not checked\n"
             f"ModelArk configured: {resolved_settings.has_modelark}\n"
+            f"Seedream default model: {resolved_settings.seedream_default_model}\n"
+            f"Seedream default family: {_seedream_default_family(resolved_settings)}\n"
             f"Seed 3D configured: {resolved_settings.has_seed3d}\n"
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
@@ -256,6 +286,7 @@ def create_server(
             f"STT configured: {resolved_settings.has_stt}\n"
             f"Artifact backend: {resolved_settings.artifact_backend}\n"
             f"Transport: {resolved_settings.mcp_transport}\n"
+            f"Background-job local export: {_background_local_export_status(resolved_settings)}\n"
         )
 
     @server.custom_route("/health", methods=["GET"])

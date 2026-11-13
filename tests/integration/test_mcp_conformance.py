@@ -104,20 +104,6 @@ def seed3d_server(
     get_settings.cache_clear()
 
 
-@pytest.fixture
-def seedance_premium_server(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
-    monkeypatch.setenv("BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED", "true")
-
-    get_settings.cache_clear()
-
-    yield SimpleNamespace(mcp=create_server(get_settings()))
-
-    get_settings.cache_clear()
-
-
 class TestToolDiscovery:
     """Verify configured tools are discoverable when credentials are set."""
 
@@ -284,20 +270,13 @@ class TestToolDiscovery:
             mcp_tool = tool.to_mcp_tool()
             assert mcp_tool.execution is None
 
-    async def test_seedance_premium_is_a_model_not_a_tool(
+    async def test_seedance_4k_is_a_resolution_not_a_tool(
         self,
         configured_server: None,
-        seedance_premium_server: None,
     ) -> None:
-        default_names = {tool.name for tool in await configured_server.mcp.list_tools()}
-        premium_names = {tool.name for tool in await seedance_premium_server.mcp.list_tools()}
-        assert default_names == premium_names
-        assert not {name for name in premium_names if "premium" in name}
-        tool = next(
-            t
-            for t in await seedance_premium_server.mcp.list_tools()
-            if t.name == "seedance_create_task"
-        )
+        tools = await configured_server.mcp.list_tools()
+        assert not {tool.name for tool in tools if "premium" in tool.name or "4k" in tool.name}
+        tool = next(t for t in tools if t.name == "seedance_create_task")
         assert tool.task_config.mode == "required"
         assert '"4k"' in json.dumps(tool.parameters)
 
@@ -325,16 +304,14 @@ class TestToolDiscovery:
         self,
         configured_server: None,
         seed3d_server: None,
-        seedance_premium_server: None,
         omnihuman_server: None,
     ) -> None:
         configured_tools = await configured_server.mcp.list_tools()
         seed3d_tools = await seed3d_server.mcp.list_tools()
-        premium_tools = await seedance_premium_server.mcp.list_tools()
         omnihuman_tools = await omnihuman_server.mcp.list_tools()
         task_enabled_names = {
             tool.name
-            for tool in [*configured_tools, *seed3d_tools, *premium_tools, *omnihuman_tools]
+            for tool in [*configured_tools, *seed3d_tools, *omnihuman_tools]
             if tool.task_config.mode in {"required", "optional"}
         }
 

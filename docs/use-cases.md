@@ -57,7 +57,7 @@ Edit an existing image using a text prompt and reference image.
 
 ## 3. Reproducible Image Generation
 
-Generate an image with a fixed seed for reproducibility.
+Generate an image with a fixed seed to help reproduce request settings.
 
 **Tool:** `seedream_generate_image`
 
@@ -69,7 +69,10 @@ Generate an image with a fixed seed for reproducibility.
 }
 ```
 
-Using the same seed and prompt produces the same image.
+The same seed and prompt do not guarantee identical pixels. Record the resolved
+model, submitted options, final prompt hash and artifact SHA-256 from the result
+for traceability. Visual acceptance remains a separate
+[review/edit step](integration-guide.md#seedream-review-and-edit).
 
 ## 4. Parallel Image Variations
 

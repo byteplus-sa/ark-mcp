@@ -1,6 +1,6 @@
 # Create-tool reference
 
-Per-product behaviour of the create tools that the tool schemas do not spell out: flows, cross-field rules, gotchas, and recovery. Parameters, ranges and output fields are in each tool's schema (also [docs/api-reference.md](../../../../docs/api-reference.md)); per-model limits are in [models-and-limits.md](models-and-limits.md); polling, persistence and artifact handling are in [polling-and-artifacts.md](polling-and-artifacts.md); background-job mechanics are in [workflows.md](workflows.md).
+Per-product behaviour of the create tools that the tool schemas do not spell out: flows, cross-field rules, gotchas, and recovery. Parameters, ranges and output fields are in each tool's schema (also [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)); per-model limits are in [models-and-limits.md](models-and-limits.md); polling, persistence and artifact handling are in [polling-and-artifacts.md](polling-and-artifacts.md); background-job mechanics are in [workflows.md](workflows.md).
 
 **Universal rules for every create tool below:** run it through `ark_job_submit` (or native task augmentation), read the task IDs from the job result, and poll those IDs. **Never resubmit a create tool to poll or to retry an ambiguous failure: every submit is billed and none is idempotent.** Take exact model IDs from `ark_list_models`; `model` accepts exact IDs only.
 
@@ -26,7 +26,7 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 - **No per-variation timeout.** Queue wait never counts; one batch deadline bounds the call. A deadline or storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry), `generating` (may have completed, **do not retry blindly**), `persisting` (billed output not stored; the provider URL may still be in the result).
 - **`variation_prompts`** must have exactly `variations` entries and replaces `prompt` (and satisfies "prompt required").
 - **Local export:** image and audio variations need an `output_path` directory ending in `/`. Video variations are polled together with **one** `gen_task_get` call over all non-null `task_id`s.
-- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is a static estimate, not a provider quote. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
+- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is an estimate, not billing or a provider quote. Seedream adds `price_source`: `catalog` for a fresh cached image rate, otherwise `builtin`. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
 - **Runtime validation reports everything at once.** Per-model limits are checked from the capability registry before any provider call, and all violations come back in one error ending with `Call ark_list_models(kind=...) for per-model limits.` Fix them together.
 
 ## Seedance
@@ -35,17 +35,22 @@ Needs `BYTEPLUS_MODELARK_API_KEY`. Video is **asynchronous**: `seedance_create_t
 
 ### Model selection
 
-**One tool covers every Seedance model**: 2.0 (Standard, Fast, Mini), 2.5 and 2.5 Premium. `ark_list_models(kind='video')` lists the exact `model_id`s, their limits, and which are bound. Omit `model` for the default (`SEEDANCE_DEFAULT_MODEL`, Seedance 2.5 unless changed).
+**One tool covers every Seedance model**: 2.0 (Standard, Fast, Mini), regular 2.5, and 2.5 Flash. `ark_list_models(kind='video')` lists the exact `model_id`s, their limits, and which are bound. Omit `model` for the default (`SEEDANCE_DEFAULT_MODEL`, regular Seedance 2.5 unless changed).
 
-- **2.5**: up to 30 s single pass, richer references, structured editing and native extension (`omni_reference_task_type`), `mov` output, Draft mode, audio-only input.
-- **2.5 Premium**: everything in 2.5 plus 4K. Whitelist-only; bound only when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`. If it is absent from `ark_list_models`, report it unavailable.
-- **2.0 family**: 4K on Standard without Premium, Fast/Mini for speed and cost, 15 s maximum, no Draft, no task types, no `output_format`, audio needs an image or video alongside it.
+- **2.5**: up to 30 s single pass, including 4K through `resolution="4k"` on the same model; richer references, structured editing and native extension (`omni_reference_task_type`), `mov` output, Draft mode, audio-only input. No extra feature flag or model.
+- **2.5 Flash**: select `dreamina-seedance-2-5-flash-261115` on the same tool for
+  480p/720p reference/edit/extend generation, with the same reference limits
+  and formats but no Draft. It is included when bindings are empty; add it
+  explicitly to custom binding lists as `seedance_2_5_flash`. Listing it is
+  not an account-activation check. Costs use the static 2.5 fallback, not a
+  token-based provider quote.
+- **2.0 family**: 4K on Standard, Fast/Mini for speed and cost, 15 s maximum, no Draft, no task types, no `output_format`, audio needs an image or video alongside it.
 
 Family limits (resolutions, durations, reference counts, Draft final resolution): [models-and-limits.md](models-and-limits.md).
 
 ### Inputs and media rules
 
-- **At least one of `prompt`, `images`, `videos`, `audios`** is required (except with `draft_task_id`). Text-only is valid text-to-video; audio-only works on 2.5 and Premium only.
+- **At least one of `prompt`, `images`, `videos`, `audios`** is required (except with `draft_task_id`). Text-only is valid text-to-video; audio-only works on regular 2.5 and Flash.
 - **Media is URL-only for video.** Every video reference must be an HTTPS URL or `asset://<asset_id>`. Images and audio also accept inline Base64 (size- and MIME-checked), but prefer URLs; local files go through `media_upload` first ([understanding-media-assets.md](understanding-media-assets.md)).
 - **Private and link-local hosts are rejected** (SSRF policy); the URL must be publicly fetchable by the provider while the task is queued.
 - **`asset://<asset_id>`** references the private asset library and is the only way to use AIGC virtual portraits, verified real people, and copyright IP. The asset must be `Active`. When AK/SK are configured and `SEEDANCE_ASSET_PREFLIGHT` is on, the server checks references before submitting (dry runs included): `Processing` or `Failed` assets fail fast with `asset_not_active`; a not-found lookup does **not** block, because console-authorized and copyright IP assets belong to other accounts.
@@ -54,7 +59,7 @@ Family limits (resolutions, durations, reference counts, Draft final resolution)
 
 ### Task types and auto-locked parameters
 
-On 2.5 and Premium, `omni_reference_task_type` (`auto`, `reference`, `edit`, `extend`) forces the task type when auto-detection is ambiguous. **Write the prompt to match the type**, otherwise the provider fails the task with `TaskTypeMismatch`.
+On regular 2.5 and Flash, `omni_reference_task_type` (`auto`, `reference`, `edit`, `extend`) forces the task type when auto-detection is ambiguous. **Write the prompt to match the type**, otherwise the provider fails the task with `TaskTypeMismatch`.
 
 | Task | Aspect ratio | Duration |
 |---|---|---|
@@ -70,9 +75,9 @@ On 2.5 and Premium, `omni_reference_task_type` (`auto`, `reference`, `edit`, `ex
 - Any request with `first_frame` / `last_frame` images needs `ratio` omitted or `adaptive`.
 - 2.0 models reject `omni_reference_task_type` entirely.
 
-### Draft mode (2.5 and 2.5 Premium)
+### Draft mode (regular 2.5 only)
 
-A cheap 480p preview, then a final render of the one you like. Each step is billed separately (the Draft as a normal 480p video).
+A cheap 480p preview, then a 1080p final render of the one you like. 4K is supported for ordinary generation, not Draft promotion. Each step is billed separately (the Draft as a normal 480p video). Static video cost previews do not account for resolution or duration.
 
 1. `draft: true` with `resolution` omitted or `480p`. Combine with `variations` for several candidates.
 2. Poll with `gen_task_get` until a Draft succeeds (`draft: true` in the result) and review it.
@@ -80,7 +85,7 @@ A cheap 480p preview, then a final render of the one you like. Each step is bill
 
 **Reused from the Draft, so omit them (rejected even when identical):** `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, `omni_reference_task_type`. The model is also reused (omit `model`; a different one is rejected), as is the Draft's seed. `resolution` must be omitted or the model's Draft final resolution (the default). Still settable on the final call: `return_last_frame`, `watermark`, `execution_expires_after`, `priority`, `safety_identifier`, `output_format`.
 
-`draft` and `draft_task_id` are mutually exclusive. On a model without Draft support (2.0) both are rejected.
+`draft` and `draft_task_id` are mutually exclusive. On a model without Draft support (2.0 or Flash) both are rejected.
 
 ```json
 { "prompt": "A cinematic 20-second chase through a night market", "duration": 20, "draft": true, "variations": 3 }
@@ -94,7 +99,7 @@ A cheap 480p preview, then a final render of the one you like. Each step is bill
 
 - `recommended_poll_after_ms` is the delay before the first `gen_task_get`; it is `null` for dry runs.
 - A single task and a variations batch return the same shape; check `failed` and each `tasks[].error` (`retryable`, `ambiguous_completion`, `phase`) before resubmitting only the failed indices.
-- `output_format: mov` (2.5 only) is H.264 4:4:4 with PCM audio for post-production; some players cannot play it.
+- `output_format: mov` (regular 2.5 and Flash) is H.264 4:4:4 with PCM audio for post-production; some players cannot play it.
 - Provider video URLs expire in about 24 hours; persist from the poller, see [polling-and-artifacts.md](polling-and-artifacts.md).
 
 ## Seedream
@@ -110,13 +115,13 @@ Needs `BYTEPLUS_MODELARK_API_KEY`. **`seedream_generate_image` is the only Seedr
 
 ### `max_images` versus `variations`
 
-- **`max_images`** is one provider call returning up to 15 images: one request, one `usage`, results in `artifacts` and `item_errors`. Only on batch-capable families (Lite, 4.x); **Seedream 5.0 Pro does not support it**.
+- **`max_images`** is one provider call returning up to 15 images: one request, one `usage`, results in `artifacts` and `item_errors`. Only on batch-capable families (Lite, 4.x); **Seedream 5.5 and 5.0 Pro do not support it**.
 - **`variations`** is separate parallel calls: works on every model, supports `variation_prompts` and per-variation seeds, results in `summary` (`artifacts` and `usage` stay empty).
-- **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On Pro, use `variations`.
+- **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On 5.5 and Pro, use `variations`.
 
 ### Seeds
 
-A fixed `seed` with the same prompt reproduces a single image. With `variations > 1`, `seed` is the **base seed**:
+A fixed `seed` reproduces request settings, not guaranteed identical pixels. Single-call `-1` or omitted seed remains provider randomness, not a recovered actual seed. With `variations > 1`, `seed` is the **base seed**:
 
 | `seed` | Per-variation seeds |
 |---|---|
@@ -126,10 +131,29 @@ A fixed `seed` with the same prompt reproduces a single image. With `variations 
 
 ### Transparent background
 
-`background="transparent"` **edits exactly one PNG input that already has transparent pixels and keeps that transparency**. It does **not** cut a subject out of an opaque image. Requires Seedream 5.0 Pro and `output_format` omitted or `png`. A Base64 input whose `mime_type` is not `image/png` is rejected locally; an opaque PNG fails at the provider with HTTP 400 ("transparent background requires a PNG input with at least one transparent pixel"). To get transparency from an opaque image, remove the background with another tool first.
+`background="transparent"` requires `output_format` omitted or `png`.
+Seedream 5.5 (default) accepts text-only prompts and reference images
+without alpha. It defaults to PNG even for ordinary generation.
+`prompt_optimization="standard"` is accepted (provider default); `fast` is rejected.
+`background="auto"` is the 5.5 default and follows the prompt; JPEG is always opaque.
+
+Use 5.5 size tiers `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT`
+with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive.
+Optional `safety_identifier` on 5.5/Pro must be a stable hashed user ID,
+1-64 non-space printable ASCII characters. Previews and logs redact it.
+`generations` preserves per-call usage, identifier echo, and provider-reported
+image size, format and actual background, with image/variation indices and
+matching artifact IDs. Missing values stay null; successful provider metadata
+survives partial variation failures. Decomposition/OCR inputs are rejected.
+
+On Seedream 5.0 Pro, transparency **edits exactly one PNG input that already has
+transparent pixels**. It does not remove an opaque background. Non-PNG Base64
+input is rejected locally; an opaque PNG fails at the provider with HTTP 400.
+The following example selects Pro, which must be bound by the operator:
 
 ```json
 {
+  "model": "dola-seedream-5-0-pro-260628",
   "prompt": "Turn the circle into a glossy ceramic button, keep the background transparent",
   "images": [{ "kind": "url", "url": "https://cdn.example.com/circle-rgba.png" }],
   "background": "transparent",
@@ -141,6 +165,17 @@ A fixed `seed` with the same prompt reproduces a single image. With `variations 
 
 - `persist=true` (default) stores each image as a durable artifact. **A storage failure never drops a billed image**: the result carries the 24-hour provider URL (id `provider-url`) with `persistence_error`, or, for Base64 output, `fallback_data` inline up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`. Check each artifact's `persistence_error` and download from `source_url`/`uri` before it expires. Details: [polling-and-artifacts.md](polling-and-artifacts.md).
 - `persist=false` returns provider-URL references only.
+- Explicit `response_format="b64_json"` with `persist=false` is rejected before
+  submission, even for dry runs. Missing output yields `NO_OUTPUT`; unexpected
+  Base64-only delivery without persistence yields `NO_DELIVERABLE_OUTPUT`.
+- `generations` includes single/variation request IDs, submitted seeds,
+  final-prompt hashes and allowlisted options excluding private media and
+  identifiers. `images[].inspection` independently measures decoded format,
+  dimensions and actual alpha: `verified`, `mismatch`, `invalid`, `unavailable`,
+  or null for URL-only delivery. It preserves artifacts, never overwrites
+  provider reports, and does not establish visual quality or trigger paid retries.
+- Use the bounded [review/edit workflow](workflows.md#seedream-generate-review-edit)
+  before accepting text, counts or geometry; publishing previews are a separate check.
 - `output_path` (stdio local export) needs `persist=true` and **must be a directory ending in `/`** when `variations > 1` or `max_images > 1`.
 - `asset://` references are **not** accepted by Seedream natively: rejected unless `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental; sends the asset's temporary download URL and only works for assets this account can look up).
 - Dry-run cost covers `variations x max_images` images.
