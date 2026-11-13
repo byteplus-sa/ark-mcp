@@ -6,7 +6,7 @@ image_id      = "image-REPLACE-WITH-UBUNTU-2404-AMD64"
 instance_type = "ecs.g4i.large"
 key_pair_name = "REPLACE-WITH-EXISTING-KEYPAIR"
 
-public_hostname = "mcp.example.com"
+public_hostname = null
 ark_mcp_image   = "REPLACE-WITH-VERIFIED-SHARED-KEY-IMAGE-DIGEST"
 
 create_vpc = true

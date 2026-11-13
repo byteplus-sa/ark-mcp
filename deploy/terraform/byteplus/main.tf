@@ -107,7 +107,7 @@ resource "bytepluscc_ecs_instance" "this" {
     volume_type          = var.volume_type
     delete_with_instance = true
   }
-  user_data = base64encode(local.cloud_init)
+  user_data = base64gzip(local.cloud_init)
 
   lifecycle {
     replace_triggered_by = [terraform_data.bootstrap_revision]
@@ -120,8 +120,8 @@ resource "bytepluscc_ecs_instance" "this" {
       error_message = "The existing subnet must belong to the specified VPC and availability zone."
     }
     precondition {
-      condition     = length(local.cloud_init) <= 16384
-      error_message = "Decoded ECS user data exceeds the 16 KiB limit."
+      condition     = length(base64gzip(local.cloud_init)) <= 16384
+      error_message = "Encoded compressed ECS user data exceeds the provider's 16 KiB limit."
     }
   }
 }

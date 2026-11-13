@@ -45,6 +45,43 @@ its task and MCP SDK dependencies.
   a recovered disk. Bootstrap changes plan VM replacement; deletion/storage
   guards require operator-reviewed maintenance. Offline tests are not a live
   deployment certification.
+  The checkout's `scripts/deploy_byteplus.py` offers `init`, `plan`, approved
+  `deploy`, `resume`, sanitized `status`, nonbillable `verify`, and approved
+  application-only `update`. Use a new private mode-0700 workspace and mode-0600
+  config/provider/token inputs. CLI defaults to a 40-GiB state disk and closed
+  SSH; null hostname selects EIP-derived sslip.io DNS. Preflight checks access
+  and pinned Linux AMD64 shared-key image metadata, not guaranteed quota or
+  exact cost. Private GHCR pulls require explicit temporary credentials.
+  Keep provider/team/Redis/job secrets out of Terraform and plaintext ECS
+  commands; encrypted transfer publishes validated config without overwrite.
+  Resume polls saved invocation IDs; unknown acceptance requires reconciliation,
+  failed guest operations require deliberate `--retry-failed`. Never retry
+  ambiguous paid submissions or rotate retained secrets. `update` preserves
+  state and changes only MCP's installed Compose image, not Terraform bootstrap.
+  This is a checkout CLI, not an account-login or one-click web wizard.
+  Operators should start with the guide's
+  [requirements](https://byteplus-sa.github.io/ark-mcp/byteplus-terraform/#requirements),
+  [dependency setup](https://byteplus-sa.github.io/ark-mcp/byteplus-terraform/#set-up-dependencies),
+  and [IAM setup](https://byteplus-sa.github.io/ark-mcp/byteplus-terraform/#set-up-iam-and-credentials).
+  The deployment workstation needs macOS/Linux, Python 3.12+, uv and Terraform
+  1.9 to below 2.0; ArkCLI, bytedcli and local Docker are not required. Infrastructure
+  AK/SK/STS credentials are separate from product bearer keys and the shared
+  MCP key. Root guest-command access is privileged; the permission checklist
+  is not a validated least-privilege IAM policy. Members connecting to an
+  existing server need none of these operator tools or cloud credentials.
+  [Secret Manager](https://byteplus-sa.github.io/ark-mcp/secret-manager/) supports
+  operator-side pinned generic-secret versions for first deployment and
+  `config status`, `config plan`, approved `config apply`, and unsubmitted
+  `config discard`. The protected reference binds Johor KMS region, account,
+  project, name and exact version UUID. Only the four provider keys are managed;
+  missing entries disable products. Never retrieve real secret values through
+  an agent merely to inspect configuration; status is local and redacted.
+  Secret reads use scoped operator IAM, never new VM IAM credentials. Approved
+  sync recreates only MCP, preserves shared-key/job/storage configuration and
+  resumes staged bytes and accepted IDs. Pause producers and drain jobs before
+  applying. Health/discovery/dry runs do not validate provider credentials.
+  Existing frozen/manual deployments require a separately reviewed migration.
+  Account enablement, IAM scoping and live Secret Manager sync are unverified.
 - Releases use `vX.Y.Z` tags, GitHub wheel/source/checksum assets, and versioned
   GHCR images. `latest` is a release; `edge` is a main build. Prefer a digest
   pin for deployment. PyPI publishing is not configured. Release publication

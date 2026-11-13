@@ -5,6 +5,12 @@ For the separate key members use to connect to a hosted MCP server, see
 That key is not a BytePlus provider key. The credentials below stay on the
 server and must not be distributed to shared-server members.
 
+For administrator-managed BytePlus deployments, follow
+[Secret Manager setup and provider-key updates](secret-manager.md).
+That workflow pins one complete four-provider bundle, requires an approved
+sync to update the VM, and preserves the separate shared MCP connection key.
+It does not manage IAM or object-storage credentials.
+
 This server calls several BytePlus services. Each uses a distinct credential
 and auth scheme — they are **not interchangeable**. You only need the keys for
 the products you want to use; absent credentials simply skip registering that

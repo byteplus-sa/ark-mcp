@@ -9,6 +9,13 @@ import stat
 import sys
 from pathlib import Path
 
+PRODUCT_KEYS = (
+    "BYTEPLUS_MODELARK_API_KEY",
+    "BYTEPLUS_SEED_SPEECH_API_KEY",
+    "BYTEPLUS_VOD_MEDIAKIT_API_KEY",
+    "BYTEPLUS_CV_API_KEY",
+)
+
 
 def load_environment(path: Path, *, expected_uid: int = 0) -> dict[str, str]:
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -78,15 +85,7 @@ def validate_environment(values: dict[str, str]) -> None:
             raise ValueError(
                 f"{key} must be positive; request and concurrency limits must be integers."
             )
-    if not any(
-        values.get(key)
-        for key in (
-            "BYTEPLUS_MODELARK_API_KEY",
-            "BYTEPLUS_SEED_SPEECH_API_KEY",
-            "BYTEPLUS_VOD_MEDIAKIT_API_KEY",
-            "BYTEPLUS_CV_API_KEY",
-        )
-    ):
+    if not any(values.get(key) for key in PRODUCT_KEYS):
         raise ValueError("Configure at least one BytePlus product API key.")
 
 

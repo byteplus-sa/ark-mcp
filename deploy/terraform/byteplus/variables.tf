@@ -140,12 +140,12 @@ variable "https_cidrs" {
 
 variable "public_hostname" {
   type        = string
-  description = "Public DNS hostname for HTTPS. Create its A record using the public_ip output; DNS is not managed here."
-  nullable    = false
+  description = "Public DNS hostname for HTTPS. Null selects an EIP-derived sslip.io name; install MCP_PUBLIC_HOST from the public_hostname output after apply."
+  default     = null
 
   validation {
-    condition     = length(var.public_hostname) <= 253 && can(regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,63}$", var.public_hostname))
-    error_message = "Use a lowercase DNS hostname, without scheme, port, wildcard, or path."
+    condition     = var.public_hostname == null ? true : length(var.public_hostname) <= 253 && can(regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,63}$", var.public_hostname))
+    error_message = "Use null or a lowercase DNS hostname, without scheme, port, wildcard, or path."
   }
 }
 

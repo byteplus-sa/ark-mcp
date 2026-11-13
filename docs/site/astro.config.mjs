@@ -112,6 +112,7 @@ export default defineConfig({
             "self-hosting",
             "deployment",
             "byteplus-terraform",
+            "secret-manager",
             "runtime",
             "security",
             "observability",

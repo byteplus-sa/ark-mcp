@@ -23,7 +23,7 @@ locals {
   })
   environment_example = join("\n", concat(
     [for line in split("\n", file("${path.module}/../../compose/.env.example")) :
-      startswith(line, "MCP_PUBLIC_HOST=") ? "MCP_PUBLIC_HOST=${var.public_hostname}" : line
+      startswith(line, "MCP_PUBLIC_HOST=") ? "MCP_PUBLIC_HOST=${var.public_hostname == null ? "" : var.public_hostname}" : line
       if can(regex("^[A-Z][A-Z0-9_]*=", line))
     ],
     var.tos_bucket_name == null ? [] : [
@@ -48,11 +48,15 @@ locals {
     "/opt/ark-mcp/activate.sh" = {
       content = file("${path.module}/scripts/activate.sh"), permissions = "0700"
     }
-    "/opt/ark-mcp/check_env.py" = {
-      content = file("${path.module}/scripts/check_env.py"), permissions = "0644"
-    }
-    "/opt/ark-mcp/generate_mcp_key.py" = {
-      content = file("${path.module}/../../../scripts/generate_mcp_key.py"), permissions = "0700"
+    "/opt/ark-mcp/helpers.yaml" = {
+      content = yamlencode({
+        "check_env.py"        = file("${path.module}/scripts/check_env.py")
+        "prepare_state.py"    = file("${path.module}/scripts/prepare_state.py")
+        "receive_config.py"   = file("${path.module}/scripts/receive_config.py")
+        "update_image.py"     = file("${path.module}/scripts/update_image.py")
+        "update_config.py"    = file("${path.module}/scripts/update_config.py")
+        "generate_mcp_key.py" = file("${path.module}/../../../scripts/generate_mcp_key.py")
+      }), permissions         = "0600"
     }
     "/opt/ark-mcp/install.sh" = {
       content = file("${path.module}/scripts/install.sh"), permissions = "0700"
@@ -72,8 +76,7 @@ locals {
       path        = path
       owner       = "root:root"
       permissions = entry.permissions
-      encoding    = "gz+b64"
-      content     = base64gzip(entry.content)
+      content     = entry.content
     }]
     runcmd = [
       ["systemctl", "daemon-reload"],

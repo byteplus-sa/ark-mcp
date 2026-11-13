@@ -11,6 +11,9 @@ mock_provider "bytepluscc" {
   mock_resource "bytepluscc_ecs_instance" {
     defaults = { instance_id = "i-test" }
   }
+  mock_resource "bytepluscc_vpc_eip" {
+    defaults = { eip_address = "203.0.113.20" }
+  }
   mock_data "bytepluscc_vpc_subnet" {
     defaults = {
       vpc_id  = "vpc-existing"
@@ -56,7 +59,7 @@ run "dedicated_network" {
     error_message = "Use the pinned image with shared-key HTTP authentication."
   }
   assert {
-    condition     = contains(keys(local.bootstrap_files), "/opt/ark-mcp/generate_mcp_key.py") && strcontains(local.environment_example, "MCP_API_KEY_SHA256=\n")
+    condition     = contains(keys(yamldecode(local.bootstrap_files["/opt/ark-mcp/helpers.yaml"].content)), "generate_mcp_key.py") && strcontains(local.environment_example, "MCP_API_KEY_SHA256=\n")
     error_message = "Include key generation but never generate or store keys in Terraform."
   }
   assert {
@@ -155,4 +158,23 @@ run "reject_ipv6_vpc" {
   command = plan
   variables { vpc_cidr = "2001:db8::/32" }
   expect_failures = [var.vpc_cidr]
+}
+
+run "generic_hostname" {
+  command = plan
+  variables { public_hostname = null }
+  assert {
+    condition     = strcontains(local.environment_example, "MCP_PUBLIC_HOST=\n")
+    error_message = "Generic DNS must be configured after apply, not embedded in VM bootstrap."
+  }
+  assert {
+    condition     = length(base64gzip(local.cloud_init)) <= 16384
+    error_message = "Compressed helper archive must fit ECS user-data limits."
+  }
+}
+
+run "reject_empty_hostname" {
+  command = plan
+  variables { public_hostname = "" }
+  expect_failures = [var.public_hostname]
 }

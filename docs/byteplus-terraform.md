@@ -6,9 +6,423 @@ stack. Members authenticate with one shared MCP key and use a fixed
 `shared-team` identity; BytePlus product keys remain on the server. No GPU is needed.
 
 The configuration is in [`deploy/terraform/byteplus/`](../deploy/terraform/byteplus/).
-It is an offline-tested starter, not a live-certified deployment or an HA
-architecture. `terraform apply` creates chargeable infrastructure, but does not
-activate an unconfigured application.
+It has offline coverage and partial live provisioning evidence, not full
+end-to-end live validation or an HA architecture. `terraform apply` creates
+chargeable infrastructure, but does not activate an unconfigured application.
+
+## Validation Status
+
+On **2026-11-13**, the guided CLI passed live cloud and pinned-image preflight,
+then created an isolated VM, disks, and security group. EIP quota blocked the
+deployment before application activation. Partial Terraform state was preserved;
+no provider configuration reached the guest and no paid generation ran.
+The temporary VM, both disks, and security group were removed and their absence
+verified through cloud APIs. The existing team server remained unchanged and
+healthy.
+
+That test exposed EBS disk sizes returned as numeric strings; the validator now
+accepts canonical decimal strings while rejecting floats, booleans, malformed
+values, and wrong sizes, with regression coverage. System-disk deletion also
+finished after Terraform returned, so teardown must verify cloud absence rather
+than rely only on an empty state file.
+
+Guided CLI HTTPS/client checks, interruption/resume behavior, and application-only
+updates have **not yet been validated live**. They remain covered by offline
+tests. A fresh end-to-end test needs EIP capacity; the CLI does not automatically
+reuse an unrelated IP or remove other resources to make room.
+
+## Requirements
+
+**These requirements are for the deployment operator. Team members do not need IAM
+credentials, Terraform, Python, or a local checkout.** Members need only a trusted
+HTTPS endpoint, the shared MCP key, and a compatible client. See
+[Connect to a Shared Server](setup/shared-server.md).
+
+| Requirement | Needed where | How to prepare |
+|---|---|---|
+| Trusted macOS or Linux workstation | Operator | The CLI uses POSIX file permissions and locking. Native Windows is not supported. |
+| Reviewed source checkout | Operator | Obtain it with Git or extract a reviewed source archive. It must contain `scripts/deploy_byteplus.py`; installing the MCP wheel alone does not install this CLI. |
+| Python 3.12+ and uv | Operator | Install uv, then let uv install Python and the locked project environment, as shown below. |
+| Terraform `>=1.9, <2.0` | Operator | Install the CLI on `PATH`. Terraform installs the pinned BytePlus provider automatically. |
+| BytePlus IAM credentials | Operator | Scoped infrastructure AK/SK, preferably temporary STS credentials, plus the permissions below. Provider bearer API keys are not infrastructure credentials. |
+| Cloud account, quota, and guest-agent access | BytePlus | Active billing, resource availability, registered SSH public key, Ubuntu AMD64 image, and working ECS Cloud Assistant. |
+| Compatible container image | VM, checked by operator | Digest-pinned Linux AMD64 GHCR image supporting `MCP_AUTH_MODE=api_key`; private packages also need a pull token. |
+| Product API keys | Private provider file or pinned Secret Manager version, then VM | Keys for the capabilities you enable. See [Provider Keys](api-keys.md) and [Secret Manager](secret-manager.md). |
+| Protected state and backups | Operator and VM | Private local deployment workspace, encrypted storage, and tested off-host backups. Retained storage is not a backup. |
+
+**ArkCLI and bytedcli are not required.** The CLI uses signed BytePlus API
+requests and Terraform; ArkCLI SSO is not automatically deployment
+authentication. An existing organization-approved credential tool, including
+bytedcli where available, can supply temporary credentials, but the deployer
+does not install it or log in for you.
+GitHub CLI, Node.js, npm, and local Docker are also unnecessary for deployment.
+Docker and Compose are installed on the VM by bootstrap; Node/npm are needed
+only when developing this documentation website.
+
+## Set Up Dependencies
+
+### Install uv and Python
+
+On macOS with Homebrew already installed:
+
+```bash
+brew install uv
+```
+
+On macOS or Linux without Homebrew, use the
+[official uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
+Review the installer before executing it:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | less
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Open a new terminal or follow the installer's `PATH` instructions, then:
+
+```bash
+uv --version
+uv python install 3.12
+```
+
+Python does not have to be installed beforehand. See
+[uv's Python setup guide](https://docs.astral.sh/uv/guides/install-python/).
+If you cannot use these installers, follow your organization's approved
+package-distribution process; do not disable TLS verification.
+
+### Install Terraform
+
+On macOS with Homebrew:
+
+```bash
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
+terraform version
+```
+
+On Linux, follow HashiCorp's
+[official installation instructions](https://developer.hashicorp.com/terraform/install)
+for its apt/yum repository or download the binary for your workstation.
+For direct downloads, follow
+[HashiCorp binary verification](https://developer.hashicorp.com/well-architected-framework/operational-excellence/verify-hashicorp-binary)
+before adding the executable to `PATH`.
+Run `terraform version` and confirm **1.9 or newer, below 2.0**. Package managers
+may change their default version; an unsupported version must be replaced with
+a supported release before deployment.
+
+The starter pins `byteplus-sdk/bytepluscc` to `0.0.63`; do not install a provider
+manually or replace it with the legacy BytePlus provider. The checked-in
+lockfile includes verified checksums for Linux AMD64 and macOS ARM64.
+Maintainers adding platforms must regenerate verified checksums with
+`terraform providers lock -platform=...`, not bypass lock verification.
+
+### Prepare the Checkout
+
+Use a reviewed checkout containing the deployment CLI, not an arbitrary old
+release. In particular, do not assume `v0.2.0` includes this CLI or a compatible
+shared-key container. Git setup is documented by the
+[official Git downloads page](https://git-scm.com/downloads); a reviewed source
+archive is an alternative.
+
+Run these commands from the checkout root:
+
+```bash
+uv sync --locked --no-dev --python 3.12
+uv run --no-sync python --version
+uv run --no-sync python scripts/deploy_byteplus.py --help
+```
+
+These commands install the locked Python dependencies and display help; they
+do not provision resources, start the MCP server, or read provider keys.
+If the help command cannot find the script, your checkout does not contain
+the deployment CLI. Resolve that revision mismatch before proceeding.
+
+## Set Up IAM and Credentials
+
+### Arrange the Deployment Identity
+
+Ask your account administrator to create or approve a dedicated deployment
+IAM user or an assumable role. Prefer temporary STS credentials; avoid main
+account keys. Official setup references:
+
+- [IAM access keys and permission assignment](https://docs.byteplus.com/en/docs/IAM/about-access-keys).
+- [Create an IAM user's access key](https://docs.byteplus.com/en/docs/IAM/creating-an-access-key).
+- [IAM roles](https://docs.byteplus.com/en/docs/IAM/about-roles) and
+  [AssumeRole temporary credentials](https://docs.byteplus.com/en/docs/byteplus-platform/reference-assumerole).
+
+For an IAM user, an administrator can open **IAM > User management > User**,
+select the dedicated user, assign approved policies, and create an access key
+on its key tab. Store the key directly in a secret manager. For a role, use
+your approved STS credential workflow; the CLI does not assume the role itself.
+
+### Required Permission Capabilities
+
+| Purpose | Permissions to review with your administrator |
+|---|---|
+| Terraform provisioning | Cloud Control operations and underlying create/read/configure/attach/tag operations for ECS, EBS, VPC, subnets, security groups, and EIP in the selected project and region. Existing-network mode still creates ECS, storage, a security group, and an EIP. |
+| ECS preflight and identity checks | `DescribeImages`, `DescribeAvailableResource`, `DescribeKeyPairs`, and `DescribeInstances`. |
+| Network preflight | `DescribeVpcs`, `DescribeSubnets`, and `DescribeEipAddresses`. |
+| Storage preflight and identity checks | `DescribeVolumeType` and `DescribeVolumes`. |
+| Guest configuration and updates | `RunCommand` and `DescribeInvocationResults` on the deployment's ECS instance. Commands run as **root** in the guest. |
+| Optional Secret Manager source | KMS `DescribeSecret` and `GetSecretValue` on the intended generic secret; review secret/project scoping and encryption-key access with your administrator. |
+
+**This is a capability checklist, not a validated least-privilege IAM policy.**
+The API names are not a complete copyable policy: your administrator must
+validate Cloud Control permissions, service action names, resource scoping,
+and first-create permissions against the pinned provider. Scope access to
+the intended project/resources where supported. Do not grant account-wide
+administrator access merely to make a failed preflight pass.
+
+On first ECS use, an account administrator may also need to complete
+[ECS cross-service authorization](https://docs.byteplus.com/en/docs/ecs/Cross-service_authorization)
+in the console. This account setup is separate from routine deployment
+permissions. The CLI does not create IAM users, attach policies, create service
+roles, or grant itself additional permissions.
+
+### Load Infrastructure Credentials
+
+The guided CLI requires these environment variables in the operator's shell:
+
+| Variable | Requirement |
+|---|---|
+| `BYTEPLUS_ACCESS_KEY` | Infrastructure access key ID. |
+| `BYTEPLUS_SECRET_KEY` | Matching infrastructure secret access key. |
+| `BYTEPLUS_SESSION_TOKEN` | Required with STS credentials; omit/unset for long-lived IAM user keys. |
+
+Use a secret manager or approved credential injector. As an interactive
+fallback, start **Bash** (`bash` on macOS if your default shell is zsh), then
+enter existing scoped credentials at hidden prompts rather than typing their
+values in commands:
+
+```bash
+set +x
+read -r -s -p "BytePlus access key: " BYTEPLUS_ACCESS_KEY
+printf '\n'
+read -r -s -p "BytePlus secret key: " BYTEPLUS_SECRET_KEY
+printf '\n'
+export BYTEPLUS_ACCESS_KEY BYTEPLUS_SECRET_KEY
+```
+
+For STS credentials, also enter the matching session token:
+
+```bash
+read -r -s -p "BytePlus session token: " BYTEPLUS_SESSION_TOKEN
+printf '\n'
+export BYTEPLUS_SESSION_TOKEN
+```
+
+For a long-lived IAM user key instead, run `unset BYTEPLUS_SESSION_TOKEN` to
+avoid accidentally retaining an unrelated token. Keep deploying from this
+same shell; environment variables are not a secret vault. Do not use shell
+tracing, echo credentials, paste them into chat, or put them in HCL/tfvars/JSON.
+The raw Terraform provider also supports profiles, but **profile-only
+authentication is insufficient for the guided CLI's signed API preflight**.
+See the [pinned provider authentication reference](https://github.com/byteplus-sdk/terraform-provider-bytepluscc/blob/v0.0.63/docs/index.md).
+Refreshing STS credentials between `plan` and `deploy` requires a new plan.
+
+### Prepare Product and Registry Credentials
+
+Prefer the [Secret Manager provider-key workflow](secret-manager.md) to avoid
+maintaining a separate provider-key input file. Alternatively, keep product API keys in a separate same-owner regular mode-`0600` file
+outside the checkout, entered through a private editor or secret manager.
+The provider file is not an IAM credential file. Only the supported product
+keys and settings listed in the guided workflow are copied to the VM.
+The shared MCP team key is generated by deployment; do not reuse a provider
+key as the team key.
+
+For a private GHCR image, create a **personal access token (classic)** with
+`read:packages`, from an identity that can read that package. Authorize it
+for organization SSO if required. Neither `write:packages` nor
+`delete:packages` is needed for pulling.
+Follow [GitHub's Container registry authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+Store only the token in a same-owner regular mode-`0600` file; provide its
+path with `--registry-token-file` and your username with `--registry-user`.
+Local `docker login` is not required and does not replace these explicit flags.
+Public images can be checked and pulled anonymously.
+
+## Check Cloud Prerequisites
+
+- Confirm billing and quota for ECS, a system disk, retained EBS storage, VPC,
+  subnet, security group, and EIP. Preflight is not a quota reservation or cost
+  estimate. An existing subnet must belong to the supplied VPC and selected
+  availability zone; both resources must be in the selected region.
+- Select a regional Ubuntu 24.04 **AMD64** image with cloud-init and working
+  ECS Cloud Assistant, plus an available AMD64 instance type. Start with at
+  least 2 vCPU/4 GiB RAM; no GPU is required.
+  See [Cloud Assistant installation](https://docs.byteplus.com/en/docs/ecs/Install-the-Cloud-Assistant-client).
+  The CLI does not install or repair a missing Cloud Assistant agent; guest
+  command access must work before encrypted configuration can be delivered.
+- Register an SSH public key pair in the same region and provide its exact
+  name. See [Creating key pairs](https://docs.byteplus.com/en/docs/ecs/Creating-key-pairs).
+  Terraform does not create or accept a private SSH key. The guided CLI uses
+  the guest agent, not SSH, and defaults to no SSH ingress; keep a separately
+  approved console/bastion recovery route.
+- Select a digest-pinned Linux AMD64 Ark MCP image **verified to support
+  `MCP_AUTH_MODE=api_key`**. `latest` and `edge` are rejected. The published
+  `v0.2.0` image is JWT-only and incompatible. Check
+  [release artifacts](releases.md) for a compatible image before applying;
+  synthetic test digests and the example placeholders are not usable images.
+- Allow workstation HTTPS access to BytePlus APIs, Terraform/package
+  distribution endpoints, and GHCR. The VM needs outbound HTTP/HTTPS, DNS,
+  NTP, package repositories, the guest-agent service, and enabled provider
+  hosts. Do not expose application port 3000 or Redis port 6379.
+- Allow public TCP 80 and HTTPS access for ACME and clients. No purchased domain
+  is required with `public_hostname=null`; custom DNS must resolve to the new
+  EIP. Generic DNS depends on sslip.io and public ACME availability.
+
+The infrastructure `region` does not change the ModelArk endpoint region.
+Choose application provider hosts and keys together.
+
+## Guided Deployment CLI
+
+The checkout includes `scripts/deploy_byteplus.py`: a repeatable CLI around
+Terraform, encrypted ECS-agent configuration, activation, and verification.
+It is not yet a one-click web wizard. No existing deployment is automatically
+adopted or changed. Complete the [requirements](#requirements),
+[dependency setup](#set-up-dependencies), and [IAM setup](#set-up-iam-and-credentials)
+above first. Preflight checks current access and availability, not guaranteed quota,
+capacity, pricing, or provider generation authorization.
+
+The `/private/...` paths below are examples, not directories supplied by the CLI.
+Replace them with actual absolute paths on your workstation. For example, create
+a private parent directory under your home directory:
+
+```bash
+install -d -m 0700 "$HOME/.config/ark-mcp-deploy"
+```
+
+Create the config/provider/token files there through a private editor or secret
+manager, with mode `0600`, and use a **new, not-yet-created** child path for the
+CLI workspace. Do not put these files in Git, a shared folder, or the public
+documentation build.
+
+Create a nonsecret JSON configuration outside the checkout, mode `0600`:
+
+```json
+{
+  "name": "ark-mcp-team",
+  "region": "ap-southeast-1",
+  "zone_id": "ap-southeast-1a",
+  "image_id": "image-REPLACE",
+  "instance_type": "ecs.c3i.large",
+  "key_pair_name": "REPLACE-WITH-REGISTERED-PUBLIC-KEY",
+  "ark_mcp_image": "REPLACE-WITH-VERIFIED-GHCR-SHA256-DIGEST",
+  "public_hostname": null
+}
+```
+
+The placeholders intentionally fail preflight until replaced. CLI defaults
+are a 40-GiB retained disk, 40-GiB system disk, deletion protection, no SSH
+ingress, dedicated VPC, and one replica. The raw module retains its 100-GiB
+state-disk default. Set `create_vpc=false`, `existing_vpc_id` and
+`existing_subnet_id` explicitly to use an existing network. Unknown fields and
+credentials in JSON are rejected. `public_hostname=null` uses
+`ark-mcp.<EIP-with-dashes>.sslip.io`; custom DNS must resolve to the new EIP.
+Generic DNS depends on sslip.io and public ACME availability.
+
+```bash
+uv run --no-sync python scripts/deploy_byteplus.py init \
+  --config /private/deployment.json --workspace /private/ark-team
+uv run --no-sync python scripts/deploy_byteplus.py plan --workspace /private/ark-team
+uv run --no-sync python scripts/deploy_byteplus.py deploy --workspace /private/ark-team \
+  --provider-env-file /private/providers.env --approve-plan PLAN_DIGEST
+```
+
+`init` requires a **new** workspace and creates it mode `0700`; files are
+`0600`. `plan` validates cloud resources and GHCR image metadata, freezes the
+templates, and returns resource actions, ongoing-charge notice and an approval
+digest. `deploy` applies that exact saved plan. Interactive approval requires
+typing the deployment name; noninteractive approval requires the exact digest.
+The digest binds source/configuration, binary plan, current state and current
+access key. Refreshing STS credentials between plan/apply requires a new plan.
+Deletion and replacement plans are refused. There is no destroy/import/adoption
+command and no automatic quota workaround.
+The CLI forces Terraform's default workspace and rejects pre-existing or named
+workspace state; each team must use its own newly initialized CLI directory.
+
+Private GHCR images need explicit pull credentials on `plan` and first `deploy`:
+add `--registry-user USER --registry-token-file /private/ghcr.token`, with a
+same-owner mode-`0600` token file. The image must be digest-pinned, Linux AMD64
+and explicitly default to shared-key auth. Login is temporary, and the image
+is pulled before credentials are removed. Failed private-image pulls can use
+fresh credentials without rewriting runtime configuration.
+
+The provider file must also be a same-owner regular mode-`0600` file. Only the
+four product bearer keys, ModelArk/Seed Audio base URLs, supported 3D/OmniHuman/
+Premium flags and spend/rate/concurrency/retention limits are copied.
+IAM, JWT, object-storage credentials and custom model bindings are **not**
+copied. This CLI creates three independent secrets once: team key, Redis
+password and job-snapshot encryption key. Subsequent runs preserve them.
+Provider keys, raw team keys and registry tokens never enter Terraform or
+plaintext ECS command content. Transfer uses a guest-only RSA key and
+instance-bound AES-GCM ciphertext. Validated configuration is published
+atomically without overwriting an existing `.env`; matching config repairs
+the durable receipt, while mismatches fail closed.
+Transfer keys/chunks are root-private on the retained disk until cleanup, so a
+guest reboot does not discard accepted transfer progress. An explicitly
+reconciled failed transfer can start a fresh encrypted attempt without changing
+the original runtime secrets.
+
+After apply, the CLI verifies instance/disk identities, explicitly initializes
+only the new empty disk, mounts by UUID, configures the host and activates.
+An existing filesystem without the matching marker requires manual recovery,
+never formatting. It then checks HTTPS health, missing/wrong keys, untrusted
+Origin denial, blocked internal routes, two clients' discovery, and a shared
+Seedream background `dry_run` when available. **No paid generation runs.**
+The result gives the MCP URL and private `team.key` path, never the key.
+Deliver that key through a secret manager.
+
+### Resume And Update
+
+```bash
+uv run --no-sync python scripts/deploy_byteplus.py status --workspace /private/ark-team
+uv run --no-sync python scripts/deploy_byteplus.py resume --workspace /private/ark-team
+uv run --no-sync python scripts/deploy_byteplus.py verify --workspace /private/ark-team
+uv run --no-sync python scripts/deploy_byteplus.py update --workspace /private/ark-team \
+  --image GHCR_SHA256_DIGEST --approve-update
+```
+
+Accepted ECS command IDs are saved immediately and polled on resume. A journal
+entry with unknown acceptance blocks replay and requires operator
+reconciliation. Failed repeatable guest commands require explicit
+`--retry-failed` after investigation. Interrupted/partial Terraform applies
+retain state; a known failed apply needs a fresh reviewed plan, while an
+unknown apply outcome requires manual reconciliation. Never erase the journal
+or regenerate keys to get past a failure.
+
+`update` pre-pulls the image, changes only the MCP image in installed Compose,
+drains/recreates only MCP, and preserves private config, SQLite, Redis, media,
+TLS state and job encryption. It does **not** modify Terraform bootstrap
+inputs. Failed updates attempt restoration of the original Compose/image;
+inspect health if restoration also fails. Repeat the same `update` command
+to poll an accepted pending update. The guest timeout is 2400 seconds,
+including forward and rollback grace periods; poll timeout preserves its ID.
+Private images require fresh registry file flags unless already pulled.
+`resume` also dispatches a recorded pending update automatically.
+
+Frozen-source changes require a separately reviewed migration, not an
+automatic bootstrap upgrade. Each completed verification round starts a new
+nonbillable job; interrupted rounds retain their job ID and never resubmit it.
+An expired/deleted pending job needs operator reconciliation. Keep the entire private
+workspace, its Terraform state and matching secrets together. Filesystem
+permissions and encryption in transit do not encrypt local state at rest.
+Use encrypted storage and tested off-host backups. Automated backups, remote
+state, account login, exact pricing, resource adoption and a browser wizard
+remain follow-ups. Offline CLI validation is not live deployment certification.
+
+### Secret Manager Provider Keys
+
+The CLI supports pinned-version, operator-side BytePlus Secret Manager reads
+for first deployment and approved provider-only configuration sync:
+`config status`, `config plan`, `config apply`, and `config discard`.
+Follow [Secret Manager setup and rotation](secret-manager.md) for account/project
+binding, scoped IAM access, protected reference files, maintenance approval,
+resume and rollback. Secret Manager access stays on the operator workstation;
+the VM receives no IAM credentials and retains its private runtime `.env`.
+
+This path is offline-tested, **not live-validated**. Existing frozen workspaces
+and manually deployed VMs need a separately reviewed source/helper migration;
+they are never automatically adopted or upgraded.
 
 ## What it creates
 
@@ -41,32 +455,12 @@ Docker engine metadata and images remain on the system disk; the application
 data does not. Keep **one application replica**. Redis does not distribute
 SQLite or in-process limiters.
 
-## Prerequisites
-
-- Terraform `>=1.9, <2.0`. The starter pins `byteplus-sdk/bytepluscc` to
-  `0.0.63` and includes verified dependency lockfile checksums for Linux AMD64
-  and macOS ARM64. Maintainers adding platforms should regenerate checksums
-  with `terraform providers lock -platform=...`, not disable lock verification.
-- A BytePlus account/project authorized for Cloud Control and the listed
-  resource operations. Use scoped infrastructure credentials, preferably
-  temporary credentials, not the application's ModelArk Bearer key.
-- A verified regional Ubuntu 24.04 **AMD64** ECS image with cloud-init, an
-  available AMD64 instance type, and an existing regional SSH key pair.
-  Start with at least 2 vCPU/4 GiB RAM; load-test large concurrent uploads.
-- A publicly resolvable hostname you control and clients supporting bearer
-  headers. See [shared-key generation and client setup](self-hosting.md#shared-mcp-key).
-- A publicly pullable, versioned Linux AMD64 Ark MCP image **verified to support
-  `MCP_AUTH_MODE=api_key`**. Prefer a release digest; `latest` and `edge` are
-  rejected. The published `v0.2.0` image is JWT-only and is not compatible.
-  Check [release artifacts](releases.md) for a compatible image before applying.
-  Until one is published and verified, do not apply this starter. The example
-  deliberately contains an invalid image placeholder so planning fails until
-  you select an image; mock plans use a synthetic digest, not a usable release.
-
-The infrastructure `region` does not change the ModelArk endpoint region.
-Choose application provider hosts and keys together.
-
 ## Configure and review
+
+This section and the host-preparation instructions below describe the
+**manual Terraform alternative**. The guided CLI performs those steps itself
+using its private workspace. Do not mix raw `terraform apply`, manual disk
+initialization, or manual key generation into a CLI-managed deployment.
 
 Authenticate outside Terraform using a secured credential injector or the
 provider's existing profile. The provider supports `BYTEPLUS_ACCESS_KEY`,
@@ -87,7 +481,7 @@ terraform -chdir=deploy/terraform/byteplus test
 Edit `terraform.tfvars`: replace the ECS `image_id` and `key_pair_name`
 placeholders, and replace `ark_mcp_image` with a verified shared-key-capable
 image digest or release tag. Verify zone and instance availability, set your
-actual hostname, and choose an unused private CIDR.
+actual hostname or `null`, and choose an unused private CIDR.
 The example SSH source `203.0.113.10/32` is documentation-only;
 replace it with your administrator public IP, or use `admin_cidrs=[]` and
 arrange a working console/bastion access method. Terraform never creates an
@@ -124,7 +518,7 @@ by `.gitignore`. Never enable verbose Terraform logging with real credentials.
 
 ## Prepare the host
 
-Create a public DNS A record for `public_hostname` using `public_ip`. Do not
+For custom DNS, create a public A record for `public_hostname` using `public_ip`. Do not
 create an AAAA record unless you separately provision working IPv6 ingress.
 
 Connect using your configured SSH key or console access. Check installation:
@@ -332,6 +726,11 @@ real infrastructure apply.
 
 ## Research sources
 
+Dependency installation, IAM/STS, ECS setup, and GHCR links in the setup
+sections above were checked on 2026-11-13. Local CLI version and permission
+requirements are derived from this checkout; external installation guides
+do not certify a deployment or supply a validated IAM policy.
+
 Verified 2026-11-11:
 
 - [BytePlus Cloud Control provider v0.0.63](https://registry.terraform.io/providers/byteplus-sdk/bytepluscc/0.0.63/docs)
@@ -345,7 +744,15 @@ Verified 2026-11-11:
   The installed schema requires EBS `pay_type="post"` despite the documentation's
   capitalized example.
 - [Canonical cloud-init write_files implementation](https://github.com/canonical/cloud-init/blob/main/cloudinit/config/cc_write_files.py):
-  supports `gz+b64` file payloads used to stay under the ECS user-data limit.
+  supports file payloads. The complete cloud-config uses gzip-compressed user
+  data, with a bundled helper archive, to fit the provider's encoded 16-KiB limit.
+- [Canonical user-data formats](https://cloudinit.readthedocs.io/en/latest/explanation/format.html)
+  and [gzip processing](https://github.com/canonical/cloud-init/blob/main/cloudinit/user_data.py),
+  verified 2026-11-13.
+- [BytePlus SDK v1.0.68](https://github.com/byteplus-sdk/byteplus-go-sdk-v2/tree/v1.0.68/service)
+  for signed ECS/VPC/storage preflight and root command invocation.
+- [Registry V2 API](https://github.com/distribution/distribution/blob/main/docs/content/spec/api.md)
+  for digest integrity and explicit GHCR pull authentication.
 - [Terraform lifecycle](https://developer.hashicorp.com/terraform/language/meta-arguments/lifecycle)
   and [mock-provider tests](https://developer.hashicorp.com/terraform/language/tests/mocking).
 - [Multi-platform provider locking](https://developer.hashicorp.com/terraform/cli/commands/providers/lock):

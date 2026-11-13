@@ -69,7 +69,11 @@ Key features:
   packages TLS ingress, [shared MCP key authentication](docs/self-hosting.md#shared-mcp-key),
   internal Redis, and spending controls.
   The [BytePlus Terraform starter](docs/byteplus-terraform.md) provisions one ECS
-  host with retained storage and explicit private configuration activation.
+  host with retained storage. Its [guided deployment CLI](docs/byteplus-terraform.md#guided-deployment-cli)
+  adds preflight, reviewed approvals, encrypted configuration, resumable
+  activation, nonbillable verification and application-only updates.
+  [Secret Manager integration](docs/secret-manager.md) adds pinned-version
+  provider-key reads and approved, resumable MCP-only configuration sync.
 - **Durable artifacts** — generated media is persisted locally so MCP
   resources remain usable after known provider URL lifetimes (2h audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at
@@ -378,6 +382,7 @@ make check-env     # Validate environment configuration
 | [Transports](docs/transports.md) | stdio vs HTTP deployment |
 | [Deployment](docs/deployment.md) | Container, Kubernetes, and remote HTTP deployment |
 | [BytePlus Terraform](docs/byteplus-terraform.md) | ECS starter, retained disk, private activation, backups, and recovery |
+| [Secret Manager](docs/secret-manager.md) | Pinned BytePlus provider-key versions, redacted planning, sync, and rollback |
 | [Troubleshooting](docs/troubleshooting.md) | Common errors and fixes |
 
 ## Project Layout

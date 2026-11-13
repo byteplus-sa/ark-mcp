@@ -73,4 +73,12 @@ downloads. Do not send a private file until you understand where it goes.
 Deploying a server is separate from connecting to one. See
 [Self-Hosting](../self-hosting.md) for the protected deployment kit and
 [Transports](../transports.md) for shared-key auth, TLS, scopes, Host/Origin guards and
-shared-process behavior. Do not expose local-auth mode to a network.
+shared-process behavior. For BytePlus provisioning, start with
+[deployment requirements](../byteplus-terraform.md#requirements),
+[dependency installation](../byteplus-terraform.md#set-up-dependencies), and
+[IAM and credential setup](../byteplus-terraform.md#set-up-iam-and-credentials).
+Administrators can maintain provider keys through
+[pinned Secret Manager versions](../secret-manager.md); members still receive
+only the separate shared MCP connection key.
+These are administrator requirements, not requirements for members connecting
+to an existing server. Do not expose local-auth mode to a network.
