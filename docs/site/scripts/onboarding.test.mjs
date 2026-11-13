@@ -82,13 +82,24 @@ test("client guides put optional manual configuration behind disclosure", () => 
   }
 });
 
-test("manual fallback retains reviewed version and private launch contract", () => {
+test("manual fallback selects a reviewed release and keeps private launch contract", () => {
   const manual = page("setup/manual-install.md");
-  assert.match(manual, /137a0c63c00be37b6d1e9bd9c021d3fd011d50d7/);
+  assert.match(manual, /latest published non-draft, non-prerelease/);
+  assert.match(manual, /git switch --detach v0\.3\.0/);
+  assert.match(manual, /do not silently fall back to main/);
+  assert.match(manual, /record its tag and commit SHA/);
   assert.match(manual, /uv sync --locked --no-dev/);
   assert.match(manual, /ARK_MCP_ENV_FILE/);
   assert.match(manual, /--no-sync/);
   assert.match(manual, /v0\.2\.0/);
+});
+
+test("guided setup distinguishes the setup skill from the usage skill", () => {
+  const install = page("setup/install.md");
+  assert.match(install, /\/\.agents\/skills\/ark-mcp-setup/);
+  assert.match(install, /--skill ark-mcp-setup/);
+  assert.match(install, /separate from authorizing it/);
+  assert.match(install, /Published `v0\.3\.0` includes/);
 });
 
 test("legacy onboarding does not advise inline provider keys or new dependency edits", () => {

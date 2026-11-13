@@ -56,10 +56,10 @@ pre-stable even though they are ordinary GitHub Releases.
 ## Installing a release
 
 For ordinary client setup, start with [guided setup](setup/install.md).
-**The historical `v0.2.0` release predates the security refresh.** Follow the
-[reviewed revision guidance](setup/manual-install.md#choose-an-installation)
-until a suitable patched release is published. The artifact instructions
-below describe the release mechanism, not an endorsement of an unpatched tag.
+Published `v0.3.0` includes the dependency security refresh.
+**The historical `v0.2.0` release predates it.** Follow
+[release selection](setup/manual-install.md#choose-an-installation) and verify
+the current release's notes, manifest and lockfile before installing.
 
 Download the wheel and `SHA256SUMS` from the
 [GitHub Releases page](https://github.com/byteplus-sa/ark-mcp/releases).
@@ -69,7 +69,7 @@ the `ark-mcp` name on PyPI belongs to this project.
 
 Container tags:
 
-- `ghcr.io/byteplus-sa/ark-mcp:v0.2.0` and `:0.2.0`: a particular release.
+- `ghcr.io/byteplus-sa/ark-mcp:v0.3.0` and `:0.3.0`: the release verified above.
 - `:latest`: the newest successfully published stable numeric version.
 - `:edge`: a passing `main` build, not a release.
 - `:sha-<full-commit-sha>`: a development image for a particular main commit.

@@ -218,6 +218,13 @@ sequenceDiagram
 
 ## Quick Start
 
+For agent-guided installation or updates, use the
+[`ark-mcp-setup` skill](.agents/skills/ark-mcp-setup/SKILL.md). It detects the
+target client (including TRAE, Claude, and Codex), defaults to global MCP
+registration, prefers the latest stable release, and opens a private local
+credential file for user entry. If no stable release exists, it asks before
+using a default-branch commit.
+
 1. Open [guided setup](docs/setup/install.md). A coding agent with terminal
    and file access can prepare the reviewed installation and client entry.
 2. Enter the provider keys you need in the private local editor, not in chat.

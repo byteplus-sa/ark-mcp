@@ -16,46 +16,73 @@ const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const skill = join(repository, ".agents/skills/ark-mcp");
 const readDoc = (path) => readFileSync(join(repository, "docs", path), "utf8");
 
-test("the complete skill keeps its local references after standalone installation", () => {
-  const temporary = mkdtempSync(join(tmpdir(), "ark-skill-install-"));
-  const installed = join(temporary, "ark-mcp");
-  try {
-    cpSync(skill, installed, {
-      recursive: true,
-      errorOnExist: true,
-      force: false,
-    });
-    const files = readdirSync(skill, { recursive: true, withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) =>
-        join(entry.parentPath, entry.name).slice(skill.length + 1),
+test("documentation CI covers standalone skill changes on pushes and pull requests", () => {
+  const workflow = readFileSync(
+    join(repository, ".github/workflows/docs.yml"),
+    "utf8",
+  );
+  for (const event of ["push", "pull_request"]) {
+    const paths = workflow.match(
+      new RegExp(`^  ${event}:\\n([\\s\\S]*?)(?=^  \\w+:)`, "m"),
+    )?.[1];
+    assert.ok(paths, `${event} trigger is missing`);
+    for (const name of ["ark-mcp", "ark-mcp-setup"]) {
+      assert.ok(
+        paths.includes(`- ".agents/skills/${name}/**"`),
+        `${event} must cover ${name} entry points and references`,
       );
-    assert.ok(files.includes("SKILL.md"));
-    assert.ok(files.includes(join("agents", "openai.yaml")));
-    assert.ok(files.some((path) => path.startsWith(`references${sep}`)));
-    for (const path of files) {
-      const contents = readFileSync(join(installed, path));
-      assert.deepEqual(contents, readFileSync(join(skill, path)));
-      if (!path.endsWith(".md")) continue;
-      for (const [, target] of contents
-        .toString()
-        .matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
-        if (/^(?:[a-z][a-z\d+.-]*:|#)/i.test(target)) continue;
-        const destination = resolve(
-          dirname(join(installed, path)),
-          target.split("#")[0],
-        );
-        assert.ok(
-          destination.startsWith(`${installed}${sep}`),
-          `${path}: reference escapes the installed skill: ${target}`,
-        );
-        assert.ok(existsSync(destination), `${path}: missing ${target}`);
-      }
     }
-  } finally {
-    rmSync(temporary, { recursive: true, force: true });
   }
 });
+
+for (const name of ["ark-mcp", "ark-mcp-setup"]) {
+  test(`${name} keeps its local references after standalone installation`, () => {
+    const sourceSkill = join(repository, ".agents/skills", name);
+    const temporary = mkdtempSync(join(tmpdir(), "ark-skill-install-"));
+    const installed = join(temporary, name);
+    try {
+      cpSync(sourceSkill, installed, {
+        recursive: true,
+        errorOnExist: true,
+        force: false,
+      });
+      const files = readdirSync(sourceSkill, {
+        recursive: true,
+        withFileTypes: true,
+      })
+        .filter((entry) => entry.isFile())
+        .map((entry) =>
+          join(entry.parentPath, entry.name).slice(sourceSkill.length + 1),
+        );
+      assert.ok(files.includes("SKILL.md"));
+      if (name === "ark-mcp") {
+        assert.ok(files.includes(join("agents", "openai.yaml")));
+      }
+      assert.ok(files.some((path) => path.startsWith(`references${sep}`)));
+      for (const path of files) {
+        const contents = readFileSync(join(installed, path));
+        assert.deepEqual(contents, readFileSync(join(sourceSkill, path)));
+        if (!path.endsWith(".md")) continue;
+        for (const [, target] of contents
+          .toString()
+          .matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+          if (/^(?:[a-z][a-z\d+.-]*:|#)/i.test(target)) continue;
+          const destination = resolve(
+            dirname(join(installed, path)),
+            target.split("#")[0],
+          );
+          assert.ok(
+            destination.startsWith(`${installed}${sep}`),
+            `${path}: reference escapes the installed skill: ${target}`,
+          );
+          assert.ok(existsSync(destination), `${path}: missing ${target}`);
+        }
+      }
+    } finally {
+      rmSync(temporary, { recursive: true, force: true });
+    }
+  });
+}
 
 test("skill installation is discoverable and uses agent-native paths", () => {
   const guide = readDoc("setup/agent-skill.md");

@@ -15,7 +15,8 @@ installation, use the same terminal-capable coding agent that performed
 ```text
 Update my existing ark-seed connection for [my client].
 Read https://byteplus-sa.github.io/ark-mcp/setup/manual-install/
-and use a reviewed patched revision, not the old unpatched v0.2.0 release.
+and select the latest published release after reviewing its migration
+and security notes. Do not use the old unpatched v0.2.0 release.
 Preserve my keys, client settings, projects, artifacts and runtime state.
 Stage and verify the update separately using discovery only.
 Do not read back credentials or run paid tests.
@@ -42,10 +43,11 @@ No separate server-start command is needed.
 ## Stage a Patched Revision
 
 Choose a reviewed revision containing the dependency security refresh and
-the supported `fastmcp[tasks]>=4.1.8,<4.2` runtime. As of 2026-11-10, the only
-published release, `v0.2.0`, is unpatched; do not stage it as an update or
-downgrade a patched installation to it. Until a suitable release exists,
-use the [pinned reviewed commit in the installation guide](install.md#choose-an-installation).
+the supported `fastmcp[tasks]>=4.1.8,<4.2` runtime. Published `v0.3.0`
+includes that refresh; the historical `v0.2.0` release is unpatched.
+Do not stage v0.2.0 as an update or downgrade a patched installation to it.
+Follow [release selection](manual-install.md#choose-an-installation); ask
+before using a reviewed commit when no suitable release exists.
 
 For a newer release, verify its notes, `pyproject.toml`, and `uv.lock` rather
 than trusting the stable tag alone. This site tracks its reviewed `main`

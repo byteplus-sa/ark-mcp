@@ -11,6 +11,22 @@ agent can prepare the installation and client configuration with your
 permission. If your administrator already provides an endpoint, use
 [Connect to a Shared Server](setup/shared-server.md) and skip local setup.
 
+The [ark-mcp-setup skill](https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp-setup) guides
+installation and updates in the user's preferred agent. It detects the current
+client where possible and asks when ambiguous, distinguishes Claude Code from
+Desktop and TRAE IDE from Work, and defaults to **global/user-level MCP
+registration**. Request project-only setup to change that scope.
+
+The workflow selects the latest published stable GitHub release and stages a
+locked installation before changing client configuration. If no stable release
+is published, it asks before using a default-branch commit. Existing credentials,
+other MCP servers, and development checkouts are preserved.
+
+This is an agent-executed workflow, not an unattended installer. Credential
+entry and some clients' configuration UIs need user interaction. Verification
+checks startup and tool discovery without paid generation; provider key validity
+and account entitlement are not established by those local checks.
+
 ## Configuration
 
 For local setup, enter the [provider keys](api-keys.md) you need in the

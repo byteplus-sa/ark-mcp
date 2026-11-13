@@ -12,18 +12,18 @@ cannot.
 
 ## Choose an Installation
 
-**Security notice, checked 2026-11-11:** the only published release,
-`v0.2.0`, predates the security refresh and locks FastMCP/tasks to `4.0.3`.
-Do not use it for a new installation or downgrade a patched installation to it.
+Select the latest published non-draft, non-prerelease
+[GitHub release](https://github.com/byteplus-sa/ark-mcp/releases).
+**Checked 2026-11-13:** `v0.3.0` is published and includes the dependency
+security refresh with `fastmcp[tasks]>=4.1.8,<4.2`. The historical `v0.2.0`
+release locks FastMCP/tasks to `4.0.3`; do not use it for a new installation or
+downgrade a patched installation to it.
 
-Use reviewed commit `137a0c63c00be37b6d1e9bd9c021d3fd011d50d7` until a
-suitable patched release is published. It declares
-`fastmcp[tasks]>=4.1.8,<4.2` and includes the reviewed lockfile. This is a
-pinned main-branch snapshot, not a stable release.
-
-For a newer [release](https://github.com/byteplus-sa/ark-mcp/releases), verify
-its notes, manifest and lockfile contain the security refresh before selecting
-it. Never infer that a PyPI package named `ark-mcp` belongs to this repository.
+Verify the selected release's notes, manifest and lockfile before executing
+it, rather than assuming every feature on main is released. If no suitable
+release exists, ask before selecting a reviewed commit or another explicit
+ref; do not silently fall back to main. Never infer that a PyPI package named
+`ark-mcp` belongs to this repository.
 See [Dependency Security](../security.md#dependency-security).
 
 ## Prepare the Software
@@ -40,9 +40,12 @@ launch Ark:
 ```bash
 git clone https://github.com/byteplus-sa/ark-mcp.git
 cd ark-mcp
-git switch --detach 137a0c63c00be37b6d1e9bd9c021d3fd011d50d7
+git switch --detach v0.3.0
 uv sync --locked --no-dev
 ```
+
+The example pins the release verified above. Resolve the current release
+and record its tag and commit SHA when performing a new setup.
 
 Preserve any existing installation and client entry until the new one passes
 verification. Do not reset, clean, or overwrite a dirty checkout, and do not

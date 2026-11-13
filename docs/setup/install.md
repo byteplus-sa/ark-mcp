@@ -51,6 +51,13 @@ For **Claude Desktop**, run the request in a separate coding agent and name
 Claude Desktop as the target. Desktop chat alone is not assumed to have
 installation access.
 
+The [ark-mcp-setup skill](https://github.com/byteplus-sa/ark-mcp/tree/main/.agents/skills/ark-mcp-setup)
+bundles this workflow for supported agents. To install only those instructions,
+use the [Skills CLI guidance](agent-skill.md) with
+`--skill ark-mcp-setup` instead of `--skill ark-mcp`. Review the bundle and
+target only your chosen agent. Installing it is separate from authorizing it
+to prepare the server and MCP connection.
+
 ### 2. Enter Your Keys Privately
 
 You need a BytePlus account and access to the products you choose. Enter only
@@ -126,7 +133,9 @@ client launch contract are documented once in
 [Manual Installation](manual-install.md). They are instructions for your
 setup agent or administrator, not extra steps after guided setup.
 
-The published `v0.2.0` release predates the security refresh; use the
-[reviewed revision](manual-install.md#choose-an-installation) instead.
+Published `v0.3.0` includes the dependency security refresh; the historical
+`v0.2.0` release does not. Follow
+[release selection](manual-install.md#choose-an-installation) and check the
+current release before setup.
 This unversioned site describes its reviewed main build, not every historical
 release.
