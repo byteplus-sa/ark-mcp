@@ -11,6 +11,7 @@ If a credential is absent, the server must not register that product's tool set.
 from __future__ import annotations
 
 import os
+import re
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -21,6 +22,7 @@ from pydantic import (
     AliasChoices,
     BaseModel,
     Field,
+    SecretStr,
     ValidationInfo,
     field_validator,
     model_validator,
@@ -97,7 +99,7 @@ class Seed3DFamily(StrEnum):
 
 class AuthMode(StrEnum):
     LOCAL = "local"
-    JWT = "jwt"
+    API_KEY = "api_key"
 
 
 class ImageModelBinding(BaseModel):
@@ -424,41 +426,10 @@ class Settings(BaseSettings):
         validation_alias="MCP_ALLOWED_HOSTS",
     )
     mcp_auth_mode: AuthMode = Field(default=AuthMode.LOCAL, validation_alias="MCP_AUTH_MODE")
-    mcp_jwt_jwks_uri: str | None = Field(default=None, validation_alias="MCP_JWT_JWKS_URI")
-    mcp_jwt_issuer: str | None = Field(default=None, validation_alias="MCP_JWT_ISSUER")
-    mcp_jwt_audience: str | None = Field(default=None, validation_alias="MCP_JWT_AUDIENCE")
-    mcp_tenant_claim: str = Field(
-        default="tenant_id",
-        min_length=1,
-        validation_alias="MCP_TENANT_CLAIM",
-    )
-    mcp_jwt_clock_skew_seconds: int = Field(
-        default=30,
-        ge=0,
-        le=300,
-        validation_alias="MCP_JWT_CLOCK_SKEW_SECONDS",
-        description="Tolerated clock skew (seconds) when validating JWT nbf (not-before) claims.",
-    )
-    mcp_jwt_provide_discovery: bool = Field(
-        default=False,
-        validation_alias="MCP_JWT_PROVIDE_DISCOVERY",
-        description=(
-            "When true and MCP_AUTH_MODE=jwt, serve RFC 9728 OAuth Protected Resource "
-            "Metadata so spec-compliant MCP clients can discover the authorization server."
-        ),
-    )
-    mcp_public_base_url: str = Field(
-        default="",
-        validation_alias="MCP_PUBLIC_BASE_URL",
-        description=(
-            "Public HTTPS base URL of this server, required when MCP_JWT_PROVIDE_DISCOVERY "
-            "is enabled (e.g. 'https://mcp.example.com')."
-        ),
-    )
-    mcp_jwt_scopes_supported: str = Field(
-        default="",
-        validation_alias="MCP_JWT_SCOPES_SUPPORTED",
-        description="Comma-separated scopes to advertise in Protected Resource Metadata.",
+    mcp_api_key_sha256: SecretStr = Field(
+        default=SecretStr(""),
+        validation_alias="MCP_API_KEY_SHA256",
+        description="Lowercase SHA-256 hex digest of the shared MCP bearer key; never the raw key.",
     )
     readiness_check_providers: bool = Field(
         default=False,
@@ -766,12 +737,6 @@ class Settings(BaseSettings):
     def allowed_hosts(self) -> list[str]:
         return [host.strip() for host in self.mcp_allowed_hosts.split(",") if host.strip()]
 
-    @property
-    def jwt_scopes_supported(self) -> list[str]:
-        return [
-            scope.strip() for scope in self.mcp_jwt_scopes_supported.split(",") if scope.strip()
-        ]
-
     @field_validator("mcp_transport")
     @classmethod
     def validate_transport(cls, v: str) -> str:
@@ -925,39 +890,18 @@ class Settings(BaseSettings):
             parsed = urlsplit(origin)
             if parsed.scheme not in {"http", "https"} or not parsed.hostname:
                 raise ValueError(f"Invalid MCP allowed origin: '{origin}'")
-        if self.mcp_auth_mode is AuthMode.JWT:
-            missing = [
-                name
-                for name, value in (
-                    ("MCP_JWT_JWKS_URI", self.mcp_jwt_jwks_uri),
-                    ("MCP_JWT_ISSUER", self.mcp_jwt_issuer),
-                    ("MCP_JWT_AUDIENCE", self.mcp_jwt_audience),
-                )
-                if not value
-            ]
-            if missing:
-                raise ValueError(f"JWT auth requires: {', '.join(missing)}")
-            parsed_jwks = urlsplit(self.mcp_jwt_jwks_uri or "")
-            if parsed_jwks.scheme != "https" or not parsed_jwks.hostname:
-                raise ValueError("MCP_JWT_JWKS_URI must be an HTTPS URL")
-        if self.mcp_jwt_provide_discovery:
-            if self.mcp_auth_mode is not AuthMode.JWT:
-                raise ValueError("MCP_JWT_PROVIDE_DISCOVERY requires MCP_AUTH_MODE=jwt.")
-            parsed_base = urlsplit(self.mcp_public_base_url)
-            if parsed_base.scheme != "https" or not parsed_base.hostname:
-                raise ValueError("MCP_PUBLIC_BASE_URL must be an HTTPS URL with a hostname.")
-            parsed_issuer = urlsplit(self.mcp_jwt_issuer or "")
-            if parsed_issuer.scheme not in {"https", "http"} or not parsed_issuer.hostname:
-                raise ValueError(
-                    "MCP_JWT_ISSUER must be an HTTP(S) URL with a hostname when "
-                    "MCP_JWT_PROVIDE_DISCOVERY is enabled."
-                )
+        if self.mcp_auth_mode is AuthMode.API_KEY and not re.fullmatch(
+            r"[a-f0-9]{64}", self.mcp_api_key_sha256.get_secret_value()
+        ):
+            raise ValueError(
+                "API key auth requires MCP_API_KEY_SHA256 (64 lowercase hex characters)."
+            )
         if (
             self.mcp_transport == "http"
             and self.mcp_auth_mode is AuthMode.LOCAL
             and self.mcp_host not in {"127.0.0.1", "::1", "localhost"}
         ):
-            raise ValueError("HTTP on a non-loopback host requires MCP_AUTH_MODE=jwt.")
+            raise ValueError("HTTP on a non-loopback host requires MCP_AUTH_MODE=api_key.")
         if bool(self.modelark_access_key) != bool(self.modelark_secret_key):
             raise ValueError(
                 "BYTEPLUS_MODELARK_ACCESS_KEY and BYTEPLUS_MODELARK_SECRET_KEY must both be set "

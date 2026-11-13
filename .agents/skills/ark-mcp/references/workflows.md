@@ -169,6 +169,9 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
 
 ### Asset-reference flow (Seedance `asset://`)
 
+The management steps require trusted local access with AK/SK. Shared-key HTTP
+does not grant asset administration; use existing authorized asset IDs there.
+
 1. **One subject per group**; never mix people or characters.
    - Fictional character or product: `ark_asset_create(subject=..., sources=[...])`
      reuses or creates the AIGC group. Assets must not resemble a real person.
@@ -286,7 +289,8 @@ honoring `Retry-After` (also capped at 4 s). After that the error reaches you.
 ### Budget rejections
 
 With `DAILY_BUDGET_USD` above 0 the server tracks per-principal daily spend
-(UTC day) and rejects a request whose estimate would exceed it, before any
+(UTC day), shared by all `shared-team` members on hosted HTTP, and rejects
+a request whose estimate would exceed it, before any
 provider call ("Daily budget of $X would be exceeded"). At `0` (default) usage
 is recorded but never blocked. Wait for the UTC rollover or raise the limit.
 
@@ -311,7 +315,8 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
 | `omnihuman_get_task` fails with `InvalidParameter ... audio` | Audio is validated only after submission (4-300 s, wav/mp3, under 15 MB; 300 s WAV is 26-58 MB) | Fix the audio (MP3 or shorter) and resubmit; never unchanged |
 | OmniHuman error `50510` | Provider content pre-filter rejected the image or audio | Use different compliant inputs; never retry unchanged |
 | 3D task failed with `AbilityProcessingError` | Transient provider error | Re-submit the same task; the input is not invalid |
-| Auth error (JWT mode) | Missing or invalid token or scope | Check JWT configuration and scopes |
+| HTTP `401` | Missing, wrong or rotated-out shared MCP key | Configure the current key privately as a bearer header; never paste it into chat |
+| Administrative tool unavailable on shared HTTP | Fixed team scopes exclude account-wide asset and moderation operations | Use an authorized local setup; scopes cannot be added to the shared key |
 
 ## Best practices beyond the schemas
 

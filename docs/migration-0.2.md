@@ -1,5 +1,10 @@
 # Migrating to 0.2.0
 
+> **Historical migration guide:** this page records the 0.1.x to 0.2.0
+> transition, including the JWT scopes used at that time. It is not current
+> authentication setup advice. Current hosted HTTP accepts only a shared MCP
+> key; see [breaking-change migration](self-hosting.md#breaking-change-migration).
+
 **0.2.0 consolidates the tool surface.** One tool per product capability
 replaces the per-model, per-variation and per-operation tools of 0.1.x. With
 every service enabled, `tools/list` now returns **38 tools**. **There is no
@@ -127,6 +132,8 @@ check `failed` in every response.
   group but every source failed.
 
 ## Auth scopes (JWT mode)
+
+This section is historical: the current server rejects `jwt` mode.
 
 | Removed | Replacement |
 |---|---|

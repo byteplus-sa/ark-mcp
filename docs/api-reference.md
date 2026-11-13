@@ -3,11 +3,19 @@
 Complete schemas, inputs, outputs, and examples for the conditional MCP tool
 surface.
 
+Hosted HTTP requires the shared MCP key on every tool call, including
+discovery. Its fixed ordinary scopes apply to all members as tenant/principal
+`shared-team`; ownership, budgets and permitted cancellations are team-wide.
+Account-wide asset and moderation administration is not available over
+shared-key HTTP, even if provider credentials register those tools. Use trusted
+local stdio for administration. Provider credentials listed below remain
+server-side and are separate from the MCP key.
+
 ## Tool Inventory
 
 | # | Tool | Product | Type | Auth |
 |---|---|---|---|---|
-| 1 | `ark_list_models` | Discovery | Read-only | None |
+| 1 | `ark_list_models` | Discovery | Read-only | No extra tool scope |
 | 2 | `seed_audio_generate` | Seed Audio | Required background task | Seed Speech |
 | 3 | `seedream_generate_image` | Seedream | Required background task | ModelArk |
 | 4 | `seedance_create_task` | Seedance (every configured model; 2.5 supports 4K) | Required background submission | ModelArk |
@@ -28,9 +36,9 @@ surface.
 | 19 | `omnihuman_create_task` | OmniHuman 2.0 (flag-gated) | Required background submission | Vision AI Bearer |
 | 20 | `omnihuman_get_task` | OmniHuman 2.0 (flag-gated) | Optional background retrieval | Vision AI Bearer |
 | 21 | `omnihuman_cancel_task` | OmniHuman 2.0 (flag-gated) | Destructive | Vision AI Bearer |
-| 22 | `seed_media_get_artifact` | Artifacts | Read-only | Local / JWT |
-| 23 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local / JWT |
-| 24 | `seed_media_persist_url` | Artifacts | Optional background task | Local / JWT |
+| 22 | `seed_media_get_artifact` | Artifacts | Read-only | Local / shared key |
+| 23 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local stdio |
+| 24 | `seed_media_persist_url` | Artifacts | Optional background task | Local / shared key |
 | 25 | `media_upload` | Object storage (optional) | Required background task (1-50 files) | TOS / S3 |
 | 26 | `media_presign` | Object storage (optional) | Read-only (1-100 keys) | TOS / S3 |
 | 27 | `ark_asset_group_ensure` | Asset library (optional) | Write | BytePlus AK/SK |
@@ -41,7 +49,7 @@ surface.
 | 32 | `ark_asset_verification_start` | Asset library (optional) | Write | BytePlus AK/SK |
 | 33 | `ark_asset_verification_result` | Asset library (optional) | Optional background retrieval | BytePlus AK/SK |
 | 34 | `ark_asset_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
-| 35 | `ark_job_capabilities` | Background jobs | Read-only ordinary tool | Local / JWT |
+| 35 | `ark_job_capabilities` | Background jobs | Read-only ordinary tool | Local / shared key |
 | 36 | `ark_job_submit` | Background jobs | Default background submission path | Dynamic target scope |
 | 37 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
 | 38 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
@@ -49,21 +57,21 @@ surface.
 Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2.md).
 
 **`seedream_generate_image` is the only Seedream tool**: registered whenever
-`BYTEPLUS_MODELARK_API_KEY` is set, it requires `seedream:generate` in JWT mode.
+`BYTEPLUS_MODELARK_API_KEY` is set, it requires `seedream:generate` in `api_key` mode.
 **`seed_audio_generate` covers single and parallel audio** and requires
 `seed:audio:generate`.
 
 `seedance_create_task` serves every configured
 Seedance model (pick one from `ark_list_models(kind='video')`), is registered
 whenever `BYTEPLUS_MODELARK_API_KEY` is set, and requires `seedance:create` in
-JWT mode. Seedance 2.5 supports 4K through `resolution="4k"` on the same model;
+`api_key` mode. Seedance 2.5 supports 4K through `resolution="4k"` on the same model;
 no additional tool, model, or feature flag is needed.
 
 The three `gen_task_*` tools poll, list, and cancel or delete **every ModelArk
 generation task** (Seedance, Hyper3D, and Hitem3d). They are registered whenever
 ModelArk is configured, independent of `BYTEPLUS_MODELARK_3D_ENABLED`, and
 require `gen:read` (`gen_task_get`, `gen_task_list`) or `gen:delete`
-(`gen_task_cancel_or_delete`) in JWT mode. `vod_get_task` polls **every VOD AI
+(`gen_task_cancel_or_delete`) in `api_key` mode. `vod_get_task` polls **every VOD AI
 MediaKit task**, is registered when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set, and
 requires `vod:read`. **`media_upload` takes a list of files** (`media:upload`)
 and **`media_presign` takes a list of keys** (`media:presign`); both are
@@ -160,8 +168,8 @@ The ordinary background-job tools, usable on any MCP client:
    completion, `result` preserves the original MCP tool result.
 4. `ark_job_cancel({"job_id": id})` cooperatively cancels the local job.
 
-The ordinary path uses the same worker, target schema validation, JWT
-target scope, tenant/principal ownership, replay claim, budget, concurrency,
+The ordinary path uses the same worker, target schema validation,
+target-scope check, tenant/principal ownership, replay claim, budget, concurrency,
 metrics, and provider adapter as native task augmentation. Ark job IDs and
 provider task IDs are separate identifiers.
 
@@ -356,7 +364,7 @@ enables a disabled service; never a secret value). Services: `modelark`,
 ## 2. seed_audio_generate
 
 Generate full-scene audio through Seed Speech: **one clip, or up to five
-independent variations in parallel**. Requires `seed:audio:generate` in JWT
+independent variations in parallel**. Requires `seed:audio:generate` in `api_key`
 mode. **Required background task**: run it through `ark_job_submit` (or native
 task augmentation).
 
@@ -469,7 +477,7 @@ Returns `SeedAudioGenerateOutput` for both single calls and variations.
 **The only Seedream tool**: text-to-image, image-to-image and reference
 editing, point/bbox edits, provider batches (`max_images`), parallel variations,
 and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
-`seedream:generate` in JWT mode. **Required background task**: run it through
+`seedream:generate` in `api_key` mode. **Required background task**: run it through
 `ark_job_submit` (or native task augmentation).
 
 ### Input
@@ -713,7 +721,7 @@ The `estimated_cost_usd` value above is illustrative only.
 **One create tool for every configured Seedance model** (2.0, 2.0 Fast, 2.0
 Mini, 2.5, and 2.5 Flash): single tasks, up to five parallel variations,
 Draft mode, and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is
-set; requires `seedance:create` in JWT mode. **Required background
+set; requires `seedance:create` in `api_key` mode. **Required background
 submission**: run it through `ark_job_submit` (or native task augmentation).
 Poll the returned task IDs with [`gen_task_get`](#10-gen_task_get).
 
@@ -1267,7 +1275,7 @@ provider task tool or object-storage upload requirement.
 **One poller for every ModelArk generation task**: Seedance video tasks
 (`seedance_create_task`, every Seedance model) and Seed 3D tasks
 (`hyper3d_create_task`, `hitem3d_create_task`). Registered whenever ModelArk is
-configured; requires `gen:read` in JWT mode. Optional background task (required
+configured; requires `gen:read` in `api_key` mode. Optional background task (required
 when `persist_output=true`).
 
 Fetches tasks with one provider list call per page of 20 task IDs (at most
@@ -1414,7 +1422,7 @@ provider SLA.
 
 List the caller's ModelArk generation tasks (Seedance video and 3D), **newest
 first**, covering tasks created in the **last 7 days** (the provider's list
-window). Registered whenever ModelArk is configured; requires `gen:read` in JWT
+window). Registered whenever ModelArk is configured; requires `gen:read` in `api_key`
 mode. Use `gen_task_get` for outputs.
 
 ### Input
@@ -1475,7 +1483,7 @@ Returns `GenTaskPage`:
 
 Cancel (queued) or delete (terminal) any ModelArk generation task: Seedance,
 Hyper3D, or Hitem3d. Registered whenever ModelArk is configured; requires
-`gen:delete` in JWT mode. **Destructive.** The tool first fetches the task and
+`gen:delete` in `api_key` mode. **Destructive.** The tool first fetches the task and
 refuses to act when its actual status differs from `expected_status`. A deleted
 task's outputs are no longer retrievable through `gen_task_get`.
 
@@ -1515,7 +1523,7 @@ task's outputs are no longer retrievable through `gen_task_get`.
 Enhance a public HTTPS video through the Bearer-authenticated BytePlus VOD AI
 MediaKit convenience endpoint. The tool is registered only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured and requires the `vod:enhance`
-scope in JWT mode.
+scope in `api_key` mode.
 
 The tool selects an enhancement tier (`fast`, `standard`, or `professional`) and a
 target resolution from 240p up to 8K (`fast` tops out at 4K) or a short-side pixel
@@ -1582,7 +1590,7 @@ live probes. Unknown shapes fail closed.
 Submit an asynchronous BytePlus VOD AI MediaKit video transcoding task through
 the Bearer-authenticated convenience endpoint. Registered only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured; requires the `vod:transcode`
-scope in JWT mode.
+scope in `api_key` mode.
 
 The request body and `video` object field names and enums are verified from the
 official AI MediaKit API reference. The default options reproduce the verified
@@ -1646,7 +1654,7 @@ server-side heuristic `recommended_poll_after_ms`.
 Submit an asynchronous BytePlus VOD AI MediaKit voice and background audio
 separation task via `POST /api/v1/tools/separate-voice`. The tool is registered
 when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured and requires the
-`vod:extract` scope in JWT mode.
+`vod:extract` scope in `api_key` mode.
 
 Input takes a public HTTPS source URL and separation options:
 
@@ -1686,7 +1694,7 @@ automatically because completion is ambiguous after a timeout.
 ## 16. vod_add_subtitles
 
 Submit `POST /tools/add-subtitle-to-video` using the configured MediaKit Bearer
-key and the `vod:subtitle:add` JWT scope. `video_url` is required and must be a
+key and the `vod:subtitle:add` scope in `api_key` mode. `video_url` is required and must be a
 public HTTPS URL. Provide at least one of `subtitle_url` (SRT, VTT, or ASS) or
 `subtitles`, where every inline cue has nonblank `subtitle_text` and an
 `end_time` greater than its nonnegative `start_time`. A subtitle file takes
@@ -1723,7 +1731,7 @@ with [`vod_get_task`](#18-vod_get_task).
 `operation` that any `vod_*` create tool returned (`vod_enhance_video`,
 `vod_transcode_video`, `vod_separate_audio`, `vod_add_subtitles`, or
 `vod_remove_subtitles`). Registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY`
-is configured; requires the `vod:read` scope in JWT mode. Only the principal
+is configured; requires the `vod:read` scope in `api_key` mode. Only the principal
 that created the task can poll it.
 
 **`processing` is not a failure: poll again later and never resubmit the create
@@ -1885,7 +1893,7 @@ These diagnostics do not check provider authorization or filesystem readiness;
 Retrieve persisted media by artifact ID. Returns the raw media bytes
 (Base64-encoded) with MIME type, SHA-256 hash, and byte count. Use this to
 fetch media after the provider URL has expired (2h audio, 24h image/video).
-Always registered; requires `artifacts:read` in JWT mode.
+Always registered; requires `artifacts:read` in `api_key` mode.
 
 ### Input
 
@@ -1929,7 +1937,8 @@ Always registered; requires `artifacts:read` in JWT mode.
 Locate or copy a persisted media artifact on the local filesystem. Returns the
 absolute on-disk path instead of streaming Base64 through the MCP context.
 Stdio transport only — the client and server must share a filesystem. Always
-registered; requires `artifacts:read` in JWT mode.
+registered, but HTTP calls are rejected even though the shared key has
+`artifacts:read`.
 
 ### Input
 
@@ -1980,7 +1989,7 @@ file is never silently overwritten (identical content is accepted).
 Persist a temporary provider output URL as a durable artifact. Use it to
 recover an `ArtifactRef` with `id="provider-url"` and a `persistence_error`
 before the provider URL expires. Always registered; requires `media:upload` in
-JWT mode. Optional background task.
+`api_key` mode. Optional background task.
 
 Only trusted BytePlus provider hosts are downloaded, through the same
 SSRF-resistant downloader, host allowlist, redirect re-validation, and size
@@ -2011,7 +2020,7 @@ retryable.
 Upload **1-50 files** to object storage (TOS or S3) in one call and return a
 presigned HTTPS GET URL per file. Registered when the selected object-storage
 backend credentials are set (`TOS_*` with default `OBJECT_STORAGE_BACKEND=tos`,
-or `S3_*` with `OBJECT_STORAGE_BACKEND=s3`); requires `media:upload` in JWT
+or `S3_*` with `OBJECT_STORAGE_BACKEND=s3`); requires `media:upload` in `api_key`
 mode. **Required background task**: run it through `ark_job_submit` (or native
 task augmentation).
 
@@ -2046,7 +2055,8 @@ references, which are URL-only.
   smaller calls"); it is not a per-item error.
 
 Each object is stored at `<key_prefix>/<media_type>/<uuid>`, and its owner is
-recorded so only the uploader can presign it later with `media_presign`.
+recorded for `media_presign` ownership checks. All shared-key members use the
+same owner and can presign team uploads.
 
 ### Output
 
@@ -2127,7 +2137,7 @@ recorded so only the uploader can presign it later with `media_presign`.
 Mint fresh presigned HTTPS GET URLs for **1-100 objects** already in storage
 (TOS or S3), without re-uploading. Use it when a reference URL from
 `media_upload` has expired or is about to. **No data is transferred.**
-Registered with object storage; requires `media:presign` in JWT mode.
+Registered with object storage; requires `media:presign` in `api_key` mode.
 Foreground (read-only).
 
 A malformed, unowned, or provider-failing key is **reported per key** while the

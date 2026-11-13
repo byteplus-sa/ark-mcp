@@ -4,7 +4,7 @@ type: spec
 status: accepted
 horizon: current
 created: 2026-10-17
-updated: 2026-11-10
+updated: 2026-11-12
 tags: [mcp, fastmcp, background-jobs, tasks, security]
 source:
   - https://gofastmcp.com/servers/tasks
@@ -80,14 +80,16 @@ Output `BackgroundJobCapabilities { targets: list[BackgroundJobTarget] }`:
 |---|---|---|
 | `tool_name` | `str` | Registered target tool name |
 | `task_mode` | `"required"` \| `"optional"` | Native task mode of the target |
-| `required_scope` | `str` | OAuth scope needed to submit it in JWT mode |
+| `required_scope` | `str` | Tool scope checked against the fixed team allowlist in `api_key` mode |
 | `description` | `str` | Target tool description |
 | `input_schema` | `dict` | JSON Schema of the target's arguments |
 
 - **Only targets registered on this server instance** are returned; a tool
   whose provider credentials are absent is not registered, so it is silently
   omitted. No credential state is exposed.
-- **JWT mode filters by scope**; local mode returns every registered target.
+- **Shared-key mode filters by the fixed ordinary scopes**; local mode returns
+  every registered target. Account-wide asset and moderation administration
+  is not permitted by the shared key.
 
 ### `ark_job_submit`
 
@@ -115,7 +117,7 @@ Order of checks, each failing as a `ToolError` **before any queue write or
 provider call** unless noted:
 
 1. Unknown `tool_name` → "not supported".
-2. JWT caller without the target's `required_scope` → "not authorized".
+2. Shared-key caller without the target's `required_scope` → "not authorized".
 3. Target not registered in this configuration → "not available".
 4. Registered task mode differs from the registry → "invalid execution policy".
 5. Argument names not accepted by the target signature, or FastMCP coercion
@@ -164,7 +166,7 @@ a provider operation already accepted by BytePlus was cancelled.
 Unknown, expired, malformed and cross-owner job IDs all return the **same
 outward error**, so the response is not an existence oracle:
 
-- JWT mode: "Background job is not available to this principal."
+- Shared-key mode: "Background job is not available to this principal."
 - Local mode: a message explaining that local jobs are process-local and must
   be polled through the same server process (or one shared HTTP server).
 
@@ -177,7 +179,7 @@ outward error**, so the response is not an existence oracle:
 | `ark_job_get` | true | false | true | false |
 | `ark_job_cancel` | false | true | false | true |
 
-All four are foreground tools with no `TaskConfig`. In JWT mode they require an
+All four are foreground tools with no `TaskConfig`. In `api_key` mode they require an
 authenticated token but no scope of their own; the target's scope is enforced
 inside `ark_job_submit` and `ark_job_capabilities`.
 
@@ -192,7 +194,7 @@ mode. A background entry without a scope fails at import. Every consumer
 reads it:
 
 - `_task_config(name)` builds the native `TaskConfig` (poll interval 2 s).
-- `register_tools` takes the JWT scope from the catalog entry.
+- `register_tools` takes the tool scope from the catalog entry.
 - `_task_handler` wraps **required** targets with `guard_task_execution` and
   instruments every registered target.
 - `ark_job_capabilities` and `ark_job_submit` resolve targets from it.
@@ -209,9 +211,18 @@ including the `ark_job_*` tools themselves.
 
 ## Security invariants
 
+Hosted HTTP supports only `MCP_AUTH_MODE=api_key`; every member is
+tenant/principal `shared-team`.
+Members deliberately share job ownership, budget and concurrency. The shared
+key's fixed scopes exclude account-wide asset and moderation administration.
+The internal bearer context retains generic claim extraction for ownership
+tests, with a fixed `tenant_id` claim key; clients cannot configure that key or
+choose an identity.
+Key rotation preserves identity; switching auth modes does not migrate ownership.
+
 1. **Allowlist only.** `tool_name` must be a registry key and registered on
    the running server.
-2. **Target-scope authorization.** In JWT mode the caller must hold the
+2. **Target-scope authorization.** In `api_key` mode the caller must hold the
    target's exact scope before validation or enqueue.
 3. **Application ownership.** Job IDs are claimed in the `TaskOwnershipStore`
    under the `mcp` namespace, keyed by principal and tenant. `ark_job_get`,
@@ -225,7 +236,7 @@ including the `ark_job_*` tools themselves.
    execution finds the claim and **fails instead of repeating billable
    provider work**. Claims are never released. Optional targets stay
    repeatable and rely on the persistence single-flight cache.
-5. **Snapshot protection.** JWT mode with a Redis Docket backend refuses to
+5. **Snapshot protection.** `api_key` mode with a Redis Docket backend refuses to
    start without `FASTMCP_TASKS_ENCRYPTION_KEY`.
 6. **Safe logging.** Job events (`background_job_accepted`,
    `background_job_polled`, `background_job_cancelled`) carry only job ID,
@@ -233,6 +244,15 @@ including the `ark_job_*` tools themselves.
 7. **No existence oracle.** See [shared errors](#errors-shared-by-get-and-cancel).
 8. **No automatic paid retry.** Neither the server nor the documented client
    workflow resubmits after a timeout or disconnect.
+
+### Breaking-change migration
+
+The former `jwt` mode is rejected; retired `MCP_JWT_*`, `MCP_TENANT_CLAIM`
+and `MCP_PUBLIC_BASE_URL` settings are not used. Old user-owned or local jobs
+do not automatically become shared-team jobs. Preserve the SQLite ownership
+and execution records, Redis state, artifacts and snapshot encryption key.
+See [migration guidance](../docs/self-hosting.md#breaking-change-migration)
+before changing a retained deployment.
 
 ## Observability
 

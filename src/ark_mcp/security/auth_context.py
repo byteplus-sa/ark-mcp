@@ -1,8 +1,8 @@
 """Auth context for multi-tenant artifact and task ownership.
 
 In ``stdio`` mode, there is a single principal (the local user). In remote
-HTTP mode, the auth context is derived from the MCP request context (OAuth
-scopes, principal ID). This module provides the abstraction for both.
+HTTP mode, the shared-key verifier supplies the team identity and scopes.
+This module provides the ownership abstraction for both.
 """
 
 from __future__ import annotations

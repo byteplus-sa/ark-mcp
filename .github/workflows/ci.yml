@@ -94,14 +94,21 @@ jobs:
 
       - name: Exercise health endpoint
         run: |
+          export MCP_API_KEY_SHA256="$(openssl rand -hex 32)"
           docker run --detach --rm --name ark-mcp-ci \
             --publish 127.0.0.1:3000:3000 \
-            --env MCP_JWT_JWKS_URI=https://auth.example.test/.well-known/jwks.json \
-            --env MCP_JWT_ISSUER=https://auth.example.test/ \
-            --env MCP_JWT_AUDIENCE=ark-mcp \
+            --env MCP_API_KEY_SHA256 \
             ark-mcp:ci
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:3000/health; then
+              status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+                --request POST \
+                --header 'Content-Type: application/json' \
+                --header 'Accept: application/json, text/event-stream' \
+                --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' \
+                http://127.0.0.1:3000/mcp)"
+              echo "Unauthenticated MCP POST returned HTTP $status"
+              test "$status" = "401"
               exit 0
             fi
             sleep 1

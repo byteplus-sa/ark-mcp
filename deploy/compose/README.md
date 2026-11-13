@@ -2,6 +2,10 @@
 
 Runs one Ark Seed MCP server for one organization: Caddy (TLS) in front of the
 server, with Redis for background jobs. Only Caddy is exposed.
+Use `MCP_AUTH_MODE=api_key` (default) with `MCP_API_KEY_SHA256`
+for one trusted team. No identity provider is required;
+members share data, budget and ordinary tool permissions, but no account-wide
+admin access. See [key generation and rotation](../../docs/self-hosting.md#shared-mcp-key).
 
 ```bash
 cp .env.example .env    # then fill in every REQUIRED value

@@ -1,0 +1,82 @@
+name: BytePlus Terraform
+
+on:
+  pull_request:
+    paths:
+      - "deploy/terraform/**"
+      - "deploy/compose/**"
+      - "scripts/generate_mcp_key.py"
+      - "scripts/deploy_byteplus.py"
+      - "scripts/byteplus_deploy/**"
+      - "tests/unit/test_byteplus*.py"
+      - "tests/unit/test_host_deployment.py"
+      - "tests/unit/test_provider_secret_sync.py"
+      - "tests/unit/test_terraform_bootstrap.py"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deploy/terraform/**"
+      - "deploy/compose/**"
+      - "scripts/generate_mcp_key.py"
+      - "scripts/deploy_byteplus.py"
+      - "scripts/byteplus_deploy/**"
+      - "tests/unit/test_byteplus*.py"
+      - "tests/unit/test_host_deployment.py"
+      - "tests/unit/test_provider_secret_sync.py"
+      - "tests/unit/test_terraform_bootstrap.py"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_VERSION: "1.17.1"
+  TF_SHA256: "4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061"
+
+jobs:
+  validate:
+    name: Offline Terraform and bootstrap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.11.26"
+          python-version: "3.12"
+
+      - name: Install checksum-verified Terraform
+        run: |
+          curl --fail --silent --show-error --location \
+            --output "$RUNNER_TEMP/terraform.zip" \
+            "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip"
+          printf '%s  %s\n' "$TF_SHA256" "$RUNNER_TEMP/terraform.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/terraform.zip" -d "$RUNNER_TEMP/terraform-bin"
+          printf '%s\n' "$RUNNER_TEMP/terraform-bin" >> "$GITHUB_PATH"
+          printf 'TF_DATA_DIR=%s/ark-terraform\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+
+      - name: Check Terraform and mocked plans
+        run: |
+          terraform -chdir=deploy/terraform/byteplus fmt -check -recursive
+          terraform -chdir=deploy/terraform/byteplus init -backend=false -input=false -lockfile=readonly
+          terraform -chdir=deploy/terraform/byteplus validate
+          terraform -chdir=deploy/terraform/byteplus test -no-color
+
+      - name: Check host bootstrap
+        run: |
+          uv sync --locked
+          uv run ruff check deploy/terraform/byteplus/scripts scripts/byteplus_deploy scripts/deploy_byteplus.py tests/unit/test_terraform_bootstrap.py tests/unit/test_byteplus*.py tests/unit/test_host_deployment.py tests/unit/test_provider_secret_sync.py
+          uv run ruff format --check deploy/terraform/byteplus/scripts scripts/byteplus_deploy scripts/deploy_byteplus.py tests/unit/test_terraform_bootstrap.py tests/unit/test_byteplus*.py tests/unit/test_host_deployment.py tests/unit/test_provider_secret_sync.py
+          uv run mypy deploy/terraform/byteplus/scripts scripts/byteplus_deploy
+          uv run pytest tests/unit/test_terraform_bootstrap.py tests/unit/test_byteplus*.py tests/unit/test_host_deployment.py tests/unit/test_provider_secret_sync.py --disable-socket --allow-unix-socket
+          bash -n deploy/terraform/byteplus/scripts/install.sh
+          bash -n deploy/terraform/byteplus/scripts/activate.sh

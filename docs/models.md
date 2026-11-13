@@ -270,8 +270,9 @@ Settings startup additionally rejects: duplicate model IDs within a
 family's bindings, a default model ID missing from bindings, a custom
 default model with no family/binding, unknown family strings, non-HTTPS
 provider URLs, non-positive `ARTIFACT_TTL_SECONDS` /
-`MCP_INLINE_MEDIA_MAX_BYTES` / timeouts, invalid allowed origins, JWT auth
-missing required fields, and non-loopback HTTP without JWT.
+`MCP_INLINE_MEDIA_MAX_BYTES` / timeouts, invalid allowed origins, shared-key
+auth with a missing or malformed `MCP_API_KEY_SHA256`, and non-loopback HTTP
+without `MCP_AUTH_MODE=api_key`.
 
 ## Module-level singleton
 

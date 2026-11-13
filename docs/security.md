@@ -24,60 +24,63 @@ runtime state, artifact storage and any task-snapshot encryption key.
 
 ## Auth modes
 
-`AuthMode` (`config/env.py`) is a `StrEnum`: `LOCAL = "local"` and
-`JWT = "jwt"`.
+`AuthMode` (`config/env.py`) accepts only `local` and `api_key`.
 
 | Mode | Transport | Behavior |
 |---|---|---|
-| `local` (default) | `stdio` or loopback HTTP | No FastMCP auth provider; a single trusted principal `local`. |
-| `jwt` | HTTP (required for non-loopback) | `fastmcp.server.auth.JWTVerifier` with `ssrf_safe=True`. |
+| `local` (Python default) | `stdio` or loopback HTTP | No FastMCP auth provider; a single trusted principal `local`. |
+| `api_key` | HTTP | `SharedKeyVerifier`, hash-only verification and one non-admin team identity. |
 
-`build_auth_provider` returns `None` for `LOCAL`, and a `JWTVerifier` for
-`JWT`. **Fail-closed is structural and startup-time:** if
+Docker, Compose and Terraform default to `api_key`. `build_auth_provider`
+returns `None` for `LOCAL` or a `SharedKeyVerifier` for `API_KEY`.
+**Fail-closed is structural and startup-time:** if
 `MCP_TRANSPORT=http` + `MCP_AUTH_MODE=local` + `MCP_HOST` is not in
 `{127.0.0.1, ::1, localhost}`, `Settings` construction raises
-`ValueError("HTTP on a non-loopback host requires MCP_AUTH_MODE=jwt.")` and
+`ValueError("HTTP on a non-loopback host requires MCP_AUTH_MODE=api_key.")` and
 the server never starts.
 
-## JWT verification
+## Shared-key verification
 
-The verifier is constructed with these settings (all required in JWT mode):
+`MCP_AUTH_MODE=api_key` requires `MCP_API_KEY_SHA256`, a lowercase 64-character
+SHA-256 digest. The bearer key must be 32 random bytes encoded as lowercase
+hex; [key generation and rotation](self-hosting.md#shared-mcp-key) use a private
+file, never command-line secret arguments. The verifier hashes the incoming
+ASCII key and compares digests with `hmac.compare_digest`. It does not cache
+authentication or log credentials. The digest is masked in settings
+representations. There is no login or OAuth discovery endpoint.
 
-| Field | Env var | Constraint |
-|---|---|---|
-| `jwks_uri` | `MCP_JWT_JWKS_URI` | must be `https://` with a hostname |
-| `issuer` | `MCP_JWT_ISSUER` | non-empty |
-| `audience` | `MCP_JWT_AUDIENCE` | non-empty |
-| `clock_skew_seconds` | `MCP_JWT_CLOCK_SKEW_SECONDS` | `0..300` (default `30`) |
-| `ssrf_safe` | — | hard-coded `True` |
+All holders receive principal/tenant `shared-team` and the fixed
+`SHARED_TEAM_SCOPES` allowlist. They share ownership, budget, and concurrency;
+they can read or cancel each other's permitted work. There is no per-member
+audit identity, automatic expiry, or individual revocation. Rotate the key for
+everyone to remove a member. Identity is independent of the credential, so
+rotation preserves team history. Switching auth modes is not a data migration.
+Account-wide asset and moderation scopes are excluded.
 
-The verifier is `StrictJWTVerifier`, pinned to RS256. Tokens missing an `exp`
-claim are rejected, and a token whose `nbf` claim is still in the future
-(beyond the configured clock skew) is rejected.
+TLS, Host/Origin enforcement, body limits, configured rate limits, ownership
+checks, and remote filesystem restrictions apply unchanged. Redis snapshot
+encryption is required for authenticated Redis task backends: a hash-only server configuration
+does not eliminate raw bearer credentials from live request/task context.
+Reload by recreating the application process/container after draining work;
+editing `.env` alone does not revoke running access.
 
-### OAuth discovery (optional)
-
-By default JWT mode is a bare verifier with no OAuth discovery — suitable for
-internal machine-to-machine clients that already know how to obtain tokens.
-Set `MCP_JWT_PROVIDE_DISCOVERY=true` (plus `MCP_PUBLIC_BASE_URL`) to wrap the
-verifier in FastMCP's `RemoteAuthProvider`, which serves RFC 9728 OAuth
-Protected Resource Metadata at `/.well-known/oauth-protected-resource` and
-advertises the scopes in `MCP_JWT_SCOPES_SUPPORTED`. This makes the server
-discoverable by spec-compliant MCP clients. The bare-verifier mode is
-unchanged when the flag is off.
-
-### Principal and tenant extraction
+## Principal and tenant extraction
 
 `get_principal(ctx)` (`runtime.py`) resolves the principal identity from the
-verified token:
+verified internal bearer-token context. `SharedKeyVerifier` supplies
+`sub="shared-team"`, `tenant_id="shared-team"` and the fixed ordinary scopes;
+clients cannot override these by submitting claims.
+
+Generic bearer-claim extraction remains internal so ownership boundaries can
+be tested independently of the shared-key verifier:
 
 - **`sub` claim → `token.subject` → `token.client_id`** (first truthy `str`
   wins). Missing → `PermissionError("The access token is missing a principal identity.")`.
-- **Tenant** is read from the claim named by `MCP_TENANT_CLAIM` (default
-  `"tenant_id"`). Missing/non-string → `PermissionError`.
+- **Tenant** is read from the fixed `"tenant_id"` claim key.
+  Missing/non-string → `PermissionError`. This key is not configurable.
 - A missing token → `PermissionError("An authenticated access token is required.")`.
 
-There is **no anonymous remote principal** — JWT mode fails closed. The only
+There is **no anonymous remote principal**; shared-key HTTP fails closed. The only
 way to get an `is_local` principal (`principal_id == "local"` with
 `transport == "stdio"`) is `LOCAL` mode, which returns `PrincipalContext()`
 untouched (`local`/`local`, empty scopes, `transport="stdio"`). This holds for
@@ -107,7 +110,7 @@ A frozen Pydantic model (`security/auth_context.py`):
 ## Scope taxonomy
 
 `component_auth(settings, *scopes)` returns `None` in `LOCAL` mode, or
-`require_scopes(*scopes)` (a FastMCP `AuthCheck`) in JWT mode. The
+`require_scopes(*scopes)` (a FastMCP `AuthCheck`) in `API_KEY` mode. The
 tool → scope mapping is the `scope` column of the static tool catalog
 (`tools/_catalog.py`), applied by `server.py::register_tools`:
 
@@ -134,14 +137,22 @@ tool → scope mapping is the `scope` column of the static tool catalog
 | `media:upload` | `media_upload`, `seed_media_persist_url` |
 | `media:presign` | `media_presign` |
 | `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}`, `seed_media_get_artifact`, `seed_media_export_artifact` |
-| `assets:read` | `ark_asset_group_list`, `ark_asset_list` |
-| `assets:write` | `ark_asset_group_ensure`, `ark_asset_create`, `ark_asset_update` |
-| `assets:verify` | `ark_asset_verification_start`, `ark_asset_verification_result` |
-| `assets:delete` | `ark_asset_delete` (assets and groups; registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`) |
+
+These ordinary scopes form the fixed shared-team allowlist. They are not
+per-user roles and cannot be changed through client claims or configuration.
+Account-wide `assets:*` and `moderation:*` scopes are excluded, so shared-key
+callers cannot invoke those administrative tools even if they are registered.
+Trusted local administration still requires the relevant provider gates.
+
+The catalog retains `assets:read`, `assets:write`, `assets:verify` and
+`assets:delete` as permission labels for asset operations. None is granted by
+the shared key; these tools are available only through trusted local mode
+with the required provider credentials and feature flags.
 
 **Create scopes are per product because that is where spend happens; read
 and delete scopes are shared** (`gen:read`, `gen:delete`) because the
-ownership store already limits every principal to the tasks it created.
+ownership store already limits every principal to its tasks. Every shared-key
+member is that same principal, including for result reads and cancellations.
 
 `ark_job_*` and `ark_list_models` need an authenticated principal but no
 scope: job tools enforce the target tool's scope at submit time, and
@@ -166,8 +177,9 @@ keys) sign ModelArk OpenAPI requests with BytePlus V4 HMAC-SHA256
 (`providers/byteplus_openapi/signing.py`). They are startup configuration
 only and are never logged, echoed, or accepted as tool arguments. The
 `ark_asset_*` tools are registered only when both keys are set. Asset
-management acts on the whole BytePlus account rather than per MCP principal,
-so grant `assets:*` scopes only to trusted callers. The real-person
+management acts on the whole BytePlus account rather than per MCP principal.
+Shared-key HTTP excludes every asset scope; use trusted local stdio for
+administration. The real-person
 verification `h5_link` embeds temporary credentials: it is returned to the
 caller but never logged. `asset://<asset_id>` references are validated by
 shape and never fetched by the server; `CreateAsset` source URLs pass the
@@ -303,7 +315,7 @@ same controls: the URL goes through `copy_from_trusted_url` with this host
 allowlist, full SSRF validation and IP pinning, per-hop redirect
 re-validation, and the per-media-type size limits. Any host outside the
 allowlist is rejected; the tool cannot be used to fetch arbitrary URLs. It
-requires the `media:upload` scope in JWT mode.
+requires the fixed team's `media:upload` scope in `api_key` mode.
 
 For VOD AI MediaKit, video processing and artifact persistence are separate
 outcomes. The tool always preserves a successful provider output URL for the
@@ -423,23 +435,26 @@ with an under-reported size could bypass it. The provider enforces the
 ## Settings caching
 
 `get_settings()` is `@lru_cache(maxsize=1)`; `refresh_settings()` clears the
-cache. Any auth/host/scope-related env change requires a process restart or
-an explicit `refresh_settings()` call to take effect.
+cache. Operators must recreate the running application after configuration
+changes; refreshing a settings cache alone does not rebuild the verifier.
+Follow [key rotation](self-hosting.md#rotation-and-removal) to revoke a key.
 
 
 ## MCP background task boundaries
 
 **MCP task results use the same tenant/principal boundary as provider tasks.**
 `TenantTasksExtension` records task ownership under the `mcp` namespace in the
-runtime ownership database and checks it before get, update, or cancel. JWT mode
-requires the configured tenant claim before accepting a tool call. FastMCP's own
-client/subject namespace remains an additional check, not the application's
-source of tenant isolation. A token for a different tenant cannot retrieve a
-cached media URL even when its OAuth client and subject are identical.
+runtime ownership database and checks it before get, update, or cancel.
+The internal bearer context must include the fixed `tenant_id` claim key.
+FastMCP's own client/subject namespace remains an additional check, not the
+application's source of tenant isolation. Ownership tests retain generic
+bearer identities to verify cross-tenant rejection even when client and subject
+match. Production shared-key requests all resolve to `shared-team`; these
+checks do not isolate members of the team.
 
 The ordinary `ark_job_*` tools reuse this boundary. Submission
 resolves only an immutable allowlist of task-enabled tools, requires the target
-tool's exact JWT scope before queueing, and claims the server-generated job ID
+tool's exact scope before queueing, and claims the server-generated job ID
 for the current tenant and principal. Capability discovery returns only
 configured targets permitted by the caller. Get and cancel check ownership
 before consulting the task backend, and unknown or cross-principal IDs never
@@ -462,3 +477,11 @@ a new submission has a new ID, and deleting runtime state removes its execution
 history. Keep the single-replica restriction and preserve the database whenever
 retaining a Redis queue. Ownership/execution rows follow the existing state
 retention policy; retained queue state must not outlive that history.
+
+## Breaking-change migration
+
+The old `jwt` auth mode is rejected. Retired `MCP_JWT_*`, `MCP_TENANT_CLAIM`
+and `MCP_PUBLIC_BASE_URL` settings are not used. There is no automatic transfer
+of former user or local ownership to `shared-team`. Preserve SQLite, artifacts,
+Redis and the existing snapshot encryption key while migrating clients.
+See the [migration procedure](self-hosting.md#breaking-change-migration).

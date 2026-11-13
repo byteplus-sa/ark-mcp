@@ -13,19 +13,20 @@ from fastmcp.server.auth import AccessToken, TokenVerifier
 from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
 from ark_mcp.providers.vod_mediakit.schemas import EnhancementSubmission
 from ark_mcp.server import create_server
-from tests.integration.test_http_security import _jwt_settings
+from tests.integration.test_http_security import _http_settings
 
 
 class TenantVerifier(TokenVerifier):
-    def __init__(self, tenant_claim: str = "tenant_id", principal_source: str = "sub") -> None:
+    """Inject synthetic identities to exercise ownership defenses independently of auth."""
+
+    def __init__(self, principal_source: str = "sub") -> None:
         super().__init__()
-        self.tenant_claim = tenant_claim
         self.principal_source = principal_source
 
     async def verify_token(self, token: str) -> AccessToken:
         claims = {"sub": "alice"} if self.principal_source == "sub" else {}
         if token != "missing-tenant":
-            claims[self.tenant_claim] = token
+            claims["tenant_id"] = token
         return AccessToken(
             token=token,
             client_id="shared-client",
@@ -74,11 +75,9 @@ async def request_task(
 
 
 @asynccontextmanager
-async def task_client(
-    tmp_path: Path, tenant_claim: str = "tenant_id", principal_source: str = "sub"
-):
-    settings = _jwt_settings(tmp_path).model_copy(update={"mcp_tenant_claim": tenant_claim})
-    server = create_server(settings, auth_provider=TenantVerifier(tenant_claim, principal_source))
+async def task_client(tmp_path: Path, principal_source: str = "sub"):
+    settings = _http_settings(tmp_path)
+    server = create_server(settings, auth_provider=TenantVerifier(principal_source))
     app = server.http_app(path="/mcp", stateless_http=True, json_response=True)
     async with (
         app.router.lifespan_context(app),
@@ -145,10 +144,9 @@ async def terminal(client: httpx.AsyncClient, task_id: str) -> dict[str, Any]:
             await asyncio.sleep(0.01)
 
 
-@pytest.mark.parametrize("tenant_claim", ["tenant_id", "organization"])
 @pytest.mark.parametrize("principal_source", ["sub", "subject", "client_id"])
-async def test_task_results_enforce_configured_tenant(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tenant_claim: str, principal_source: str
+async def test_task_results_enforce_owner_tenant(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, principal_source: str
 ) -> None:
     provider = AsyncMock(
         return_value=EnhancementSubmission(
@@ -157,7 +155,7 @@ async def test_task_results_enforce_configured_tenant(
     )
     monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", provider)
     monkeypatch.setattr(VodMediaKitEnhancementService, "close", AsyncMock())
-    async with task_client(tmp_path, tenant_claim, principal_source) as client:
+    async with task_client(tmp_path, principal_source) as client:
         task_id = (await submit(client))["result"]["taskId"]
         result = await terminal(client, task_id)
         assert "result" in result, result

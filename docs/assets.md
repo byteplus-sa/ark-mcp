@@ -53,9 +53,12 @@ or authorized in the console.
 | `ark_asset_verification_result` | `GetVisualValidateResult` | Returns the verified person's `LivenessFace` `group_id`; `wait_seconds` polls. Background-job capable. |
 | `ark_asset_delete` | `DeleteAsset` / `DeleteAssetGroup` | **Irreversible.** Exactly one of `asset_id` or `group_id`, and `confirm: true`. Registered only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`. Deleting a group also removes its assets, so **a non-empty group is refused unless `cascade: true`**. Returns `id`, `kind` (`asset` or `group`), and `deleted`. |
 
-JWT scopes: `assets:read`, `assets:write`, `assets:verify`, `assets:delete`.
 Asset management acts on the whole BytePlus account, not per MCP principal, so
-grant these scopes only to trusted callers.
+the shared HTTP key excludes all asset scopes (`assets:read`, `assets:write`,
+`assets:verify`, `assets:delete`). These management workflows require trusted
+local access with AK/SK; registering the tools does not grant shared-key users
+access. Existing authorized `asset://` references still work for Seedance
+generation over HTTP.
 
 `subject` lookup and creation is serialized within one server event loop. If
 separate stdio servers or replicas may create the same subject concurrently,

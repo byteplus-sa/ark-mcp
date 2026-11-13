@@ -122,6 +122,8 @@ export default defineConfig({
             "setup/manual-install",
             "self-hosting",
             "deployment",
+            "byteplus-terraform",
+            "secret-manager",
             "runtime",
             "security",
             "observability",

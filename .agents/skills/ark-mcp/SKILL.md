@@ -11,6 +11,12 @@ skill covers only what the schemas cannot tell you: the flow, the rules that
 span tools, and where to look things up. **Parameters live in the tool
 schemas** (full reference: [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
+Hosted HTTP accepts only one shared MCP API key. Every member uses tenant and
+principal `shared-team`, sharing data, budgets and fixed ordinary scopes.
+Account-wide asset and moderation administration is excluded; use trusted local
+stdio for administration. Provider keys stay on the server. Setup and rotation:
+[environment.md](references/environment.md#transport-and-auth).
+
 | Product | Create tool | Poll / result | Enabled by |
 |---|---|---|---|
 | **Seedance** video (2.0, regular 2.5 with 4K, and 2.5 Flash) | `seedance_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_API_KEY` |
@@ -181,6 +187,9 @@ flowchart LR
   (`MEDIA_UPLOAD_BATCH_MAX_BYTES`) fails the whole call. Use a long
   `expires_in_seconds` (e.g. 3600) for URLs that `vod_*` tools fetch later.
 - An uploaded `object_key` also works as an `ark_asset_create` source.
+- **Asset library management is unavailable over shared-key HTTP.** Use a
+  trusted local setup with AK/SK for the management workflow below. Existing
+  authorized `asset://` references can still be used for Seedance generation.
 - **Asset library:** `asset://<id>` is accepted natively by Seedance only, and
   **only `Active` assets work** (check `all_active` / `status`). Create AIGC
   groups with `ark_asset_group_ensure` by subject name (never invent group
@@ -231,7 +240,7 @@ each returned `asset_uri` as `images: ["asset://asset-..."]` to
 | `queued` / `running` for a long time | Normal provider queue | Keep polling `gen_task_get`; `queue.hint` explains the wait |
 | `persistence_error` on an artifact | Output billed, storage failed | `seed_media_persist_url` before the URL expires |
 | Variation `error.phase` | `queued` (`QUEUE_TIMEOUT`): safe to retry; `generating`: may have completed; `persisting`: output not stored | Retry only `queued` ones |
-| `NOT_OWNED` | The caller did not create that task or key | Use the original principal |
+| `NOT_OWNED` | The task or key is not owned by this server identity | Check the endpoint and retained ownership records; shared-key rotation keeps ownership, but old user/local data is not automatically transferred |
 | OmniHuman failed `InvalidParameter ... audio` or error `50510` | Provider rejected the audio or content after submission | Fix the inputs; never retry unchanged |
 | Budget rejected | `DAILY_BUDGET_USD` exceeded | Wait for the UTC day rollover or raise it |
 

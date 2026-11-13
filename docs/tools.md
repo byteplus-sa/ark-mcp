@@ -9,6 +9,13 @@ tool accepts a Pydantic input model and returns a Pydantic output model as
 structured content. All tools accept a `ctx: Context` parameter for progress
 reporting and logging.
 
+Hosted HTTP accepts only the shared MCP key. Scope checks below use the fixed
+ordinary team allowlist, not per-user grants. All members share tenant/principal
+`shared-team`, including task, artifact and upload ownership, budgets and
+cancellations. Account-wide asset and moderation administration is excluded
+even when provider gates register those tools; use trusted local stdio for it.
+See [Security](security.md#scope-taxonomy).
+
 ## Tool Contract for MCP Clients
 
 Every tool is self-describing through its JSON schema — MCP clients do not
@@ -182,7 +189,7 @@ They do not make long operations synchronous: `ark_job_submit` validates the
 selected target, durably enqueues it on the same Docket worker used by native
 MCP tasks, and returns an Ark job ID. All four tools are always registered;
 capabilities include only provider tools enabled by configuration and permitted
-by the caller's JWT scopes.
+by the fixed shared-team scopes in `api_key` mode.
 
 ### ark_job_capabilities
 
@@ -283,7 +290,7 @@ generation or retrieval result returned an artifact with `id="provider-url"`
 and a `persistence_error`: the output was generated and billed, but could not
 be stored at the time. Call it before the provider URL expires (2 hours for
 audio, 24 hours for image, video, and 3D). Always registered; uses the
-`media:upload` JWT scope.
+`media:upload` scope in `api_key` mode.
 
 Only trusted BytePlus provider hosts are accepted. The URL goes through the
 same SSRF-resistant downloader, host allowlist, redirect re-validation, and
@@ -314,7 +321,7 @@ code and whether it is retryable.
 
 Enhance a public HTTPS source video through BytePlus VOD AI MediaKit. This
 tool is registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses
-the `vod:enhance` JWT scope.
+the `vod:enhance` scope in `api_key` mode.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -354,7 +361,7 @@ is confirmed.
 
 Submit an asynchronous BytePlus VOD AI MediaKit video transcoding task. This
 tool is registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the
-`vod:transcode` JWT scope.
+`vod:transcode` scope in `api_key` mode.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -413,7 +420,7 @@ ambiguous completion.
 Burn subtitles into a public HTTPS video with MediaKit. Supply either
 `subtitle_url` for an SRT, VTT, or ASS file or a non-empty `subtitles` list of
 `subtitle_text`, `start_time`, and `end_time` cues. If both are supplied, the
-subtitle file takes priority. The tool uses `vod:subtitle:add` in JWT mode and
+subtitle file takes priority. The tool uses `vod:subtitle:add` in `api_key` mode and
 runs in the background; pass the `task_id` and `operation="add_subtitles"`
 from its background result to [`vod_get_task`](#vod_get_task).
 
@@ -447,8 +454,8 @@ background result to [`vod_get_task`](#vod_get_task).
 
 Submit an asynchronous BytePlus VOD AI MediaKit voice and background audio
 separation task (`POST /api/v1/tools/separate-voice`). This tool is registered
-when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the `vod:extract` JWT
-scope.
+when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the `vod:extract`
+scope in `api_key` mode.
 
 Input takes a public HTTPS `audio_url` or `video_url` (exactly one), a `scene`,
 and an `output_format`.
@@ -479,7 +486,7 @@ retried automatically (timeout/5xx means ambiguous completion).
 Poll the status and outputs of **any** BytePlus VOD AI MediaKit task: one
 poller for every `vod_*` create tool. Pass the `task_id` and the `operation`
 that the create tool returned. This tool is registered when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the `vod:read` JWT scope.
+`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set and uses the `vod:read` scope in `api_key` mode.
 
 **Execution:** Optional background job. `persist_output` defaults to
 `false`, so a plain foreground call is a quick status poll; background
@@ -727,7 +734,7 @@ Three takes written to a local directory:
 editing, point or box edits, transparent PNG generation (5.5), transparency-preserving
 edits (5.0 Pro), provider batches
 (`max_images`), and parallel variations. Registered when
-`BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedream:generate` JWT scope.
+`BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedream:generate` scope in `api_key` mode.
 
 **Execution:** Required background job. Submit it through `ark_job_submit` (or
 native task augmentation).
@@ -890,7 +897,7 @@ Drop `dry_run` (and add `output_path` ending in `/` on stdio) to generate.
 2.5, and 2.5 Flash. Pick the model with `model`; set
 `variations` to create several tasks in parallel; set `dry_run` to preview the
 request and its cost without billing. Registered when
-`BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedance:create` JWT scope.
+`BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedance:create` scope in `api_key` mode.
 
 **Execution:** Required background job. Submit it through `ark_job_submit` (or
 native task augmentation); a dry run finishes on the first `ark_job_get`. Poll
@@ -1097,7 +1104,7 @@ Draft step 2 (render the final video from a succeeded Draft):
 Check the status and outputs of **any** ModelArk generation task: Seedance
 video (2.0, regular 2.5, and 2.5 Flash), Hyper3D, and Hitem3d. Pass every task ID you
 are waiting on in one call. Registered when `BYTEPLUS_MODELARK_API_KEY` is set
-(not gated by the 3D flag) and uses the `gen:read` JWT scope.
+(not gated by the 3D flag) and uses the `gen:read` scope in `api_key` mode.
 
 The server makes one provider list call per page of 20 task IDs (at most
 three), filtered by the requested IDs, and re-fetches individually only the
@@ -1216,7 +1223,7 @@ them locally) through a background job:
 
 List your ModelArk generation tasks (Seedance video and 3D), **newest first**,
 from the last 7 days (the provider's list window). Registered when
-`BYTEPLUS_MODELARK_API_KEY` is set and uses the `gen:read` JWT scope. Use
+`BYTEPLUS_MODELARK_API_KEY` is set and uses the `gen:read` scope in `api_key` mode. Use
 `gen_task_get` for outputs.
 
 **Annotations:** `readOnlyHint=True`, `destructiveHint=False`,
@@ -1254,7 +1261,7 @@ listed.
 
 Cancel (queued) or delete (terminal) any ModelArk generation task: Seedance,
 Hyper3D, or Hitem3d. Registered when `BYTEPLUS_MODELARK_API_KEY` is set and
-uses the `gen:delete` JWT scope. A deleted task's outputs are no longer
+uses the `gen:delete` scope in `api_key` mode. A deleted task's outputs are no longer
 retrievable through `gen_task_get`.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=True`,
@@ -1617,7 +1624,7 @@ optional `log_id`.
 
 Upload 1-50 image, audio, or video files to object storage (TOS or S3) and
 receive a presigned HTTPS URL for each. Registered with object storage and
-uses the `media:upload` JWT scope.
+uses the `media:upload` scope in `api_key` mode.
 
 **Execution:** Required background job (use `ark_job_submit`), because one
 item can hold up to 200 MiB of video.
@@ -1686,7 +1693,7 @@ without failing the call, so always check `failed` and `items[].error`.
 Generate fresh presigned HTTPS GET URLs for 1-100 existing objects without
 re-uploading. Use it when a previously uploaded reference's URL has expired
 or is about to expire. Registered with object storage and uses the
-`media:presign` JWT scope.
+`media:presign` scope in `api_key` mode.
 
 **Annotations:** `readOnlyHint=True`, `destructiveHint=False`,
 `idempotentHint=True`, `openWorldHint=False`

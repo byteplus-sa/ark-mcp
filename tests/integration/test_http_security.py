@@ -23,15 +23,13 @@ from ark_mcp.security.http_middleware import (
 from ark_mcp.server import create_server
 
 
-def _jwt_settings(tmp_path: Path) -> Settings:
+def _http_settings(tmp_path: Path) -> Settings:
     return Settings(
         _env_file=None,
         MCP_TRANSPORT="http",
         MCP_HOST="127.0.0.1",
-        MCP_AUTH_MODE="jwt",
-        MCP_JWT_JWKS_URI="https://identity.example.com/.well-known/jwks.json",
-        MCP_JWT_ISSUER="https://identity.example.com",
-        MCP_JWT_AUDIENCE="ark-mcp",
+        MCP_AUTH_MODE="api_key",
+        MCP_API_KEY_SHA256="a" * 64,
         MCP_ALLOWED_HOSTS="testserver",
         MCP_ALLOWED_ORIGINS="https://client.example.com",
         ARTIFACT_DIR=str(tmp_path / "artifacts"),
@@ -77,7 +75,7 @@ def _verifier() -> ClaimsTokenVerifier:
 
 @asynccontextmanager
 async def _http_client(tmp_path: Path) -> AsyncIterator[httpx.AsyncClient]:
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
         path="/mcp",
@@ -380,7 +378,7 @@ async def test_ready_with_provider_check_enabled(
 
     monkeypatch.setattr(BaseHttpGateway, "health_check", _ok_health)
 
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     settings.readiness_check_providers = True
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
@@ -417,7 +415,7 @@ async def test_ready_degraded_when_provider_down(
 
     monkeypatch.setattr(BaseHttpGateway, "health_check", _down_health)
 
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     settings.readiness_check_providers = True
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
@@ -446,7 +444,7 @@ async def test_ready_degraded_when_provider_down(
 async def test_rate_limit_allows_under_threshold(tmp_path: Path) -> None:
     from ark_mcp.security.http_middleware import RateLimitMiddleware
 
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
         path="/mcp",
@@ -474,7 +472,7 @@ async def test_rate_limit_allows_under_threshold(tmp_path: Path) -> None:
 async def test_rate_limit_blocks_over_threshold(tmp_path: Path) -> None:
     from ark_mcp.security.http_middleware import RateLimitMiddleware
 
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
         path="/mcp",
@@ -505,7 +503,7 @@ async def test_rate_limit_blocks_over_threshold(tmp_path: Path) -> None:
 async def test_rate_limit_retry_after_header(tmp_path: Path) -> None:
     from ark_mcp.security.http_middleware import RateLimitMiddleware
 
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
         path="/mcp",
@@ -538,7 +536,7 @@ async def test_rate_limit_retry_after_header(tmp_path: Path) -> None:
 
 
 async def test_rate_limit_disabled_by_default(tmp_path: Path) -> None:
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     server = create_server(settings, auth_provider=_verifier())
     app = server.http_app(
         path="/mcp",
@@ -602,7 +600,7 @@ class TestRateLimitMiddlewareBucketing:
 
 
 async def test_create_server_applies_body_and_rate_limit_middleware(tmp_path: Path) -> None:
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     settings.rate_limit_rpm = 10
     settings.rate_limit_burst = 10
     settings.rate_limit_trust_proxy_headers = True
@@ -631,7 +629,7 @@ async def test_create_server_applies_body_and_rate_limit_middleware(tmp_path: Pa
 
 
 async def test_ready_probes_use_resolved_settings_urls(tmp_path: Path) -> None:
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     settings = settings.model_copy(
         update={
             "modelark_api_key": "test-modelark-key",
@@ -677,21 +675,21 @@ def _capture_warnings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[s
     return captured
 
 
-def test_jwt_http_warns_when_budget_and_rate_limit_are_off(
+def test_authenticated_http_warns_when_budget_and_rate_limit_are_off(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     warnings = _capture_warnings(monkeypatch)
-    create_server(_jwt_settings(tmp_path), auth_provider=_verifier())
+    create_server(_http_settings(tmp_path), auth_provider=_verifier())
 
     guardrails = [fields for event, fields in warnings if event == "http_guardrails_disabled"]
     assert len(guardrails) == 1
     assert guardrails[0]["disabled"] == ["DAILY_BUDGET_USD", "RATE_LIMIT_RPM"]
 
 
-def test_jwt_http_is_quiet_when_guardrails_are_set(
+def test_authenticated_http_is_quiet_when_guardrails_are_set(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    settings = _jwt_settings(tmp_path)
+    settings = _http_settings(tmp_path)
     settings.daily_budget_usd = 25.0
     settings.rate_limit_rpm = 120
     warnings = _capture_warnings(monkeypatch)

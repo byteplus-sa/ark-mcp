@@ -57,6 +57,7 @@ source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "cachetools" },
+    { name = "cryptography" },
     { name = "fastmcp", extra = ["tasks"] },
     { name = "httpx" },
     { name = "jsonschema" },
@@ -83,12 +84,14 @@ dev = [
     { name = "respx" },
     { name = "ruff" },
     { name = "types-jsonschema" },
+    { name = "types-pyyaml" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.43,<2.0" },
     { name = "cachetools", specifier = ">=7.1.4,<8" },
+    { name = "cryptography", specifier = ">=50.0.2" },
     { name = "fastmcp", extras = ["tasks"], specifier = ">=4.1.8,<4.2" },
     { name = "httpx", specifier = ">=0.28.1,<1.0" },
     { name = "jsonschema", specifier = ">=4.26.0" },
@@ -115,6 +118,7 @@ dev = [
     { name = "respx", specifier = ">=0.23.1" },
     { name = "ruff", specifier = ">=0.15.22" },
     { name = "types-jsonschema", specifier = ">=4.26.0.20260518" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20261111" },
 ]
 
 [[package]]
@@ -2588,6 +2592,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/29/d2/1f742605f5a6d39f993134885b8de41c98af606871d3ebddaf3e776bd1eb/types_jsonschema-4.26.0.20261006.tar.gz", hash = "sha256:3eb7db61b6819d40addfdaac7173e749071a7d4a9a4394f0c844598ec84b2500", size = 16843, upload-time = "2026-10-06T08:16:07.318Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/a0/4f2e3c0dc3d5cad958006f2e0307065cc8fe4fbf0393ff0b69d55ee9bbe5/types_jsonschema-4.26.0.20261006-py3-none-any.whl", hash = "sha256:29301f4e65e3928540cdf5e23ad716e38bb0c0b416a48dada213edd3d70206ec", size = 16113, upload-time = "2026-10-06T08:16:06.355Z" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20261111"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/49/96041fdb54de08a5b47bcfcbb4881873b25bae367d1e4dec79d19dfeb84b/types_pyyaml-6.0.12.20261111.tar.gz", hash = "sha256:c511f563eaf820b948c4ff6f43fe0b9d48b227be442a69058d9f68f139cae1fb", size = 18970, upload-time = "2026-11-11T08:32:30.036Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/ec/b23dd6911cd0e870e9396b48929ef7c92b58a551c3651d184bb573f371eb/types_pyyaml-6.0.12.20261111-py3-none-any.whl", hash = "sha256:b7e46cbc847dc235305e95e3e3570792d72e6ccf64bf9b831306f48da490322d", size = 21317, upload-time = "2026-11-11T08:32:29.148Z" },
 ]
 
 [[package]]

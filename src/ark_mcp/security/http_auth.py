@@ -2,86 +2,75 @@
 
 from __future__ import annotations
 
-import time
-from typing import Any
+import hashlib
+import hmac
+import re
 
 from fastmcp.server.auth import (
     AccessToken,
     AuthCheck,
     AuthProvider,
-    JWTVerifier,
-    RemoteAuthProvider,
+    TokenVerifier,
     require_scopes,
 )
-from pydantic import AnyHttpUrl
 
 from ark_mcp.config.env import AuthMode, Settings
 from ark_mcp.observability.logger import info as log_info
-from ark_mcp.observability.logger import warning as log_warning
+
+SHARED_TEAM_SCOPES = (
+    "seed:audio:generate",
+    "seedream:generate",
+    "seedance:create",
+    "gen:read",
+    "gen:delete",
+    "seed:asr:transcribe",
+    "understanding:read",
+    "hyper3d:create",
+    "hitem3d:create",
+    "omnihuman:create",
+    "omnihuman:read",
+    "omnihuman:cancel",
+    "vod:enhance",
+    "vod:transcode",
+    "vod:subtitle:add",
+    "vod:subtitle:remove",
+    "vod:read",
+    "vod:extract",
+    "media:upload",
+    "media:presign",
+    "artifacts:read",
+)
 
 
-class StrictJWTVerifier(JWTVerifier):
-    """JWT verifier pinned to RS256 that rejects tokens without an ``exp`` claim.
+class SharedKeyVerifier(TokenVerifier):
+    """Validate one hashed bearer key and assign a stable, non-admin team identity."""
 
-    Also enforces ``nbf`` (not-valid-before) with a bounded clock-skew
-    allowance, per RFC 8725 §3.10.
-    """
-
-    def __init__(self, *, clock_skew_seconds: int = 30, **kwargs: Any) -> None:
-        kwargs.pop("algorithm", None)
-        self._clock_skew_seconds = clock_skew_seconds
-        super().__init__(algorithm="RS256", **kwargs)
+    def __init__(self, settings: Settings) -> None:
+        super().__init__()
+        self._digest = settings.mcp_api_key_sha256.get_secret_value()
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        verified = await super().verify_token(token)
-        if verified is None:
-            log_warning("jwt_verification_failed", reason="invalid_token")
+        if len(token) != 64 or not re.fullmatch(r"[a-f0-9]{64}", token):
             return None
-        claims = verified.claims or {}
-        if claims.get("exp") is None:
-            log_warning("jwt_verification_failed", reason="missing_exp")
+        digest = hashlib.sha256(token.encode("ascii")).hexdigest()
+        if not hmac.compare_digest(digest, self._digest):
             return None
-        nbf = claims.get("nbf")
-        if isinstance(nbf, (int, float)) and nbf > time.time() + self._clock_skew_seconds:
-            log_warning("jwt_verification_failed", reason="token_not_yet_valid")
-            return None
-        log_info("jwt_verified", subject=verified.subject, client_id=verified.client_id)
-        return verified
+        return AccessToken(
+            token=token,
+            client_id="ark-mcp-shared-key",
+            subject="shared-team",
+            scopes=list(SHARED_TEAM_SCOPES),
+            claims={"sub": "shared-team", "tenant_id": "shared-team"},
+        )
 
 
 def build_auth_provider(settings: Settings) -> AuthProvider | None:
-    """Build the configured verifier; local stdio/loopback mode uses none.
-
-    In JWT mode this returns either a bare :class:`StrictJWTVerifier` (internal
-    machine-to-machine validation, no OAuth discovery) or, when
-    ``MCP_JWT_PROVIDE_DISCOVERY`` is enabled, a :class:`RemoteAuthProvider`
-    that additionally serves RFC 9728 Protected Resource Metadata so
-    spec-compliant MCP clients can discover the authorization server.
-    """
+    """Build the shared-key verifier; local stdio/loopback mode uses none."""
     if settings.mcp_auth_mode is AuthMode.LOCAL:
         log_info("auth_mode", mode="local")
         return None
-    log_info(
-        "auth_mode",
-        mode="jwt",
-        provide_discovery=settings.mcp_jwt_provide_discovery,
-    )
-    verifier = StrictJWTVerifier(
-        jwks_uri=settings.mcp_jwt_jwks_uri,
-        issuer=settings.mcp_jwt_issuer,
-        audience=settings.mcp_jwt_audience,
-        ssrf_safe=True,
-        clock_skew_seconds=settings.mcp_jwt_clock_skew_seconds,
-    )
-    if not settings.mcp_jwt_provide_discovery:
-        return verifier
-    scopes_supported = settings.jwt_scopes_supported or None
-    return RemoteAuthProvider(
-        token_verifier=verifier,
-        authorization_servers=[AnyHttpUrl(url=settings.mcp_jwt_issuer or "")],
-        base_url=settings.mcp_public_base_url,
-        scopes_supported=scopes_supported,
-    )
+    log_info("auth_mode", mode="api_key")
+    return SharedKeyVerifier(settings)
 
 
 def component_auth(settings: Settings, *scopes: str) -> AuthCheck | None:
