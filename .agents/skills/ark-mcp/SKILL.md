@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), audio (Seed Audio), video (Seedance 2.0, 2.5, 2.5 Premium), 3D (Hyper3D, Hitem3d) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll, then seed_media_* for artifacts.
+description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), audio (Seed Audio), video (Seedance 2.0, regular 2.5 with 4K, and 2.5 Flash at 480p/720p), 3D (Hyper3D, Hitem3d) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll, then seed_media_* for artifacts.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -9,11 +9,11 @@ Typed MCP tools for BytePlus multimodal generation, over `stdio` or Streamable
 HTTP. The server already publishes every tool's description and schema, so this
 skill covers only what the schemas cannot tell you: the flow, the rules that
 span tools, and where to look things up. **Parameters live in the tool
-schemas** (full reference: [docs/api-reference.md](../../../docs/api-reference.md)).
+schemas** (full reference: [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 | Product | Create tool | Poll / result | Enabled by |
 |---|---|---|---|
-| **Seedance** video (2.0, 2.5, 2.5 Premium) | `seedance_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_API_KEY` (Premium model also needs `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`) |
+| **Seedance** video (2.0, regular 2.5 with 4K, and 2.5 Flash) | `seedance_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_API_KEY` |
 | **Seedream** images (generate and edit) | `seedream_generate_image` | artifacts in the result | `BYTEPLUS_MODELARK_API_KEY` |
 | **Seed Audio** | `seed_audio_generate` | artifact in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
 | **Seed 3D** (Hyper3D, Hitem3d) | `hyper3d_create_task`, `hitem3d_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_3D_ENABLED=true` + ModelArk key |
@@ -88,20 +88,26 @@ flowchart LR
 - Per-model limits (resolutions, durations, reference counts, Draft support,
   formats) are checked at runtime. **All violations come back in one error**
   that points to `ark_list_models`; fix them all, or use `dry_run`.
-- `SEEDANCE_DEFAULT_MODEL` is Seedance 2.5. **Premium is a model ID**, present
-  only when its flag is on; there are no Premium tools.
+- `SEEDANCE_DEFAULT_MODEL` is Seedance 2.5. **4K is a resolution**:
+  use `resolution="4k"` on the same model, with no separate binding or flag.
+- **Flash** uses `model="dreamina-seedance-2-5-flash-261115"` on the same tool,
+  with 480p/720p and no Draft. Empty bindings include it automatically;
+  explicit binding lists must add it themselves. Discovery does not prove
+  account activation; custom Flash endpoints use family `seedance_2_5_flash`.
 - `variations`: Seedance 1-5 (separate billed tasks, `tasks[]`), Seedream 1-10
   (`summary`), Seed Audio 1-5 (`summary`). Failures are per variation. Seedream
   `seed` is the base seed (`N, N+1, ...`); `max_images` and `variations > 1`
   are mutually exclusive.
 - `dry_run` returns `preview` (request bodies, cost estimate) and bills nothing.
+  Video estimates are static and do not account for resolution or duration.
+  Flash currently reuses the static 2.5 per-task fallback, not its token price.
 
 ### Seedance
 
-- **Draft (2.5 models only):** `draft=true` makes a cheap 480p preview; once it
+- **Draft (regular 2.5 only, not Flash):** `draft=true` makes a cheap 480p preview; once it
   has `succeeded` (at most 7 days old), call again with only `draft_task_id`
   (plus `return_last_frame`, `watermark`, `output_format` and similar) to render
-  the final video. The Draft's model, prompt, media, duration and ratio are
+  the final video at 1080p, not 4K. The Draft's model, prompt, media, duration and ratio are
   reused and must be omitted; `variations` must be 1.
 - Video references must be public HTTPS URLs (or `asset://`); use
   `media_upload` for local files.
@@ -109,12 +115,38 @@ flowchart LR
 
 ### Seedream
 
+- Default: Seedream 5.5 (`dola-seedream-5-5-261028`; requires
+  account authorization). Explicit operator defaults remain unchanged.
 - `images` plus optional `point` or `bbox` (0-999, on the first image) edits;
   without images it is text-to-image.
-- `background="transparent"` needs Seedream 5.0 Pro, **exactly one PNG input
-  that already has transparent pixels**, and `output_format` omitted or `png`.
-  It edits that image and keeps the transparency; it does not cut a subject out
-  of an opaque image.
+- `background="transparent"` on 5.5 accepts text-only prompts or references
+  without existing alpha. On 5.0 Pro it requires **exactly one PNG input that
+  already has transparent pixels** and preserves that transparency.
+  Both require `output_format` omitted or `png`. 5.5 defaults to PNG.
+- Use `variations`, not provider batches, on 5.5 and 5.0 Pro.
+- 5.5 sizes: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with
+  921600-4624220 pixels and width/height ratio 1/16-16, inclusive. No `auto` size.
+- 5.5 `prompt_optimization` accepts `standard` only (provider default);
+  `background` defaults to `auto` (JPEG always opaque). Pro's operator
+  optimization setting never applies to 5.5.
+- `safety_identifier` on 5.5/Pro must be a stable hashed user ID, 1-64 non-space
+  printable ASCII characters; previews and logs redact it.
+- `response_format="b64_json"` requires `persist=true`, including dry runs.
+  Missing output is an explicit error, not an artifact-less success.
+- Read `generations` for per-call request ID, submitted seed, exact final-prompt
+  SHA-256 and allowlisted options; provider background/size/format/usage and
+  identifier echo stay separate from local byte `images[].inspection`.
+  Inspection is advisory, preserves billed artifacts and never rerolls.
+  URL-only inspection and absent provider metadata stay null.
+- Delivery is not visual acceptance. Use the bounded
+  [generate/review/edit workflow](references/workflows.md#seedream-generate-review-edit)
+  for text, absence, counts and geometry. Reviewer refusal is `Not evaluated`,
+  not generation failure. Layer-decomposition/OCR inputs are rejected.
+- Published tool pages list supported models in one table per capability,
+  including defaults, configuration gates and key limits. See the
+  [Seedream tool reference](https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#supported-models)
+  for the image model table and shared editing guidance; discovery remains
+  authoritative for your connection.
 
 ### Polling and persistence
 
@@ -214,4 +246,4 @@ Read these only when you need the detail:
 - [workflows.md](references/workflows.md): background jobs in depth, production workflows, retry policy, common issues.
 - [environment.md](references/environment.md): credentials, flags, transport, auth, architecture.
 - [background-job-output.md](references/background-job-output.md): local-write options inside `ark_job_submit`.
-- [docs/api-reference.md](../../../docs/api-reference.md): every tool's parameters and outputs.
+- [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/): every tool's parameters and outputs.

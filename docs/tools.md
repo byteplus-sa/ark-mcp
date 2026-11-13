@@ -153,7 +153,7 @@ needs no scope.
     reasoning efforts, response formats. Both the default model for requests
     with audio and the default for requests without audio are marked
     `is_default`.
-- **`services`**: `modelark`, `seedance_2_5_premium`, `seed3d`, `seed_audio`,
+- **`services`**: `modelark`, `seed3d`, `seed_audio`,
   `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`,
   `asset_library` and `asset_delete`, each with `enabled` and, when disabled,
   a `reason` naming the setting to change (never a secret value).
@@ -164,8 +164,8 @@ needs no scope.
   waits for a catalog request. The background refresher requires AK/SK and
   `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` greater than zero.
 
-Models are listed only when their service is enabled. The Seedance 2.5
-Premium binding exists only when its whitelist flag is on.
+Models are listed only when their service is enabled. Regular Seedance 2.5
+and Flash share the ModelArk service; discovery does not verify account entitlement.
 
 The audio-model entry names `seed_audio_understand`, advertises only `audio`
 with an eight-clip limit, and uses the server-configured model without a
@@ -724,7 +724,8 @@ Three takes written to a local directory:
 ## seedream_generate_image
 
 **The only Seedream tool**: text-to-image, image-to-image and reference
-editing, point or box edits, editing PNGs while keeping their transparency, provider batches
+editing, point or box edits, transparent PNG generation (5.5), transparency-preserving
+edits (5.0 Pro), provider batches
 (`max_images`), and parallel variations. Registered when
 `BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedream:generate` JWT scope.
 
@@ -747,9 +748,14 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 
 | Family | Max reference images | `max_images` batch | `output_format` | `background="transparent"` |
 |---|---|---|---|---|
-| Seedream 5.0 Pro (default) | 10 | No (use `variations`) | `png`, `jpeg` | Yes |
+| Seedream 5.5 (default) | 10 | No (use `variations`) | `png` (default), `jpeg` | Text-only or reference-based generation |
+| Seedream 5.0 Pro | 10 | No (use `variations`) | `png`, `jpeg` | Existing transparent PNG only |
 | Seedream Lite | 14 | Yes | `png`, `jpeg` | No |
 | Seedream 4.x | 14 | Yes | `jpeg` | No |
+
+5.5's model ID is `dola-seedream-5-5-261028`; account authorization is required.
+Explicit existing defaults stay unchanged. See the
+[upgrade note](configuration.md#seedream-default-model-upgrade-note).
 
 ### Input
 
@@ -760,14 +766,15 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 | `point` | EditCoordinate | No | Edit mode: `{x, y}` in normalized `0..999` space on the **first** image. Requires `images` |
 | `bbox` | EditBbox | No | Edit mode: `{x1, y1, x2, y2}` in normalized `0..999` space (`x1 <= x2`, `y1 <= y2`) on the **first** image. Requires `images` |
 | `model` | string | No | Exact configured model ID; omit for the default |
-| `size` | string | No | Image dimensions (e.g. `"2048x2048"`); validated against the model |
+| `size` | string | No | 5.5: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive. `auto` is not a generation size. Older families remain provider-validated |
 | `seed` | integer | No | `-1` to `2147483647`. For a single call it is sent as is. **With `variations > 1` it is the base seed**: omitted lets the provider randomize each variation, `-1` picks a random seed per variation (recorded in `summary`), and `N` uses `N`, `N+1`, `N+2`, ... |
 | `max_images` | integer | No | Images from one provider call (1-15), batch-capable models only. **Cannot be combined with `variations > 1`** |
-| `output_format` | `"png"` \| `"jpeg"` | No | Output format; per-model set checked at runtime |
-| `response_format` | `"url"` \| `"b64_json"` | No | Provider response format |
+| `output_format` | `"png"` \| `"jpeg"` | No | Defaults to `png` on 5.5 and for transparent output; otherwise provider default |
+| `response_format` | `"url"` \| `"b64_json"` | No | Base64 requires `persist=true`; invalid combinations are rejected before submission, even for dry runs |
 | `watermark` | boolean | No | AIGC watermark |
-| `prompt_optimization` | `"standard"` \| `"fast"` | No | Prompt optimization mode; 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
-| `background` | `"opaque"` \| `"transparent"` | No | `transparent` edits an image and keeps its transparency. It needs a supported model (Seedream 5.0 Pro), **exactly one PNG input image that already has transparent pixels**, and `output_format` omitted or `png`. **It does not remove the background of an opaque image**: the provider rejects an input without transparent pixels (HTTP 400), and the server rejects a Base64 input whose `mime_type` is not `image/png` before calling the provider |
+| `prompt_optimization` | `"standard"` \| `"fast"` | No | 5.5: `standard` only (provider default); `fast` rejected. 5.0 Pro defaults to `SEEDREAM_PROMPT_OPTIMIZATION_MODE` (`standard`) |
+| `background` | `"auto"` \| `"opaque"` \| `"transparent"` | No | 5.5 defaults to `auto` (prompt decides; JPEG always opaque). `auto` is 5.5-only. `transparent` requires PNG output; 5.5 accepts text or references without alpha; Pro requires exactly one already-transparent PNG |
+| `safety_identifier` | string | No | 5.5/Pro: stable hashed end-user ID, 1-64 non-space printable ASCII characters. Never send raw personal data; redacted from previews and logs |
 | `variations` | integer | No | Independent generations to run in parallel (1-10, default 1); partial failures are reported per variation |
 | `variation_prompts` | list[string] | No | One prompt per variation, overriding `prompt`; must have exactly `variations` entries |
 | `persist` | boolean | No | Whether to persist output (default: true) |
@@ -776,6 +783,10 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 | `overwrite` | boolean | No | Allow `output_path` to replace an existing file (default: false) |
 
 \* Either `prompt` or `variation_prompts` must be provided.
+
+Unknown fields, including `layer_decomposition` and
+`layer_decomposition_options`, are rejected before job submission.
+Layer decomposition and rich-text OCR are not exposed.
 
 With `point` or `bbox`, the tool prepends coordinate markup to every prompt
 (`Image 1<bbox>x1 y1 x2 y2</bbox>` and/or `Image 1<point>x y</point>`), so
@@ -790,10 +801,20 @@ Returns `SeedreamGenerateOutput`:
 | `provider`, `model`, `created_at` | Provider (`byteplus-modelark`), model ID used, and ISO-8601 timestamp |
 | `dry_run` | `true` when nothing was generated; see `preview` |
 | `artifacts` | Images from a single call (`variations=1`); empty for variations and dry runs |
-| `item_errors` | Per-image errors from a single provider batch |
-| `usage` | Token usage of a single call; `null` for variations and dry runs |
+| `item_errors` | Single-call image errors: `NO_OUTPUT` for empty/missing output, `NO_DELIVERABLE_OUTPUT` for unexpected Base64-only output without persistence |
+| `usage` | Single-call usage, including provider-reported `input_images`, `generated_images`, `output_tokens`, and legacy token fields; `null` for variations and dry runs |
 | `summary` | `VariationSummary` when `variations > 1`: `total`, `succeeded`, `failed`, and per-variation `index`, `seed`, artifact or error |
-| `preview` | Dry run only: `requests` (provider bodies, one per variation, with reference image URLs reduced to scheme and host and inline Base64 to its size) and `estimated_cost_usd` (a static estimate, not a provider quote) |
+| `generations` | Completed calls ordered by `variation_index`, with `request_id`, submitted `seed`, final `prompt_sha256` and allowlisted `request_options`; per-call provider usage/identifier echo and `images` with artifact mapping, provider reports and independent `inspection`. Absent provider values stay null; empty for dry runs |
+| `preview` | Dry run only: redacted `requests`, `estimated_cost_usd` and `price_source` (`catalog`: fresh cached account image rate, `builtin`: fallback). Neither billing nor a provider quote; no pricing fetch |
+
+Image inspection reports decoded dimensions, format and actual alpha separately
+from provider claims: `verified`, `mismatch`, `invalid` or `unavailable`, or null
+for URL-only delivery. It retains billed artifacts without rerolls; verified
+bytes do not establish visual acceptance. A single-call seed of `-1` or null is
+provider randomness, not a recovered actual seed. Full contracts:
+[API reference](api-reference.md#3-seedream_generate_image),
+[image inspection](artifacts.md#seedream-image-inspection) and
+[bounded review/edit](integration-guide.md#seedream-review-and-edit).
 
 A storage failure does not fail the call. Each image degrades on its own:
 URL outputs come back as `id="provider-url"` references to the temporary
@@ -819,7 +840,21 @@ Box edit of the first image:
 }
 ```
 
-Edit an image with transparency on Seedream 5.0 Pro (the input PNG must
+Generate a transparent PNG from text with Seedream 5.5 (`arguments.input`):
+
+```json
+{
+  "model": "dola-seedream-5-5-261028",
+  "prompt": "Realistic embroidered heart and daisy stickers, cream stitched borders, transparent background",
+  "size": "2K",
+  "response_format": "url",
+  "output_format": "png",
+  "background": "transparent",
+  "watermark": true
+}
+```
+
+Edit an image with transparency on Seedream 5.0 Pro (bind/select Pro; the input PNG must
 already have transparent pixels):
 
 ```json
@@ -852,7 +887,7 @@ Drop `dry_run` (and add `output_path` ending in `/` on stdio) to generate.
 ## seedance_create_task
 
 **One tool for every Seedance model**: 2.0 (and its Fast and Mini variants),
-2.5, and the whitelist-only 2.5 Premium. Pick the model with `model`; set
+2.5, and 2.5 Flash. Pick the model with `model`; set
 `variations` to create several tasks in parallel; set `dry_run` to preview the
 request and its cost without billing. Registered when
 `BYTEPLUS_MODELARK_API_KEY` is set and uses the `seedance:create` JWT scope.
@@ -870,9 +905,11 @@ resubmit the create tool to poll**: each call starts new billed tasks.
 - **`model` takes an exact configured ID** from `ark_list_models(kind='video')`,
   which also lists each model's limits. Omit it to use `SEEDANCE_DEFAULT_MODEL`
   (default `dreamina-seedance-2-5-260628`, Seedance 2.5).
-- **Premium is just a model ID** (`dreamina-seedance-2-5-premium-260915` by
-  default). It is configured only when
-  `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`.
+- **4K is a resolution, not a separate model.** Set `resolution="4k"` on
+  `dreamina-seedance-2-5-260628` or a configured 2.5 endpoint.
+- **Flash** uses `dreamina-seedance-2-5-flash-261115` with family
+  `seedance_2_5_flash`: 480p/720p and no Draft mode. It is added automatically
+  when bindings are empty; explicit binding lists must include it themselves.
 - **The input schema advertises the widest limits; the model's own limits are
   checked at runtime.** Every violation (resolution, ratio, duration, reference
   counts, priority and expiry ranges, Draft, audio-only input, task type,
@@ -886,8 +923,12 @@ server has configured):
 |---|---|---|---|---|---|---|---|
 | Seedance 2.0 | 480p, 720p, 1080p, 4k | 4-15 | 9 / 3 / 3 | No | No | No | No |
 | Seedance 2.0 Fast, 2.0 Mini | 480p, 720p | 4-15 | 9 / 3 / 3 | No | No | No | No |
-| Seedance 2.5 | 480p, 720p, 1080p | 4-30 | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
-| Seedance 2.5 Premium (whitelist, flag-gated) | 480p, 720p, 1080p, 4k | 4-30 | 30 / 10 / 10 | Yes (4k) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| Seedance 2.5 | 480p, 720p, 1080p, 4k | 4-30 | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| Seedance 2.5 Flash | 480p, 720p | 4-30 | 30 / 10 / 10 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+
+Static video cost estimates are not provider quotes and do not account for
+resolution or duration, including 4K. Flash reuses the static 2.5 per-task
+fallback; it is not a quote derived from the provider's token prices.
 
 ### Input
 
@@ -909,7 +950,7 @@ server has configured):
 | `execution_expires_after` | integer | No | Seconds before an unfinished task expires (3600-259200) |
 | `priority` | integer | No | Priority (0-9) |
 | `safety_identifier` | string | No | Safety identifier (max 64 chars) |
-| `draft` | boolean | No | Draft mode step 1 (Seedance 2.5 models): a 480p preview. Mutually exclusive with `draft_task_id`. See [Draft mode](#draft-mode) |
+| `draft` | boolean | No | Draft mode step 1 (regular Seedance 2.5 only, not Flash): a 480p preview. Mutually exclusive with `draft_task_id`. See [Draft mode](#draft-mode) |
 | `draft_task_id` | string | No | Draft mode step 2: render a succeeded Draft task as the final video. Requires `variations=1` |
 | `variations` | integer | No | Tasks to create in parallel (1-5, default 1). **Each variation is a separate billed task**; partial failures are reported per variation |
 | `variation_prompts` | list[string] | No | One prompt per variation (each 1-32,000 chars), overriding `prompt`; must have exactly `variations` entries |
@@ -940,7 +981,7 @@ certain parameters are auto-derived from the input media:
 ### Draft mode
 
 Draft mode is a two-step flow for checking a video cheaply before paying for
-the final render. Seedance 2.5 and 2.5 Premium support it; Seedance 2.0 models
+the final render. Regular Seedance 2.5 supports it; Flash and Seedance 2.0 models
 do not.
 
 1. Call `seedance_create_task` with `draft: true` and the usual prompt and
@@ -953,9 +994,8 @@ do not.
    `generate_audio`, and `omni_reference_task_type`, so those fields (and
    `draft`, even `false`) must be omitted; the provider rejects them even when
    they match. `resolution` may only be omitted or the model's Draft final
-   resolution, which is also the default: `1080p` on Seedance 2.5 and `4k` on
-   Seedance 2.5 Premium. The Premium `4k` final is this server's rule, not
-   stated in the public guide; revisit it if the provider differs.
+   resolution, which is also the default: `1080p` on Seedance 2.5.
+   Ordinary generation supports 4K, but Draft promotion remains 1080p.
    `return_last_frame`, `watermark`, `execution_expires_after`, `priority`,
    `safety_identifier`, and `output_format` can be set again; omitted values
    use the model defaults, not the Draft's values. The final video is billed
@@ -991,6 +1031,32 @@ Single Seedance 2.5 task (default model):
   "duration": 8
 }
 ```
+
+Flash multimodal reference generation (the `arguments.input` of
+`ark_job_submit`, with `tool_name="seedance_create_task"`):
+
+```json
+{
+  "model": "dreamina-seedance-2-5-flash-261115",
+  "prompt": "Use Video 1 POV and Audio 1 as music for a fruit tea promotional ad.",
+  "images": [
+    "https://ark-doc.tos-ap-southeast-1.bytepluses.com/doc_image/r2v_tea_pic1.jpg",
+    "https://ark-doc.tos-ap-southeast-1.bytepluses.com/doc_image/r2v_tea_pic2.jpg"
+  ],
+  "videos": ["https://ark-doc.tos-ap-southeast-1.bytepluses.com/doc_video/r2v_tea_video1.mp4"],
+  "audios": ["https://ark-doc.tos-ap-southeast-1.bytepluses.com/doc_audio/r2v_tea_audio1.mp3"],
+  "resolution": "720p",
+  "generate_audio": true,
+  "ratio": "16:9",
+  "duration": 11,
+  "watermark": false,
+  "dry_run": true
+}
+```
+
+Plain image URLs use `reference_image`, so the explicit 16:9 ratio is valid.
+Remove `dry_run` only when ready to submit a billed task. Discovery does not
+verify account activation.
 
 Three variations on an explicit model, submitted as a background job:
 
@@ -1029,7 +1095,7 @@ Draft step 2 (render the final video from a succeeded Draft):
 ## gen_task_get
 
 Check the status and outputs of **any** ModelArk generation task: Seedance
-video (2.0, 2.5, and 2.5 Premium), Hyper3D, and Hitem3d. Pass every task ID you
+video (2.0, regular 2.5, and 2.5 Flash), Hyper3D, and Hitem3d. Pass every task ID you
 are waiting on in one call. Registered when `BYTEPLUS_MODELARK_API_KEY` is set
 (not gated by the 3D flag) and uses the `gen:read` JWT scope.
 

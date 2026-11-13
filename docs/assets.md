@@ -34,7 +34,7 @@ BYTEPLUS_MODELARK_SESSION_TOKEN=            # required only for AKTP... keys
 ```
 
 The IAM user needs `ArkFullAccess` on the ModelArk project. All settings are
-listed in [configuration.md](configuration.md#private-asset-library-akssk).
+listed in [configuration.md](configuration.md#private-asset-library-aksk).
 
 **Using** assets in Seedance needs only the normal `BYTEPLUS_MODELARK_API_KEY`:
 `asset://` references work even without AK/SK, for example for assets created

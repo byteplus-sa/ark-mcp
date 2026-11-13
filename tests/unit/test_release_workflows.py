@@ -15,6 +15,7 @@ def test_publisher_validates_exact_tag_commit_before_writing() -> None:
     assert set(publisher["on"]) == {"workflow_dispatch"}
     assert publisher["permissions"] == {"contents": "read"}
     resolve = publisher["jobs"]["resolve"]
+    assert resolve["permissions"] == {"contents": "write"}
     assert resolve["if"] == "github.ref == 'refs/heads/main'"
     assert "git merge-base --is-ancestor" in resolve["steps"][-1]["run"]
     assert "isDraft" in resolve["steps"][-1]["run"]
@@ -54,10 +55,14 @@ def test_bot_generated_events_have_explicit_workflow_dispatches() -> None:
 def test_python_releases_update_only_root_lockfile_package() -> None:
     config = json.loads((ROOT / "release-please-config.json").read_text())["packages"]["."]
     assert config["release-type"] == "python"
-    assert config["initial-version"] == "0.2.0"
+    assert config.get("release-as") in {None, "0.2.0"}
     assert config["draft"] is True
     assert config["force-tag-creation"] is True
     assert config["include-component-in-tag"] is False
     assert config["extra-files"] == [
-        {"type": "toml", "path": "uv.lock", "jsonpath": "$.package[?(@.name=='ark-mcp')].version"}
+        {
+            "type": "toml",
+            "path": "uv.lock",
+            "jsonpath": "$.package[?(@.name.value=='ark-mcp')].version",
+        }
     ]

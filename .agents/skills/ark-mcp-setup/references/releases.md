@@ -30,8 +30,8 @@ from repository metadata; do not assume `main`.
 Authentication, rate limits, network failures, or inconsistent release
 metadata require diagnosis, not automatic fallback. If `gh` is unavailable,
 ask to install/use an approved GitHub integration. Never request a GitHub
-token in chat. As of 2026-10-20, this repository had no published releases;
-query again on every setup/update rather than treating that as permanent.
+token in chat. Query again on every setup/update; do not reuse a previous
+session's release list or assume that a main-branch feature is already released.
 
 ## Stage, Do Not Overwrite
 

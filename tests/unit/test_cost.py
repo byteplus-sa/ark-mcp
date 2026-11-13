@@ -227,14 +227,15 @@ class TestEstimateCost3D:
 class TestVideoCostByFamily:
     """Video pricing follows the registry family, not the model ID text."""
 
-    def test_custom_endpoint_bound_to_2_5_is_priced_as_2_5(self) -> None:
+    @pytest.mark.parametrize("family", ["seedance_2_5", "seedance_2_5_flash"])
+    def test_custom_2_5_endpoint_uses_static_2_5_fallback(self, family: str) -> None:
         cost = estimate_cost(
-            product="video", variations=1, model_id="ep-my-endpoint", video_family="seedance_2_5"
+            product="video", variations=1, model_id="ep-my-endpoint", video_family=family
         )
         assert cost == COST_PER_VIDEO_TASK_2_5
 
-    def test_premium_family_is_priced_as_2_5(self) -> None:
-        cost = estimate_cost(product="video", variations=2, video_family="seedance_2_5_premium")
+    def test_2_5_variations_use_the_2_5_rate(self) -> None:
+        cost = estimate_cost(product="video", variations=2, video_family="seedance_2_5")
         assert cost == round(2 * COST_PER_VIDEO_TASK_2_5, 2)
 
     def test_2_0_family_uses_default_price_even_with_2_5_looking_id(self) -> None:
@@ -246,10 +247,13 @@ class TestVideoCostByFamily:
         )
         assert cost == COST_PER_VIDEO_TASK
 
-    def test_model_override_wins_over_family(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("family", ["seedance_2_5", "seedance_2_5_flash"])
+    def test_model_override_wins_over_family(
+        self, monkeypatch: pytest.MonkeyPatch, family: str
+    ) -> None:
         monkeypatch.setattr("ark_mcp.tools._cost._VIDEO_COST_OVERRIDES", {})
         register_video_cost_override("ep-special", 1.23)
         cost = estimate_cost(
-            product="video", variations=1, model_id="ep-special", video_family="seedance_2_5"
+            product="video", variations=1, model_id="ep-special", video_family=family
         )
         assert cost == 1.23

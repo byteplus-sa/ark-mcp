@@ -35,6 +35,11 @@ def read_version(root: Path, *, allow_bootstrap: bool = False) -> str:
         package["version"] for package in lock["package"] if package["name"] == project["name"]
     ]
     manifest = json.loads((root / ".release-please-manifest.json").read_text())
+    config_path = root / "release-please-config.json"
+    if manifest and config_path.exists():
+        release_config = json.loads(config_path.read_text())["packages"]["."]
+        if release_config.get("release-as"):
+            raise ValueError("Remove the one-time release-as override from the first release PR")
     if "." not in manifest and not (allow_bootstrap and manifest == {}):
         raise ValueError("Release manifest must contain the root version")
     if (
