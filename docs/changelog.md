@@ -4,6 +4,55 @@ Release entries below are historical records, not current setup instructions.
 For the removal of JWT authentication and migration to shared-key HTTP, see
 [breaking-change migration](self-hosting.md#breaking-change-migration).
 
+## [0.3.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.2.0...v0.3.0) (2026-11-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* unify Seedance 2.5 4K and add Flash
+
+### Features
+
+* add Seedream 5.5 generation and editing support ([f1c40ad](https://github.com/byteplus-sa/ark-mcp/commit/f1c40adc86989571333a46270e96d7bfe1b5e01c))
+* support early-access Seedream 5.5 as the image default ([607714c](https://github.com/byteplus-sa/ark-mcp/commit/607714cf6005e31a351324fb53bab9f0fae699ed))
+* unify Seedance 2.5 4K and add Flash ([94ecd4f](https://github.com/byteplus-sa/ark-mcp/commit/94ecd4fc8b62e16d8a2801d68424671ad0cb7cf9))
+
+
+### Bug Fixes
+
+* align Seedream 5.5 generation with the early-access API ([0848571](https://github.com/byteplus-sa/ark-mcp/commit/08485713c566f2acca2abb79ad6870e6923d1e74))
+* enforce supported FastMCP bounds in declarative launches ([0e657b4](https://github.com/byteplus-sa/ark-mcp/commit/0e657b48e79f270fba7726474106cecc800f9474))
+* include Seedream decoder in declarative deployments ([c8e7232](https://github.com/byteplus-sa/ark-mcp/commit/c8e723244f58ce33ab8bde04f9ad815910ace7b9))
+* preserve Seedream delivery and expose trustworthy generation metadata ([e09048e](https://github.com/byteplus-sa/ark-mcp/commit/e09048e3de73ac8f3a4ff62bd12920ab4acad7c3))
+* refresh vulnerable dependencies and support FastMCP 4.1 ([137a0c6](https://github.com/byteplus-sa/ark-mcp/commit/137a0c63c00be37b6d1e9bd9c021d3fd011d50d7))
+* refresh vulnerable dependencies and support FastMCP 4.1 ([96be340](https://github.com/byteplus-sa/ark-mcp/commit/96be34091feefc56e99f210cfc31c0b6365cce04))
+* satisfy documentation CI formatting ([97654f6](https://github.com/byteplus-sa/ark-mcp/commit/97654f6dee97d8dad0cd2e6c620482aeacaa7e10))
+
+
+### Documentation
+
+* add agent skill installation and usage guide ([f00c9d9](https://github.com/byteplus-sa/ark-mcp/commit/f00c9d9198683ed5970d1408fe28938523e4707f))
+* add per-tool model tables and render Mermaid diagrams ([95895aa](https://github.com/byteplus-sa/ark-mcp/commit/95895aa5c5062695ffd254f97f557194c505e963))
+* align first-run cross-reference with prompt examples ([e74b561](https://github.com/byteplus-sa/ark-mcp/commit/e74b5618b0f2c9a83c8e9c9ea3113eb13942a19e))
+* consolidate Seedream 5.5 into its tool reference ([76e33fa](https://github.com/byteplus-sa/ark-mcp/commit/76e33fa787b59e4c3161e93dc406de5c2f1e7440))
+* consolidate supported models and render Mermaid diagrams ([b5c1656](https://github.com/byteplus-sa/ark-mcp/commit/b5c165643026f9d98bc7ba0482736566920ddfa2))
+* describe only supported ASR output in model table ([0b29e71](https://github.com/byteplus-sa/ark-mcp/commit/0b29e71833172f8e184d2c8b9fdedfa43522b918))
+* guide agent skill installation and preserve standalone references ([850e08d](https://github.com/byteplus-sa/ark-mcp/commit/850e08d1f8b6b87cd361091a034d3af5a9f5b2e0))
+* guide installs to a reviewed security-patched revision ([6125e31](https://github.com/byteplus-sa/ark-mcp/commit/6125e312cbb886ef3423e29dbce4bc7860d66f7e))
+* keep skill update checks in the installed scope ([7166511](https://github.com/byteplus-sa/ark-mcp/commit/71665111d7b751912d5cf6b030b4567adf4679a9))
+* lead first use with plain-language generation prompts ([a82a7dc](https://github.com/byteplus-sa/ark-mcp/commit/a82a7dcc19eed94ed989b0a5d87399fa24720e5f))
+* lead first use with simple generation prompts ([c777ada](https://github.com/byteplus-sa/ark-mcp/commit/c777adaa225ed587523a997cadab7f75026d8938))
+* move Seedream 5.5 guidance into its tool reference ([f016710](https://github.com/byteplus-sa/ark-mcp/commit/f016710cdef5d06cef1190c13e962aaf608d9d97))
+* prefer Skills CLI for agent skill installation ([25cc944](https://github.com/byteplus-sa/ark-mcp/commit/25cc944fcbff5eed224ac92c449d5d42e4d2dc9d))
+* publish Ark MCP setup and tool documentation site ([985cd58](https://github.com/byteplus-sa/ark-mcp/commit/985cd5850fab61c18e81a926e8e2fd7055a5797e))
+* publish Ark MCP setup and tool documentation site ([7db29eb](https://github.com/byteplus-sa/ark-mcp/commit/7db29ebfe1f5f7a086c5bcf491276bfe043a22ee))
+* reconcile Seedream size validation summaries ([4b4cc2f](https://github.com/byteplus-sa/ark-mcp/commit/4b4cc2f96e8185e189b2057e05a59dbf3eac0e7d))
+* refine BytePlus styling and separate tool categories ([1cce4d1](https://github.com/byteplus-sa/ark-mcp/commit/1cce4d1b4e14100b3757aa7216888b7975e9a1c2))
+* refine BytePlus styling and separate tool categories ([5bc3804](https://github.com/byteplus-sa/ark-mcp/commit/5bc3804feaee56d9b7896364087aa5bc2dfabf14))
+* simplify onboarding and consolidate client setup ([98e05ce](https://github.com/byteplus-sa/ark-mcp/commit/98e05ce187d50d3b20e588bb4a771aebf7e0776c))
+* simplify onboarding and consolidate client setup ([21f1a66](https://github.com/byteplus-sa/ark-mcp/commit/21f1a66442866c5174d034afb36d042f49200c53))
+* simplify skill installs with the Skills CLI ([c4b22a0](https://github.com/byteplus-sa/ark-mcp/commit/c4b22a0ababe3911a8d5faa888961cbcb4ad7ad5))
+
 ## 0.2.0 (2026-10-20)
 
 

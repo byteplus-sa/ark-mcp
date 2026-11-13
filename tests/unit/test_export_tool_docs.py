@@ -246,6 +246,54 @@ def test_documentation_examples_match_actual_input_schemas(exported: dict[str, A
                 )
 
 
+def test_model_tables_only_document_catalog_tools() -> None:
+    tables = json.loads(
+        (SCRIPT.parents[1] / "docs/site/tool-models.json").read_text(encoding="utf-8")
+    )
+    assert set(tables) <= {entry.name for entry in CATALOG}
+    for entry in tables.values():
+        assert entry["selection"].strip()
+        assert entry["models"]
+        assert len({row["name"] for row in entry["models"]}) == len(entry["models"])
+        for row in entry["models"]:
+            assert set(row) == {"name", "id", "availability", "capabilities"}
+            assert all(isinstance(value, str) and value.strip() for value in row.values())
+
+
+@pytest.mark.parametrize(
+    ("tool", "setting"),
+    [
+        ("seedream_generate_image", "seedream_default_model"),
+        ("seedance_create_task", "seedance_default_model"),
+        ("seed_understand", "seed_understanding_default_model"),
+        ("seed_audio_understand", "seed_audio_understanding_model"),
+        ("hyper3d_create_task", "hyper3d_default_model"),
+        ("hitem3d_create_task", "hitem3d_default_model"),
+        ("omnihuman_create_task", "omnihuman_req_key"),
+    ],
+)
+def test_model_table_ids_match_static_configuration_defaults(tool: str, setting: str) -> None:
+    from ark_mcp.config.env import Settings
+
+    tables = json.loads(
+        (SCRIPT.parents[1] / "docs/site/tool-models.json").read_text(encoding="utf-8")
+    )
+    assert f"`{Settings.model_fields[setting].default}`" in {
+        row["id"] for row in tables[tool]["models"]
+    }
+
+
+def test_model_table_includes_default_flash_binding() -> None:
+    from ark_mcp.config.env import SEEDANCE_2_5_FLASH_MODEL_ID
+
+    tables = json.loads(
+        (SCRIPT.parents[1] / "docs/site/tool-models.json").read_text(encoding="utf-8")
+    )
+    assert f"`{SEEDANCE_2_5_FLASH_MODEL_ID}`" in {
+        row["id"] for row in tables["seedance_create_task"]["models"]
+    }
+
+
 def _canonical_schema(value: Any) -> Any:
     if isinstance(value, dict):
         return {

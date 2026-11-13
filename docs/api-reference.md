@@ -18,7 +18,7 @@ server-side and are separate from the MCP key.
 | 1 | `ark_list_models` | Discovery | Read-only | No extra tool scope |
 | 2 | `seed_audio_generate` | Seed Audio | Required background task | Seed Speech |
 | 3 | `seedream_generate_image` | Seedream | Required background task | ModelArk |
-| 4 | `seedance_create_task` | Seedance (every configured model, incl. 2.5 Premium when enabled) | Required background submission | ModelArk |
+| 4 | `seedance_create_task` | Seedance (every configured model; 2.5 supports 4K) | Required background submission | ModelArk |
 | 5 | `hyper3d_create_task` | Hyper3D (optional) | Required background submission | ModelArk |
 | 6 | `hitem3d_create_task` | Hitem3d (optional) | Required background submission | ModelArk |
 | 7 | `seed_understand` | Seed 2.1 (optional) | Required background task | ModelArk |
@@ -64,8 +64,8 @@ Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2
 `seedance_create_task` serves every configured
 Seedance model (pick one from `ark_list_models(kind='video')`), is registered
 whenever `BYTEPLUS_MODELARK_API_KEY` is set, and requires `seedance:create` in
-`api_key` mode. Seedance 2.5 Premium has no separate tool: its model ID is bound only
-when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true`.
+`api_key` mode. Seedance 2.5 supports 4K through `resolution="4k"` on the same model;
+no additional tool, model, or feature flag is needed.
 
 The three `gen_task_*` tools poll, list, and cancel or delete **every ModelArk
 generation task** (Seedance, Hyper3D, and Hitem3d). They are registered whenever
@@ -350,7 +350,7 @@ images/videos. Neither route supports mixed audio/visual requests.
 
 **ServiceStatus:** `service`, `enabled`, and `reason` (the env var or flag that
 enables a disabled service; never a secret value). Services: `modelark`,
-`seedance_2_5_premium`, `seed3d`, `seed_audio`, `speech_to_text`,
+`seed3d`, `seed_audio`, `speech_to_text`,
 `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`.
 
 ### Example
@@ -719,7 +719,7 @@ The `estimated_cost_usd` value above is illustrative only.
 ## 4. seedance_create_task
 
 **One create tool for every configured Seedance model** (2.0, 2.0 Fast, 2.0
-Mini, 2.5, and 2.5 Premium): single tasks, up to five parallel variations,
+Mini, 2.5, and 2.5 Flash): single tasks, up to five parallel variations,
 Draft mode, and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is
 set; requires `seedance:create` in `api_key` mode. **Required background
 submission**: run it through `ark_job_submit` (or native task augmentation).
@@ -730,10 +730,13 @@ Poll the returned task IDs with [`gen_task_get`](#10-gen_task_get).
 Set `model` to an **exact configured ID from `ark_list_models(kind='video')`**;
 every video model listed there names `seedance_create_task` as its tool. Omit
 `model` to use `SEEDANCE_DEFAULT_MODEL`, which defaults to
-`dreamina-seedance-2-5-260628` (Seedance 2.5). Seedance 2.5 Premium
-(`dreamina-seedance-2-5-premium-260915`, `SEEDANCE_2_5_PREMIUM_MODEL`) is just
-another model ID, bound automatically only when
-`BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (whitelist-only).
+`dreamina-seedance-2-5-260628` (Seedance 2.5). Select `resolution="4k"` on
+this same model or a configured 2.5 endpoint for 4K output.
+
+Flash uses `dreamina-seedance-2-5-flash-261115` with `seedance_2_5_flash`
+through this same tool. It is included when bindings are empty; explicit
+binding lists must add it themselves. Regular 2.5 remains the default.
+Discovery reports configured support, not account activation.
 
 Family limits as shipped (**`ark_list_models(kind='video')` is authoritative**
 for the models configured on a given server):
@@ -743,8 +746,8 @@ for the models configured on a given server):
 | `seedance_2` | 480p, 720p, 1080p, 4k | 4-15 | 9 / 3 / 3 | No | No | — | — |
 | `seedance_2_fast` | 480p, 720p | 4-15 | 9 / 3 / 3 | No | No | — | — |
 | `seedance_2_mini` | 480p, 720p | 4-15 | 9 / 3 / 3 | No | No | — | — |
-| `seedance_2_5` | 480p, 720p, 1080p | 4-30 | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
-| `seedance_2_5_premium` (whitelist + flag) | 480p, 720p, 1080p, 4k | 4-30 | 30 / 10 / 10 | Yes (4k) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| `seedance_2_5` | 480p, 720p, 1080p, 4k | 4-30 | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| `seedance_2_5_flash` | 480p, 720p | 4-30 | 30 / 10 / 10 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
 
 ### Input
 
@@ -766,7 +769,7 @@ for the models configured on a given server):
 | `execution_expires_after` | integer | No | — | 3600-259200 seconds |
 | `priority` | integer | No | — | 0-9; model range checked at runtime |
 | `safety_identifier` | string | No | — | Max 64 chars |
-| `draft` | boolean | No | — | Draft step 1 (2.5 models): 480p preview billed as a normal 480p video. Mutually exclusive with `draft_task_id` |
+| `draft` | boolean | No | — | Draft step 1 (regular 2.5 only, not Flash): 480p preview billed as a normal 480p video. Mutually exclusive with `draft_task_id` |
 | `draft_task_id` | string | No | — | Draft step 2: render a succeeded Draft task as the final video. See [Draft Mode](#draft-mode) |
 | `variations` | integer | No | `1` | 1-5. Each variation is a **separate billed task** |
 | `variation_prompts` | list[string] | No | — | Exactly `variations` entries, each 1-32,000 chars; overrides `prompt` |
@@ -810,7 +813,7 @@ overridden:
 
 ### Draft Mode
 
-**Two steps, Seedance 2.5 and 2.5 Premium only:**
+**Two steps, regular Seedance 2.5 only; Flash rejects both Draft fields:**
 
 1. **Preview.** Call with `draft: true`. `resolution` must be omitted (becomes
    `480p`) or `480p`. Works with `variations` to compare several previews.
@@ -826,7 +829,8 @@ overridden:
    - `model` may be omitted (the Draft's model is used); a different model is
      rejected.
    - `resolution` must be omitted or the model's Draft final resolution
-     (`1080p` for 2.5, `4k` for Premium), which is the default.
+     (`1080p` for 2.5), which is the default. 4K applies to ordinary generation,
+     not Draft promotion.
    - `return_last_frame`, `watermark`, `execution_expires_after`, `priority`,
      `safety_identifier`, and `output_format` may be set again.
    - Requires `variations=1` and no `variation_prompts`.
@@ -839,6 +843,9 @@ overridden:
 - **Dry run:** `dry_run: true` runs all validation and returns `preview`
   instead of submitting. Through `ark_job_submit`, a dry run finishes on the
   first `ark_job_get`.
+- **Cost preview:** static video estimates do not account for resolution or
+  duration, including 4K; they are not provider quotes. Flash currently reuses
+  the static 2.5 per-task fallback, not its token-based provider price.
 
 ### SeedanceImageInput
 

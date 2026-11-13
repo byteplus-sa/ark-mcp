@@ -1,8 +1,19 @@
+import { readFileSync } from "node:fs";
 import { posix } from "node:path";
 import examples from "../tool-examples.json" with { type: "json" };
+import toolModels from "../tool-models.json" with { type: "json" };
 
 export const SITE_BASE = "/ark-mcp";
 export const SOURCE_BASE = "https://github.com/byteplus-sa/ark-mcp/blob/main/";
+const toolNotes = new Map([
+  [
+    "seedream_generate_image",
+    readFileSync(
+      new URL("../tool-notes/seedream-generate-image.md", import.meta.url),
+      "utf8",
+    ),
+  ],
+]);
 
 export function handbookPage(source, content, toolCount) {
   content = content.replaceAll("\r\n", "\n");
@@ -92,6 +103,29 @@ export function schemaTable(schema) {
 
 export const EXAMPLES = examples;
 
+function supportedModels(name) {
+  const entry = toolModels[name];
+  if (!entry) return "";
+  const rows = entry.models.map(
+    (model) =>
+      `| ${cell(model.name)} | ${cell(model.id)} | ${cell(model.availability)} | ${cell(model.capabilities)} |`,
+  );
+  const anchor =
+    name === "seedream_generate_image"
+      ? '<span id="seedream-5-5"></span>\n<span id="seedream-55"></span>\n\n'
+      : "";
+  return `${anchor}## Supported Models
+
+These are supported families and built-in model or service IDs for this site revision, not provider account access or a guarantee that every row is enabled on your server. Check [model discovery](${SITE_BASE}/tool-reference/ark-list-models/) for configured bindings and service availability.
+
+| Model | Model or service ID | Availability | Capabilities |
+| --- | --- | --- | --- |
+${rows.join("\n")}
+
+${entry.selection}
+`;
+}
+
 export function toolPage(tool) {
   const name = tool.name;
   const mode =
@@ -146,6 +180,8 @@ ${tool.description}
 
 This site lists the full configured capability surface, not the tools enabled on your particular server. Use [model discovery](${SITE_BASE}/tool-reference/ark-list-models/) and [job discovery](${SITE_BASE}/tool-reference/ark-job-capabilities/) to check your connection. Credentials are server configuration, never tool arguments.
 
+${supportedModels(name)}
+
 ## Usage
 
 Ask your connected AI client to use \`${name}\` for the operation you want.
@@ -172,6 +208,8 @@ ${JSON.stringify(call, null, 2)}
 }
 
 ${providerTasks ? `An Ark job ID is not a provider task ID. Video and 3D tasks use [gen_task_get](${SITE_BASE}/tool-reference/gen-task-get/), VOD tasks use [vod_get_task](${SITE_BASE}/tool-reference/vod-get-task/), and avatars use [omnihuman_get_task](${SITE_BASE}/tool-reference/omnihuman-get-task/). Save accepted provider task IDs and resume polling instead of submitting a second generation.` : ""}
+
+${toolNotes.get(name) || ""}
 
 ## Inputs
 

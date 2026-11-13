@@ -105,7 +105,7 @@ For Seedance and Seed 3D, and equally for VOD and OmniHuman:
    which needs `OUTPUT_ROOTS`). Record the artifact IDs, or download the
    `video` output's `source_url` (valid about 24 h) yourself and record bytes,
    SHA-256 and `ffprobe` properties.
-4. Draft flow (2.5 family): submit `draft=true` (480p), poll it to success,
+4. Draft flow (regular 2.5 only, not Flash): submit `draft=true` (480p), poll it to success,
    review the preview, then submit once with `draft_task_id` for the final
    render. The provider reuses the Draft's values, so omit the fields it
    fixes (and `variations`); omit `model` to reuse the Draft's model.
@@ -298,7 +298,7 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Tool missing from the tool list | Provider key or feature flag not set (`BYTEPLUS_MODELARK_3D_ENABLED`, `BYTEPLUS_OMNIHUMAN_ENABLED` plus a separate `BYTEPLUS_CV_API_KEY`, Premium flag, AK/SK, `TOS_*`/`S3_*`) | See [environment.md](environment.md) |
+| Tool missing from the tool list | Provider key or feature flag not set (`BYTEPLUS_MODELARK_3D_ENABLED`, `BYTEPLUS_OMNIHUMAN_ENABLED` plus a separate `BYTEPLUS_CV_API_KEY`, AK/SK, `TOS_*`/`S3_*`) | See [environment.md](environment.md) |
 | `Request is not valid for model ...` (Seedance, Seedream) | Request breaks that model's limits; every violation is listed | Fix each item or pick another model from `ark_list_models`; re-check with `dry_run: true` |
 | Model not found | Unknown ID (exact IDs only) | Use the did-you-mean hint or `ark_list_models` |
 | Artifact has `persistence_error` | Billed output, storage failed after retries | `id="provider-url"`: `seed_media_persist_url` before `source_url_expires_at`; `id="inline-fallback"`: bytes are in `fallback_data` |

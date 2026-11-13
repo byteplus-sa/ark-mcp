@@ -341,12 +341,6 @@ def describe_services(settings: Settings) -> list[ServiceStatus]:
     services = (
         ("modelark", settings.has_modelark, "Set BYTEPLUS_MODELARK_API_KEY."),
         (
-            "seedance_2_5_premium",
-            settings.has_seedance_2_5_premium,
-            "Set BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true (whitelisted accounts only) "
-            "and BYTEPLUS_MODELARK_API_KEY.",
-        ),
-        (
             "seed3d",
             settings.has_seed3d,
             "Set BYTEPLUS_MODELARK_3D_ENABLED=true and BYTEPLUS_MODELARK_API_KEY.",

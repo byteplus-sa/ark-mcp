@@ -36,7 +36,7 @@ flowchart LR
 |---|---|
 | `seedance_create_task` (2.0) | `seedance_create_task` with `model` set to the 2.0 ID |
 | `seedance_2_5_create_task` | `seedance_create_task` (2.5 is the default model) |
-| `seedance_2_5_premium_create_task` | `seedance_create_task` with `model` set to the Premium ID (still gated by `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED`) |
+| `seedance_2_5_premium_create_task` | `seedance_create_task` with `model="dreamina-seedance-2-5-260628"` and `resolution="4k"` |
 | `seedance_create_task_variations`, `seedance_2_5_create_task_variations`, `seedance_2_5_premium_create_task_variations` | `seedance_create_task` with `variations` (and optional `variation_prompts`) |
 | `seedance_get_task`, `seedance_get_tasks` | `gen_task_get` (`task_ids`, 1-50) |
 | `seedance_list_tasks` | `gen_task_list` (`page_size`, `cursor`, `status`, `model`) |
@@ -48,6 +48,15 @@ flowchart LR
   `failed`, `recommended_poll_after_ms`.
 - **Default model changed:** `SEEDANCE_DEFAULT_MODEL` now defaults to
   `dreamina-seedance-2-5-260628`. Set it explicitly to keep 2.0 as the default.
+- **4K is unified:** regular Seedance 2.5 accepts `resolution="4k"`.
+  The separate Premium family, model settings, and service entry are removed,
+  with no compatibility aliases. Remove the old Premium settings and update
+  bindings explicitly; see [configuration](configuration.md#seedance-25-4k).
+- **Flash shares the tool:** `dreamina-seedance-2-5-flash-261115` uses
+  `seedance_create_task` with 480p/720p and no Draft mode. Empty bindings now
+  include Flash; non-empty lists are unchanged and must add it explicitly.
+  Regular 2.5 remains the default. See
+  [Flash configuration](configuration.md#seedance-25-flash).
 
 ### 3D
 
@@ -140,5 +149,5 @@ principals cannot poll or cancel tasks.** Ownership checks are unchanged: a
 
 The `tool` label on `ark_mcp_tool_requests_total` and
 `ark_mcp_tool_duration_seconds` follows the new names. **The merged
-`seedance_create_task` no longer separates 2.0, 2.5 and Premium by label**;
+`seedance_create_task` no longer separates 2.0 and 2.5 by label**;
 use the `model` field in logs to split them.

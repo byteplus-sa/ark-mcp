@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import mermaid from "astro-mermaid";
 import { unified } from "@astrojs/markdown-remark";
 import starlightLinksValidator from "starlight-links-validator";
 import remarkLinks from "./scripts/remark-links.mjs";
@@ -16,6 +17,10 @@ export default defineConfig({
   base: "/ark-mcp",
   trailingSlash: "always",
   outDir: "../../out/docs-site",
+  redirects: {
+    "/seedream-5-5/":
+      "https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5",
+  },
   markdown: {
     processor: unified({
       remarkPlugins: [remarkLinks],
@@ -23,6 +28,13 @@ export default defineConfig({
     }),
   },
   integrations: [
+    mermaid({
+      autoTheme: true,
+      enableLog: false,
+      mermaidConfig: {
+        securityLevel: "strict",
+      },
+    }),
     starlight({
       title: "BytePlus Ark MCP",
       logo: {
@@ -94,7 +106,6 @@ export default defineConfig({
           collapsed: true,
           items: [
             { slug: "models" },
-            { slug: "seedream-5-5", label: "Seedream 5.5" },
             { slug: "tools", label: "Worked Tool Examples" },
             { slug: "artifacts" },
             { slug: "multi-generation" },

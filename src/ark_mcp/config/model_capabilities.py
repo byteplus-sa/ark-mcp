@@ -42,7 +42,7 @@ class ModelFamily(StrEnum):
     SEEDANCE_2_FAST = "seedance_2_fast"
     SEEDANCE_2_MINI = "seedance_2_mini"
     SEEDANCE_2_5 = "seedance_2_5"
-    SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"
+    SEEDANCE_2_5_FLASH = "seedance_2_5_flash"
     SEED_2_1_PRO = "seed_2_1_pro"
     SEED_2_1_TURBO = "seed_2_1_turbo"
     SEED_AUDIO_UNDERSTANDING = "seed_audio_understanding"
@@ -246,13 +246,15 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
     settings = get_settings()
     capabilities: dict[str, VideoCapabilities] = {}
     for binding in settings.seedance_model_bindings:
+        is_flash = binding.family is SeedanceFamily.SEEDANCE_2_5_FLASH
+        is_2_5 = binding.family in (
+            SeedanceFamily.SEEDANCE_2_5,
+            SeedanceFamily.SEEDANCE_2_5_FLASH,
+        )
         resolutions: tuple[str, ...]
-        if binding.family is SeedanceFamily.SEEDANCE_2_5_PREMIUM:
-            family = ModelFamily.SEEDANCE_2_5_PREMIUM
-            resolutions = ("480p", "720p", "1080p", "4k")
-        elif binding.family is SeedanceFamily.SEEDANCE_2_5:
-            family = ModelFamily.SEEDANCE_2_5
-            resolutions = ("480p", "720p", "1080p")
+        if is_2_5:
+            family = ModelFamily.SEEDANCE_2_5_FLASH if is_flash else ModelFamily.SEEDANCE_2_5
+            resolutions = ("480p", "720p") if is_flash else ("480p", "720p", "1080p", "4k")
         elif binding.family is SeedanceFamily.MINI:
             family = ModelFamily.SEEDANCE_2_MINI
             resolutions = ("480p", "720p")
@@ -263,7 +265,7 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
             family = ModelFamily.SEEDANCE_2
             resolutions = ("480p", "720p", "1080p", "4k")
 
-        if binding.family in (SeedanceFamily.SEEDANCE_2_5, SeedanceFamily.SEEDANCE_2_5_PREMIUM):
+        if is_2_5:
             capabilities[binding.model_id] = VideoCapabilities(
                 family=family,
                 model_id=binding.model_id,
@@ -278,10 +280,8 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
                 duration_range=(4, 30),
                 priority_range=(0, 9),
                 execution_expires_after_range=(3600, 259200),
-                supports_draft=True,
-                draft_final_resolution="4k"
-                if family is ModelFamily.SEEDANCE_2_5_PREMIUM
-                else "1080p",
+                supports_draft=not is_flash,
+                draft_final_resolution=None if is_flash else "1080p",
                 supports_audio_only_input=True,
                 supported_task_types=SEEDANCE_2_5_TASK_TYPES,
                 supported_output_formats=("mp4", "mov"),

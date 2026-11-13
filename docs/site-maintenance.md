@@ -49,6 +49,8 @@ the project environment is not at `.venv/`.
 | Capability overview | `docs/capabilities.md` |
 | Existing handbook | Other `docs/*.md` files |
 | Tool contracts | Handler docstrings, Pydantic models and `src/ark_mcp/tools/_catalog.py` |
+| Supported-model tables | `docs/site/tool-models.json`, rendered once per model-backed tool page by `docs/site/scripts/docs.mjs` |
+| Tool-specific usage guidance | `docs/site/tool-notes/`, injected by `docs/site/scripts/docs.mjs` into the relevant tool page only |
 | Page generation and link rewriting | `docs/site/scripts/` |
 | Navigation and theme | `docs/site/astro.config.mjs`, `docs/site/src/styles/custom.css` |
 | Tool-reference categories | `docs/site/scripts/navigation.mjs` |
@@ -105,13 +107,39 @@ credential reads.
 Relative Markdown handbook links become project-base-prefixed site routes.
 References outside `docs/` point to GitHub source; reference definitions are
 handled too. Build-time link validation catches missing pages and fragments.
-The existing Mermaid fences remain readable Mermaid source blocks; interactive
-diagram rendering is not installed.
+
+Mermaid fences render locally in the browser through `astro-mermaid` and the
+bundled `mermaid` library. Keep the Mermaid integration before Starlight; it
+preserves the existing unified processor's link rewriting and table wrappers.
+Automatic light/dark themes and strict security are enabled; no external
+diagram service or CDN is used. Without JavaScript, source remains readable.
+The renderer is loaded on pages containing diagrams, rather than on every
+tool page. Mermaid's renderer produces a large lazy-loaded bundle; the build
+can report a non-failing chunk-size warning.
+Keep diagram source in the handbook, and verify SVG rendering in a production
+preview after changes. `mermaid.test.mjs` checks real fence transformation,
+HTML escaping, retained Markdown plugins and runtime script injection.
 
 Update tool examples in `docs/site/tool-examples.json` when tool contracts
 change. Examples use synthetic URLs/IDs, not real customer media, signed URLs,
 credentials or private assets. Discovery is not a provider-entitlement test.
 Never enable optional services or perform paid generation during a site build.
+
+Model-specific guidance belongs in one **Supported Models** table on each
+relevant generated tool page, not in separate model sections or product guides.
+The table lists model/service IDs, defaults or configuration gates, and compact
+capabilities. Do not invent built-in IDs for custom-bound families or imply that
+all rows are enabled on every deployment. Fixed-service tools have no per-call
+`model` selector. Utility and polling tools do not get unrelated model tables.
+`tool-models.test.mjs` guards layout and scope; Python export tests compare the
+documented built-in defaults with static settings fields without constructing
+settings or calling providers. Keep summaries aligned with the capability registry.
+
+Seedream's shared editing/output guidance remains in `seedream_generate_image`
+under **Tool Reference > Images and video**.
+Source notes under `docs/site/tool-notes/` are not standalone site pages.
+The former `/seedream-5-5/` URL is an Astro static redirect; the old section
+anchors now resolve above the supported-model table.
 
 ## GitHub Pages
 
@@ -140,3 +168,7 @@ Documentation consulted 2026-11-10:
 - [Starlight content collections](https://starlight.astro.build/guides/content-collections/)
 - [Astro GitHub Pages deployment](https://docs.astro.build/en/guides/deploy/github/)
 - [FastMCP tools](https://gofastmcp.com/servers/tools)
+
+Mermaid integration consulted 2026-11-12:
+
+- [astro-mermaid setup and Astro/Starlight compatibility](https://github.com/joesaby/astro-mermaid#readme)

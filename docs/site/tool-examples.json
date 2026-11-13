@@ -16,7 +16,11 @@
     }
   },
   "seedance_create_task": {
-    "input": { "prompt": "A paper boat floats on calm water.", "dry_run": true }
+    "input": {
+      "prompt": "A paper boat floats on calm water.",
+      "resolution": "4k",
+      "dry_run": true
+    }
   },
   "seed_audio_generate": {
     "input": {

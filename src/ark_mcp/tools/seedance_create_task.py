@@ -1,7 +1,8 @@
 """``seedance_create_task`` tool — create Seedance video tasks for any configured model.
 
-One tool covers every Seedance family (2.0, 2.0 Fast/Mini, 2.5 and the
-whitelist-only 2.5 Premium). The input schema advertises the widest limits;
+One tool covers every Seedance family (2.0, 2.0 Fast/Mini, 2.5 and 2.5 Flash).
+Regular 2.5 supports 4K; Flash supports 480p/720p without Draft mode.
+The schema advertises the widest limits;
 the model's own limits are checked at runtime from the capability registry
 and every violation is reported at once.
 """
@@ -86,7 +87,7 @@ class SeedanceCreateTaskInput(BaseModel):
         None,
         max_length=10,
         description=(
-            "Reference audio (max 10). Entry forms as for images. Seedance 2.5 accepts audio "
+            "Reference audio (max 10). Entry forms as for images. 2.5 and Flash accept audio "
             "alone; 2.0 also needs an image or video."
         ),
     )
@@ -100,8 +101,9 @@ class SeedanceCreateTaskInput(BaseModel):
     resolution: Literal["480p", "720p", "1080p", "4k"] | None = Field(
         None,
         description=(
-            "Output resolution (per-model set in ark_list_models). draft=true allows only 480p; "
-            "draft_task_id only the model's Draft final resolution; each defaults to it."
+            "Resolution: regular 2.5 supports all four; Flash only 480p/720p. "
+            "Draft preview: 480p; final: 1080p (defaults when omitted). "
+            "Per-model limits: ark_list_models."
         ),
     )
     ratio: SeedanceRatio | None = Field(
@@ -126,7 +128,7 @@ class SeedanceCreateTaskInput(BaseModel):
     output_format: Literal["mp4", "mov"] | None = Field(
         None,
         description=(
-            "Container (Seedance 2.5 only). 'mov' is H.264 4:4:4 with PCM audio for "
+            "Container (2.5 and Flash). 'mov' is H.264 4:4:4 with PCM audio for "
             "post-production; some players cannot play it."
         ),
     )
@@ -159,7 +161,7 @@ class SeedanceCreateTaskInput(BaseModel):
     draft: bool | None = Field(
         None,
         description=(
-            "Draft step 1 (Seedance 2.5): create a 480p preview billed as a normal 480p "
+            "Draft step 1 (regular 2.5 only): create a 480p preview billed as a normal 480p "
             "video, then pass its task_id as draft_task_id. Exclusive with draft_task_id."
         ),
     )
@@ -302,7 +304,10 @@ class SeedanceCreatePreview(BaseModel):
     )
     estimated_cost_usd: float = Field(
         ...,
-        description="Static estimate in USD from the server's price table for all requests; not a provider quote.",
+        description=(
+            "Static estimate in USD for all requests; not a provider quote. Does not account "
+            "for video resolution or duration, including 4K."
+        ),
     )
 
 
@@ -338,13 +343,13 @@ TOOL_ANNOTATIONS = {
 async def seedance_create_task(
     input: SeedanceCreateTaskInput, ctx: Context
 ) -> SeedanceCreateTaskOutput | ToolResult:
-    """Create asynchronous Seedance video tasks (any configured model).
+    """Create Seedance video tasks, variations, or a free dry-run preview.
 
-    Model IDs and per-model limits come from ark_list_models(kind='video'); requests
-    outside them are rejected with every problem listed. variations creates several
-    tasks; draft=true then draft_task_id previews cheaply before the final render
-    (2.5); dry_run=true returns the request bodies and a cost estimate. Run through
-    ark_job_submit, then poll the task IDs with gen_task_get (never resubmit to poll).
+    Choose model and limits with ark_list_models(kind='video'); invalid requests
+    fail before submission. Regular 2.5 supports 4K; Flash only 480p/720p, without Draft.
+    Draft previews are 480p; finals are 1080p. Cost previews are static.
+    Submit via ark_job_submit, then poll task IDs with gen_task_get; never resubmit
+    to poll, because each create starts new billed tasks.
     """
     settings = get_settings()
     if not settings.has_modelark:

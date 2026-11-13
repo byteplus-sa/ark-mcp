@@ -127,6 +127,7 @@ def test_provider_configuration_excludes_legacy_and_account_secrets(tmp_path: Pa
     provider = tmp_path / "providers.env"
     provider.write_text(
         "BYTEPLUS_MODELARK_API_KEY=synthetic-provider\nMCP_JWT_ISSUER=old\nS3_SECRET_KEY=unused\nBYTEPLUS_MODELARK_ACCESS_KEY=unused\n"
+        "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true\n"
     )
     provider.chmod(0o600)
     payload, token = make_configuration(provider, "mcp.team.test")
@@ -135,6 +136,7 @@ def test_provider_configuration_excludes_legacy_and_account_secrets(tmp_path: Pa
     assert "MCP_JWT_ISSUER" not in values
     assert "S3_SECRET_KEY" not in values
     assert "BYTEPLUS_MODELARK_ACCESS_KEY" not in values
+    assert "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED" not in values
     assert token not in payload.decode()
     assert values["REDIS_PASSWORD"] != values["FASTMCP_TASKS_ENCRYPTION_KEY"]
     assert json.loads(json.dumps(values)) == values
