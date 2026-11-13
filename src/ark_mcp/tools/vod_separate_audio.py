@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.domain.errors import ProviderError
+from ark_mcp.domain.media import HttpsUrl
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.vod_mediakit.schemas import VodMediaKitSeparateVoiceRequest
 from ark_mcp.providers.vod_mediakit.separate_voice import (
@@ -18,8 +19,7 @@ from ark_mcp.runtime import get_principal, get_runtime
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._task_execution import context_log
-
-HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
+from ark_mcp.tools._vod_shared import VOD_OPERATION_DESCRIPTION, VodOperation
 
 
 class VodSeparateAudioInput(BaseModel):
@@ -28,28 +28,26 @@ class VodSeparateAudioInput(BaseModel):
     audio_url: HttpsUrl | None = Field(
         default=None,
         description=(
-            "Public HTTPS audio URL that BytePlus can fetch. Set exactly one of audio_url or "
-            "video_url. Supported formats: mp3, m4a, wav."
+            "Public HTTPS audio URL (mp3, m4a, wav). Set exactly one of audio_url or video_url."
         ),
     )
     video_url: HttpsUrl | None = Field(
         default=None,
         description=(
-            "Public HTTPS video URL that BytePlus can fetch. Set exactly one of audio_url or "
-            "video_url. Supported formats: mp4, flv, ts, avi, mov, wmv, mkv."
+            "Public HTTPS video URL (mp4, flv, ts, avi, mov, wmv, mkv). Set exactly one of "
+            "audio_url or video_url."
         ),
     )
     scene: Literal["Audio", "Music", "Drama", "Narrate"] = Field(
         default="Audio",
         description=(
-            "Separation scene. Audio (default) and Music produce a 2-track split "
-            "(voice + background); Drama and Narrate produce a 3-track split "
-            "(voice + music + sound effects)."
+            "Audio and Music give voice + background tracks; Drama and Narrate give voice + "
+            "music + sfx tracks."
         ),
     )
     output_format: Literal["aac", "mp3", "wav", "m4a", "flac"] = Field(
         default="aac",
-        description="Output audio format. Default: aac.",
+        description="Output audio format.",
     )
 
     @model_validator(mode="after")
@@ -63,36 +61,29 @@ class VodSeparateAudioOutput(BaseModel):
     """Accepted asynchronous voice and background audio separation submission."""
 
     provider: Literal["byteplus-vod-mediakit"] = Field(
-        default="byteplus-vod-mediakit", description="Provider surface that processed the request."
+        default="byteplus-vod-mediakit", description="Provider surface."
     )
-    status: Literal["accepted"] = Field(
-        description="Always 'accepted': the separation task is asynchronous."
-    )
-    request_id: str | None = Field(
-        default=None, description="Provider diagnostic request ID, when returned."
-    )
+    status: Literal["accepted"] = Field(description="Always accepted; the task is asynchronous.")
+    request_id: str | None = Field(default=None, description="Provider request ID, when returned.")
     provider_log_id: str | None = Field(
-        default=None, description="Provider x-tt-logid diagnostic identifier, when returned."
+        default=None, description="Provider x-tt-logid, when returned."
     )
     task_id: str = Field(
-        description="Provider task ID to pass to vod_get_audio_separation for polling."
+        description="Task ID to poll with vod_get_task (operation 'separate_audio')."
     )
+    operation: VodOperation = Field(default="separate_audio", description=VOD_OPERATION_DESCRIPTION)
     recommended_poll_after_ms: int = Field(
-        description="Server-side suggested poll delay; a heuristic, not a provider guarantee."
+        description="Suggested delay before the first vod_get_task poll, in milliseconds."
     )
 
 
 async def vod_separate_audio(
     input: VodSeparateAudioInput, ctx: Context
 ) -> VodSeparateAudioOutput | ToolResult:
-    """Submit an asynchronous BytePlus VOD AI MediaKit voice and background audio separation task.
+    """Split a public audio or video URL into voice and background tracks (plus music and sfx for Drama/Narrate scenes) with MediaKit.
 
-    Accepts a public HTTPS audio or video URL and submits a separate-voice task
-    that splits the media into a clean vocal track and a background track
-    (plus music and sound-effects tracks for the Drama and Narrate scenes).
-    Returns an accepted task ID for polling with vod_get_audio_separation. The
-    mutation is never retried automatically because completion can be ambiguous
-    after a timeout. Requires MCP task-augmented execution for submission.
+    Returns a task_id; poll it with vod_get_task (operation 'separate_audio').
+    Not retried automatically. Requires background execution (ark_job_submit).
     """
     runtime = get_runtime(ctx)
     settings = runtime.settings

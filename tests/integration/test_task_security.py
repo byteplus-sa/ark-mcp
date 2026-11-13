@@ -280,7 +280,7 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
             for target in authorized_capabilities["result"]["structuredContent"]["targets"]
         }
         assert "vod_enhance_video" in authorized_targets
-        assert "vod_get_enhancement_task" not in authorized_targets
+        assert "vod_get_task" not in authorized_targets
 
         missing_tenant = await compatibility_call(
             client,

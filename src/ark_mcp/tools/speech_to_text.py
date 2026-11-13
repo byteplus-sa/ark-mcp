@@ -44,17 +44,19 @@ def _estimate_duration_seconds(num_bytes: int) -> float:
 class AsrAudioInput(BaseModel):
     """Audio source — resolved to raw bytes for HTTP submit."""
 
-    audio_url: str | None = Field(None, description="HTTPS URL of the audio file.")
+    audio_url: str | None = Field(
+        None, description="HTTPS URL of the audio (max 200 MB). Exactly one audio source."
+    )
     audio_data: str | None = Field(
-        None, description="Base64-encoded audio bytes. Mutually exclusive with other inputs."
+        None, description="Base64 audio bytes (max 200 MB decoded). Exactly one audio source."
     )
     audio_file_path: str | None = Field(
         None,
-        description="Absolute local file path. stdio transport only. Mutually exclusive with other inputs.",
+        description="Absolute local file path (stdio only, max 200 MB). Exactly one audio source.",
     )
     audio_format: Literal["wav", "mp3", "ogg", "raw", "flac"] = Field(
         ...,
-        description="Audio format: wav, mp3, ogg, raw, flac.",
+        description="Format of the source audio.",
     )
 
     @model_validator(mode="after")
@@ -74,17 +76,17 @@ class AsrAudioInput(BaseModel):
 class AsrRequestOptions(BaseModel):
     """Optional transcription feature toggles."""
 
-    language: str = Field("en-US", description="BCP-47 language code.")
-    enable_punc: bool | None = Field(None, description="Enable punctuation.")
-    enable_itn: bool | None = Field(None, description="Enable ITN.")
+    language: str = Field("en-US", description="BCP-47 language code, e.g. en-US.")
+    enable_punc: bool | None = Field(None, description="Add punctuation to the text.")
+    enable_itn: bool | None = Field(
+        None, description="Inverse text normalization (e.g. spoken numbers to digits)."
+    )
 
 
 class SpeechToTextInput(BaseModel):
     """Input for the ``speech_to_text`` tool."""
 
-    audio: AsrAudioInput = Field(
-        ..., description="Audio source to transcribe — URL, Base64 bytes, or local file path."
-    )
+    audio: AsrAudioInput = Field(..., description="Audio source to transcribe.")
     options: AsrRequestOptions | None = Field(
         None, description="Optional transcription feature toggles."
     )
@@ -124,12 +126,10 @@ async def _resolve_audio_bytes(audio: AsrAudioInput, ctx: Context) -> bytes:
 
 
 async def speech_to_text(input: SpeechToTextInput, ctx: Context) -> SpeechToTextOutput | ToolResult:
-    """Transcribe audio to text via Seed Speech ASR.
+    """Transcribe audio to text with word-level timings via Seed Speech ASR.
 
-    Accepts audio via URL, Base64, or local file path (stdio only). Requires MCP
-    task-augmented execution because the internal provider polling can run for
-    up to the configured ASR poll limit. Returns the complete
-    ``TranscriptionResult`` through the MCP task result.
+    Accepts an HTTPS URL, Base64 data, or a local file path (stdio only), up to
+    200 MB. Requires background execution (ark_job_submit).
     """
     await context_log(ctx, "info", "Starting speech-to-text transcription")
     await ctx.report_progress(progress=10, total=100)

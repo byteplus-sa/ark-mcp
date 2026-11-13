@@ -6,18 +6,25 @@ provider call (mocked) → structured output, plus the env-configured model ID.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
+import respx
+from fastmcp.tools import ToolResult
 from pydantic import ValidationError
 
 from ark_mcp.config.env import get_settings
+from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
+from ark_mcp.providers.modelark.files import ModelArkFile, ModelArkFilesService
 from ark_mcp.providers.modelark.schemas import (
     ChatCompletionProviderRequest,
     ChatCompletionProviderResponse,
 )
 from ark_mcp.providers.modelark.understanding import SeedUnderstandingService
+from ark_mcp.security.output_paths import OutputPathError
 from ark_mcp.tools.seed_audio_understand import (
     SeedAudioUnderstandInput,
     SeedAudioUnderstandOutput,
@@ -28,6 +35,32 @@ from tests.fixtures.fake_context import FakeContext
 
 _AUDIO_URL = "https://cdn.example.com/speech.mp3"
 _WAV_B64 = base64.b64encode(b"RIFF" + b"\x00" * 64).decode()
+
+
+@respx.mock
+async def test_malformed_upload_is_cleaned_and_returned_without_understanding_call(
+    test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base = get_settings().modelark_base_url.rstrip("/")
+    respx.post(f"{base}/files").respond(200, json={"id": "file-malformed"})
+    deletion = respx.delete(f"{base}/files/file-malformed").respond(200)
+    captured = _capture_requests(monkeypatch)
+
+    result = await seed_audio_understand(
+        SeedAudioUnderstandInput(
+            prompt="Transcribe", audios=[{"kind": "url", "url": _AUDIO_URL}], delivery="files_api"
+        ),
+        fake_ctx,
+    )
+
+    assert isinstance(result, ToolResult)
+    assert result.is_error
+    text = result.content[0].text
+    assert "code=INVALID_RESPONSE" in text
+    assert "ambiguous_completion=True" in text
+    assert "retryable=False" in text
+    assert deletion.called
+    assert captured == []
 
 
 def _response(content: str) -> dict[str, Any]:
@@ -208,6 +241,285 @@ class TestSeedAudioUnderstandTool:
         sent = captured[0].model_dump(exclude_none=True)["response_format"]
         assert sent["type"] == "json_schema"
         assert sent["json_schema"]["schema"] == schema
+
+
+def _rejection(message: str, *, status: int = 400) -> ProviderError:
+    return ProviderError(
+        NormalizedProviderError(
+            provider="modelark",
+            operation="chat_completion",
+            http_status=status,
+            code="InvalidParameter",
+            message=message,
+            retryable=False,
+            ambiguous_completion=False,
+        )
+    )
+
+
+_SIZE_REJECTION = (
+    "The request failed because the size of the input audio (26 MiB) exceeds the limit (25 MiB)."
+)
+
+
+class _FakeFiles:
+    """Records Files API calls; files classify as video when the URL ends in .mp4."""
+
+    def __init__(self) -> None:
+        self.uploads: list[dict[str, Any]] = []
+        self.deleted: list[str] = []
+        self.fail_upload: ProviderError | None = None
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        fake = self
+
+        async def upload_url(self: ModelArkFilesService, url: str, **kwargs: Any) -> ModelArkFile:
+            if fake.fail_upload is not None:
+                raise fake.fail_upload
+            fake.uploads.append({"url": url, **kwargs})
+            mime = "video/mp4" if url.endswith(".mp4") else "audio/mpeg"
+            return ModelArkFile(id=f"file-{len(fake.uploads)}", status="processing", mime_type=mime)
+
+        async def wait_until_active(self: ModelArkFilesService, file: ModelArkFile) -> ModelArkFile:
+            return file.model_copy(update={"status": "active"})
+
+        async def delete(self: ModelArkFilesService, file_id: str) -> bool:
+            fake.deleted.append(file_id)
+            return True
+
+        monkeypatch.setattr(ModelArkFilesService, "upload_url", upload_url)
+        monkeypatch.setattr(ModelArkFilesService, "wait_until_active", wait_until_active)
+        monkeypatch.setattr(ModelArkFilesService, "delete", delete)
+
+
+def _capture_with_rejections(
+    monkeypatch: pytest.MonkeyPatch, rejections: list[ProviderError]
+) -> list[ChatCompletionProviderRequest]:
+    """Reject the first requests with ``rejections``, then answer normally."""
+    captured: list[ChatCompletionProviderRequest] = []
+
+    async def mock_generate(
+        self: SeedUnderstandingService, request: ChatCompletionProviderRequest
+    ) -> tuple[ChatCompletionProviderResponse, str | None]:
+        captured.append(request)
+        if rejections:
+            raise rejections.pop(0)
+        return ChatCompletionProviderResponse.model_validate(_response("ok")), "req-audio"
+
+    monkeypatch.setattr(SeedUnderstandingService, "generate", mock_generate)
+    return captured
+
+
+def _audio_parts(request: ChatCompletionProviderRequest) -> list[dict[str, Any]]:
+    content = request.model_dump(exclude_none=True)["messages"][-1]["content"]
+    return [part for part in content if part["type"] != "text"]
+
+
+class TestSeedAudioUnderstandFilesApi:
+    async def test_invalid_output_path_does_not_upload(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        upload = AsyncMock(side_effect=AssertionError("Must validate output before upload"))
+        monkeypatch.setattr(ModelArkFilesService, "upload_url", upload)
+        with pytest.raises(OutputPathError):
+            await seed_audio_understand(
+                SeedAudioUnderstandInput(
+                    prompt="x",
+                    audios=[{"kind": "url", "url": _AUDIO_URL}],
+                    delivery="files_api",
+                    save_to="/outside-allowed-roots/answer.txt",
+                ),
+                fake_ctx,
+            )
+        upload.assert_not_awaited()
+
+    async def test_cancellation_during_processing_deletes_uploaded_file(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        closed = AsyncMock()
+        monkeypatch.setattr(
+            ModelArkFilesService,
+            "wait_until_active",
+            AsyncMock(side_effect=asyncio.CancelledError()),
+        )
+        monkeypatch.setattr(ModelArkFilesService, "close", closed)
+        with pytest.raises(asyncio.CancelledError):
+            await seed_audio_understand(
+                SeedAudioUnderstandInput(
+                    prompt="x", audios=[{"kind": "url", "url": _AUDIO_URL}], delivery="files_api"
+                ),
+                fake_ctx,
+            )
+        assert files.deleted == ["file-1"]
+        closed.assert_awaited_once()
+
+    async def test_auto_retries_oversized_url_through_files_api(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        captured = _capture_with_rejections(monkeypatch, [_rejection(_SIZE_REJECTION)])
+        video_url = "https://cdn.example.com/episode.mp4"
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(
+                prompt="Review the soundtrack.",
+                audios=[
+                    {"kind": "url", "url": video_url},
+                    {"kind": "base64", "data": _WAV_B64, "mime_type": "audio/wav"},
+                ],
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, SeedAudioUnderstandOutput)
+        assert result.choices[0].content == "ok"
+        assert result.attempts == 1
+        assert result.audio_delivery == ["files_api_video", "base64"]
+        assert result.delivery_fallback_reason == _SIZE_REJECTION
+        assert len(captured) == 2
+        assert _audio_parts(captured[0])[0] == {
+            "type": "input_audio",
+            "input_audio": {"url": video_url},
+        }
+        retried = _audio_parts(captured[1])
+        assert retried[0] == {"type": "video_url", "video_url": {"file_id": "file-1"}}
+        assert retried[1]["input_audio"]["format"] == "wav"
+        assert files.uploads == [
+            {"url": video_url, "video_model": "seed-2-0-lite-260428", "video_fps": 0.2}
+        ]
+        assert files.deleted == ["file-1"]
+
+    async def test_explicit_files_api_uploads_before_the_call(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        captured = _capture_with_rejections(monkeypatch, [])
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(
+                prompt="Transcribe.",
+                audios=[{"kind": "url", "url": _AUDIO_URL}],
+                delivery="files_api",
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, SeedAudioUnderstandOutput)
+        assert result.audio_delivery == ["files_api_audio"]
+        assert result.delivery_fallback_reason is None
+        assert len(captured) == 1
+        assert _audio_parts(captured[0]) == [
+            {"type": "input_audio", "input_audio": {"file_id": "file-1"}}
+        ]
+        assert files.deleted == ["file-1"]
+
+    async def test_direct_reports_rejection_without_files_api(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        captured = _capture_with_rejections(monkeypatch, [_rejection(_SIZE_REJECTION)])
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(
+                prompt="x", audios=[{"kind": "url", "url": _AUDIO_URL}], delivery="direct"
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        assert len(captured) == 1
+        assert files.uploads == []
+
+    @pytest.mark.parametrize(
+        "rejection",
+        [
+            _rejection("response_format.json_schema is invalid"),
+            _rejection("the input audio is temporarily unavailable", status=503),
+        ],
+    )
+    async def test_auto_ignores_unrelated_rejections(
+        self,
+        test_env: None,
+        fake_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        rejection: ProviderError,
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        captured = _capture_with_rejections(monkeypatch, [rejection])
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(prompt="x", audios=[{"kind": "url", "url": _AUDIO_URL}]),
+            fake_ctx,
+        )
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        assert len(captured) == 1
+        assert files.uploads == []
+
+    async def test_auto_without_urls_never_falls_back(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        captured = _capture_with_rejections(monkeypatch, [_rejection(_SIZE_REJECTION)])
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(
+                prompt="x",
+                audios=[{"kind": "base64", "data": _WAV_B64, "mime_type": "audio/wav"}],
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, ToolResult)
+        assert len(captured) == 1
+        assert files.uploads == []
+
+    async def test_upload_failure_is_reported_before_any_billed_call(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        files.fail_upload = _rejection("url is not reachable")
+        captured = _capture_with_rejections(monkeypatch, [])
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(
+                prompt="x", audios=[{"kind": "url", "url": _AUDIO_URL}], delivery="files_api"
+            ),
+            fake_ctx,
+        )
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        assert captured == []
+
+    async def test_uploads_are_deleted_when_the_retry_fails(
+        self, test_env: None, fake_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        files = _FakeFiles()
+        files.install(monkeypatch)
+        captured = _capture_with_rejections(
+            monkeypatch, [_rejection(_SIZE_REJECTION), _rejection("audio is too long")]
+        )
+
+        result = await seed_audio_understand(
+            SeedAudioUnderstandInput(prompt="x", audios=[{"kind": "url", "url": _AUDIO_URL}]),
+            fake_ctx,
+        )
+
+        assert isinstance(result, ToolResult)
+        assert result.is_error
+        assert len(captured) == 2
+        assert files.deleted == ["file-1"]
 
 
 class TestSeedAudioUnderstandValidation:

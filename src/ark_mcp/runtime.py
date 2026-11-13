@@ -28,6 +28,7 @@ from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.observability.metrics import BUDGET_REJECTIONS
+from ark_mcp.providers.modelark.pricing import live_pricing_enabled, run_price_refresher
 from ark_mcp.security.auth_context import AuthContext, PrincipalContext
 from ark_mcp.security.safe_downloader import SafeDownloader
 
@@ -36,7 +37,9 @@ if TYPE_CHECKING:
 
     from ark_mcp.artifacts.store import ArtifactStore
 
-ProviderKey = Literal["modelark", "modelark-openapi", "seed-speech", "vod-mediakit", "tos", "s3"]
+ProviderKey = Literal[
+    "modelark", "modelark-openapi", "seed-speech", "vod-mediakit", "vision-cv", "tos", "s3"
+]
 
 
 def _open_sqlite_connection(database_path: Path) -> sqlite3.Connection:
@@ -88,6 +91,7 @@ class ProviderLimiters:
             "modelark-openapi": asyncio.Semaphore(provider_limit),
             "seed-speech": asyncio.Semaphore(provider_limit),
             "vod-mediakit": asyncio.Semaphore(provider_limit),
+            "vision-cv": asyncio.Semaphore(provider_limit),
             "tos": asyncio.Semaphore(provider_limit),
             "s3": asyncio.Semaphore(provider_limit),
         }
@@ -129,6 +133,14 @@ class ProviderLimiters:
                 yield
 
 
+@dataclass(frozen=True, slots=True)
+class OwnedTask:
+    """A provider task ID owned by one principal, with its recording time."""
+
+    task_id: str
+    created_at: datetime
+
+
 class TaskOwnershipStore(Protocol):
     async def claim(self, provider: str, task_id: str, owner: AuthContext) -> bool: ...
 
@@ -136,7 +148,15 @@ class TaskOwnershipStore(Protocol):
 
     async def require_owner(self, provider: str, task_id: str, owner: AuthContext) -> None: ...
 
-    async def list_task_ids(self, provider: str, owner: AuthContext) -> set[str]: ...
+    async def list_owned_tasks(
+        self,
+        provider: str,
+        owner: AuthContext,
+        *,
+        since: datetime,
+        before: tuple[datetime, str] | None,
+        limit: int,
+    ) -> list[OwnedTask]: ...
 
     async def prune(self, max_age_days: int) -> int: ...
 
@@ -213,6 +233,10 @@ class TaskArtifactPersistenceLocks:
                     self._entries.pop(key, None)
 
 
+def _ownership_timestamp(moment: datetime) -> str:
+    return moment.astimezone(UTC).isoformat(timespec="microseconds")
+
+
 class SQLiteTaskOwnershipStore:
     """Small single-instance ownership database for provider task IDs."""
 
@@ -278,9 +302,15 @@ class SQLiteTaskOwnershipStore:
             )
             """
         )
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS task_ownership_owner_created
+            ON task_ownership(provider, tenant_id, principal_id, created_at, task_id)
+            """
+        )
 
     async def record(self, provider: str, task_id: str, owner: AuthContext) -> None:
-        created_at = datetime.now(UTC).isoformat()
+        created_at = _ownership_timestamp(datetime.now(UTC))
 
         def _run() -> None:
             self._connection.execute(
@@ -306,7 +336,7 @@ class SQLiteTaskOwnershipStore:
         await _run_locked(self._lock, _run)
 
     async def claim(self, provider: str, task_id: str, owner: AuthContext) -> bool:
-        created_at = datetime.now(UTC).isoformat()
+        created_at = _ownership_timestamp(datetime.now(UTC))
 
         def _run() -> bool:
             cursor = self._connection.execute(
@@ -343,18 +373,44 @@ class SQLiteTaskOwnershipStore:
         if row != (owner.principal_id, owner.tenant_id):
             raise PermissionError("Task is not owned by the current principal.")
 
-    async def list_task_ids(self, provider: str, owner: AuthContext) -> set[str]:
-        def _run() -> list[tuple[str]]:
-            return self._connection.execute(
-                """
-                SELECT task_id FROM task_ownership
-                WHERE provider = ? AND principal_id = ? AND tenant_id = ?
-                """,
-                (provider, owner.principal_id, owner.tenant_id),
-            ).fetchall()
+    async def list_owned_tasks(
+        self,
+        provider: str,
+        owner: AuthContext,
+        *,
+        since: datetime,
+        before: tuple[datetime, str] | None,
+        limit: int,
+    ) -> list[OwnedTask]:
+        """Return owned task IDs recorded at or after ``since``, newest first.
+
+        ``before`` is an exclusive ``(created_at, task_id)`` keyset cursor.
+        """
+        query = """
+            SELECT task_id, created_at FROM task_ownership
+            WHERE provider = ? AND tenant_id = ? AND principal_id = ? AND created_at >= ?
+        """
+        params: list[str | int] = [
+            provider,
+            owner.tenant_id,
+            owner.principal_id,
+            _ownership_timestamp(since),
+        ]
+        if before is not None:
+            query += " AND (created_at < ? OR (created_at = ? AND task_id < ?))"
+            cursor_time = _ownership_timestamp(before[0])
+            params.extend([cursor_time, cursor_time, before[1]])
+        query += " ORDER BY created_at DESC, task_id DESC LIMIT ?"
+        params.append(limit)
+
+        def _run() -> list[tuple[str, str]]:
+            return self._connection.execute(query, params).fetchall()
 
         rows = await _run_locked(self._lock, _run)
-        return {str(row[0]) for row in rows}
+        return [
+            OwnedTask(task_id=str(task_id), created_at=datetime.fromisoformat(str(created_at)))
+            for task_id, created_at in rows
+        ]
 
     async def prune(self, max_age_days: int) -> int:
         cutoff = (datetime.now(UTC) - timedelta(days=max_age_days)).isoformat()
@@ -1014,12 +1070,19 @@ def build_lifespan(
         if state is not None:
             state.runtime = runtime
         sweeper = asyncio.create_task(_state_sweeper(runtime, settings))
+        price_refresher = (
+            asyncio.create_task(run_price_refresher(settings))
+            if live_pricing_enabled(settings)
+            else None
+        )
         try:
             yield {"runtime": runtime}
         finally:
-            sweeper.cancel()
-            with suppress(asyncio.CancelledError):
-                await sweeper
+            for background in (sweeper, price_refresher):
+                if background is not None:
+                    background.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await background
             if state is not None:
                 state.runtime = None
             await close_runtime_services(runtime)

@@ -77,8 +77,31 @@ cancel its waiters.
 
 > For parallel variation tools, a third local `asyncio.Semaphore(max_concurrent=5)`
 > is created per batch by `run_variation_batch` (see [Parallel
-> variations](#parallel-variations)). It composes with — and is independent
+> variations](#parallel-variations-tools_parallelpy)). It composes with — and is independent
 > of — these provider/principal limiters.
+
+## Concurrency and timeouts
+
+**Parallel tool calls are bounded only by the limiters above.** Slow responses
+come from provider latency, not from a server-wide lock. The other bounds:
+
+| Bound | Default | Code | Effect |
+|---|---|---|---|
+| Provider request | `BYTEPLUS_REQUEST_TIMEOUT_MS=600000` (10 min), connect `BYTEPLUS_CONNECT_TIMEOUT_MS=10000` | `config/env.py` | Per HTTP call to a provider; timeouts are classified in [Error taxonomy](#error-taxonomy) |
+| HTTP graceful shutdown | equals `BYTEPLUS_REQUEST_TIMEOUT_MS` | `__main__.py` (`timeout_graceful_shutdown`) | In-flight HTTP requests get up to one provider timeout to finish on shutdown |
+| SQLite lock wait | `busy_timeout=5000` ms | `runtime.py::_open_sqlite_connection` | A blocked writer waits up to 5 s in its worker thread, never on the event loop |
+| HTTP request body | `MCP_HTTP_MAX_BODY_BYTES=314572800` (300 MiB) | `config/env.py` | A value below the 200 MiB video limit × 4/3 (Base64) logs `http_body_limit_below_media_upload_max` at startup |
+| Variation batch | `variation_batch_deadline(...)` | `tools/_parallel.py` | See [Parallel variations](#parallel-variations-tools_parallelpy) |
+
+- **A client's foreground deadline is not a server timeout.** Generation,
+  understanding, transcription and upload tools use task mode `required`, so
+  they run in the background worker and a foreground call is rejected before
+  the provider is called. See
+  [SPEC_BACKGROUND_JOBS.md](../specs/SPEC_BACKGROUND_JOBS.md) and
+  [troubleshooting](troubleshooting.md#client-timeouts-vs-provider-latency).
+- **Large media should not travel inside JSON-RPC.** Use `media_upload` with a
+  file path (stdio) or the presign and direct-upload path; the body limit only
+  bounds inlined Base64.
 
 ## Artifact persistence single-flight
 
@@ -133,28 +156,50 @@ The daily window is the UTC calendar date, scoped per `(principal_id, tenant_id)
 
 ### Cost estimation (`tools/_cost.py`)
 
-The estimator used by parallel variation tools. Costs are per product and
-per variation only — there is **no per-model or per-family cost table**.
+The estimator behind the daily budget and the cost log. Image and understanding
+estimates use fresh, recognized prices from the ModelArk pricing catalog when
+available; unmatched models, unsupported units, and other products use built-in
+rates.
+
+**Live prices.** With AK/SK configured, the server loads the account's prices
+(discounts applied) from `ListModelChargeItems` in the background at startup and refreshes them
+every `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` (default 86400, 24 hours). The snapshot
+lives in an in-process price book (`providers/modelark/pricing.py`) keyed by
+catalog name, which is the configured model ID without its trailing version
+date. A snapshot older than twice the refresh interval is ignored. If a refresh
+fails, the previous snapshot is kept until it expires and the failure is logged
+as `pricing_refresh_failed`. The `cost_estimate` log line carries
+`price_source` (`live` or `builtin`).
+The refresher uses the server's resolved settings for credentials, endpoint,
+region, model bindings, timeouts, and snapshot freshness, including when the
+server was constructed with explicit settings instead of environment defaults.
+
+**Built-in rates** (used when there is no fresh price for the model):
 
 | Constant | Value |
 |---|---|
 | `COST_PER_IMAGE` | `0.03` USD |
 | `COST_PER_AUDIO_SECOND` | `0.0031` USD |
-| `COST_PER_VIDEO_TASK` | `0.07` USD |
+| `COST_PER_VIDEO_TASK` | `0.07` USD (`0.35` for Seedance 2.5) |
+| `COST_PER_STT_SECOND` | `0.0006` USD |
+| `COST_UNDERSTANDING_INPUT_PER_MTOK` / `_OUTPUT_PER_MTOK` | `0.50` / `3.00` USD |
+| `COST_PER_3D_TASK_HYPER3D` / `_HITEM3D` | `0.25` / `1.0` USD |
 | `DEFAULT_MAX_CONCURRENT` | `5` |
 
-`estimate_cost(product, variations, duration_seconds=0.0)`:
+`estimate_cost(product, variations, ..., model_id=None)`:
 
 | `product` | Formula |
 |---|---|
-| `"image"` | `round(variations * 0.03, 2)` |
+| `"image"` | Live: `variations * ToICompletion` price per piece. Built-in: `variations * 0.03`. Rounded to 4 decimals |
+| `"understanding"` | Live: `InferencePrompt` and `InferenceCompletion` per-K-token prices scaled to millions of tokens. Built-in: the per-Mtok constants. Uses `prompt_tokens` and `max_tokens` |
 | `"audio"` | `round(variations * max(duration_seconds, 10) * 0.0031, 2)` — **floor of 10 seconds per variation** |
-| `"video"` | `round(variations * 0.07, 2)` |
+| `"video"` | `round(variations * 0.07, 2)` (Seedance 2.5 uses `0.35`); live video prices are token-based and not yet used |
+| `"3d"` | Per-task built-in rate by family; live prices are not yet used |
+| `"stt"` | Built-in per-second rate with a 10 second floor |
 | (any other) | `0.0` |
 
-> Note: `SeedreamFamily` (`pro`/`lite`/`4x`) and `SeedanceFamily`
-> (`standard`/`fast`/`mini`) are model-binding constructs defined in
-> `config/env.py`, **not** cost tiers. They do not affect the estimate.
+> Live prices are looked up by model ID. Built-in video estimates retain the
+> selected model family's rate, including Seedance 2.5.
 
 ## Provider task ownership (`SQLiteTaskOwnershipStore`)
 
@@ -319,7 +364,8 @@ submit failures stay ambiguous.
 
 Re-exports `DEFAULT_MAX_CONCURRENT = 5`.
 
-- **`generate_seeds(base_seed, count)`** — `None` → provider-randomized (seed
+- **`generate_seeds(...)`** — derives Seedream variation seeds from
+  the request's `seed` (the base seed): `None` → provider-randomized (seed
   not recorded); `-1` → per-variation `secrets.randbelow(2**31)` (recorded);
   `N` → deterministic `(N + i) % 2**31`.
 - **`resolve_prompts(base_prompt, variation_prompts, count)`** — uses

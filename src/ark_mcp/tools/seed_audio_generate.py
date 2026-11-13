@@ -10,24 +10,25 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Annotated, Any, Literal
 from uuid import uuid4
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, model_validator
 
+from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.media import AudioReference, ReferenceImageInput
-from ark_mcp.domain.models import Subtitle
+from ark_mcp.domain.models import Subtitle, VariationError, VariationResult, VariationSummary
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.tools._asset_shared import resolve_asset_references
-from ark_mcp.tools._cost import log_cost_estimate
+from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._local_export import (
     local_export,
@@ -37,12 +38,21 @@ from ark_mcp.tools._local_export import (
 from ark_mcp.tools._local_export import (
     needs_persist as _needs_persist,
 )
-from ark_mcp.tools._persistence import persist_base64
+from ark_mcp.tools._parallel import (
+    VariationProgress,
+    resolve_prompts,
+    run_variation_batch,
+    variation_batch_deadline,
+)
+from ark_mcp.tools._persistence import persist_base64, persistence_variation_error, provider_url_ref
 from ark_mcp.tools._task_execution import context_log
 
 # ---------------------------------------------------------------------------
 # Input / Output models
 # ---------------------------------------------------------------------------
+
+
+MAX_VARIATIONS = 5
 
 
 class AudioOutputOptions(BaseModel):
@@ -86,11 +96,14 @@ class AudioWatermarkOptions(BaseModel):
 class SeedAudioGenerateInput(BaseModel):
     """Input model for ``seed_audio_generate``."""
 
-    text_prompt: str = Field(
-        ...,
+    text_prompt: str | None = Field(
+        None,
         min_length=1,
         max_length=3000,
-        description="Text describing the audio to generate (up to 3,000 characters).",
+        description=(
+            "Text describing the audio to generate (up to 3,000 characters). Required unless "
+            "variation_prompts is set."
+        ),
     )
     audio_references: list[AudioReference] = Field(
         default_factory=list,
@@ -107,11 +120,33 @@ class SeedAudioGenerateInput(BaseModel):
     watermark: AudioWatermarkOptions | None = Field(
         None, description="Optional AIGC watermark settings."
     )
-    persist: bool = Field(
-        True, description="Whether to persist the generated audio as a durable MCP resource."
+    variations: int = Field(
+        1,
+        ge=1,
+        le=MAX_VARIATIONS,
+        description=(
+            "Parallel generations (1-5). Audio has no seed, so results differ by sampling; "
+            "failures are reported per variation."
+        ),
     )
-    output_path: str | None = output_path_field("the generated audio")
+    variation_prompts: list[Annotated[str, Field(min_length=1, max_length=3000)]] | None = Field(
+        None,
+        description="One prompt per variation, overriding text_prompt. Must have exactly `variations` entries.",
+    )
+    persist: bool = Field(True, description="Persist the audio as a durable MCP resource.")
+    output_path: str | None = output_path_field(
+        "the generated audio", directory_needed="when variations > 1"
+    )
     overwrite: bool = overwrite_field()
+
+    @model_validator(mode="after")
+    def validate_prompts(self) -> SeedAudioGenerateInput:
+        """Require a prompt and one variation prompt per variation."""
+        if self.text_prompt is None and not self.variation_prompts:
+            raise ValueError("Either text_prompt or variation_prompts must be provided.")
+        if self.variation_prompts is not None and len(self.variation_prompts) != self.variations:
+            raise ValueError(f"variation_prompts must have exactly {self.variations} entries.")
+        return self
 
     @model_validator(mode="after")
     def validate_no_media_mixing(self) -> SeedAudioGenerateInput:
@@ -133,13 +168,19 @@ class SeedAudioGenerateOutput(BaseModel):
     model: Literal["seed-audio-1.0"] = Field(
         "seed-audio-1.0", description="Model used for generation."
     )
-    duration_seconds: float = Field(..., description="Actual audio duration in seconds.")
-    billing_duration_seconds: float = Field(
-        ...,
-        description="Billing-relevant audio duration in seconds (may differ from actual duration).",
+    duration_seconds: float | None = Field(
+        None, description="Actual audio duration in seconds; null when variations > 1."
     )
-    artifact: ArtifactRef = Field(
-        ..., description="Durable artifact reference for the generated audio."
+    billing_duration_seconds: float | None = Field(
+        None,
+        description=(
+            "Billing-relevant audio duration in seconds (may differ from actual duration); null "
+            "when variations > 1."
+        ),
+    )
+    artifact: ArtifactRef | None = Field(
+        None,
+        description="Durable artifact reference for the generated audio; null when variations > 1.",
     )
     subtitle: Subtitle | None = Field(
         None, description="Timestamped subtitle data, if requested and available."
@@ -150,6 +191,10 @@ class SeedAudioGenerateOutput(BaseModel):
     )
     source_url: str | None = Field(
         None, description="Provider HTTP URL (2-hour expiry) for direct download."
+    )
+    summary: VariationSummary | None = Field(
+        None,
+        description="Per-variation artifacts and errors when variations > 1; null otherwise.",
     )
 
 
@@ -181,17 +226,16 @@ def _parse_duration_hint(text_prompt: str, *, default: float = 15.0) -> float:
 # ---------------------------------------------------------------------------
 
 
-@local_export("artifact", precondition=_needs_persist)
+@local_export(
+    "artifact", "summary", require_dir=lambda i: i.variations > 1, precondition=_needs_persist
+)
 async def seed_audio_generate(
     input: SeedAudioGenerateInput, ctx: Context
 ) -> SeedAudioGenerateOutput | ToolResult:
-    """Generate full-scene audio through Seed Speech.
+    """Generate full-scene audio with Seed Speech (text prompt, optional voice-cloning audio or image reference).
 
-    Accepts a text prompt (up to 3,000 characters) and optional audio or
-    image references for voice cloning and scene control. Returns a durable
-    artifact reference that survives the 2-hour provider URL expiry. Requires
-    MCP task-augmented execution because generation and persistence can exceed
-    foreground client deadlines.
+    Returns a durable artifact (provider URLs expire after 2 hours). variations (up to 5)
+    run in parallel and return a summary. Run through ark_job_submit.
     """
     await context_log(ctx, "info", "Starting Seed Audio generation")
     await ctx.report_progress(progress=10, total=100)
@@ -219,6 +263,12 @@ async def seed_audio_generate(
     )
     image_ref_data = image_refs[0] if image_refs else None
 
+    if input.variations > 1:
+        summary = await _generate_variations(input, ctx, audio_refs_data, image_ref_data)
+        await ctx.report_progress(progress=100, total=100)
+        return SeedAudioGenerateOutput(summary=summary)
+
+    text_prompt = resolve_prompts(input.text_prompt, input.variation_prompts, input.variations)[0]
     service = SeedAudioService()
     await ctx.report_progress(progress=30, total=100)
 
@@ -236,7 +286,7 @@ async def seed_audio_generate(
         watermark_dict = input.watermark.model_dump(exclude_none=True)
 
     request = SeedAudioService.build_request(
-        text_prompt=input.text_prompt,
+        text_prompt=text_prompt,
         references=references if references else None,
         audio_config=audio_config_dict,
         watermark=watermark_dict,
@@ -244,7 +294,7 @@ async def seed_audio_generate(
 
     await ctx.report_progress(progress=50, total=100)
 
-    duration_hint = _parse_duration_hint(input.text_prompt, default=15.0)
+    duration_hint = _parse_duration_hint(text_prompt, default=15.0)
     estimated_cost = log_cost_estimate(
         product="audio", variations=1, duration_seconds=duration_hint
     )
@@ -318,6 +368,122 @@ async def seed_audio_generate(
         provider_log_id=log_id,
         source_url=source_url,
     )
+
+
+async def _generate_variations(
+    input: SeedAudioGenerateInput,
+    ctx: Context,
+    audio_refs_data: list[dict[str, Any]] | None,
+    image_ref_data: dict[str, Any] | None,
+) -> VariationSummary:
+    log_cost_estimate(product="audio", variations=input.variations, duration_seconds=15.0)
+    prompts = resolve_prompts(input.text_prompt, input.variation_prompts, input.variations)
+    store = get_runtime(ctx).artifact_store
+    owner = get_principal(ctx)
+    audio_config_dict: dict[str, Any] | None = (
+        input.output.model_dump(exclude_none=True) if input.output else None
+    )
+    watermark_dict: dict[str, Any] | None = (
+        input.watermark.model_dump(exclude_none=True) if input.watermark else None
+    )
+    service = SeedAudioService()
+
+    async def _generate_single(idx: int, progress: VariationProgress) -> VariationResult:
+        try:
+            client_request_id = str(uuid4())
+            references = SeedAudioService.build_references(
+                audio_refs=audio_refs_data,
+                image_ref=image_ref_data,
+            )
+
+            request = SeedAudioService.build_request(
+                text_prompt=prompts[idx],
+                references=references if references else None,
+                audio_config=audio_config_dict,
+                watermark=watermark_dict,
+            )
+
+            async with billed_provider_slot(
+                ctx,
+                provider="seed-speech",
+                product="audio",
+                estimated_cost_usd=estimate_cost(
+                    product="audio", variations=1, duration_seconds=15.0
+                ),
+            ):
+                progress.phase = "generating"
+                response, log_id = await call_with_retry(
+                    lambda: service.generate(request, request_id=client_request_id)
+                )
+
+            artifact: ArtifactRef | None = None
+            source_expiry = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
+
+            if input.persist and response.audio:
+                progress.phase = "persisting"
+                artifact = await persist_base64(
+                    store,
+                    data=response.audio,
+                    media_type=MediaType.AUDIO,
+                    mime_type="audio/wav",
+                    source_expires_at=source_expiry,
+                    auth=owner,
+                    provider_url=response.url,
+                )
+            elif response.url:
+                artifact = provider_url_ref(
+                    url=response.url,
+                    media_type=MediaType.AUDIO,
+                    mime_type="audio/wav",
+                    source_expires_at=source_expiry,
+                )
+
+            return VariationResult(
+                index=idx,
+                artifact=artifact,
+                request_id=client_request_id,
+                provider_log_id=log_id,
+            )
+        except ProviderError as exc:
+            return VariationResult(
+                index=idx,
+                error=VariationError(
+                    code=exc.code or "PROVIDER_ERROR",
+                    message=exc.message,
+                    request_id=exc.request_id,
+                    retryable=exc.retryable,
+                    ambiguous_completion=bool(exc.ambiguous_completion),
+                ),
+                request_id=exc.request_id,
+            )
+        except ArtifactPersistenceError as exc:
+            return VariationResult(index=idx, error=persistence_variation_error(exc))
+        except Exception as exc:
+            return VariationResult(
+                index=idx,
+                error=VariationError(code="UNEXPECTED_ERROR", message=str(exc)),
+            )
+
+    try:
+        summary = await run_variation_batch(
+            count=input.variations,
+            factory=_generate_single,
+            batch_deadline=variation_batch_deadline(
+                input.variations, get_settings(), persists=True
+            ),
+            max_concurrent=DEFAULT_MAX_CONCURRENT,
+        )
+    finally:
+        await service.close()
+
+    log_info(
+        "seed_audio_variations_complete",
+        total=summary.total,
+        succeeded=summary.succeeded,
+        failed=summary.failed,
+    )
+
+    return summary
 
 
 # Tool annotation constants — camelCase per MCP specification.

@@ -77,7 +77,11 @@ async def _client_roots(ctx: Context | None) -> list[Path]:
     """Return the client's ``file://`` MCP roots, or [] when unavailable."""
     if ctx is None:
         return []
-    session = getattr(ctx, "session", None)
+    try:
+        session = ctx.session
+    except (AttributeError, RuntimeError):
+        log_debug("mcp_roots_unavailable", error="no_session")
+        return []
     list_roots = getattr(session, "list_roots", None)
     if list_roots is None:
         return []

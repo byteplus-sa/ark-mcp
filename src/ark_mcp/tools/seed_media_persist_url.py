@@ -28,50 +28,36 @@ class SeedMediaPersistUrlInput(BaseModel):
         ...,
         min_length=1,
         max_length=8192,
-        description=(
-            "Temporary HTTPS provider URL to persist, typically the uri of an ArtifactRef whose "
-            "id is 'provider-url'. Only trusted BytePlus provider hosts are accepted."
-        ),
+        description="Provider output URL, usually the uri of an ArtifactRef with id 'provider-url'. BytePlus hosts only.",
     )
     media_type: Literal["image", "audio", "video", "three_d"] = Field(
-        ..., description="Logical media type of the output: image, audio, video, or three_d."
+        ..., description="Media type of the output."
     )
     mime_type: str = Field(
         ...,
         min_length=3,
         max_length=128,
-        description=(
-            "Expected MIME type (e.g. image/jpeg, video/mp4, audio/wav, model/gltf-binary). "
-            "A specific Content-Type returned by the provider takes precedence."
-        ),
+        description="Expected MIME type (e.g. video/mp4); a specific provider Content-Type takes precedence.",
     )
     source_expires_at: str | None = Field(
         None,
-        description=(
-            "Optional ISO-8601 expiry of the provider URL, copied from the original "
-            "ArtifactRef.source_expires_at, recorded on the new artifact."
-        ),
+        description="ISO-8601 URL expiry, from ArtifactRef.source_expires_at; recorded on the new artifact.",
     )
 
 
 class SeedMediaPersistUrlOutput(BaseModel):
     """Output model for ``seed_media_persist_url``."""
 
-    artifact: ArtifactRef = Field(
-        ..., description="The durable artifact now stored for the provider output."
-    )
+    artifact: ArtifactRef = Field(..., description="The durable artifact.")
 
 
 async def seed_media_persist_url(
     input: SeedMediaPersistUrlInput, ctx: Context
 ) -> SeedMediaPersistUrlOutput:
-    """Persist a temporary provider output URL as a durable media artifact.
+    """Persist a provider output URL as a durable artifact and return its ArtifactRef.
 
-    Use this when a generation result returned an artifact with id
-    'provider-url' and a persistence_error, to store the output before the
-    provider URL expires (2h for audio, 24h for image/video/3D). Only trusted
-    BytePlus provider hosts are downloaded; any other URL is rejected. Returns
-    the new durable ArtifactRef.
+    Use when a generation result has an artifact with id 'provider-url' and a persistence_error,
+    before the URL expires (2h audio, 24h image/video/3D). Non-BytePlus hosts are rejected.
     """
     await context_log(ctx, "info", "Persisting provider output URL")
     runtime = get_runtime(ctx)

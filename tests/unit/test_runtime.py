@@ -168,7 +168,7 @@ async def test_task_ownership_is_principal_and_tenant_scoped(tmp_path: Path) -> 
     await store.record("modelark", "task-1", alice)
 
     await store.require_owner("modelark", "task-1", alice)
-    assert await store.list_task_ids("modelark", alice) == {"task-1"}
+    assert await _owned_ids(store, "modelark", alice) == ["task-1"]
 
     with pytest.raises(PermissionError):
         await store.require_owner(
@@ -197,8 +197,8 @@ async def test_task_ownership_and_artifacts_are_provider_scoped(tmp_path: Path) 
 
     await store.require_owner("modelark", "shared-id", alice)
     await store.require_owner("vod-mediakit", "shared-id", bob)
-    assert await store.list_task_ids("modelark", alice) == {"shared-id"}
-    assert await store.list_task_ids("vod-mediakit", alice) == set()
+    assert await _owned_ids(store, "modelark", alice) == ["shared-id"]
+    assert await _owned_ids(store, "vod-mediakit", alice) == []
     modelark = await cache.get("modelark", "shared-id")
     mediakit = await cache.get("vod-mediakit", "shared-id")
     assert modelark is not None and modelark["video"] is not None
@@ -251,7 +251,7 @@ async def test_legacy_runtime_tables_migrate_to_modelark_provider(tmp_path: Path
     cache = SQLiteTaskArtifactCache(database)
     owner = AuthContext(principal_id="alice", tenant_id="tenant-a")
     await store.require_owner("modelark", "legacy-task", owner)
-    assert await store.list_task_ids("modelark", owner) == {"legacy-task"}
+    assert await _owned_ids(store, "modelark", owner) == ["legacy-task"]
     migrated = await cache.get("modelark", "legacy-task")
     assert migrated is not None and migrated["video"] is not None
     assert migrated["video"].id == "legacy"
@@ -554,7 +554,7 @@ class TestPruneMethods:
         pruned = await store.prune(30)
 
         assert pruned == 1
-        assert await store.list_task_ids("modelark", owner) == {"fresh-task"}
+        assert await _owned_ids(store, "modelark", owner) == ["fresh-task"]
         await store.close()
 
     async def test_task_artifact_cache_prune_expired_deletes_only_expired(
@@ -877,3 +877,62 @@ async def test_task_claim_is_atomic_and_survives_reopening(tmp_path: Path) -> No
         await reopened.require_owner("mcp-execution", "task-one", owner)
     finally:
         await reopened.close()
+
+
+async def _owned_ids(
+    store: SQLiteTaskOwnershipStore, provider: str, owner: AuthContext
+) -> list[str]:
+    since = datetime.now(UTC) - timedelta(days=3650)
+    rows = await store.list_owned_tasks(provider, owner, since=since, before=None, limit=1000)
+    return [row.task_id for row in rows]
+
+
+async def test_owned_tasks_are_listed_newest_first_with_keyset_cursor(tmp_path: Path) -> None:
+    store = SQLiteTaskOwnershipStore(tmp_path / "runtime.sqlite3")
+    alice = AuthContext(principal_id="alice", tenant_id="tenant-a")
+    for task_id in ("t-1", "t-2", "t-3", "t-4"):
+        await store.record("modelark", task_id, alice)
+    await store.record("modelark", "bob-1", AuthContext(principal_id="bob", tenant_id="tenant-a"))
+    since = datetime.now(UTC) - timedelta(days=1)
+
+    first = await store.list_owned_tasks("modelark", alice, since=since, before=None, limit=2)
+    assert [row.task_id for row in first] == ["t-4", "t-3"]
+    cursor = (first[-1].created_at, first[-1].task_id)
+    second = await store.list_owned_tasks("modelark", alice, since=since, before=cursor, limit=2)
+    assert [row.task_id for row in second] == ["t-2", "t-1"]
+    last = (second[-1].created_at, second[-1].task_id)
+    assert await store.list_owned_tasks("modelark", alice, since=since, before=last, limit=2) == []
+    await store.close()
+
+
+async def test_owned_tasks_respect_since_and_tie_break_on_task_id(tmp_path: Path) -> None:
+    store = SQLiteTaskOwnershipStore(tmp_path / "runtime.sqlite3")
+    alice = AuthContext(principal_id="alice", tenant_id="tenant-a")
+    same_time = datetime(2026, 10, 17, 12, 0, tzinfo=UTC).isoformat(timespec="microseconds")
+    old = datetime(2026, 9, 1, tzinfo=UTC).isoformat(timespec="microseconds")
+    store._connection.executemany(
+        "INSERT INTO task_ownership VALUES (?, ?, ?, ?, ?)",
+        [
+            ("modelark", "a", "alice", "tenant-a", same_time),
+            ("modelark", "b", "alice", "tenant-a", same_time),
+            ("modelark", "old", "alice", "tenant-a", old),
+        ],
+    )
+    since = datetime(2026, 10, 1, tzinfo=UTC)
+    rows = await store.list_owned_tasks("modelark", alice, since=since, before=None, limit=10)
+    assert [row.task_id for row in rows] == ["b", "a"]
+    cursor = (rows[0].created_at, rows[0].task_id)
+    after_b = await store.list_owned_tasks("modelark", alice, since=since, before=cursor, limit=10)
+    assert [row.task_id for row in after_b] == ["a"]
+    await store.close()
+
+
+async def test_ownership_index_exists_and_reopening_is_idempotent(tmp_path: Path) -> None:
+    database = tmp_path / "runtime.sqlite3"
+    SQLiteTaskOwnershipStore(database)._connection.close()
+    store = SQLiteTaskOwnershipStore(database)
+    indexes = {
+        row[1] for row in store._connection.execute("PRAGMA index_list(task_ownership)").fetchall()
+    }
+    assert "task_ownership_owner_created" in indexes
+    await store.close()

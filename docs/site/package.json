@@ -1,0 +1,30 @@
+{
+  "name": "ark-mcp-docs",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "prepare:docs": "node scripts/prepare-docs.mjs",
+    "dev": "npm run prepare:docs && astro dev",
+    "build": "npm run prepare:docs && astro build",
+    "preview": "astro preview",
+    "check": "npm run prepare:docs && astro check",
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/markdown-remark": "^7.3.6",
+    "@astrojs/starlight": "^0.42.10",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "astro": "^7.4.8",
+    "astro-mermaid": "^2.2.0",
+    "mermaid": "^12.3.0",
+    "prettier": "^3.9.10",
+    "starlight-links-validator": "^0.27.0",
+    "typescript": "^6.0.3"
+  }
+}

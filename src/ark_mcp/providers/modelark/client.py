@@ -50,6 +50,16 @@ class ModelArkGateway(BaseHttpGateway):
         """POST to ModelArk and return the raw response."""
         return await self._request("POST", path, json=json_body)
 
+    async def post_multipart(self, path: str, fields: dict[str, str]) -> httpx.Response:
+        """POST ``multipart/form-data`` text fields (the Files API rejects other encodings)."""
+        headers = {key: value for key, value in self._headers().items() if key != "Content-Type"}
+        return await self._request(
+            "POST",
+            path,
+            headers=headers,
+            files={name: (None, value) for name, value in fields.items()},
+        )
+
     async def get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
         """GET from ModelArk and return the raw response."""
         return await self._request("GET", path, params=params)
@@ -80,7 +90,13 @@ class ModelArkGateway(BaseHttpGateway):
         message = error_obj.get("message", str(body)) if isinstance(error_obj, dict) else str(body)
 
         retryable = status == 429 or status >= 500
-        mutation = operation in {"generate_image", "create_task", "delete_task", "chat_completion"}
+        mutation = operation in {
+            "generate_image",
+            "create_task",
+            "delete_task",
+            "chat_completion",
+            "upload_file",
+        }
         retry_after = response.headers.get("Retry-After")
         try:
             retry_after_seconds = float(retry_after) if retry_after is not None else None

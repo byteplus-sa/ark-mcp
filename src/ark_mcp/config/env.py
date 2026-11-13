@@ -68,6 +68,7 @@ def _warn_if_http_body_limit_blocks_media_upload(body_bytes: int) -> None:
 
 
 class SeedreamFamily(StrEnum):
+    SEEDREAM_5_5 = "seedream_5_5"
     PRO = "pro"
     LITE = "lite"
     V4X = "4x"
@@ -78,7 +79,10 @@ class SeedanceFamily(StrEnum):
     FAST = "fast"
     MINI = "mini"
     SEEDANCE_2_5 = "seedance_2_5"
-    SEEDANCE_2_5_PREMIUM = "seedance_2_5_premium"
+    SEEDANCE_2_5_FLASH = "seedance_2_5_flash"
+
+
+SEEDANCE_2_5_FLASH_MODEL_ID = "dreamina-seedance-2-5-flash-261115"
 
 
 class SeedUnderstandingFamily(StrEnum):
@@ -152,6 +156,12 @@ class Settings(BaseSettings):
         description="BytePlus VOD AI MediaKit Bearer API key.",
     )
 
+    cv_api_key: str = Field(
+        default="",
+        validation_alias="BYTEPLUS_CV_API_KEY",
+        description="BytePlus Vision AI Bearer API key for OmniHuman.",
+    )
+
     # --- Provider base URLs --------------------------------------------------
 
     modelark_base_url: str = Field(
@@ -166,6 +176,28 @@ class Settings(BaseSettings):
         default="https://mediakit.ap-southeast-1.bytepluses.com/api/v1",
         validation_alias="BYTEPLUS_VOD_MEDIAKIT_BASE_URL",
         description="BytePlus VOD AI MediaKit HTTPS API base URL.",
+    )
+    cv_base_url: str = Field(
+        default="https://openapi.cv.bytepluses.com",
+        validation_alias="BYTEPLUS_CV_BASE_URL",
+        description="BytePlus Vision AI HTTPS API base URL.",
+    )
+
+    # --- OmniHuman feature flag ----------------------------------------------
+
+    omnihuman_enabled: bool = Field(
+        default=False,
+        validation_alias="BYTEPLUS_OMNIHUMAN_ENABLED",
+        description=(
+            "Feature flag for OmniHuman 2.0 tools. Disabled by default. When false, no "
+            "OmniHuman tools are registered even if BYTEPLUS_CV_API_KEY is configured."
+        ),
+    )
+    omnihuman_req_key: str = Field(
+        default="realman_avatar_picture_omni20_cv",
+        min_length=1,
+        validation_alias="BYTEPLUS_OMNIHUMAN_REQ_KEY",
+        description="Vision AI service identifier sent as req_key for OmniHuman requests.",
     )
 
     # --- ModelArk OpenAPI (private asset library, AK/SK signed) -------------
@@ -199,6 +231,16 @@ class Settings(BaseSettings):
         validation_alias="BYTEPLUS_MODELARK_REGION",
         description="Region used in the OpenAPI signing credential scope.",
     )
+    modelark_pricing_refresh_seconds: int = Field(
+        default=86400,
+        ge=0,
+        validation_alias="BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS",
+        description=(
+            "Seconds between live price refreshes from the ModelArk pricing catalog "
+            "(requires AK/SK). Prices older than twice this interval are ignored and cost "
+            "estimates fall back to built-in rates. 0 disables live pricing."
+        ),
+    )
     modelark_project_name: str = Field(
         default="default",
         min_length=1,
@@ -211,7 +253,7 @@ class Settings(BaseSettings):
     modelark_assets_allow_delete: bool = Field(
         default=False,
         validation_alias="BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE",
-        description="Register the irreversible ark_asset_delete and ark_asset_group_delete tools.",
+        description="Register the irreversible ark_asset_delete tool (assets and groups).",
     )
     modelark_asset_create_qpm: int = Field(
         default=3,
@@ -285,24 +327,24 @@ class Settings(BaseSettings):
         ),
     )
     seedream_default_model: str = Field(
-        default="dola-seedream-5-0-pro-260628",
+        default="dola-seedream-5-5-261028",
         validation_alias="SEEDREAM_DEFAULT_MODEL",
     )
     seedance_default_model: str = Field(
-        default="dreamina-seedance-2-0-260128",
+        default="dreamina-seedance-2-5-260628",
         validation_alias="SEEDANCE_DEFAULT_MODEL",
     )
     seedream_model_family: str = Field(
         default="",
         validation_alias="SEEDREAM_MODEL_FAMILY",
-        description="Explicit family: 'pro', 'lite', or '4x'. Empty = infer from model ID.",
+        description="Explicit family: 'seedream_5_5', 'pro', 'lite', or '4x'. Empty = infer from model ID.",
     )
     seedance_model_family: str = Field(
         default="",
         validation_alias="SEEDANCE_MODEL_FAMILY",
         description=(
             "Explicit family: 'standard', 'fast', 'mini', 'seedance_2_5', or "
-            "'seedance_2_5_premium'. Empty = infer."
+            "'seedance_2_5_flash'. Empty = infer."
         ),
     )
     seedream_model_bindings: list[ImageModelBinding] = Field(
@@ -333,27 +375,6 @@ class Settings(BaseSettings):
         description=(
             "ModelArk model ID used by seed_audio_understand. Must accept Chat "
             "Completions input_audio parts with deep thinking."
-        ),
-    )
-
-    # --- Seedance 2.5 Premium feature flag ----------------------------------
-
-    seedance_2_5_premium_enabled: bool = Field(
-        default=False,
-        validation_alias="BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED",
-        description=(
-            "Feature flag for Seedance 2.5 Premium (4K), a whitelist-only model. "
-            "Disabled by default. When false, the Premium tools are not registered "
-            "and Premium model bindings are rejected."
-        ),
-    )
-    seedance_2_5_premium_model: str = Field(
-        default="dreamina-seedance-2-5-premium-260915",
-        min_length=1,
-        validation_alias="SEEDANCE_2_5_PREMIUM_MODEL",
-        description=(
-            "Seedance 2.5 Premium model ID bound automatically when the Premium "
-            "flag is on and SEEDANCE_MODEL_BINDINGS has no seedance_2_5_premium binding."
         ),
     )
 
@@ -622,7 +643,7 @@ class Settings(BaseSettings):
         default=500 * 1024 * 1024,
         ge=1,
         validation_alias="MEDIA_UPLOAD_BATCH_MAX_BYTES",
-        description="Maximum total decoded bytes accepted by one media_upload_batch call.",
+        description="Maximum total decoded bytes accepted by one media_upload call.",
     )
 
     # --- Runtime policy -----------------------------------------------------
@@ -676,11 +697,6 @@ class Settings(BaseSettings):
         return bool(self.modelark_api_key)
 
     @property
-    def has_seedance_2_5_premium(self) -> bool:
-        """Whether whitelist-only Seedance 2.5 Premium is enabled (separate flag, same key)."""
-        return self.seedance_2_5_premium_enabled and bool(self.modelark_api_key)
-
-    @property
     def has_seed3d(self) -> bool:
         """Whether ModelArk 3D generation is enabled (separate flag, same key)."""
         return self.seed3d_enabled and bool(self.modelark_api_key)
@@ -694,6 +710,11 @@ class Settings(BaseSettings):
     def has_vod_mediakit(self) -> bool:
         """Whether BytePlus VOD AI MediaKit credentials are configured."""
         return bool(self.vod_mediakit_api_key)
+
+    @property
+    def has_omnihuman(self) -> bool:
+        """Whether OmniHuman 2.0 is enabled and a Vision AI API key is configured."""
+        return self.omnihuman_enabled and bool(self.cv_api_key)
 
     @property
     def has_modelark_openapi(self) -> bool:
@@ -769,6 +790,7 @@ class Settings(BaseSettings):
         "seed_audio_base_url",
         "seed_speech_asr_base_url",
         "vod_mediakit_base_url",
+        "cv_base_url",
         "modelark_openapi_base_url",
     )
     @classmethod
@@ -781,6 +803,7 @@ class Settings(BaseSettings):
                 "seed_audio_base_url": "BYTEPLUS_SEED_AUDIO_BASE_URL",
                 "seed_speech_asr_base_url": "SEED_SPEECH_ASR_BASE_URL",
                 "vod_mediakit_base_url": "BYTEPLUS_VOD_MEDIAKIT_BASE_URL",
+                "cv_base_url": "BYTEPLUS_CV_BASE_URL",
             }
             variable = env_var_map.get(info.field_name or "", "BYTEPLUS_PROVIDER_BASE_URL")
             raise ValueError(f"{variable} must use HTTPS and include a host")
@@ -794,7 +817,9 @@ class Settings(BaseSettings):
         if not self.seedream_model_bindings:
             family = self.seedream_model_family.strip().lower()
             if not family:
-                if self.seedream_default_model == "dola-seedream-5-0-pro-260628":
+                if self.seedream_default_model == "dola-seedream-5-5-261028":
+                    family = SeedreamFamily.SEEDREAM_5_5
+                elif self.seedream_default_model == "dola-seedream-5-0-pro-260628":
                     family = SeedreamFamily.PRO
                 else:
                     raise ValueError(
@@ -815,8 +840,8 @@ class Settings(BaseSettings):
                     family = SeedanceFamily.STANDARD
                 elif self.seedance_default_model == "dreamina-seedance-2-5-260628":
                     family = SeedanceFamily.SEEDANCE_2_5
-                elif self.seedance_default_model == self.seedance_2_5_premium_model:
-                    family = SeedanceFamily.SEEDANCE_2_5_PREMIUM
+                elif self.seedance_default_model == SEEDANCE_2_5_FLASH_MODEL_ID:
+                    family = SeedanceFamily.SEEDANCE_2_5_FLASH
                 else:
                     raise ValueError(
                         "A custom SEEDANCE_DEFAULT_MODEL requires "
@@ -828,33 +853,13 @@ class Settings(BaseSettings):
                     family=SeedanceFamily(family),
                 )
             ]
-
-        premium_bound = any(
-            binding.family is SeedanceFamily.SEEDANCE_2_5_PREMIUM
-            for binding in self.seedance_model_bindings
-        )
-        if premium_bound and not self.seedance_2_5_premium_enabled:
-            raise ValueError(
-                "Seedance 2.5 Premium is whitelist-only; set "
-                "BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true to bind a "
-                "seedance_2_5_premium model."
-            )
-        if self.seedance_2_5_premium_enabled and not premium_bound:
-            if any(
-                binding.model_id == self.seedance_2_5_premium_model
-                for binding in self.seedance_model_bindings
-            ):
-                raise ValueError(
-                    f"SEEDANCE_2_5_PREMIUM_MODEL '{self.seedance_2_5_premium_model}' is "
-                    "already bound to a non-Premium family."
+            if self.seedance_default_model != SEEDANCE_2_5_FLASH_MODEL_ID:
+                self.seedance_model_bindings.append(
+                    VideoModelBinding(
+                        model_id=SEEDANCE_2_5_FLASH_MODEL_ID,
+                        family=SeedanceFamily.SEEDANCE_2_5_FLASH,
+                    )
                 )
-            self.seedance_model_bindings = [
-                *self.seedance_model_bindings,
-                VideoModelBinding(
-                    model_id=self.seedance_2_5_premium_model,
-                    family=SeedanceFamily.SEEDANCE_2_5_PREMIUM,
-                ),
-            ]
 
         if not self.seed_understanding_model_bindings:
             family = self.seed_understanding_model_family.strip().lower()
@@ -903,7 +908,8 @@ class Settings(BaseSettings):
                 raise ValueError(f"{label} model bindings contain duplicate IDs.")
             if default_model not in ids:
                 raise ValueError(
-                    f"{label} default model '{default_model}' is missing from its bindings."
+                    f"{label} default model '{default_model}' is missing from its bindings. "
+                    f"Set the default model env var to one of the bound IDs: {ids}."
                 )
         if self.artifact_ttl_seconds <= 0:
             raise ValueError("ARTIFACT_TTL_SECONDS must be positive")

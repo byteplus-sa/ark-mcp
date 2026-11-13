@@ -10,12 +10,12 @@ from __future__ import annotations
 import pytest
 
 from ark_mcp.domain.media import MediaSource, MediaSourceKind
-from ark_mcp.tools.seedream_edit_image import (
-    EditBbox,
-    EditCoordinate,
-    SeedreamEditInput,
-    _build_edit_prompt,
+from ark_mcp.tools._seedream_shared import EditBbox, EditCoordinate, edit_prompt
+from ark_mcp.tools.seedream_generate_image import (
+    SeedreamGenerateInput,
 )
+
+_IMG = MediaSource(kind=MediaSourceKind.url, url="https://example.com/a.png")
 
 
 class TestEditCoordinate:
@@ -74,7 +74,7 @@ class TestSeedreamEditInput:
         return MediaSource(kind=MediaSourceKind.url, url="https://example.com/img.png")
 
     def test_point_edit_minimal_valid(self) -> None:
-        inp = SeedreamEditInput(
+        inp = SeedreamGenerateInput(
             prompt="replace with a crown",
             images=[self._ref_image()],
             point=EditCoordinate(x=520, y=460),
@@ -83,7 +83,7 @@ class TestSeedreamEditInput:
         assert inp.point.y == 460
 
     def test_bbox_edit_minimal_valid(self) -> None:
-        inp = SeedreamEditInput(
+        inp = SeedreamGenerateInput(
             prompt="replace with a garden",
             images=[self._ref_image()],
             bbox=EditBbox(x1=120, y1=180, x2=640, y2=760),
@@ -92,7 +92,7 @@ class TestSeedreamEditInput:
         assert inp.bbox.y1 == 180
 
     def test_point_and_bbox_together_valid(self) -> None:
-        inp = SeedreamEditInput(
+        inp = SeedreamGenerateInput(
             prompt="cross-image edit",
             images=[self._ref_image(), self._ref_image()],
             point=EditCoordinate(x=50, y=50),
@@ -101,16 +101,17 @@ class TestSeedreamEditInput:
         assert inp.point is not None
         assert inp.bbox is not None
 
-    def test_no_coordinate_rejected(self) -> None:
-        with pytest.raises(ValueError, match=r"point.*bbox.*must be provided"):
-            SeedreamEditInput(
-                prompt="edit something",
-                images=[self._ref_image()],
-            )
+    def test_images_without_coordinates_are_plain_image_to_image(self) -> None:
+        inp = SeedreamGenerateInput(prompt="make it blue", images=[_IMG])
+        assert inp.point is None and inp.bbox is None
+
+    def test_coordinates_without_images_rejected(self) -> None:
+        with pytest.raises(ValueError, match="provide images"):
+            SeedreamGenerateInput(prompt="edit", point=EditCoordinate(x=1, y=1))
 
     def test_no_images_rejected(self) -> None:
         with pytest.raises(ValueError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="edit something",
                 images=[],
                 point=EditCoordinate(x=500, y=500),
@@ -118,7 +119,7 @@ class TestSeedreamEditInput:
 
     def test_empty_prompt_rejected(self) -> None:
         with pytest.raises(ValueError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="",
                 images=[self._ref_image()],
                 point=EditCoordinate(x=500, y=500),
@@ -126,7 +127,7 @@ class TestSeedreamEditInput:
 
     def test_prompt_too_long_rejected(self) -> None:
         with pytest.raises(ValueError):
-            SeedreamEditInput(
+            SeedreamGenerateInput(
                 prompt="x" * 4001,
                 images=[self._ref_image()],
                 point=EditCoordinate(x=500, y=500),
@@ -135,7 +136,7 @@ class TestSeedreamEditInput:
 
 class TestBuildEditPrompt:
     def test_point_prompt(self) -> None:
-        result = _build_edit_prompt(
+        result = edit_prompt(
             instruction="Replace the object with a crown.",
             point=EditCoordinate(x=520, y=460),
             bbox=None,
@@ -144,7 +145,7 @@ class TestBuildEditPrompt:
         assert result.endswith("Replace the object with a crown.")
 
     def test_bbox_prompt(self) -> None:
-        result = _build_edit_prompt(
+        result = edit_prompt(
             instruction="Replace with a garden.",
             point=None,
             bbox=EditBbox(x1=120, y1=180, x2=640, y2=760),
@@ -153,7 +154,7 @@ class TestBuildEditPrompt:
         assert result.endswith("Replace with a garden.")
 
     def test_point_and_bbox_prompt(self) -> None:
-        result = _build_edit_prompt(
+        result = edit_prompt(
             instruction="Replace the object with a crown.",
             point=EditCoordinate(x=50, y=50),
             bbox=EditBbox(x1=179, y1=283, x2=796, y2=986),
@@ -163,7 +164,7 @@ class TestBuildEditPrompt:
         assert result.endswith("Replace the object with a crown.")
 
     def test_bbox_before_point_in_prompt(self) -> None:
-        result = _build_edit_prompt(
+        result = edit_prompt(
             instruction="edit",
             point=EditCoordinate(x=100, y=200),
             bbox=EditBbox(x1=10, y1=20, x2=30, y2=40),

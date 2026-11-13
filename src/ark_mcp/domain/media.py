@@ -12,9 +12,9 @@ reaching the provider.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Literal
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AnyUrl, BaseModel, Field, UrlConstraints, model_validator
 
 from ark_mcp.domain.artifacts import MediaType
 from ark_mcp.domain.assets import AssetUriError, is_asset_uri, parse_asset_uri
@@ -28,6 +28,8 @@ from ark_mcp.security.media_policy import (
     validate_video_mime,
 )
 from ark_mcp.security.url_policy import UrlValidationError, validate_url
+
+HttpsUrl = Annotated[AnyUrl, UrlConstraints(allowed_schemes=["https"])]
 
 ASSET_REFERENCE_URL_DESCRIPTION = (
     "HTTPS URL of the media, or 'asset://<asset_id>' for an Active private asset library "

@@ -19,20 +19,20 @@ class SeedMediaGetArtifactInput(BaseModel):
     artifact_id: str = Field(
         ...,
         min_length=1,
-        description="The artifact ID returned by a previous generation call.",
+        description="Artifact ID (ArtifactRef.id) from a generation result.",
     )
 
 
 class SeedMediaGetArtifactOutput(BaseModel):
     """Output model for ``seed_media_get_artifact``."""
 
-    artifact_id: str = Field(..., description="Unique artifact identifier.")
-    media_type: MediaType = Field(..., description="Logical media type: image, audio, or video.")
-    mime_type: str = Field(..., description="MIME type of the stored content (e.g. image/png).")
+    artifact_id: str = Field(..., description="Artifact identifier.")
+    media_type: MediaType = Field(..., description="image, audio, video, or three_d.")
+    mime_type: str = Field(..., description="MIME type of the stored content.")
     sha256: str = Field(..., description="SHA-256 hex digest of the stored content.")
     bytes: int = Field(..., description="Size of the stored content in bytes.")
     expires_at: str | None = Field(
-        None, description="ISO-8601 timestamp when the local artifact expires, if applicable."
+        None, description="ISO-8601 expiry of the stored artifact, if any."
     )
     data: str = Field(..., description="Base64-encoded media data.")
 
@@ -40,12 +40,10 @@ class SeedMediaGetArtifactOutput(BaseModel):
 async def seed_media_get_artifact(
     input: SeedMediaGetArtifactInput, ctx: Context
 ) -> SeedMediaGetArtifactOutput | ToolResult:
-    """Retrieve persisted media by its artifact ID.
+    """Fetch persisted media by artifact ID as Base64 plus metadata.
 
-    Returns the raw media bytes (Base64-encoded) along with metadata such as
-    MIME type, SHA-256 hash, and byte count. Use this to fetch media that was
-    persisted by a previous generation call after the provider URL has expired
-    (2h for audio, 24h for image/video).
+    Use after the provider URL has expired (2h audio, 24h image/video/3D). Large files cost
+    context; prefer seed_media_export_artifact on stdio.
     """
     await context_log(ctx, "info", f"Fetching artifact {input.artifact_id}")
 

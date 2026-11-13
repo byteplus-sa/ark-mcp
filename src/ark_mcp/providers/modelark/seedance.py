@@ -1,34 +1,25 @@
 """Seedance adapter — asynchronous video generation task management.
 
-Translates domain input models to provider DTOs, calls the ModelArk gateway
-for the four task operations (create, get, list, delete), and maps provider
-responses to domain output models.
+Translates domain input models to provider DTOs and creates Seedance tasks.
+Retrieval, listing and deletion are shared with 3D tasks in
+``generation_tasks.GenerationTaskService``.
 """
 
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from typing import Any, cast
 
 import httpx
 
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
-from ark_mcp.domain.models import (
-    SeedanceTaskStatus,
-    SeedanceTaskSummary,
-    SeedanceTaskUsage,
-)
 from ark_mcp.observability.logger import debug as log_debug
 from ark_mcp.providers.modelark.client import ModelArkGateway
 from ark_mcp.providers.modelark.schemas import (
     SeedanceContentItem,
     SeedanceCreateProviderRequest,
     SeedanceCreateProviderResponse,
-    SeedanceTaskListResponse,
-    SeedanceTaskResponse,
 )
-from ark_mcp.providers.modelark.seedance_queue import queue_info
 
 
 def _parse_success_body(response: httpx.Response, operation: str) -> dict[str, Any]:
@@ -89,118 +80,6 @@ class SeedanceService:
             request_id=request_id,
         )
         return parsed.id, request_id
-
-    async def get_task(self, task_id: str) -> tuple[SeedanceTaskResponse, str | None]:
-        """Call ``GET /contents/generations/tasks/{id}``.
-
-        Returns ``(task, request_id)``.
-        """
-        log_debug("seedance_get_task", task_id=task_id)
-        try:
-            response = await self._gateway.get(f"/contents/generations/tasks/{task_id}")
-        except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("get_task", side_effect=False) from None
-        except httpx.ConnectError as exc:
-            raise ModelArkGateway.normalize_connection_error("get_task", exc) from exc
-        except httpx.TransportError as exc:
-            raise ModelArkGateway.normalize_transport_error("get_task", exc) from exc
-
-        request_id = ModelArkGateway.extract_request_id(response)
-
-        if response.status_code >= 400:
-            raise ModelArkGateway.normalize_error(response, "get_task")
-
-        body = _parse_success_body(response, "get_task")
-        parsed = SeedanceTaskResponse.model_validate(body)
-        log_debug(
-            "seedance_get_task_complete",
-            task_id=task_id,
-            status=parsed.status,
-            status_code=response.status_code,
-            request_id=request_id,
-        )
-        return parsed, request_id
-
-    async def list_tasks(
-        self,
-        *,
-        page: int = 1,
-        page_size: int = 20,
-        status: str | None = None,
-        task_ids: list[str] | None = None,
-        model: str | None = None,
-        service_tier: str | None = None,
-    ) -> tuple[SeedanceTaskListResponse, str | None]:
-        """Call ``GET /contents/generations/tasks``.
-
-        Returns ``(page, request_id)``.
-        """
-        params: dict[str, Any] = {
-            "page_num": page,
-            "page_size": page_size,
-        }
-        if status:
-            params["filter.status"] = status
-        if task_ids:
-            params["filter.task_ids"] = task_ids
-        if model:
-            params["filter.model"] = model
-        if service_tier:
-            params["filter.service_tier"] = service_tier
-
-        log_debug("seedance_list_tasks", page=page, page_size=page_size)
-        try:
-            response = await self._gateway.get("/contents/generations/tasks", params=params)
-        except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("list_tasks", side_effect=False) from None
-        except httpx.ConnectError as exc:
-            raise ModelArkGateway.normalize_connection_error("list_tasks", exc) from exc
-        except httpx.TransportError as exc:
-            raise ModelArkGateway.normalize_transport_error("list_tasks", exc) from exc
-
-        request_id = ModelArkGateway.extract_request_id(response)
-
-        if response.status_code >= 400:
-            raise ModelArkGateway.normalize_error(response, "list_tasks")
-
-        body = _parse_success_body(response, "list_tasks")
-        parsed = SeedanceTaskListResponse.model_validate(body)
-        log_debug(
-            "seedance_list_tasks_complete",
-            page=page,
-            total=len(parsed.data) if parsed.data else 0,
-            status_code=response.status_code,
-            request_id=request_id,
-        )
-        return parsed, request_id
-
-    async def delete_task(self, task_id: str) -> str | None:
-        """Call ``DELETE /contents/generations/tasks/{id}``.
-
-        Returns the request ID.
-        """
-        log_debug("seedance_delete_task", task_id=task_id)
-        try:
-            response = await self._gateway.delete(f"/contents/generations/tasks/{task_id}")
-        except httpx.TimeoutException:
-            raise ModelArkGateway.normalize_timeout("delete_task") from None
-        except httpx.ConnectError as exc:
-            raise ModelArkGateway.normalize_connection_error("delete_task", exc) from exc
-        except httpx.TransportError as exc:
-            raise ModelArkGateway.normalize_transport_error("delete_task", exc) from exc
-
-        request_id = ModelArkGateway.extract_request_id(response)
-
-        if response.status_code >= 400:
-            raise ModelArkGateway.normalize_error(response, "delete_task")
-
-        log_debug(
-            "seedance_delete_task_complete",
-            task_id=task_id,
-            status_code=response.status_code,
-            request_id=request_id,
-        )
-        return request_id
 
     @staticmethod
     def build_content(
@@ -287,6 +166,7 @@ class SeedanceService:
         safety_identifier: str | None = None,
         omni_reference_task_type: str | None = None,
         draft: bool | None = None,
+        output_format: str | None = None,
     ) -> SeedanceCreateProviderRequest:
         """Build a provider request from domain-level parameters."""
         return SeedanceCreateProviderRequest(
@@ -303,49 +183,8 @@ class SeedanceService:
             safety_identifier=safety_identifier,
             omni_reference_task_type=omni_reference_task_type,
             draft=draft,
+            output_format=output_format,
         )
-
-    @staticmethod
-    def to_task_summary(task: SeedanceTaskResponse) -> SeedanceTaskSummary:
-        """Convert a full task response to a summary for list results."""
-        return SeedanceTaskSummary(
-            task_id=task.id,
-            model=task.model,
-            status=SeedanceTaskStatus(task.status),
-            created_at=str(task.created_at or ""),
-            updated_at=str(task.updated_at or ""),
-            queue=queue_info(task),
-        )
-
-    @staticmethod
-    def extract_usage(task: SeedanceTaskResponse) -> SeedanceTaskUsage | None:
-        """Extract usage data from a task response."""
-        if task.usage is None:
-            return None
-        return SeedanceTaskUsage(
-            completion_tokens=task.usage.completion_tokens,
-            prompt_tokens=task.usage.prompt_tokens,
-        )
-
-    @staticmethod
-    def get_created_at(task: SeedanceTaskResponse) -> str:
-        """Format the task's ``created_at`` as ISO-8601."""
-        raw = task.created_at
-        if raw is None:
-            return datetime.now(UTC).isoformat()
-        if isinstance(raw, (int, float)):
-            return datetime.fromtimestamp(raw, tz=UTC).isoformat()
-        return str(raw)
-
-    @staticmethod
-    def get_updated_at(task: SeedanceTaskResponse) -> str:
-        """Format the task's ``updated_at`` as ISO-8601."""
-        raw = task.updated_at
-        if raw is None:
-            return datetime.now(UTC).isoformat()
-        if isinstance(raw, (int, float)):
-            return datetime.fromtimestamp(raw, tz=UTC).isoformat()
-        return str(raw)
 
     async def close(self) -> None:
         await self._gateway.close()

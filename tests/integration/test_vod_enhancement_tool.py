@@ -23,12 +23,9 @@ from ark_mcp.tools.vod_enhance_video import (
     VodEnhanceVideoOutput,
     vod_enhance_video,
 )
-from ark_mcp.tools.vod_get_enhancement_task import (
-    VodEnhancementTaskOutput,
-    VodGetEnhancementTaskInput,
-    vod_get_enhancement_task,
-)
+from ark_mcp.tools.vod_get_task import VodGetTaskInput, VodTaskOutput, vod_get_task
 from tests.fixtures.fake_context import FakeContext
+from tests.fixtures.ownership import owned_task_ids
 
 
 async def _close(_self: VodMediaKitEnhancementService) -> None:
@@ -47,6 +44,10 @@ def _submission() -> EnhancementSubmission:
         output_size_bytes=123,
         provider_status="completed",
     )
+
+
+def _poll_input(**kwargs: object) -> VodGetTaskInput:
+    return VodGetTaskInput(operation="enhance", **{"persist_output": True, **kwargs})  # type: ignore[arg-type]
 
 
 def _succeeded_task() -> EnhancementTask:
@@ -135,12 +136,11 @@ async def test_accepted_task_is_owned_and_not_persisted(
     assert result.request_id == "request-1"
     assert result.provider_log_id == "log-1"
     assert result.task_id == "amk-tool-enhance-video-1"
+    assert result.operation == "enhance"
     assert result.source_url is None
     assert result.persistence == "not_applicable"
     assert result.video is None
-    assert await runtime.ownership_store.list_task_ids("vod-mediakit", AuthContext()) == {
-        "amk-tool-enhance-video-1"
-    }
+    assert await owned_task_ids(runtime, "vod-mediakit") == {"amk-tool-enhance-video-1"}
     copy.assert_not_awaited()
 
 
@@ -370,22 +370,18 @@ async def test_poll_enhancement_succeeded_persists_once(
     copy = AsyncMock(return_value=ref)
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
-    result_again = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
+    result_again = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.video == ref
-    assert result.persistence == "persisted"
+    assert result.outputs[0].artifact == ref
+    assert result.outputs[0].persistence == "persisted"
     assert result.duration_seconds == 30.917
     assert result.fps == 24
     assert result.resolution == "4k"
     assert result.tool_version == "professional"
-    assert result_again.video == ref
+    assert result_again.outputs[0].artifact == ref
     assert copy.await_count == 1
 
 
@@ -437,14 +433,10 @@ async def test_concurrent_first_polls_persist_one_shared_artifact(
     )
 
     first = asyncio.create_task(
-        vod_get_enhancement_task(
-            VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-        )
+        vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
     )
     second = asyncio.create_task(
-        vod_get_enhancement_task(
-            VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-        )
+        vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
     )
     await asyncio.wait_for(copy_started.wait(), timeout=1)
     await asyncio.sleep(0)
@@ -453,10 +445,10 @@ async def test_concurrent_first_polls_persist_one_shared_artifact(
 
     assert copy_count == 1
     first_result, second_result = results
-    assert isinstance(first_result, VodEnhancementTaskOutput)
-    assert isinstance(second_result, VodEnhancementTaskOutput)
-    assert first_result.video == ref
-    assert second_result.video == ref
+    assert isinstance(first_result, VodTaskOutput)
+    assert isinstance(second_result, VodTaskOutput)
+    assert first_result.outputs[0].artifact == ref
+    assert second_result.outputs[0].artifact == ref
     assert any("artifact cache update failed" in message for message in fake_ctx.messages)
 
 
@@ -474,19 +466,21 @@ async def test_poll_enhancement_can_skip_persistence(
     copy = AsyncMock()
     monkeypatch.setattr(runtime.artifact_store, "copy_from_trusted_url", copy)
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(
+    result = await vod_get_task(
+        _poll_input(
             task_id="amk-tool-enhance-video-1",
             persist_output=False,
         ),
         fake_ctx,
     )
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "not_requested"
-    assert result.video is None
-    assert str(result.source_url) == "https://tos-ap-southeast.bytepluses.com/enhanced.mp4"
+    assert result.outputs[0].persistence == "not_requested"
+    assert result.outputs[0].artifact is None
+    assert (
+        str(result.outputs[0].source_url) == "https://tos-ap-southeast.bytepluses.com/enhanced.mp4"
+    )
     copy.assert_not_awaited()
 
 
@@ -513,16 +507,14 @@ async def test_poll_enhancement_persistence_failure_preserves_success(
         ),
     )
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "failed"
-    assert result.persistence_issue is not None
-    assert result.persistence_issue.code == "output_too_large"
-    assert result.video is None
+    assert result.outputs[0].persistence == "failed"
+    assert result.outputs[0].persistence_issue is not None
+    assert result.outputs[0].persistence_issue.code == "output_too_large"
+    assert result.outputs[0].artifact is None
     assert any(message.startswith("WARNING:") for message in fake_ctx.messages)
 
 
@@ -557,14 +549,12 @@ async def test_poll_enhancement_cache_lookup_failure_preserves_success(
         AsyncMock(return_value=ref),
     )
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "persisted"
-    assert result.video == ref
+    assert result.outputs[0].persistence == "persisted"
+    assert result.outputs[0].artifact == ref
     messages = "\n".join(fake_ctx.messages)
     assert "artifact cache lookup failed" in messages
     assert "private.example.com" not in messages
@@ -602,14 +592,12 @@ async def test_poll_enhancement_cache_update_failure_returns_created_artifact(
         AsyncMock(side_effect=RuntimeError("https://private.example.com/?token=secret")),
     )
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "succeeded"
-    assert result.persistence == "persisted"
-    assert result.video == ref
+    assert result.outputs[0].persistence == "persisted"
+    assert result.outputs[0].artifact == ref
     messages = "\n".join(fake_ctx.messages)
     assert "artifact cache update failed" in messages
     assert "private.example.com" not in messages
@@ -629,14 +617,11 @@ async def test_poll_enhancement_processing_has_no_output(
     monkeypatch.setattr(VodMediaKitEnhancementService, "get", AsyncMock(return_value=task))
     monkeypatch.setattr(VodMediaKitEnhancementService, "close", _close)
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "processing"
-    assert result.source_url is None
-    assert result.persistence == "not_applicable"
+    assert result.outputs == []
 
 
 async def test_poll_enhancement_failed_returns_safe_error(
@@ -654,15 +639,14 @@ async def test_poll_enhancement_failed_returns_safe_error(
     monkeypatch.setattr(VodMediaKitEnhancementService, "get", AsyncMock(return_value=task))
     monkeypatch.setattr(VodMediaKitEnhancementService, "close", _close)
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
-    assert isinstance(result, VodEnhancementTaskOutput)
+    assert isinstance(result, VodTaskOutput)
     assert result.status == "failed"
     assert result.error is not None
     assert result.error.code == "DownloadFailed"
-    assert result.persistence == "not_applicable"
+    assert result.error.message == "Failed to download the source video."
+    assert result.outputs == []
 
 
 async def test_poll_enhancement_provider_error_returns_mcp_error(
@@ -683,9 +667,7 @@ async def test_poll_enhancement_provider_error_returns_mcp_error(
     monkeypatch.setattr(VodMediaKitEnhancementService, "get", AsyncMock(side_effect=error))
     monkeypatch.setattr(VodMediaKitEnhancementService, "close", _close)
 
-    result = await vod_get_enhancement_task(
-        VodGetEnhancementTaskInput(task_id="amk-tool-enhance-video-1"), fake_ctx
-    )
+    result = await vod_get_task(_poll_input(task_id="amk-tool-enhance-video-1"), fake_ctx)
 
     assert isinstance(result, ToolResult)
     assert result.is_error is True

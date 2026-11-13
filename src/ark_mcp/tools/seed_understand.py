@@ -73,40 +73,32 @@ class SeedUnderstandInput(UnderstandingOptions):
     images: list[UnderstandingImageInput] | None = Field(
         None,
         max_length=32,
-        description="Images to understand (URL or Base64). For local files, upload via media_upload first.",
+        description="Images to understand. Upload local files with media_upload first.",
     )
     videos: list[UnderstandingVideoInput] | None = Field(
         None,
         max_length=32,
-        description="Videos to understand. Must be HTTPS URLs — video Base64 is not supported.",
+        description="Videos to understand; HTTPS URLs only, no Base64.",
     )
     model: str | None = Field(
         None,
-        description="Override the configured Seed 2.1 model ID. Must be present in the capability registry.",
+        description="Understanding model ID from ark_list_models(kind='understanding'). Omit for the default.",
     )
     thinking: bool | None = Field(
         None,
-        description=(
-            "Deprecated and ignored. Deep thinking is always enabled; use reasoning_effort to "
-            "control its depth. The reasoning trace is never returned. Will be removed."
-        ),
+        description="Deprecated and ignored; thinking is always on. Use reasoning_effort.",
     )
 
 
 async def seed_understand(
     input: SeedUnderstandInput, ctx: Context
 ) -> SeedUnderstandOutput | ToolResult:
-    """Understand images and videos, or reason about a task, through the Seed 2.1 multimodal model.
+    """Understand images and videos, or reason about a prompt, with a Seed 2.1 model.
 
-    Accepts a natural-language prompt plus optional images and videos, and
-    returns only the model's final answer. The model always uses deep thinking
-    (depth set by reasoning_effort, default 'medium'), but the reasoning trace is
-    never returned. Use response_format to force JSON or a JSON Schema at
-    generation time (parsed result in choices[].parsed), and save_to to write the
-    answer straight to a local file. For local media files, upload them first with
-    media_upload to obtain an HTTPS URL; video Base64 is not supported by the chat
-    endpoint. This tool requires task-augmented execution so long video analysis
-    does not consume a foreground MCP request deadline.
+    Returns only the final answer (deep thinking is always on, its trace is never
+    returned). Use response_format for JSON output and save_to to write the answer
+    to a file. Choose the model with ark_list_models(kind='understanding'). Requires
+    background execution (ark_job_submit).
     """
     await context_log(ctx, "info", "Starting Seed 2.1 multimodal understanding")
     await ctx.report_progress(progress=10, total=100)

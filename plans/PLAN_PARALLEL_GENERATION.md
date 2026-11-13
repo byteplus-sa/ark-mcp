@@ -1,7 +1,7 @@
 ---
 title: Parallel Multiple Generation for Seedance, Audio, and Seedream
 type: plan
-status: active
+status: in-progress
 created: 2026-07-21
 updated: 2026-07-21
 tags:

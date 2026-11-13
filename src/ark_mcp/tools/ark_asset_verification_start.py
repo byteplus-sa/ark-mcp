@@ -31,13 +31,10 @@ async def ark_asset_verification_start(
 ) -> VerificationStartOutput | ToolResult:
     """Start real-person verification so a real person's face can be used in Seedance.
 
-    Returns an H5 verification link for the person to open themselves: they
-    confirm consent and pass a liveness check. Then call
-    ark_asset_verification_result with the returned verification_token to get
-    their dedicated LivenessFace asset group, and upload only that person's
-    media to it. Never verify someone without their consent. The link carries
-    temporary credentials; share it only with that person. Requires Advanced
-    Creation Rights (API real-person verification) and BytePlus AK/SK.
+    Returns an H5 link the person opens themselves to consent and pass a liveness check; then
+    call ark_asset_verification_result with verification_token. Never verify someone without
+    consent; share the link (temporary credentials) only with them. Requires Advanced Creation
+    Rights and AK/SK.
     """
     callback_url = input.callback_url or get_settings().modelark_asset_verify_callback_url
     if not callback_url:

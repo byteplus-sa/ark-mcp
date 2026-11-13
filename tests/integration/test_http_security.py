@@ -666,3 +666,51 @@ async def test_ready_probes_use_resolved_settings_urls(tmp_path: Path) -> None:
     assert ready.status_code == 200
     assert ready.json() == {"status": "ready", "providers": {"modelark": "reachable"}}
     assert probe_route.called
+
+
+def _capture_warnings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, dict[str, Any]]]:
+    captured: list[tuple[str, dict[str, Any]]] = []
+    monkeypatch.setattr(
+        "ark_mcp.server.log_warning",
+        lambda event, **fields: captured.append((event, fields)),
+    )
+    return captured
+
+
+def test_jwt_http_warns_when_budget_and_rate_limit_are_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    warnings = _capture_warnings(monkeypatch)
+    create_server(_jwt_settings(tmp_path), auth_provider=_verifier())
+
+    guardrails = [fields for event, fields in warnings if event == "http_guardrails_disabled"]
+    assert len(guardrails) == 1
+    assert guardrails[0]["disabled"] == ["DAILY_BUDGET_USD", "RATE_LIMIT_RPM"]
+
+
+def test_jwt_http_is_quiet_when_guardrails_are_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = _jwt_settings(tmp_path)
+    settings.daily_budget_usd = 25.0
+    settings.rate_limit_rpm = 120
+    warnings = _capture_warnings(monkeypatch)
+    create_server(settings, auth_provider=_verifier())
+
+    assert all(event != "http_guardrails_disabled" for event, _ in warnings)
+
+
+def test_local_mode_never_warns_about_guardrails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = Settings(
+        _env_file=None,
+        MCP_TRANSPORT="http",
+        MCP_HOST="127.0.0.1",
+        MCP_AUTH_MODE="local",
+        ARTIFACT_DIR=str(tmp_path / "artifacts"),
+    )
+    warnings = _capture_warnings(monkeypatch)
+    create_server(settings)
+
+    assert all(event != "http_guardrails_disabled" for event, _ in warnings)

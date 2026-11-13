@@ -81,84 +81,108 @@ class TestSettings:
                 ],
             )
 
-    def test_seedance_2_5_premium_disabled_by_default(self) -> None:
-        settings = Settings(_env_file=None, BYTEPLUS_MODELARK_API_KEY="sk-test")
-        assert not settings.seedance_2_5_premium_enabled
-        assert not settings.has_seedance_2_5_premium
-        assert all(
-            binding.family != "seedance_2_5_premium" for binding in settings.seedance_model_bindings
-        )
-
-    def test_seedance_2_5_premium_requires_both_flag_and_key(self) -> None:
-        assert not Settings(
-            _env_file=None, BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True
-        ).has_seedance_2_5_premium
-        assert Settings(
-            _env_file=None,
-            BYTEPLUS_MODELARK_API_KEY="sk-test",  # pragma: allowlist secret
-            BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
-        ).has_seedance_2_5_premium
-
-    def test_seedance_2_5_premium_flag_appends_binding(self) -> None:
+    def test_removed_premium_settings_do_not_add_bindings(self) -> None:
         settings = Settings(
             _env_file=None,
             BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
-            SEEDANCE_MODEL_BINDINGS=[
-                {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"}
-            ],
+            SEEDANCE_2_5_PREMIUM_MODEL="ep-retired",
         )
         bindings = {b.model_id: b.family for b in settings.seedance_model_bindings}
-        assert bindings["dreamina-seedance-2-5-premium-260915"] == "seedance_2_5_premium"
-        assert bindings["dreamina-seedance-2-0-260128"] == "standard"
+        assert "seedance_2_5_premium" not in bindings.values()
+        assert "ep-retired" not in bindings
+        assert "seedance_2_5_premium_enabled" not in Settings.model_fields
+        assert "seedance_2_5_premium_model" not in Settings.model_fields
 
-    def test_seedance_2_5_premium_model_override(self) -> None:
+    def test_seedance_default_model_is_2_5(self) -> None:
+        settings = Settings(_env_file=None)
+        assert settings.seedance_default_model == "dreamina-seedance-2-5-260628"
+        bindings = {b.model_id: b.family for b in settings.seedance_model_bindings}
+        assert bindings == {
+            "dreamina-seedance-2-5-260628": "seedance_2_5",
+            "dreamina-seedance-2-5-flash-261115": "seedance_2_5_flash",
+        }
+
+    def test_flash_default_model_infers_family_without_duplicates(self) -> None:
         settings = Settings(
-            _env_file=None,
-            BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
-            SEEDANCE_2_5_PREMIUM_MODEL="ep-premium-endpoint",
+            _env_file=None, SEEDANCE_DEFAULT_MODEL="dreamina-seedance-2-5-flash-261115"
         )
-        ids = [b.model_id for b in settings.seedance_model_bindings]
-        assert "ep-premium-endpoint" in ids
-        assert "dreamina-seedance-2-5-premium-260915" not in ids
+        assert len(settings.seedance_model_bindings) == 1
+        assert settings.seedance_model_bindings[0].family == "seedance_2_5_flash"
 
-    def test_seedance_2_5_premium_explicit_binding_kept(self) -> None:
+    def test_explicit_bindings_do_not_automatically_add_flash(self) -> None:
         settings = Settings(
             _env_file=None,
-            BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
             SEEDANCE_MODEL_BINDINGS=[
-                {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"},
-                {"model_id": "ep-premium", "family": "seedance_2_5_premium"},
+                {"model_id": "dreamina-seedance-2-5-260628", "family": "seedance_2_5"}
             ],
         )
-        ids = [b.model_id for b in settings.seedance_model_bindings]
-        assert ids == ["dreamina-seedance-2-0-260128", "ep-premium"]
+        assert len(settings.seedance_model_bindings) == 1
 
-    def test_seedance_2_5_premium_binding_rejected_without_flag(self) -> None:
-        with pytest.raises(ValueError, match="whitelist-only"):
+    def test_custom_flash_endpoint_requires_and_accepts_explicit_family(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            SEEDANCE_DEFAULT_MODEL="ep-flash",
+            SEEDANCE_MODEL_FAMILY="seedance_2_5_flash",
+        )
+        assert settings.seedance_model_bindings[0].model_id == "ep-flash"
+        assert settings.seedance_model_bindings[0].family == "seedance_2_5_flash"
+
+    def test_2_0_only_bindings_without_default_explain_the_fix(self) -> None:
+        with pytest.raises(ValueError) as excinfo:
             Settings(
                 _env_file=None,
                 SEEDANCE_MODEL_BINDINGS=[
-                    {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"},
+                    {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"}
+                ],
+            )
+        message = str(excinfo.value)
+        assert "default model 'dreamina-seedance-2-5-260628' is missing" in message
+        assert "dreamina-seedance-2-0-260128" in message
+
+    def test_removed_premium_binding_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="Input should be"):
+            Settings(
+                _env_file=None,
+                SEEDANCE_MODEL_BINDINGS=[
                     {
-                        "model_id": "dreamina-seedance-2-5-premium-260915",
+                        "model_id": "ep-retired",
                         "family": "seedance_2_5_premium",
                     },
                 ],
             )
 
-    def test_seedance_2_5_premium_model_bound_to_other_family_rejected(self) -> None:
-        with pytest.raises(ValueError, match="non-Premium family"):
+    def test_removed_premium_default_family_is_rejected(self) -> None:
+        with pytest.raises(ValueError, match="not a valid SeedanceFamily"):
             Settings(
                 _env_file=None,
-                BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=True,
-                SEEDANCE_MODEL_BINDINGS=[
-                    {"model_id": "dreamina-seedance-2-0-260128", "family": "standard"},
-                    {
-                        "model_id": "dreamina-seedance-2-5-premium-260915",
-                        "family": "seedance_2_5",
-                    },
-                ],
+                SEEDANCE_DEFAULT_MODEL="ep-retired",
+                SEEDANCE_MODEL_FAMILY="seedance_2_5_premium",
             )
+
+    def test_omnihuman_disabled_by_default(self) -> None:
+        settings = Settings(_env_file=None)
+        assert not settings.omnihuman_enabled
+        assert not settings.has_omnihuman
+        assert settings.cv_base_url == "https://openapi.cv.bytepluses.com"
+        assert settings.omnihuman_req_key == "realman_avatar_picture_omni20_cv"
+
+    def test_omnihuman_requires_both_flag_and_key(self) -> None:
+        assert not Settings(_env_file=None, BYTEPLUS_OMNIHUMAN_ENABLED=True).has_omnihuman
+        assert not Settings(
+            _env_file=None,
+            BYTEPLUS_CV_API_KEY="cv-key",  # pragma: allowlist secret
+        ).has_omnihuman
+        assert Settings(
+            _env_file=None,
+            BYTEPLUS_OMNIHUMAN_ENABLED=True,
+            BYTEPLUS_CV_API_KEY="cv-key",  # pragma: allowlist secret
+        ).has_omnihuman
+
+    def test_cv_base_url_override_requires_https(self) -> None:
+        settings = Settings(_env_file=None, BYTEPLUS_CV_BASE_URL="https://cv.example.com/")
+        assert settings.cv_base_url == "https://cv.example.com"
+        with pytest.raises(ValueError, match="BYTEPLUS_CV_BASE_URL must use HTTPS"):
+            Settings(_env_file=None, BYTEPLUS_CV_BASE_URL="http://cv.example.com")
 
     def test_vod_mediakit_base_url_override_requires_https(self) -> None:
         settings = Settings(

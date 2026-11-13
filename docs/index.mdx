@@ -1,0 +1,79 @@
+---
+title: BytePlus Ark MCP
+description: Connect your AI client to BytePlus image, video, audio, understanding and media tools.
+template: splash
+hero:
+  tagline: Images, video, audio, 3D and understanding.<br />One MCP server, in the AI client you already use.
+  actions:
+    - text: Get started
+      link: /ark-mcp/setup/install/
+      icon: right-arrow
+    - text: Connect your client
+      link: /ark-mcp/integrations/
+      variant: minimal
+    - text: Explore the tools
+      link: /ark-mcp/capabilities/
+      variant: minimal
+editUrl: https://github.com/byteplus-sa/ark-mcp/edit/main/docs/index.mdx
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+<nav className="client-strip" aria-label="Client integrations">
+  <a href="/ark-mcp/integrations/claude-desktop/">Claude Desktop</a>
+  <a href="/ark-mcp/integrations/claude-code/">Claude Code</a>
+  <a href="/ark-mcp/integrations/codex/">Codex</a>
+  <a href="/ark-mcp/integrations/trae/">TRAE</a>
+  <a href="/ark-mcp/integrations/cursor/">Cursor</a>
+  <a href="/ark-mcp/integrations/vscode/">VS Code</a>
+  <a href="/ark-mcp/integrations/opencode/">OpenCode</a>
+  <a href="/ark-mcp/integrations/python/">Python</a>
+</nav>
+
+<CardGrid>
+  <Card title="__TOOL_COUNT__ tools" icon="puzzle">
+    One tool per capability. Explore typed inputs, outputs and examples for every step of your media workflow.
+  </Card>
+  <Card title="Your workflow, connected" icon="rocket">
+    Create, poll and retrieve results without leaving your AI client. Keep generated media as durable artifacts.
+  </Card>
+  <Card title="Your own credentials" icon="seti:lock">
+    Private keys stay on your server. Enable the products you need, with usage billed to your BytePlus account.
+  </Card>
+</CardGrid>
+
+## Start Building
+
+From a fresh installation to your first tool call.
+
+<CardGrid>
+  <LinkCard title="Set up your connection" description="Let a coding agent handle local setup, or connect to your team's existing server." href="/ark-mcp/setup/install/" />
+  <LinkCard title="Connect your client" description="Find the right configuration, from Claude and Codex to your own Python app." href="/ark-mcp/integrations/" />
+  <LinkCard title="Create with a prompt" description="Ask your agent to generate an image or video. Copy a prompt and make it your own." href="/ark-mcp/setup/first-run/" />
+  <LinkCard title="Explore the reference" description="Find every tool's requirements, inputs, outputs and execution guidance." href="/ark-mcp/capabilities/" />
+</CardGrid>
+
+Give your agent the workflow guide: [install the optional ark-mcp skill](/ark-mcp/setup/agent-skill/)
+for model discovery, progress checks and keeping results.
+
+## Create Across Modalities
+
+The BytePlus models you need, connected through one consistent interface.
+
+<div className="capability-grid">
+<CardGrid>
+  <LinkCard title="Images" description="Generate and edit images with Seedream 5.5, create transparent PNGs and explore variations." href="/ark-mcp/tool-reference/seedream-generate-image/" />
+  <LinkCard title="Video" description="Bring prompts and reference media to life with Seedance." href="/ark-mcp/tool-reference/seedance-create-task/" />
+  <LinkCard title="Audio" description="Create full-scene audio and transcribe speech with Seed Speech." href="/ark-mcp/capabilities/#audio" />
+  <LinkCard title="Understanding" description="Analyze images, video and audio with multimodal models." href="/ark-mcp/capabilities/#understanding" />
+  <LinkCard title="3D" description="Turn text and images into models with Hyper3D and Hitem3d." href="/ark-mcp/capabilities/#3d" />
+  <LinkCard title="Avatars" description="Create talking-avatar video from an image and audio with OmniHuman." href="/ark-mcp/capabilities/#avatars" />
+</CardGrid>
+</div>
+
+Finish your workflow with [VOD AI MediaKit](/ark-mcp/capabilities/#media-processing),
+[object storage and artifacts](/ark-mcp/capabilities/#uploads-and-outputs),
+and the [private asset library](/ark-mcp/capabilities/#asset-library).
+
+Available tools depend on your credentials, feature flags and account access.
+Start with discovery before making a paid generation.

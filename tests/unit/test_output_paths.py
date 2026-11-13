@@ -117,3 +117,14 @@ async def test_falls_back_to_output_roots_when_client_has_none(tmp_path: Path) -
     ctx = SimpleNamespace(session=SimpleNamespace(list_roots=list_roots))
     settings = SimpleNamespace(output_root_paths=[str(tmp_path)])
     assert await allowed_output_roots(ctx, settings) == [tmp_path.resolve()]  # type: ignore[arg-type]
+
+
+async def test_falls_back_to_output_roots_when_session_is_unavailable(tmp_path: Path) -> None:
+    class BackgroundContext:
+        @property
+        def session(self) -> Any:
+            raise RuntimeError("session is not available")
+
+    settings = SimpleNamespace(output_root_paths=[str(tmp_path)])
+    roots = await allowed_output_roots(BackgroundContext(), settings)  # type: ignore[arg-type]
+    assert roots == [tmp_path.resolve()]

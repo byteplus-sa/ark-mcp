@@ -18,6 +18,7 @@ ProviderName = Literal[
     "modelark-openapi",
     "seed-speech",
     "byteplus-vod-mediakit",
+    "byteplus-vision-cv",
     "tos",
     "s3",
 ]

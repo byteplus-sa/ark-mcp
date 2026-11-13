@@ -8,11 +8,15 @@ https://docs.byteplus.com/en/docs/ModelArk/2333589 (real-human).
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.assets import Asset, AssetGroup
 from ark_mcp.providers.modelark.openapi import CREATE_ASSET_LIMITER, ModelArkOpenApiGateway
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from contextlib import AbstractAsyncContextManager
 
 AssetTypeName = Literal["Image", "Video", "Audio"]
 
@@ -24,9 +28,22 @@ def _drop_none(body: dict[str, Any]) -> dict[str, Any]:
 class AssetService:
     """Service layer for asset groups, assets, and real-person verification."""
 
-    def __init__(self, gateway: ModelArkOpenApiGateway | None = None) -> None:
+    def __init__(
+        self,
+        gateway: ModelArkOpenApiGateway | None = None,
+        *,
+        call_slot: Callable[[], AbstractAsyncContextManager[None]] | None = None,
+    ) -> None:
         self._gateway = gateway or ModelArkOpenApiGateway()
         self._default_project = get_settings().modelark_project_name
+        self._call_slot = call_slot
+
+    async def _call(self, action: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Send one action, holding ``call_slot`` only for the request itself."""
+        if self._call_slot is None:
+            return await self._gateway.call(action, body)
+        async with self._call_slot():
+            return await self._gateway.call(action, body)
 
     def _project(self, project_name: str | None) -> str:
         return project_name or self._default_project
@@ -44,7 +61,7 @@ class AssetService:
         project_name: str | None,
     ) -> str:
         """``CreateAssetGroup`` (virtual portrait / ``AIGC``). Returns the group ID."""
-        result = await self._gateway.call(
+        result = await self._call(
             "CreateAssetGroup",
             _drop_none(
                 {
@@ -58,7 +75,7 @@ class AssetService:
         return str(result.get("Id") or "")
 
     async def get_group(self, group_id: str, project_name: str | None) -> AssetGroup:
-        result = await self._gateway.call(
+        result = await self._call(
             "GetAssetGroup", {"Id": group_id, "ProjectName": self._project(project_name)}
         )
         return AssetGroup.from_provider(result)
@@ -78,7 +95,7 @@ class AssetService:
         filter_body = _drop_none(
             {"Name": name, "GroupIds": group_ids or None, "GroupType": group_type}
         )
-        result = await self._gateway.call(
+        result = await self._call(
             "ListAssetGroups",
             _drop_none(
                 {
@@ -103,7 +120,7 @@ class AssetService:
         description: str | None,
         project_name: str | None,
     ) -> None:
-        await self._gateway.call(
+        await self._call(
             "UpdateAssetGroup",
             _drop_none(
                 {
@@ -116,7 +133,7 @@ class AssetService:
         )
 
     async def delete_group(self, group_id: str, project_name: str | None) -> None:
-        await self._gateway.call(
+        await self._call(
             "DeleteAssetGroup", {"Id": group_id, "ProjectName": self._project(project_name)}
         )
 
@@ -134,7 +151,7 @@ class AssetService:
     ) -> str:
         """``CreateAsset`` (asynchronous). Returns the asset ID; poll ``get_asset``."""
         await CREATE_ASSET_LIMITER.wait(get_settings().modelark_asset_create_qpm)
-        result = await self._gateway.call(
+        result = await self._call(
             "CreateAsset",
             _drop_none(
                 {
@@ -150,7 +167,7 @@ class AssetService:
         return str(result.get("Id") or "")
 
     async def get_asset(self, asset_id: str, project_name: str | None) -> Asset:
-        result = await self._gateway.call(
+        result = await self._call(
             "GetAsset", {"Id": asset_id, "ProjectName": self._project(project_name)}
         )
         if not result.get("Id"):
@@ -177,7 +194,7 @@ class AssetService:
                 "Name": name,
             }
         )
-        result = await self._gateway.call(
+        result = await self._call(
             "ListAssets",
             _drop_none(
                 {
@@ -195,13 +212,13 @@ class AssetService:
         return assets, (str(result["NextToken"]) if result.get("NextToken") else None)
 
     async def update_asset(self, asset_id: str, *, name: str, project_name: str | None) -> None:
-        await self._gateway.call(
+        await self._call(
             "UpdateAsset",
             {"Id": asset_id, "Name": name, "ProjectName": self._project(project_name)},
         )
 
     async def delete_asset(self, asset_id: str, project_name: str | None) -> None:
-        await self._gateway.call(
+        await self._call(
             "DeleteAsset", {"Id": asset_id, "ProjectName": self._project(project_name)}
         )
 
@@ -211,7 +228,7 @@ class AssetService:
         self, *, callback_url: str, project_name: str | None
     ) -> dict[str, str]:
         """``CreateVisualValidateSession``. Returns ``BytedToken`` and ``H5Link``."""
-        result = await self._gateway.call(
+        result = await self._call(
             "CreateVisualValidateSession",
             {"CallbackURL": callback_url, "ProjectName": self._project(project_name)},
         )
@@ -224,7 +241,7 @@ class AssetService:
         self, *, byted_token: str, project_name: str | None
     ) -> str | None:
         """``GetVisualValidateResult``. Returns the new ``LivenessFace`` group ID, if any."""
-        result = await self._gateway.call(
+        result = await self._call(
             "GetVisualValidateResult",
             {"BytedToken": byted_token, "ProjectName": self._project(project_name)},
         )

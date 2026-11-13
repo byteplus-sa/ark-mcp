@@ -19,7 +19,7 @@ ENTRY   := src/ark_mcp/server.py:mcp
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap install sync build dev start start-http shared-http test test-watch \
+.PHONY: help bootstrap install sync build dev start start-http shared-http test test-watch audit-capabilities \
         lint typecheck format pre-commit-install pre-commit-run pre-commit-run-all \
         secrets-baseline audit inspect inspect-dev check-env clean setup
 
@@ -90,6 +90,9 @@ secrets-baseline: ## Regenerate .secrets.baseline from the current codebase
 
 audit: ## Audit dependencies for known vulnerabilities
 	bash scripts/audit_dependencies.sh
+
+audit-capabilities: ## Compare the capability registry with an ArkModels dump (CATALOG=path.json)
+	$(UV) run python scripts/audit_capabilities.py $(CATALOG)
 
 # --- MCP inspection -------------------------------------------------------
 

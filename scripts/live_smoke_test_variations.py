@@ -26,26 +26,26 @@ truststore.inject_into_ssl()
 from _smoke_context import SmokeClient, require_tool_success, smoke_session  # noqa: E402
 
 from ark_mcp.config.env import get_settings  # noqa: E402
-from ark_mcp.tools.seed_audio_generate_variations import (  # noqa: E402
-    SeedAudioVariationsInput,
-    SeedAudioVariationsOutput,
+from ark_mcp.tools.gen_task_get import (  # noqa: E402
+    GenTaskGetInput,
+    GenTaskGetOutput,
 )
-from ark_mcp.tools.seedance_create_task import SeedanceImageInput  # noqa: E402
-from ark_mcp.tools.seedance_create_task_variations import (  # noqa: E402
-    SeedanceVariationsInput,
-    SeedanceVariationsOutput,
+from ark_mcp.tools.gen_task_list import (  # noqa: E402
+    GenTaskListInput,
+    GenTaskPage,
 )
-from ark_mcp.tools.seedance_get_task import (  # noqa: E402
-    SeedanceGetTaskInput,
-    SeedanceTaskOutput,
+from ark_mcp.tools.seed_audio_generate import (  # noqa: E402
+    SeedAudioGenerateInput,
+    SeedAudioGenerateOutput,
 )
-from ark_mcp.tools.seedance_list_tasks import (  # noqa: E402
-    SeedanceListTasksInput,
-    SeedanceTaskPage,
+from ark_mcp.tools.seedance_create_task import (  # noqa: E402
+    SeedanceCreateTaskInput,
+    SeedanceCreateTaskOutput,
+    SeedanceImageInput,
 )
-from ark_mcp.tools.seedream_generate_image_variations import (  # noqa: E402
-    SeedreamVariationsInput,
-    SeedreamVariationsOutput,
+from ark_mcp.tools.seedream_generate_image import (  # noqa: E402
+    SeedreamGenerateInput,
+    SeedreamGenerateOutput,
 )
 
 if TYPE_CHECKING:
@@ -68,26 +68,29 @@ async def test_image_variations(
     header("Seedream: 3 Image Variations (seeds 42, 43, 44)")
     result = require_tool_success(
         await ctx.call(
-            "seedream_generate_image_variations",
-            SeedreamVariationsInput(
+            "seedream_generate_image",
+            SeedreamGenerateInput(
                 prompt="A beautiful mountain landscape, digital art",
                 variations=3,
-                base_seed=42,
+                seed=42,
                 size="1024x1024",
                 response_format="url",
                 persist=True,
             ),
-            SeedreamVariationsOutput,
+            SeedreamGenerateOutput,
         )
     )
 
-    print(f"  Total: {result.summary.total}")
-    print(f"  Succeeded: {result.summary.succeeded}")
-    print(f"  Failed: {result.summary.failed}")
+    summary = result.summary
+    if summary is None:
+        return False, None
+    print(f"  Total: {summary.total}")
+    print(f"  Succeeded: {summary.succeeded}")
+    print(f"  Failed: {summary.failed}")
 
-    all_verified = result.summary.failed == 0
+    all_verified = summary.failed == 0
     reference_image: ArtifactRef | None = None
-    for v in result.summary.variations:
+    for v in summary.variations:
         if v.artifact:
             stored = await store.get(v.artifact.id)
             reference_image = reference_image or v.artifact
@@ -104,21 +107,24 @@ async def test_audio_variations(ctx: SmokeClient, store: ArtifactStore) -> bool:
     header("Seed Audio: 3 Audio Variations")
     result = require_tool_success(
         await ctx.call(
-            "seed_audio_generate_variations",
-            SeedAudioVariationsInput(
+            "seed_audio_generate",
+            SeedAudioGenerateInput(
                 text_prompt="Hello, this is a parallel variation test of the Seed Audio MCP tool.",
                 variations=3,
             ),
-            SeedAudioVariationsOutput,
+            SeedAudioGenerateOutput,
         )
     )
 
-    print(f"  Total: {result.summary.total}")
-    print(f"  Succeeded: {result.summary.succeeded}")
-    print(f"  Failed: {result.summary.failed}")
+    summary = result.summary
+    if summary is None:
+        return False
+    print(f"  Total: {summary.total}")
+    print(f"  Succeeded: {summary.succeeded}")
+    print(f"  Failed: {summary.failed}")
 
-    all_verified = result.summary.failed == 0
-    for v in result.summary.variations:
+    all_verified = summary.failed == 0
+    for v in summary.variations:
         if v.artifact:
             stored = await store.get(v.artifact.id)
             path = ARTIFACTS_DIR / f"variation_audio_{v.index}.wav"
@@ -141,8 +147,8 @@ async def test_seedance_variations(
 
     result = require_tool_success(
         await ctx.call(
-            "seedance_create_task_variations",
-            SeedanceVariationsInput(
+            "seedance_create_task",
+            SeedanceCreateTaskInput(
                 variation_prompts=[
                     "A cat walks forward slowly through a garden",
                     "A cat looks around curiously, then jumps playfully",
@@ -159,16 +165,16 @@ async def test_seedance_variations(
                 resolution="480p",
                 duration=5,
             ),
-            SeedanceVariationsOutput,
+            SeedanceCreateTaskOutput,
         )
     )
 
-    print(f"  Total: {result.summary.total}")
-    print(f"  Succeeded: {result.summary.succeeded}")
-    print(f"  Failed: {result.summary.failed}")
-    all_verified = result.summary.failed == 0
+    print(f"  Total: {len(result.tasks)}")
+    print(f"  Submitted: {result.submitted}")
+    print(f"  Failed: {result.failed}")
+    all_verified = result.failed == 0
     task_ids: list[str] = []
-    for v in result.summary.variations:
+    for v in result.tasks:
         if v.task_id:
             print(f"  [{v.index}] task_id={v.task_id}")
             task_ids.append(v.task_id)
@@ -182,9 +188,9 @@ async def test_seedance_variations(
     ctx.save_provider_ids(ARTIFACTS_DIR, task_ids)
     listed = require_tool_success(
         await ctx.call(
-            "seedance_list_tasks",
-            SeedanceListTasksInput(task_ids=task_ids),
-            SeedanceTaskPage,
+            "gen_task_list",
+            GenTaskListInput(task_ids=task_ids),
+            GenTaskPage,
             background=False,
         )
     )
@@ -200,27 +206,32 @@ async def test_seedance_variations(
         for task_id in list(pending):
             task = require_tool_success(
                 await ctx.call(
-                    "seedance_get_task",
-                    SeedanceGetTaskInput(task_id=task_id, persist_output=False),
-                    SeedanceTaskOutput,
+                    "gen_task_get",
+                    GenTaskGetInput(task_ids=[task_id]),
+                    GenTaskGetOutput,
                     background=False,
                 )
-            )
+            ).tasks[0]
             print(f"  Task {task_id}: {task.status}")
             if task.status in {"queued", "running"}:
                 continue
             pending.remove(task_id)
             if task.status == "succeeded":
-                task = await ctx.call(
-                    "seedance_get_task",
-                    SeedanceGetTaskInput(task_id=task_id, persist_output=True),
-                    SeedanceTaskOutput,
-                )
-            if task.status != "succeeded" or task.video is None:
+                task = (
+                    await ctx.call(
+                        "gen_task_get",
+                        GenTaskGetInput(task_ids=[task_id], persist_output=True),
+                        GenTaskGetOutput,
+                    )
+                ).tasks[0]
+            video = next(
+                (output.artifact for output in task.outputs if output.role == "video"), None
+            )
+            if task.status != "succeeded" or video is None:
                 print(f"  Task {task_id} failed: {task.error}")
                 all_verified = False
                 continue
-            stored = await runtime.artifact_store.get(task.video.id)
+            stored = await runtime.artifact_store.get(video.id)
             output_path = ARTIFACTS_DIR / f"variation_video_{task_id}.mp4"
             output_path.write_bytes(stored.data)
             print(

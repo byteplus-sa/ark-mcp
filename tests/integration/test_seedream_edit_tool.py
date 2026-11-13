@@ -1,4 +1,4 @@
-"""Integration tests for the ``seedream_edit_image`` tool handler.
+"""Integration tests for the ``seedream_generate_image`` tool handler.
 
 Exercises the full path: input validation → prompt construction →
 provider call (mocked) → artifact persistence → structured output.
@@ -17,11 +17,11 @@ from ark_mcp.domain.media import MediaSource, MediaSourceKind
 from ark_mcp.providers.modelark.schemas import SeedreamProviderResponse
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.security.safe_downloader import DownloadedMedia
-from ark_mcp.tools.seedream_edit_image import (
-    EditCoordinate,
-    SeedreamEditInput,
-    SeedreamEditOutput,
-    seedream_edit_image,
+from ark_mcp.tools._seedream_shared import EditCoordinate
+from ark_mcp.tools.seedream_generate_image import (
+    SeedreamGenerateInput,
+    SeedreamGenerateOutput,
+    seedream_generate_image,
 )
 from tests.fixtures.fake_context import FakeContext
 
@@ -60,8 +60,8 @@ class TestSeedreamEditImageTool:
 
         monkeypatch.setattr(SeedreamService, "generate", mock_generate)
 
-        await seedream_edit_image(
-            SeedreamEditInput(
+        await seedream_generate_image(
+            SeedreamGenerateInput(
                 prompt="Replace the object with a crown.",
                 images=[_ref_image()],
                 point=EditCoordinate(x=520, y=460),
@@ -101,8 +101,8 @@ class TestSeedreamEditImageTool:
                 ),
             ),
         ):
-            result = await seedream_edit_image(
-                SeedreamEditInput(
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(
                     prompt="Replace the object with a crown.",
                     images=[_ref_image()],
                     point=EditCoordinate(x=520, y=460),
@@ -110,7 +110,7 @@ class TestSeedreamEditImageTool:
                 fake_ctx,
             )
 
-        assert isinstance(result, SeedreamEditOutput)
+        assert isinstance(result, SeedreamGenerateOutput)
         assert result.provider == "byteplus-modelark"
         assert result.model == "dola-seedream-5-0-pro-260628"
         assert len(result.artifacts) == 1
@@ -133,8 +133,8 @@ class TestSeedreamEditImageTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store", return_value=temp_store):
-            result = await seedream_edit_image(
-                SeedreamEditInput(
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(
                     prompt="Replace with a garden.",
                     images=[_ref_image()],
                     bbox={"x1": 120, "y1": 180, "x2": 640, "y2": 760},
@@ -161,8 +161,8 @@ class TestSeedreamEditImageTool:
         )
 
         with patch("ark_mcp.artifacts.registry.get_artifact_store"):
-            result = await seedream_edit_image(
-                SeedreamEditInput(
+            result = await seedream_generate_image(
+                SeedreamGenerateInput(
                     prompt="edit",
                     images=[_ref_image()],
                     point=EditCoordinate(x=500, y=500),
@@ -196,8 +196,8 @@ class TestSeedreamEditImageTool:
 
         monkeypatch.setattr(SeedreamService, "generate", mock_generate)
 
-        result = await seedream_edit_image(
-            SeedreamEditInput(
+        result = await seedream_generate_image(
+            SeedreamGenerateInput(
                 prompt="edit", images=[_ref_image()], point=EditCoordinate(x=500, y=500)
             ),
             fake_ctx,
@@ -216,8 +216,10 @@ class TestSeedreamEditImageTool:
             MediaSource(kind=MediaSourceKind.url, url=f"https://example.com/{i}.png")
             for i in range(11)
         ]
-        with pytest.raises(ValueError, match="at most 10"):
-            await seedream_edit_image(
-                SeedreamEditInput(prompt="edit", images=images, point=EditCoordinate(x=500, y=500)),
+        with pytest.raises(ValueError, match="11 reference images exceed the maximum of 10"):
+            await seedream_generate_image(
+                SeedreamGenerateInput(
+                    prompt="edit", images=images, point=EditCoordinate(x=500, y=500)
+                ),
                 fake_ctx,
             )

@@ -11,9 +11,11 @@ from ark_mcp.tools._cost import (
     COST_PER_AUDIO_SECOND,
     COST_PER_IMAGE,
     COST_PER_VIDEO_TASK,
+    COST_PER_VIDEO_TASK_2_5,
     DEFAULT_MAX_CONCURRENT,
     estimate_cost,
     log_cost_estimate,
+    register_video_cost_override,
 )
 
 
@@ -197,6 +199,7 @@ class TestLogCostEstimate:
                 product="image",
                 variations=1,
                 estimated_cost_usd=0.03,
+                price_source="builtin",
             )
 
 
@@ -219,3 +222,38 @@ class TestEstimateCost3D:
 
         cost = estimate_cost(product="3d", variations=1, seed3d_family="seed3d_hyper3d")
         assert cost == COST_PER_3D_TASK_HYPER3D
+
+
+class TestVideoCostByFamily:
+    """Video pricing follows the registry family, not the model ID text."""
+
+    @pytest.mark.parametrize("family", ["seedance_2_5", "seedance_2_5_flash"])
+    def test_custom_2_5_endpoint_uses_static_2_5_fallback(self, family: str) -> None:
+        cost = estimate_cost(
+            product="video", variations=1, model_id="ep-my-endpoint", video_family=family
+        )
+        assert cost == COST_PER_VIDEO_TASK_2_5
+
+    def test_2_5_variations_use_the_2_5_rate(self) -> None:
+        cost = estimate_cost(product="video", variations=2, video_family="seedance_2_5")
+        assert cost == round(2 * COST_PER_VIDEO_TASK_2_5, 2)
+
+    def test_2_0_family_uses_default_price_even_with_2_5_looking_id(self) -> None:
+        cost = estimate_cost(
+            product="video",
+            variations=1,
+            model_id="dreamina-seedance-2-5-lookalike",
+            video_family="seedance_2",
+        )
+        assert cost == COST_PER_VIDEO_TASK
+
+    @pytest.mark.parametrize("family", ["seedance_2_5", "seedance_2_5_flash"])
+    def test_model_override_wins_over_family(
+        self, monkeypatch: pytest.MonkeyPatch, family: str
+    ) -> None:
+        monkeypatch.setattr("ark_mcp.tools._cost._VIDEO_COST_OVERRIDES", {})
+        register_video_cost_override("ep-special", 1.23)
+        cost = estimate_cost(
+            product="video", variations=1, model_id="ep-special", video_family=family
+        )
+        assert cost == 1.23

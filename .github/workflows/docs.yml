@@ -1,0 +1,82 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".agents/skills/ark-mcp/**"
+      - "src/ark_mcp/**"
+      - "scripts/export_tool_docs.py"
+      - "tests/unit/test_export_tool_docs.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".agents/skills/ark-mcp/**"
+      - "src/ark_mcp/**"
+      - "scripts/export_tool_docs.py"
+      - "tests/unit/test_export_tool_docs.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.11.26"
+          python-version: "3.12"
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: docs/site/package-lock.json
+      - name: Install locked Python dependencies
+        run: uv sync --locked
+      - name: Test offline schema export
+        run: uv run pytest tests/unit/test_export_tool_docs.py --disable-socket
+      - name: Install locked documentation dependencies
+        run: npm --prefix docs/site ci --ignore-scripts
+      - name: Test documentation utilities
+        run: npm --prefix docs/site test
+      - name: Format check
+        run: npm --prefix docs/site exec -- prettier --check docs/site/astro.config.mjs docs/site/src/content.config.ts "docs/site/scripts/*.mjs" docs/site/src/styles/custom.css
+      - name: Type check
+        run: npm --prefix docs/site run check
+      - name: Build and validate links
+        run: npm --prefix docs/site run build
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9
+        with:
+          path: out/docs-site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346

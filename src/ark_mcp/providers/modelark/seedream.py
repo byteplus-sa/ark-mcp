@@ -12,7 +12,12 @@ from typing import Any, cast
 
 import httpx
 
-from ark_mcp.domain.models import SeedreamItemError, SeedreamUsage
+from ark_mcp.domain.models import (
+    SeedreamGenerationMetadata,
+    SeedreamImageMetadata,
+    SeedreamItemError,
+    SeedreamUsage,
+)
 from ark_mcp.observability.logger import debug as log_debug
 from ark_mcp.providers.modelark.client import ModelArkGateway
 from ark_mcp.providers.modelark.schemas import (
@@ -88,6 +93,8 @@ class SeedreamService:
         response_format: str | None = None,
         watermark: bool | None = None,
         prompt_optimization: str | None = None,
+        background: str | None = None,
+        safety_identifier: str | None = None,
     ) -> SeedreamProviderRequest:
         """Build a provider request from domain-level parameters.
 
@@ -126,6 +133,8 @@ class SeedreamService:
             response_format=response_format,
             watermark=watermark,
             optimize_prompt_options=optimize_options,
+            background=background,
+            safety_identifier=safety_identifier,
         )
 
     @staticmethod
@@ -138,6 +147,30 @@ class SeedreamService:
             prompt_tokens=usage.get("prompt_tokens"),
             completion_tokens=usage.get("completion_tokens"),
             total_tokens=usage.get("total_tokens"),
+            input_images=usage.get("input_images"),
+            generated_images=usage.get("generated_images"),
+            output_tokens=usage.get("output_tokens"),
+        )
+
+    @staticmethod
+    def extract_generation_metadata(
+        response: SeedreamProviderResponse, *, variation_index: int = 0
+    ) -> SeedreamGenerationMetadata:
+        """Preserve response metadata without inferring absent provider values."""
+        return SeedreamGenerationMetadata(
+            variation_index=variation_index,
+            images=[
+                SeedreamImageMetadata(
+                    index=index,
+                    artifact_id=None,
+                    size=item.size,
+                    output_format=item.output_format,
+                    background=item.background,
+                )
+                for index, item in enumerate(response.data)
+            ],
+            safety_identifier=response.safety_identifier,
+            usage=SeedreamService.extract_usage(response) if response.usage is not None else None,
         )
 
     @staticmethod
@@ -149,11 +182,17 @@ class SeedreamService:
         The provider may include partial failures in the ``data`` array.
         """
         errors: list[SeedreamItemError] = []
-        for item in response.data:
-            if item.b64_json is None and item.url is None:
+        if not response.data:
+            return [
+                SeedreamItemError(
+                    index=0, code="NO_OUTPUT", message="Image generation returned no images."
+                )
+            ]
+        for index, item in enumerate(response.data):
+            if not item.b64_json and not item.url:
                 errors.append(
                     SeedreamItemError(
-                        index=item.index if item.index is not None else 0,
+                        index=item.index if item.index is not None else index,
                         code="NO_OUTPUT",
                         message="Image generation produced no output.",
                     )
