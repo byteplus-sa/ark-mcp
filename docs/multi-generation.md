@@ -32,6 +32,7 @@ preferred over variations when the model supports it.
 | Model family | Supports `max_images` | Max images |
 |---|---|---|
 | **Pro** (`seedream_pro`) | No | 1 |
+| **5.5** (`seedream_5_5`, default) | No | 1 |
 | **Lite** (`seedream_lite`) | Yes | 15 |
 | **4.x** (`seedream_4x`) | Yes | 15 |
 
@@ -71,6 +72,12 @@ The shared helper [`run_variation_batch`] in `tools/_parallel.py`:
    `DEFAULT_MAX_CONCURRENT` in `tools/_cost.py`).
 5. Waits for all of them under one batch deadline (see below), then builds a
    `VariationSummary` with per-variation success/failure tracking.
+
+Seedream also returns `generations`, ordered by zero-based `variation_index`,
+for completed provider calls. Each includes per-call usage, echoed safety ID,
+and provider-reported image size, format and actual background, with matching
+artifact IDs. Failed provider calls have no metadata entry; absent provider
+values remain `null`. The top-level `usage` remains single-call-only.
 
 ### Deadlines and failure phases
 
@@ -150,7 +157,7 @@ usage fields.
 | Scenario | Use |
 |---|---|
 | Multiple images, same prompt, Lite or 4.x model | `max_images` on `seedream_generate_image` |
-| Multiple images, Pro model | `variations` on `seedream_generate_image` |
+| Multiple images, 5.5 or Pro model | `variations` on `seedream_generate_image` |
 | Per-variation prompts or seeds | `variations` plus `variation_prompts` (and `seed` on Seedream) |
 | Multiple audio outputs | `variations` on `seed_audio_generate` |
 | Check requests and cost first | `dry_run=true` on `seedream_generate_image` or `seedance_create_task` |

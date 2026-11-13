@@ -1,6 +1,6 @@
 # Models and limits
 
-Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed 3D, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [api-reference.md](../../../../docs/api-reference.md)).
+Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed 3D, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 ## Discovery with `ark_list_models`
 
@@ -17,7 +17,7 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 - **`models[]`** has one entry per configured model whose service is enabled (empty when ModelArk is not configured; `3d` models appear only when 3D is enabled). Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, `seed3d`, or `understanding`).
 - **`model_id` is the exact value the `model` argument accepts.** Omitting `model` uses the entry with `is_default: true`.
 - **`tool`** names the tool that serves the model. Understanding modalities and media limits describe this route, not every possible use of the underlying model. `seed_audio_understand` advertises only `audio` (up to eight clips); use `seed_understand` for images/videos. Neither handler accepts mixed audio/visual requests.
-- **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seedance_2_5_premium`, `seed3d`, `seed_audio`, `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
+- **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seed3d`, `seed_audio`, `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
 
 | `kind` | `tool` | Notes on `is_default` |
 |---|---|---|
@@ -52,16 +52,17 @@ The server maps each configured model ID to a **family**; the family decides the
 | `HYPER3D_DEFAULT_MODEL`, `HITEM3D_DEFAULT_MODEL` | Per-family 3D defaults |
 | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | `standard` (default) or `fast`; applies only to Seedream 5.0 Pro when the caller omits `prompt_optimization` |
 
-Family values: Seedream `pro` / `lite` / `4x`; Seedance `standard` (2.0) / `fast` / `mini` / `seedance_2_5` / `seedance_2_5_premium`; understanding `pro` / `turbo`; 3D `hyper3d` / `hitem3d`.
+Family values: Seedream `seedream_5_5` / `pro` / `lite` / `4x`; Seedance `standard` (2.0) / `fast` / `mini` / `seedance_2_5` / `seedance_2_5_flash`; understanding `pro` / `turbo`; 3D `hyper3d` / `hitem3d`.
 
 ### Built-in model IDs (no binding needed)
 
 | Product | Default model ID | Family |
 |---|---|---|
-| Seedream | `dola-seedream-5-0-pro-260628` | Pro |
+| Seedream 5.5 (default) | `dola-seedream-5-5-261028` | `seedream_5_5` |
+| Seedream 5.0 Pro (opt-in) | `dola-seedream-5-0-pro-260628` | Pro |
 | Seedance | `dreamina-seedance-2-5-260628` | 2.5 |
+| Seedance Flash | `dreamina-seedance-2-5-flash-261115` | 2.5 Flash |
 | Seedance 2.0 (opt-in) | `dreamina-seedance-2-0-260128` | Standard |
-| Seedance 2.5 Premium | `dreamina-seedance-2-5-premium-260915` (`SEEDANCE_2_5_PREMIUM_MODEL`) | Premium |
 | Understanding | `dola-seed-2-1-turbo-260628` | Turbo |
 | Understanding (opt-in) | `dola-seed-evolving` | Pro |
 | Hyper3D | `hyper3d-gen2-260112` | Hyper3D |
@@ -69,15 +70,24 @@ Family values: Seedream `pro` / `lite` / `4x`; Seedance `standard` (2.0) / `fast
 
 Seedream Lite, Seedream 4.x, Seedance 2.0 Fast, and Seedance 2.0 Mini have no built-in ID; bind the account's authorized ID to the family.
 
+When Seedance bindings are empty, Flash is added alongside the selected default,
+unless it is already the default. Regular 2.5 remains the default when omitted.
+Explicit non-empty binding lists are never augmented. Listing Flash is not a
+provider activation or account-entitlement check.
+
 ### Rules that fail startup
 
 - **The default model must be one of the bound IDs, and bound IDs must be unique.** Startup fails with `... default model '<id>' is missing from its bindings. Set the default model env var to one of the bound IDs: [...]`.
+- **5.5 is the image default and requires account authorization.** Existing explicit defaults are unchanged. A bindings list containing only older models needs an explicit default or a 5.5 entry. Set `SEEDREAM_DEFAULT_MODEL=dola-seedream-5-0-pro-260628` to retain Pro; discovery does not prove provider access.
 - **`SEEDANCE_DEFAULT_MODEL` defaults to Seedance 2.5.** A `SEEDANCE_MODEL_BINDINGS` that lists only a 2.0 model therefore fails startup unless `SEEDANCE_DEFAULT_MODEL` is set to that 2.0 ID (to keep 2.0 as the default) or a 2.5 binding is added.
 - A custom default model ID with no family, no bindings, and no built-in match also fails startup (set the matching `*_MODEL_FAMILY` or bindings).
 
-### Seedance 2.5 Premium
+### Seedance 2.5 4K
 
-Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PREMIUM_ENABLED=true` (whitelisted accounts). With the flag on, the server binds `SEEDANCE_2_5_PREMIUM_MODEL` automatically unless a `seedance_2_5_premium` binding exists. It is called through `seedance_create_task` like every other Seedance model. With the flag off, Premium is absent from `ark_list_models` and a Premium binding is rejected at startup; `services` shows `seedance_2_5_premium` as disabled with the flag to set.
+4K is selected through `resolution="4k"` on `dreamina-seedance-2-5-260628`
+or an endpoint bound to `seedance_2_5`. No separate model, binding, or feature
+flag is needed. Old separate-model configuration must be removed explicitly;
+the server provides no compatibility aliases.
 
 ## Seedance (`kind: video`)
 
@@ -86,8 +96,8 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 | 2.0 | 480p, 720p, 1080p, 4k | 4-15 s | 9 / 3 / 3 | No | No | none | none |
 | 2.0 Fast | 480p, 720p | 4-15 s | 9 / 3 / 3 | No | No | none | none |
 | 2.0 Mini | 480p, 720p | 4-15 s | 9 / 3 / 3 | No | No | none | none |
-| 2.5 (default) | 480p, 720p, 1080p | 4-30 s | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
-| 2.5 Premium | 480p, 720p, 1080p, 4k | 4-30 s | 30 / 10 / 10 | Yes (4k) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| 2.5 (default) | 480p, 720p, 1080p, 4k | 4-30 s | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| 2.5 Flash | 480p, 720p | 4-30 s | 30 / 10 / 10 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
 
 - **Ratios** for every family: `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, `adaptive`.
 - **Duration `-1` (auto)** is accepted by every family in addition to the range.
@@ -95,21 +105,25 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 - **An empty `task_types` or `output_formats` list means the field is unsupported** on that model; setting it is rejected.
 - **Audio-only input** means audio references may be the only media input; on 2.0 families an audio reference needs an image or video alongside it.
 
-**Choosing a model.** Use 2.5 for single-pass video up to 30 s, richer references, structured editing, native extension, `mov` output, or Draft mode. Use Premium when you need **4K plus** the 2.5 feature set. Use 2.0 for 4K without Premium, or Fast/Mini for speed and lower cost.
+**Choosing a model.** Use regular 2.5 for 4K or Draft mode. Flash shares the 2.5 reference/edit/extend features up to 30 s at 480p/720p but rejects Draft requests. Use 2.0 when its legacy behavior is needed, or Fast/Mini for speed and lower cost. Static video estimates do not account for resolution or duration; Flash reuses the static 2.5 per-task fallback, not its token-based provider price.
 
-**Draft mode (2.5 and Premium only).** Step 1: `draft: true` renders a cheap 480p preview (resolution omitted or `480p`). Step 2, once the Draft task has succeeded (at most 7 days old, owned by the caller): `draft_task_id` renders the final video at the model's Draft final resolution (**1080p** on 2.5, **4k** on Premium). The provider reuses the Draft's model, prompt, media, duration, ratio, seed, `generate_audio`, and `omni_reference_task_type`, so omit them (they are rejected even when they match); leave `variations` at 1. `return_last_frame`, `watermark`, `execution_expires_after`, `priority`, `safety_identifier`, and `output_format` may be set again. Each step is billed separately. Polling and the `draft` flag in results: [polling-and-artifacts.md](polling-and-artifacts.md).
+**Draft mode (regular 2.5 only; not Flash).** Step 1: `draft: true` renders a cheap 480p preview (resolution omitted or `480p`). Step 2, once the Draft task has succeeded (at most 7 days old, owned by the caller): `draft_task_id` renders the final video at **1080p**, not 4K. The provider reuses the Draft's model, prompt, media, duration, ratio, seed, `generate_audio`, and `omni_reference_task_type`, so omit them (they are rejected even when they match); leave `variations` at 1. `return_last_frame`, `watermark`, `execution_expires_after`, `priority`, `safety_identifier`, and `output_format` may be set again. Each step is billed separately. Polling and the `draft` flag in results: [polling-and-artifacts.md](polling-and-artifacts.md).
 
 ## Seedream (`kind: image`)
 
 | Family | Max references | `max_images` batch | `output_format` | Prompt optimization | Transparent background |
 |---|---|---|---|---|---|
-| Pro (5.0 Pro, default) | 10 | No | `png`, `jpeg` | Yes; omitted value uses `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | Yes |
+| 5.5 (default) | 10 | No | `png` (default), `jpeg` | `standard` only (provider default) | Text-only or references without alpha |
+| Pro (5.0 Pro) | 10 | No | `png`, `jpeg` | Yes; omitted value uses `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | Existing transparent PNG only |
 | Lite | 14 | Yes | `png`, `jpeg` | Yes; provider default when omitted | No |
 | 4.x | 14 | Yes | `jpeg` only | Yes; provider default when omitted | No |
 
-- **`supported_sizes` is `null` (any size the provider accepts) on every built-in family.**
-- **`max_images` vs `variations`.** `max_images` is one provider batch (one request, one usage record) and only works where batch is supported (Lite, 4.x). `variations` (1-10) runs separate calls in parallel and works on every model. **On Pro use `variations`.** Passing both is rejected.
-- **`background="transparent"`** edits exactly one PNG input that already has transparent pixels and keeps the transparency. It needs Pro and `output_format` omitted or `png`. It does **not** cut a subject out of an opaque image.
+- **5.5 sizes:** `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with inclusive pixel count 921600-4624220 and width/height ratio 1/16-16. `auto`, `3K`, and `4K` are rejected for generation. Older families keep `supported_sizes=null` (provider validation).
+- **`max_images` vs `variations`.** `max_images` is one provider batch (one request, one usage record) and only works where batch is supported (Lite, 4.x). `variations` (1-10) runs separate calls in parallel and works on every model. **On 5.5 and Pro use `variations`.** Passing both is rejected.
+- **`background="transparent"`** requires `output_format` omitted or `png`. 5.5 supports text-only and reference-based generation without existing alpha. Pro edits exactly one already-transparent PNG; it does not remove an opaque background.
+- **5.5 background:** `auto` (default), `opaque`, `transparent`; JPEG in auto mode is always opaque. Pro accepts only `opaque` and `transparent`.
+- **Safety IDs:** optional `safety_identifier` on 5.5/Pro, 1-64 non-space printable ASCII characters; use a stable hash, not personal data.
+- Discovery reports transparency, named/custom size limits, `background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`. Source and remaining live-alpha validation: [model capabilities](https://byteplus-sa.github.io/ark-mcp/models/#image-capabilities-imagecapabilities). Layer-decomposition/OCR inputs are rejected.
 
 ## Seed 3D (`kind: 3d`, requires `BYTEPLUS_MODELARK_3D_ENABLED=true`)
 
@@ -138,4 +152,12 @@ Premium is **only a model ID**, present when `BYTEPLUS_MODELARK_SEEDANCE_2_5_PRE
 
 ## Health
 
-**`seed-health://status`** is an MCP resource that needs no authentication and exposes no credentials. It prints the build stamp, a healthy status, which products are configured (ModelArk, Seed 3D, asset library, Seed Audio, VOD AI MediaKit, OmniHuman, TOS, S3, speech-to-text), the object-storage backend, the artifact backend, and the active transport. Over HTTP transport, `/health` (liveness), `/ready` (artifact storage writable, optional provider checks), and `/metrics` are also available. For per-service enablement and the setting that fixes a disabled one, prefer the `services` field of `ark_list_models`. Environment variables: [environment.md](environment.md).
+**`seed-health://status`** is an MCP resource that needs no authentication and
+exposes no credentials or output-root paths. It prints the build stamp, configured
+products, storage backends, transport, effective Seedream default model/family
+and background-job local-export configuration. These are configuration-only
+diagnostics, not provider authorization or filesystem readiness. A configured
+absolute `OUTPUT_ROOTS` entry still needs request preflight; client roots do not
+exist in jobs. Over HTTP, `/health` (liveness), `/ready` (storage readiness,
+optional provider checks) and `/metrics` are also available. For per-service
+enablement prefer `ark_list_models.services`. Settings: [environment.md](environment.md).

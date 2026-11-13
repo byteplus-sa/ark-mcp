@@ -77,7 +77,7 @@ cancel its waiters.
 
 > For parallel variation tools, a third local `asyncio.Semaphore(max_concurrent=5)`
 > is created per batch by `run_variation_batch` (see [Parallel
-> variations](#parallel-variations)). It composes with — and is independent
+> variations](#parallel-variations-tools_parallelpy)). It composes with — and is independent
 > of — these provider/principal limiters.
 
 ## Concurrency and timeouts
@@ -91,7 +91,7 @@ come from provider latency, not from a server-wide lock. The other bounds:
 | HTTP graceful shutdown | equals `BYTEPLUS_REQUEST_TIMEOUT_MS` | `__main__.py` (`timeout_graceful_shutdown`) | In-flight HTTP requests get up to one provider timeout to finish on shutdown |
 | SQLite lock wait | `busy_timeout=5000` ms | `runtime.py::_open_sqlite_connection` | A blocked writer waits up to 5 s in its worker thread, never on the event loop |
 | HTTP request body | `MCP_HTTP_MAX_BODY_BYTES=314572800` (300 MiB) | `config/env.py` | A value below the 200 MiB video limit × 4/3 (Base64) logs `http_body_limit_below_media_upload_max` at startup |
-| Variation batch | `variation_batch_deadline(...)` | `tools/_parallel.py` | See [Parallel variations](#parallel-variations) |
+| Variation batch | `variation_batch_deadline(...)` | `tools/_parallel.py` | See [Parallel variations](#parallel-variations-tools_parallelpy) |
 
 - **A client's foreground deadline is not a server timeout.** Generation,
   understanding, transcription and upload tools use task mode `required`, so
