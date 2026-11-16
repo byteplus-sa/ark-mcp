@@ -216,6 +216,83 @@ class TestSettings:
         with pytest.raises(ValueError, match="API key auth requires"):
             Settings(_env_file=None, MCP_AUTH_MODE="api_key")
 
+    @pytest.mark.parametrize("retention", [1, 7, 13])
+    @pytest.mark.parametrize("model", ["dreamina-seedance-2-5-260628", "ep-draft"])
+    def test_authenticated_draft_models_reject_short_ownership_retention(
+        self, monkeypatch: pytest.MonkeyPatch, retention: int, model: str
+    ) -> None:
+        monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
+        with pytest.raises(ValueError, match="STATE_PRUNE_MAX_AGE_DAYS must be at least 14"):
+            Settings(
+                _env_file=None,
+                MCP_TRANSPORT="http",
+                MCP_AUTH_MODE="api_key",
+                MCP_API_KEY_SHA256="a" * 64,
+                SEEDANCE_DEFAULT_MODEL=model,
+                SEEDANCE_MODEL_FAMILY="seedance_2_5",
+                STATE_PRUNE_MAX_AGE_DAYS=retention,
+            )
+
+    @pytest.mark.parametrize("retention", [14, 30])
+    @pytest.mark.parametrize("model", ["dreamina-seedance-2-5-260628", "ep-draft"])
+    def test_authenticated_draft_models_accept_full_ownership_retention(
+        self, monkeypatch: pytest.MonkeyPatch, retention: int, model: str
+    ) -> None:
+        monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
+        settings = Settings(
+            _env_file=None,
+            MCP_TRANSPORT="http",
+            MCP_AUTH_MODE="api_key",
+            MCP_API_KEY_SHA256="a" * 64,
+            SEEDANCE_DEFAULT_MODEL=model,
+            SEEDANCE_MODEL_FAMILY="seedance_2_5",
+            STATE_PRUNE_MAX_AGE_DAYS=retention,
+        )
+        assert settings.state_prune_max_age_days == retention
+
+    def test_nondefault_draft_binding_requires_full_ownership_retention(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
+        with pytest.raises(ValueError, match="STATE_PRUNE_MAX_AGE_DAYS must be at least 14"):
+            Settings(
+                _env_file=None,
+                MCP_TRANSPORT="http",
+                MCP_AUTH_MODE="api_key",
+                MCP_API_KEY_SHA256="a" * 64,
+                SEEDANCE_DEFAULT_MODEL="ep-flash",
+                SEEDANCE_MODEL_BINDINGS=[
+                    {"model_id": "ep-flash", "family": "seedance_2_5_flash"},
+                    {"model_id": "ep-draft", "family": "seedance_2_5"},
+                ],
+                STATE_PRUNE_MAX_AGE_DAYS=7,
+            )
+
+    @pytest.mark.parametrize(
+        "transport,auth_mode,provider_key,model,family",
+        [
+            ("stdio", "local", "sk-test", "ep-draft", "seedance_2_5"),
+            ("http", "local", "sk-test", "ep-draft", "seedance_2_5"),
+            ("http", "api_key", "", "ep-draft", "seedance_2_5"),
+            ("http", "api_key", "sk-test", "ep-flash", "seedance_2_5_flash"),
+            ("http", "api_key", "sk-test", "ep-legacy", "standard"),
+        ],
+    )
+    def test_configurations_without_authenticated_drafts_keep_short_retention(
+        self, transport: str, auth_mode: str, provider_key: str, model: str, family: str
+    ) -> None:
+        settings = Settings(
+            _env_file=None,
+            BYTEPLUS_MODELARK_API_KEY=provider_key,
+            MCP_TRANSPORT=transport,
+            MCP_AUTH_MODE=auth_mode,
+            MCP_API_KEY_SHA256="a" * 64,
+            SEEDANCE_DEFAULT_MODEL=model,
+            SEEDANCE_MODEL_FAMILY=family,
+            STATE_PRUNE_MAX_AGE_DAYS=1,
+        )
+        assert settings.state_prune_max_age_days == 1
+
     def test_timeout_defaults(self) -> None:
         settings = Settings(_env_file=None)
         assert settings.connect_timeout_ms == 10000

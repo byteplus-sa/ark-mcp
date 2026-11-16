@@ -16,7 +16,7 @@ from fastmcp import Context
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, model_validator
 
-from ark_mcp.config.env import get_settings
+from ark_mcp.config.env import SEEDANCE_DRAFT_MAX_AGE_DAYS, get_settings
 from ark_mcp.config.model_capabilities import VideoCapabilities
 from ark_mcp.domain.artifacts import MediaType
 from ark_mcp.domain.errors import ProviderError
@@ -211,7 +211,9 @@ DRAFT_REUSED_FIELDS = (
     "generate_audio",
     "omni_reference_task_type",
 )
-DRAFT_TASK_MAX_AGE = timedelta(days=7)
+DRAFT_EXTENDED_WINDOW_START = datetime(2026, 10, 28, 2, tzinfo=UTC)
+DRAFT_TASK_MAX_AGE = timedelta(days=SEEDANCE_DRAFT_MAX_AGE_DAYS)
+DRAFT_LEGACY_TASK_MAX_AGE = timedelta(days=7)
 RECOMMENDED_POLL_AFTER_MS = 5000
 
 
@@ -391,8 +393,8 @@ async def load_draft_task(draft_task_id: str, ctx: Context) -> GenerationTaskRes
     """Fetch a Draft task and check it can be rendered as a final video.
 
     Enforces task ownership, then rejects tasks that have not succeeded, were
-    not created in Draft mode, or are past the provider's 7-day Draft window,
-    so the caller gets an actionable error instead of a provider rejection.
+    not created in Draft mode, or are past the provider's Draft window: 14 days
+    for tasks created at or after 2026-10-28 10:00 UTC+8, seven days before.
     """
     await get_runtime(ctx).ownership_store.require_owner(
         "modelark", draft_task_id, get_principal(ctx)
@@ -418,9 +420,15 @@ async def load_draft_task(draft_task_id: str, ctx: Context) -> GenerationTaskRes
             "gen_task_get until it succeeds."
         )
     created_at = parse_created_at(task.created_at)
-    if created_at is not None and datetime.now(UTC) - created_at > DRAFT_TASK_MAX_AGE:
-        raise ValueError(
-            f"Draft task '{draft_task_id}' was created more than 7 days ago and can "
-            "no longer be rendered as a final video. Create a new Draft task."
+    if created_at is not None:
+        max_age = (
+            DRAFT_TASK_MAX_AGE
+            if created_at >= DRAFT_EXTENDED_WINDOW_START
+            else DRAFT_LEGACY_TASK_MAX_AGE
         )
+        if datetime.now(UTC) - created_at > max_age:
+            raise ValueError(
+                f"Draft task '{draft_task_id}' was created more than {max_age.days} days ago "
+                "and can no longer be rendered as a final video. Create a new Draft task."
+            )
     return task

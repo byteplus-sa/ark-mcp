@@ -76,6 +76,17 @@ async def test_flash_discovery_shares_the_existing_tool_and_keeps_regular_defaul
     assert models["dreamina-seedance-2-5-260628"]["is_default"] is True
     assert flash["video"]["resolutions"] == ["480p", "720p"]
     assert flash["video"]["duration_seconds"] == [4, 30]
+    assert (
+        flash["video"]["max_reference_images"],
+        flash["video"]["max_reference_videos"],
+        flash["video"]["max_reference_audios"],
+    ) == (10, 5, 5)
+    regular = models["dreamina-seedance-2-5-260628"]["video"]
+    assert (
+        regular["max_reference_images"],
+        regular["max_reference_videos"],
+        regular["max_reference_audios"],
+    ) == (30, 10, 10)
     assert flash["video"]["supports_draft"] is False
     assert flash["video"]["draft_final_resolution"] is None
     assert flash["video"]["task_types"] == ["auto", "reference", "edit", "extend"]
@@ -219,18 +230,21 @@ async def test_flash_variations_keep_the_same_model_and_resolution(
     }
 
 
-@pytest.mark.parametrize("field,maximum", [("images", 30), ("videos", 10), ("audios", 10)])
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize("field,maximum", [("images", 10), ("videos", 5), ("audios", 5)])
 async def test_flash_rejects_excess_references_before_submission(
     flash_ctx: FakeContext,
     captured_creates: list[SeedanceCreateProviderRequest],
     field: str,
     maximum: int,
+    dry_run: bool,
 ) -> None:
-    with pytest.raises(ValueError, match="at most"):
+    with pytest.raises(ValueError, match=f"maximum of {maximum}"):
         request = SeedanceCreateTaskInput.model_validate(
             {
                 "model": MODEL,
                 field: ["https://cdn.example.com/reference"] * (maximum + 1),
+                "dry_run": dry_run,
             }
         )
         await seedance_create_task(request, flash_ctx)
@@ -275,25 +289,33 @@ async def test_flash_supports_structured_task_types_and_mov(
     assert captured_creates == []
 
 
+@pytest.mark.parametrize("dry_run", [False, True])
 async def test_flash_supports_audio_only_input_and_reference_count_boundaries(
     flash_ctx: FakeContext,
     captured_creates: list[SeedanceCreateProviderRequest],
+    dry_run: bool,
 ) -> None:
     for media in [
         {"audios": ["https://cdn.example.com/music.mp3"]},
         {
-            "images": ["https://cdn.example.com/tea.jpg"] * 30,
-            "videos": ["https://cdn.example.com/tea.mp4"] * 10,
-            "audios": ["https://cdn.example.com/music.mp3"] * 10,
+            "images": ["https://cdn.example.com/tea.jpg"] * 10,
+            "videos": ["https://cdn.example.com/tea.mp4"] * 5,
+            "audios": ["https://cdn.example.com/music.mp3"] * 5,
         },
     ]:
         result = await seedance_create_task(
-            SeedanceCreateTaskInput.model_validate({"model": MODEL, "dry_run": True, **media}),
+            SeedanceCreateTaskInput.model_validate({"model": MODEL, "dry_run": dry_run, **media}),
             flash_ctx,
         )
         assert isinstance(result, SeedanceCreateTaskOutput)
-        assert result.preview is not None
-    assert captured_creates == []
+        reference_count = sum(len(references) for references in media.values())
+        if dry_run:
+            assert result.preview is not None
+            assert len(result.preview.requests[0]["content"]) == reference_count
+        else:
+            assert result.submitted == 1
+            assert len(captured_creates[-1].content) == reference_count
+    assert len(captured_creates) == (0 if dry_run else 2)
 
 
 async def test_custom_flash_endpoint_keeps_flash_limits(
@@ -311,6 +333,22 @@ async def test_custom_flash_endpoint_keeps_flash_limits(
     caps = get_capability_registry().resolve_video_model("ep-flash")
     assert caps.supported_resolutions == ("480p", "720p")
     assert caps.supports_draft is False
+    assert (
+        caps.max_reference_images,
+        caps.max_reference_videos,
+        caps.max_reference_audios,
+    ) == (10, 5, 5)
+    for field, maximum in [("images", 10), ("videos", 5), ("audios", 5)]:
+        with pytest.raises(ValueError, match=f"maximum of {maximum}"):
+            await seedance_create_task(
+                SeedanceCreateTaskInput.model_validate(
+                    {
+                        "model": "ep-flash",
+                        field: ["https://cdn.example.com/reference"] * (maximum + 1),
+                    }
+                ),
+                flash_ctx,
+            )
     with pytest.raises(ValueError, match="resolution '4k' is not supported"):
         await seedance_create_task(
             SeedanceCreateTaskInput(model="ep-flash", prompt="A tea ad", resolution="4k"),

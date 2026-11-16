@@ -103,7 +103,8 @@ class SeedreamGenerateInput(BaseModel):
         ge=-1,
         le=2147483647,
         description=(
-            "Random seed. With variations > 1: N gives variation i seed N + i; -1 picks a "
+            "Seed compatibility field; 5.5 support is undocumented, so omit unless verified. "
+            "With variations > 1: N gives variation i seed N + i; -1 picks a "
             "random seed per variation; omitted lets the provider randomize."
         ),
     )

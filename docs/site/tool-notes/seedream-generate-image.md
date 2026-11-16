@@ -41,6 +41,8 @@ and [default upgrade note](/ark-mcp/configuration/#seedream-default-model-upgrad
 The adapter sends `POST /api/v3/images/generations` with Bearer authentication
 and `stream: false`. `persist`, `dry_run` and the job envelope are MCP controls,
 not provider payload fields. Keep keys in private server configuration.
+Seedream 5.5 does not document the retained `seed` compatibility field in its
+GA parameters or OpenAPI schema; omit it unless provider acceptance is verified.
 
 ### Output Checks and Scope
 

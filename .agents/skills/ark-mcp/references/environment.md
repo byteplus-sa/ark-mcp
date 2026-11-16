@@ -227,12 +227,17 @@ setting AK/SK or feature flags does not grant shared-key callers access.
 | Service | Behaviour | Settings |
 |---|---|---|
 | Artifact store | Durable media, metadata, ownership, TTL cleanup; a billed output is never dropped because storage failed | `ARTIFACT_BACKEND` (`filesystem` default, or `object_storage`), `ARTIFACT_DIR` (`~/.ark-mcp/artifacts`), `ARTIFACT_TTL_SECONDS` (7 days), `ARTIFACT_SWEEP_INTERVAL_SECONDS` |
-| Ownership / budget / cache state | SQLite, single instance; task ID to principal mapping enforced for Seedance and 3D | `STATE_BACKEND=sqlite`, `STATE_PRUNE_MAX_AGE_DAYS` (30), `PERSISTENCE_CACHE_MAX_SIZE` / `_TTL_SECONDS` |
+| Ownership / budget / cache state | SQLite, single instance; task ID to principal mapping enforced for Seedance and 3D | `STATE_BACKEND=sqlite`, `STATE_PRUNE_MAX_AGE_DAYS` (30; minimum 14 for authenticated HTTP with regular 2.5 enabled), `PERSISTENCE_CACHE_MAX_SIZE` / `_TTL_SECONDS` |
 | Budget ledger | Per-principal UTC daily spend estimate, shared by the whole team on hosted HTTP; a call that would exceed the limit is rejected before it reaches the provider | `DAILY_BUDGET_USD` (`0` records without blocking) |
 | Provider limiters | Per-provider semaphore for every call; one shared-team principal semaphore on authenticated HTTP (stdio and local HTTP are bounded by the provider limit alone) | `PROVIDER_MAX_CONCURRENCY` (5), `PRINCIPAL_MAX_CONCURRENCY` (3) |
 | Safe downloader | SSRF-safe provider-output downloads with IP pinning and redirect validation; retries timeouts, network errors, 408/429/5xx with 1s, 2s, 4s backoff; never retries policy failures | `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` (120), `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` (3) |
 | Background jobs | FastMCP task backend behind `ark_job_*`; the default in-memory backend is process-local, so a restart discards active and retained jobs | `FASTMCP_DOCKET_URL` (`memory://`), `FASTMCP_DOCKET_CONCURRENCY` (10), `FASTMCP_TASKS_ENCRYPTION_KEY` (required for shared-key auth with Redis) |
 
+- **Draft ownership:** authenticated HTTP with ModelArk credentials and any
+  `seedance_2_5` binding requires `STATE_PRUNE_MAX_AGE_DAYS >= 14`, including
+  custom/non-default bindings. Shorter overrides fail at startup; the default
+  30 is safe. Flash-only, legacy-only, local, and disabled ModelArk settings
+  keep the one-day minimum. Increasing retention cannot restore pruned ownership.
 - **Inline fallback:** if storage fails for inline Base64 output (Seed Audio,
   Seedream `b64_json`), it is returned inline up to
   `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables).

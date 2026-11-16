@@ -81,7 +81,7 @@ A cheap 480p preview, then a 1080p final render of the one you like. 4K is suppo
 
 1. `draft: true` with `resolution` omitted or `480p`. Combine with `variations` for several candidates.
 2. Poll with `gen_task_get` until a Draft succeeds (`draft: true` in the result) and review it.
-3. Call again with **only** `draft_task_id` (plus optional overrides below). It must be a succeeded Draft task **you own**, at most **7 days old**, and `variations` stays 1 with no `variation_prompts`.
+3. Call again with **only** `draft_task_id` (plus optional overrides below). It must be a succeeded Draft task **you own**, within **14 days of creation** (**7 days** if created before **2026-10-28 10:00 UTC+8**), and `variations` stays 1 with no `variation_prompts`.
 
 **Reused from the Draft, so omit them (rejected even when identical):** `prompt`, `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`, `omni_reference_task_type`. The model is also reused (omit `model`; a different one is rejected), as is the Draft's seed. `resolution` must be omitted or the model's Draft final resolution (the default). Still settable on the final call: `return_last_frame`, `watermark`, `execution_expires_after`, `priority`, `safety_identifier`, `output_format`.
 
@@ -120,6 +120,9 @@ Needs `BYTEPLUS_MODELARK_API_KEY`. **`seedream_generate_image` is the only Seedr
 - **They cannot be combined** (`variations > 1` with `max_images > 1` is rejected). On 5.5 and Pro, use `variations`.
 
 ### Seeds
+
+Seedream 5.5 does not document this compatibility field; omit it unless provider
+acceptance is verified.
 
 A fixed `seed` reproduces request settings, not guaranteed identical pixels. Single-call `-1` or omitted seed remains provider randomness, not a recovered actual seed. With `variations > 1`, `seed` is the **base seed**:
 

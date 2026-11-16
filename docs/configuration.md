@@ -143,7 +143,7 @@ video cost previews do not account for resolution or duration.
 
 Flash uses `dreamina-seedance-2-5-flash-261115`, family `seedance_2_5_flash`,
 through the same `seedance_create_task` tool, ModelArk key, host, and task
-lifecycle. It supports 480p/720p, 4-30 seconds, 30 image / 10 video / 10 audio
+lifecycle. It supports 480p/720p, 4-30 seconds, 10 image / 5 video / 5 audio
 references, audio-only input, reference/edit/extend task types, and MP4/MOV.
 It does not support 1080p, 4K, `draft`, or `draft_task_id`.
 
@@ -365,7 +365,7 @@ S3-compatible storage.
 | `ARTIFACT_DIR` | `~/.ark-mcp/artifacts` | Media, metadata, ownership, and budget state |
 | `ARTIFACT_TTL_SECONDS` | `604800` | Artifact retention, in seconds |
 | `ARTIFACT_SWEEP_INTERVAL_SECONDS` | `3600` | Interval between background artifact/state expiry sweeps |
-| `STATE_PRUNE_MAX_AGE_DAYS` | `30` | Max age for ownership/budget/cache rows before pruning |
+| `STATE_PRUNE_MAX_AGE_DAYS` | `30` | Max age for ownership/budget/cache rows before pruning; at least 14 for authenticated HTTP with regular Seedance 2.5 enabled |
 | `MCP_INLINE_MEDIA_MAX_BYTES` | `8388608` | Maximum inline MCP media size |
 | `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` | `120` | Timeout for each attempt to download provider output into artifact storage (filesystem and object-storage backends) |
 | `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` | `3` | Attempts (1-10) for a retryable output download (timeouts, network errors, 408/429/5xx), with 1s, 2s, 4s, ... backoff. Expired, untrusted, or oversized sources are never retried |
@@ -375,6 +375,14 @@ S3-compatible storage.
 | `DAILY_BUDGET_USD` | `0` | Per-principal UTC daily estimate limit, team-wide on shared-key HTTP; zero records only |
 | `PERSISTENCE_CACHE_MAX_SIZE` | `10000` | Max cached provider task IDs in artifact-resolution cache |
 | `PERSISTENCE_CACHE_TTL_SECONDS` | `86400` | TTL for cached task-to-artifact mappings (seconds) |
+
+Authenticated HTTP servers with ModelArk credentials and any regular
+`seedance_2_5` binding (including custom or non-default models) require
+`STATE_PRUNE_MAX_AGE_DAYS >= 14` to retain Draft ownership throughout the
+promotion window. Shorter values fail at startup; increase existing overrides
+or keep the 30-day default. Flash-only, legacy-only, local, and disabled
+ModelArk configurations retain the one-day minimum. Increasing retention does
+not recover already-pruned ownership rows; missing ownership remains denied.
 
 A billed output is never dropped because storage failed; see
 [Artifacts](artifacts.md#persistence-failures).
