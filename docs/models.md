@@ -81,12 +81,14 @@ ASCII characters on 5.5 and Pro. Use a stable hashed user identifier, not raw
 personal data. Dry-run previews and structured logs redact it; generation
 metadata preserves the provider's echo.
 
-The generation controls match the launch request examples supplied on
-2026-11-12. Size and reference bounds retain the prelaunch API revision 579
-(accessed 2026-11-09, including its 2026-11-07 pixel-limit reduction); the
-[public image API](https://docs.byteplus.com/en/docs/modelark/image-generation-api)
-is the provider reference. The request examples do not establish live editing
-quality, output alpha or account access. Use the opt-in
+The generation controls and size/reference bounds match the GA
+[image API](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/image-generation-api)
+(accessed 2026-11-16). Seedream 5.5 does not document `seed` in either the
+parameter reference or the official OpenAPI schema. The MCP retains it as an
+explicit compatibility field; omit it unless provider acceptance has been
+verified. The schema also lags GA fields such as `background="auto"`, so schema
+omissions alone are not proof of rejection. These contract checks do not
+establish live editing quality, output alpha or account access. Use the opt-in
 `scripts/smoke_seedream55.py` checks and review the results before release;
 the script is offline by default.
 
@@ -138,7 +140,8 @@ Only `supported_resolutions` differs:
 > separately) and reference counts (`max_reference_images=30`,
 > `max_reference_videos=10`, `max_reference_audios=10`). All four resolutions,
 > including `4k`, use the same regular 2.5 model. Flash shares the 2.5 duration
-> and reference limits but supports only 480p/720p and no Draft mode.
+> range but has reference limits of 10 images, 5 videos and 5 audios (20 total),
+> and supports only 480p/720p and no Draft mode.
 > Both 2.5 families set `supports_audio_only_input=True`,
 > `supported_task_types=("auto", "reference", "edit", "extend")`, and
 > `supported_output_formats=("mp4", "mov")`.
@@ -150,6 +153,20 @@ Only `supported_resolutions` differs:
 > Only regular 2.5 sets `supports_draft=True`; Flash sets it to `False` with
 > `draft_final_resolution=None`. Drafts are always `480p`, and a final rendered
 > from a Draft is `1080p`. 4K Draft promotion is not advertised or accepted.
+
+The GA [create-task API](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/create-video-generation-task-api)
+(accessed 2026-11-16) confirms Flash's 10/5/5 reference limits. Drafts created
+at or after **2026-10-28 10:00 UTC+8** (02:00 UTC) are valid for **14 days**;
+earlier Drafts retain **seven days**. The local check selects the window using
+the provider's creation timestamp, not the current date. Missing or unparsable
+timestamps leave the expiry decision to the provider.
+
+**Regular 2.5 4K contract caveat:** the server retains its existing `4k`
+resolution acceptance on the same model, but the current model-specific API
+docs list regular 2.5 only through 1080p and assign 4K to 2.0. The generic
+OpenAPI resolution enum includes `4k` without establishing support for a
+specific model. A successful dry run proves local validation only, not
+provider acceptance; confirm support before a paid regular 2.5 4K request.
 
 **Every Seedance model is called through one tool, `seedance_create_task`.**
 Its input schema advertises the widest limits; at runtime the tool checks the

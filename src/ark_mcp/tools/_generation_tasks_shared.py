@@ -104,7 +104,8 @@ class GenTask(BaseModel):
         None,
         description=(
             "True for a Seedance Draft task (480p preview). Once it succeeds, pass task_id as "
-            "draft_task_id to the Seedance create tool within 7 days of created_at."
+            "draft_task_id to the Seedance create tool within 14 days of created_at "
+            "(7 if created before 2026-10-28 10:00 UTC+8)."
         ),
     )
     settings: SeedanceTaskSettings | None = Field(

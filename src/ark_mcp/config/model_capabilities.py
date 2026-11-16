@@ -269,9 +269,9 @@ def _seedance_capabilities() -> dict[str, VideoCapabilities]:
             capabilities[binding.model_id] = VideoCapabilities(
                 family=family,
                 model_id=binding.model_id,
-                max_reference_images=30,
-                max_reference_videos=10,
-                max_reference_audios=10,
+                max_reference_images=10 if is_flash else 30,
+                max_reference_videos=5 if is_flash else 10,
+                max_reference_audios=5 if is_flash else 10,
                 supported_resolutions=resolutions,
                 supports_seed=False,
                 supports_camera_fixed=False,

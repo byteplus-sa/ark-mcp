@@ -143,7 +143,7 @@ video cost previews do not account for resolution or duration.
 
 Flash uses `dreamina-seedance-2-5-flash-261115`, family `seedance_2_5_flash`,
 through the same `seedance_create_task` tool, ModelArk key, host, and task
-lifecycle. It supports 480p/720p, 4-30 seconds, 30 image / 10 video / 10 audio
+lifecycle. It supports 480p/720p, 4-30 seconds, 10 image / 5 video / 5 audio
 references, audio-only input, reference/edit/extend task types, and MP4/MOV.
 It does not support 1080p, 4K, `draft`, or `draft_task_id`.
 

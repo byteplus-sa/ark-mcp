@@ -61,6 +61,17 @@ test("image and video tables distinguish defaults, custom IDs and gated models",
     /Seedance 2\.5 \|[^\n]*480p\/720p\/1080p\/4K on the same model/,
   );
   assert.match(video, /Seedance 2\.5 Flash \|[^\n]*480p\/720p;[^\n]*no Draft/);
+  assert.match(
+    video,
+    /Seedance 2\.5 Flash \|[^\n]*10 images \/ 5 videos \/ 5 audios/,
+  );
+  assert.doesNotMatch(
+    video,
+    /Seedance 2\.5 Flash \|[^\n]*30 images \/ 10 videos \/ 10 audios/,
+  );
+  assert.match(video, /Draft window 14 days/);
+  assert.match(video, /7 for creation before 2026-10-28 10:00 UTC\+8/);
+  assert.match(video, /not confirmed by current model-specific provider docs/);
   assert.match(video, /explicit lists must add/);
   assert.match(video, /discovery does not verify entitlement/);
   assert.match(video, /Seedance 2\.0 Fast/);

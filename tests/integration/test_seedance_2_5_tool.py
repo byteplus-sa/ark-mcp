@@ -6,8 +6,9 @@ provider responses and a temp artifact store.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -452,14 +453,14 @@ class TestSeedance25DraftMode:
         self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
-            return _draft_task(age=timedelta(days=8)), None
+            return _draft_task(age=timedelta(days=15)), None
 
         monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
 
         monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
-        with pytest.raises(ValueError, match="more than 7 days ago"):
+        with pytest.raises(ValueError, match="more than 14 days ago"):
             await seedance_create_task(
                 SeedanceCreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
             )
@@ -467,7 +468,7 @@ class TestSeedance25DraftMode:
     async def test_final_from_expired_iso_created_at_rejected(
         self, seedance_2_5_ctx: FakeContext, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        old = (datetime.now(UTC) - timedelta(days=8)).isoformat()
+        old = (datetime.now(UTC) - timedelta(days=15)).isoformat()
 
         async def mock_get(self: SeedanceService, task_id: str) -> tuple[Any, str | None]:
             return _draft_task(created_at=old), None
@@ -477,10 +478,84 @@ class TestSeedance25DraftMode:
         monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
         monkeypatch.setattr(SeedanceService, "close", _mock_close)
 
-        with pytest.raises(ValueError, match="more than 7 days ago"):
+        with pytest.raises(ValueError, match="more than 14 days ago"):
             await seedance_create_task(
                 SeedanceCreateTaskInput(draft_task_id="cgt-draft"), seedance_2_5_ctx
             )
+
+    @pytest.mark.parametrize("encoding", ["epoch", "iso", "utc-plus-eight"])
+    @pytest.mark.parametrize(
+        "cutoff_offset_seconds,age,window_days,expired",
+        [
+            (-1, timedelta(days=7), 7, False),
+            (-1, timedelta(days=7, seconds=1), 7, True),
+            (-1, timedelta(days=8), 7, True),
+            (0, timedelta(days=8), 14, False),
+            (0, timedelta(days=14), 14, False),
+            (0, timedelta(days=14, seconds=1), 14, True),
+            (1, timedelta(days=8), 14, False),
+            (1, timedelta(days=14), 14, False),
+            (1, timedelta(days=14, seconds=1), 14, True),
+        ],
+        ids=[
+            "legacy-at-expiry",
+            "legacy-past-expiry",
+            "legacy-eight-days",
+            "cutoff-eight-days",
+            "cutoff-at-expiry",
+            "cutoff-past-expiry",
+            "new-eight-days",
+            "new-at-expiry",
+            "new-past-expiry",
+        ],
+    )
+    async def test_draft_promotion_uses_creation_time_for_provider_expiry_window(
+        self,
+        seedance_2_5_ctx: FakeContext,
+        monkeypatch: pytest.MonkeyPatch,
+        encoding: str,
+        cutoff_offset_seconds: int,
+        age: timedelta,
+        window_days: int,
+        expired: bool,
+    ) -> None:
+        created = datetime(2026, 10, 28, 2, tzinfo=UTC) + timedelta(seconds=cutoff_offset_seconds)
+        if encoding == "epoch":
+            created_at: int | str = int(created.timestamp())
+        elif encoding == "utc-plus-eight":
+            created_at = created.astimezone(timezone(timedelta(hours=8))).isoformat()
+        else:
+            created_at = created.isoformat()
+        captured: list[Any] = []
+
+        async def mock_get(
+            self: GenerationTaskService, task_id: str
+        ) -> tuple[GenerationTaskResponse, str | None]:
+            return _draft_task(created_at=created_at), None
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            captured.append(request)
+            return "cgt-final", None
+
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+
+        with patch("ark_mcp.tools._seedance_shared.datetime", wraps=datetime) as clock:
+            clock.now.return_value = created + age
+            request = SeedanceCreateTaskInput(draft_task_id="cgt-draft")
+            if expired:
+                with pytest.raises(ValueError, match=f"more than {window_days} days ago"):
+                    await seedance_create_task(request, seedance_2_5_ctx)
+                assert captured == []
+            else:
+                result = await seedance_create_task(request, seedance_2_5_ctx)
+                assert isinstance(result, SeedanceCreateTaskOutput)
+                assert result.tasks[0].task_id == "cgt-final"
+                assert len(captured) == 1
+                assert captured[0].resolution == "1080p"
+                assert captured[0].content[0].draft_task == {"id": "cgt-draft"}
 
     @pytest.mark.parametrize(
         "created_at",

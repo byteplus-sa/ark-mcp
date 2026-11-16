@@ -29,19 +29,19 @@
     ]
   },
   "seedance_create_task": {
-    "selection": "Pass an exact configured ID as `model`, or omit it for `SEEDANCE_DEFAULT_MODEL`. Custom IDs require an explicit family binding in `SEEDANCE_MODEL_BINDINGS`. Limits below are family limits; discovery is authoritative for your server.",
+    "selection": "Pass an exact configured ID as `model`, or omit it for `SEEDANCE_DEFAULT_MODEL`. Custom IDs require an explicit family binding in `SEEDANCE_MODEL_BINDINGS`. Limits below are family limits; discovery is authoritative for your server. Regular 2.5 4K is retained server acceptance, not confirmed by current model-specific provider docs; see the [contract caveat](/ark-mcp/models/#video-capabilities-videocapabilities).",
     "models": [
       {
         "name": "Seedance 2.5",
         "id": "`dreamina-seedance-2-5-260628`",
         "availability": "Built-in default.",
-        "capabilities": "480p/720p/1080p/4K on the same model; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; Draft final at 1080p, not 4K."
+        "capabilities": "480p/720p/1080p/4K on the same model; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; Draft final at 1080p, not 4K; Draft window 14 days (7 for creation before 2026-10-28 10:00 UTC+8)."
       },
       {
         "name": "Seedance 2.5 Flash",
         "id": "`dreamina-seedance-2-5-flash-261115`",
         "availability": "Added alongside the selected default when bindings are empty; explicit lists must add `seedance_2_5_flash`. Account activation required; discovery does not verify entitlement.",
-        "capabilities": "480p/720p; 4-30 s or auto; 30 images / 10 videos / 10 audios; audio-only references; structured edit/extend; MP4/MOV; no Draft. Static cost previews reuse the 2.5 fallback, not token pricing."
+        "capabilities": "480p/720p; 4-30 s or auto; 10 images / 5 videos / 5 audios; audio-only references; structured edit/extend; MP4/MOV; no Draft. Static cost previews reuse the 2.5 fallback, not token pricing."
       },
       {
         "name": "Seedance 2.0",

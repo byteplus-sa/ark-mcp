@@ -96,6 +96,8 @@ flowchart LR
   that points to `ark_list_models`; fix them all, or use `dry_run`.
 - `SEEDANCE_DEFAULT_MODEL` is Seedance 2.5. **4K is a resolution**:
   use `resolution="4k"` on the same model, with no separate binding or flag.
+  This is retained server acceptance; current model-specific provider docs
+  omit regular 2.5 4K. Confirm provider support before paid use.
 - **Flash** uses `model="dreamina-seedance-2-5-flash-261115"` on the same tool,
   with 480p/720p and no Draft. Empty bindings include it automatically;
   explicit binding lists must add it themselves. Discovery does not prove
@@ -111,7 +113,8 @@ flowchart LR
 ### Seedance
 
 - **Draft (regular 2.5 only, not Flash):** `draft=true` makes a cheap 480p preview; once it
-  has `succeeded` (at most 7 days old), call again with only `draft_task_id`
+  has `succeeded` (within 14 days of creation, or 7 if created before
+  2026-10-28 10:00 UTC+8), call again with only `draft_task_id`
   (plus `return_last_frame`, `watermark`, `output_format` and similar) to render
   the final video at 1080p, not 4K. The Draft's model, prompt, media, duration and ratio are
   reused and must be omitted; `variations` must be 1.
@@ -130,6 +133,8 @@ flowchart LR
   already has transparent pixels** and preserves that transparency.
   Both require `output_format` omitted or `png`. 5.5 defaults to PNG.
 - Use `variations`, not provider batches, on 5.5 and 5.0 Pro.
+- Seedream 5.5 does not document the retained `seed` compatibility field;
+  omit it unless provider acceptance is verified.
 - 5.5 sizes: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with
   921600-4624220 pixels and width/height ratio 1/16-16, inclusive. No `auto` size.
 - 5.5 `prompt_optimization` accepts `standard` only (provider default);

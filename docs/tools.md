@@ -761,6 +761,8 @@ Built-in family limits (`ark_list_models` is authoritative for your server):
 | Seedream 4.x | 14 | Yes | `jpeg` | No |
 
 5.5's model ID is `dola-seedream-5-5-261028`; account authorization is required.
+Its `seed` compatibility field is not documented by the GA API; omit it unless
+provider acceptance has been verified. See the [contract notes](models.md#image-capabilities-imagecapabilities).
 Explicit existing defaults stay unchanged. See the
 [upgrade note](configuration.md#seedream-default-model-upgrade-note).
 
@@ -913,7 +915,9 @@ resubmit the create tool to poll**: each call starts new billed tasks.
   which also lists each model's limits. Omit it to use `SEEDANCE_DEFAULT_MODEL`
   (default `dreamina-seedance-2-5-260628`, Seedance 2.5).
 - **4K is a resolution, not a separate model.** Set `resolution="4k"` on
-  `dreamina-seedance-2-5-260628` or a configured 2.5 endpoint.
+  `dreamina-seedance-2-5-260628` or a configured 2.5 endpoint. This is retained
+  server acceptance; current model-specific provider docs do not list regular
+  2.5 4K. See the [contract caveat](models.md#video-capabilities-videocapabilities).
 - **Flash** uses `dreamina-seedance-2-5-flash-261115` with family
   `seedance_2_5_flash`: 480p/720p and no Draft mode. It is added automatically
   when bindings are empty; explicit binding lists must include it themselves.
@@ -931,7 +935,7 @@ server has configured):
 | Seedance 2.0 | 480p, 720p, 1080p, 4k | 4-15 | 9 / 3 / 3 | No | No | No | No |
 | Seedance 2.0 Fast, 2.0 Mini | 480p, 720p | 4-15 | 9 / 3 / 3 | No | No | No | No |
 | Seedance 2.5 | 480p, 720p, 1080p, 4k | 4-30 | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
-| Seedance 2.5 Flash | 480p, 720p | 4-30 | 30 / 10 / 10 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| Seedance 2.5 Flash | 480p, 720p | 4-30 | 10 / 5 / 5 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
 
 Static video cost estimates are not provider quotes and do not account for
 resolution or duration, including 4K. Flash reuses the static 2.5 per-task
@@ -1009,8 +1013,9 @@ do not.
    separately at its resolution.
 
 Before submitting step 2, the tool checks that the caller owns the Draft task,
-that it succeeded, that it was created in Draft mode, and that it is at most
-7 days old. If `model` is omitted, the tool uses the Draft task's model; a
+that it succeeded, that it was created in Draft mode, and that it is within
+**14 days of creation** (**7 days** if created before **2026-10-28 10:00 UTC+8**).
+If `model` is omitted, the tool uses the Draft task's model; a
 different `model` is rejected.
 
 ### Output
@@ -1153,7 +1158,7 @@ Each `GenTask` contains:
 | `outputs` | List of `TaskOutputFile`: roles `video` and `last_frame` for video tasks, `model_file` for 3D tasks. Empty until the task succeeds |
 | `error` | Provider failure `code` and `message` when failed |
 | `usage` | Token usage reported by the provider |
-| `draft` | `true` for a Seedance Draft task (480p preview); pass `task_id` as `draft_task_id` within 7 days. `null` for 3D |
+| `draft` | `true` for a Seedance Draft task (480p preview); pass `task_id` as `draft_task_id` within 14 days of creation (7 if created before 2026-10-28 10:00 UTC+8). `null` for 3D |
 | `settings` | Video generation settings echoed by the provider; `null` for 3D |
 | `queue` | Server-derived queue timing for a queued or running video task (below); `null` once finished and for 3D |
 

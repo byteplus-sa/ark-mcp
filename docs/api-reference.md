@@ -490,7 +490,7 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `bbox` | EditBbox | No | — | `x1`, `y1`, `x2`, `y2` in 0-999 on the **first** image, `x1 <= x2`, `y1 <= y2`; requires `images` |
 | `model` | string | No | `SEEDREAM_DEFAULT_MODEL` | Exact configured ID from `ark_list_models(kind='image')` |
 | `size` | string | No | `2K` on 5.5 | 5.5: `1K`, `1.5K`, `2K`, or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and ratio 1/16-16, inclusive. No generation `auto`; older families remain provider-validated |
-| `seed` | integer | No | — | -1 to 2147483647; the **base seed** when `variations > 1` (see below) |
+| `seed` | integer | No | — | -1 to 2147483647; undocumented compatibility field on 5.5, omit unless verified; the **base seed** when `variations > 1` (see below) |
 | `max_images` | integer | No | — | 1-15 images from **one provider call**; batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | `png` on 5.5 and transparent output; provider default otherwise | Model-dependent |
 | `response_format` | `"url"` \| `"b64_json"` | No | — | Base64 requires `persist=true`; the unusable combination is rejected even for dry runs, before submission |
@@ -515,7 +515,9 @@ only generation and editing are supported.
 `Image 1<point>x y</point>`, bbox first when both are set. The 4000-character
 limit applies to the final prompt.
 
-**Seed behavior.** A single call (`variations=1`) sends `seed` as-is. With
+**Seed behavior.** Seedream 5.5 does not document this compatibility field;
+omit it unless provider acceptance is verified. A single call (`variations=1`)
+sends an explicitly supplied `seed` as-is. With
 `variations > 1`, `seed` is the base seed:
 
 | `seed` | Per-variation seeds |
@@ -658,6 +660,7 @@ Variations report missing/undeliverable outputs as explicit errors in `summary`.
 ```json
 // Three variations with a base seed (arguments.input)
 {
+  "model": "dola-seedream-5-0-pro-260628",
   "prompt": "A futuristic city skyline, cyberpunk",
   "variations": 3,
   "seed": 42,
@@ -731,7 +734,9 @@ Set `model` to an **exact configured ID from `ark_list_models(kind='video')`**;
 every video model listed there names `seedance_create_task` as its tool. Omit
 `model` to use `SEEDANCE_DEFAULT_MODEL`, which defaults to
 `dreamina-seedance-2-5-260628` (Seedance 2.5). Select `resolution="4k"` on
-this same model or a configured 2.5 endpoint for 4K output.
+this same model or a configured 2.5 endpoint for retained server 4K acceptance.
+Current model-specific provider docs list regular 2.5 only through 1080p;
+see the [contract caveat](models.md#video-capabilities-videocapabilities).
 
 Flash uses `dreamina-seedance-2-5-flash-261115` with `seedance_2_5_flash`
 through this same tool. It is included when bindings are empty; explicit
@@ -747,7 +752,7 @@ for the models configured on a given server):
 | `seedance_2_fast` | 480p, 720p | 4-15 | 9 / 3 / 3 | No | No | — | — |
 | `seedance_2_mini` | 480p, 720p | 4-15 | 9 / 3 / 3 | No | No | — | — |
 | `seedance_2_5` | 480p, 720p, 1080p, 4k | 4-30 | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
-| `seedance_2_5_flash` | 480p, 720p | 4-30 | 30 / 10 / 10 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| `seedance_2_5_flash` | 480p, 720p | 4-30 | 10 / 5 / 5 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
 
 ### Input
 
@@ -819,8 +824,8 @@ overridden:
    `480p`) or `480p`. Works with `variations` to compare several previews.
 2. **Final.** Once a Draft has succeeded, call again with `draft_task_id` set
    to its `task_id`. The tool checks that the caller owns the task, that it
-   succeeded, that it was created in Draft mode, and that it is at most 7 days
-   old.
+   succeeded, that it was created in Draft mode, and that it is within 14 days
+   of creation (7 days if created before 2026-10-28 10:00 UTC+8).
    - The provider reuses the Draft's model, prompt, media, duration, ratio,
      seed, `generate_audio`, and `omni_reference_task_type`, so `prompt`,
      `images`, `videos`, `audios`, `duration`, `ratio`, `generate_audio`,
@@ -1332,7 +1337,7 @@ Returns `GenTaskGetOutput`:
 | `outputs` | list[TaskOutputFile] | `video` and `last_frame` for video tasks, `model_file` for 3D tasks; empty until `succeeded`. Same shape as in [`vod_get_task`](#18-vod_get_task) |
 | `error` | TaskError \| null | Provider `code` and `message` when failed |
 | `usage` | TaskUsage \| null | `prompt_tokens`, `completion_tokens`, `total_tokens` when reported |
-| `draft` | boolean \| null | `true` for a Seedance Draft task (480p preview); once it has succeeded, pass its `task_id` as `draft_task_id` within 7 days of `created_at` |
+| `draft` | boolean \| null | `true` for a Seedance Draft task (480p preview); once it has succeeded, pass its `task_id` as `draft_task_id` within 14 days of `created_at` (7 if created before 2026-10-28 10:00 UTC+8) |
 | `settings` | SeedanceTaskSettings \| null | Video generation settings echoed by the provider; `null` for 3D tasks |
 | `queue` | SeedanceQueueInfo \| null | Server-derived queue timing for a queued or running video task; `null` once finished and for 3D tasks |
 

@@ -88,6 +88,9 @@ provider activation or account-entitlement check.
 or an endpoint bound to `seedance_2_5`. No separate model, binding, or feature
 flag is needed. Old separate-model configuration must be removed explicitly;
 the server provides no compatibility aliases.
+This is retained server acceptance, not proof of provider support. Current
+model-specific API docs list regular 2.5 only through 1080p; confirm acceptance
+before paid 4K use. See the [contract caveat](https://byteplus-sa.github.io/ark-mcp/models/#video-capabilities-videocapabilities).
 
 ## Seedance (`kind: video`)
 
@@ -97,7 +100,7 @@ the server provides no compatibility aliases.
 | 2.0 Fast | 480p, 720p | 4-15 s | 9 / 3 / 3 | No | No | none | none |
 | 2.0 Mini | 480p, 720p | 4-15 s | 9 / 3 / 3 | No | No | none | none |
 | 2.5 (default) | 480p, 720p, 1080p, 4k | 4-30 s | 30 / 10 / 10 | Yes (1080p) | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
-| 2.5 Flash | 480p, 720p | 4-30 s | 30 / 10 / 10 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
+| 2.5 Flash | 480p, 720p | 4-30 s | 10 / 5 / 5 | No | Yes | `auto`, `reference`, `edit`, `extend` | `mp4`, `mov` |
 
 - **Ratios** for every family: `16:9`, `4:3`, `1:1`, `3:4`, `9:16`, `21:9`, `adaptive`.
 - **Duration `-1` (auto)** is accepted by every family in addition to the range.
@@ -107,7 +110,7 @@ the server provides no compatibility aliases.
 
 **Choosing a model.** Use regular 2.5 for 4K or Draft mode. Flash shares the 2.5 reference/edit/extend features up to 30 s at 480p/720p but rejects Draft requests. Use 2.0 when its legacy behavior is needed, or Fast/Mini for speed and lower cost. Static video estimates do not account for resolution or duration; Flash reuses the static 2.5 per-task fallback, not its token-based provider price.
 
-**Draft mode (regular 2.5 only; not Flash).** Step 1: `draft: true` renders a cheap 480p preview (resolution omitted or `480p`). Step 2, once the Draft task has succeeded (at most 7 days old, owned by the caller): `draft_task_id` renders the final video at **1080p**, not 4K. The provider reuses the Draft's model, prompt, media, duration, ratio, seed, `generate_audio`, and `omni_reference_task_type`, so omit them (they are rejected even when they match); leave `variations` at 1. `return_last_frame`, `watermark`, `execution_expires_after`, `priority`, `safety_identifier`, and `output_format` may be set again. Each step is billed separately. Polling and the `draft` flag in results: [polling-and-artifacts.md](polling-and-artifacts.md).
+**Draft mode (regular 2.5 only; not Flash).** Step 1: `draft: true` renders a cheap 480p preview (resolution omitted or `480p`). Step 2, once the Draft task has succeeded (within 14 days of creation, or 7 if created before 2026-10-28 10:00 UTC+8; owned by the caller): `draft_task_id` renders the final video at **1080p**, not 4K. The provider reuses the Draft's model, prompt, media, duration, ratio, seed, `generate_audio`, and `omni_reference_task_type`, so omit them (they are rejected even when they match); leave `variations` at 1. `return_last_frame`, `watermark`, `execution_expires_after`, `priority`, `safety_identifier`, and `output_format` may be set again. Each step is billed separately. Polling and the `draft` flag in results: [polling-and-artifacts.md](polling-and-artifacts.md).
 
 ## Seedream (`kind: image`)
 
@@ -123,6 +126,7 @@ the server provides no compatibility aliases.
 - **`background="transparent"`** requires `output_format` omitted or `png`. 5.5 supports text-only and reference-based generation without existing alpha. Pro edits exactly one already-transparent PNG; it does not remove an opaque background.
 - **5.5 background:** `auto` (default), `opaque`, `transparent`; JPEG in auto mode is always opaque. Pro accepts only `opaque` and `transparent`.
 - **Safety IDs:** optional `safety_identifier` on 5.5/Pro, 1-64 non-space printable ASCII characters; use a stable hash, not personal data.
+- **5.5 `seed`:** retained as an explicit compatibility field but absent from the current provider parameter docs and OpenAPI schema; omit unless provider acceptance is verified.
 - Discovery reports transparency, named/custom size limits, `background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`. Source and remaining live-alpha validation: [model capabilities](https://byteplus-sa.github.io/ark-mcp/models/#image-capabilities-imagecapabilities). Layer-decomposition/OCR inputs are rejected.
 
 ## Seed 3D (`kind: 3d`, requires `BYTEPLUS_MODELARK_3D_ENABLED=true`)
