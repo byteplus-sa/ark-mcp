@@ -51,10 +51,10 @@ test("moderation has its own section separate from asset management", () => {
     { name: "ark_moderation_get" },
     { name: "ark_asset_list" },
   ]);
-  assert.deepEqual(groups.map((group) => group.label), [
-    "Asset library",
-    "Moderation",
-  ]);
+  assert.deepEqual(
+    groups.map((group) => group.label),
+    ["Asset library", "Moderation"],
+  );
   assert.deepEqual(groups[1].items, [
     {
       label: "ark_moderation_get",
