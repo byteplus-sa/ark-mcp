@@ -30,7 +30,7 @@ See [release policy and installation](docs/releases.md) and the
 
 ## What It Does
 
-The server provides a conditional MCP tool surface across several BytePlus
+The catalog contains 39 tools, conditionally exposed across several BytePlus
 products plus artifact access and an optional media upload helper:
 
 | Product | Tools | Description |
@@ -50,6 +50,7 @@ products plus artifact access and an optional media upload helper:
 | **VOD Audio Separation** | `vod_separate_audio` | Submit voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
 | **VOD task polling** | `vod_get_task` | One poller for every `vod_*` task: pass the `task_id` and `operation` the create tool returned; normalized status and outputs with optionally background durable persistence |
 | **Private Asset Library** | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result`, `ark_asset_delete` | Manage Seedance Advanced Creation Rights assets (virtual portraits, verified real people) with BytePlus AK/SK; reference them as `asset://<id>` in Seedance |
+| **Moderation lookup** (optional) | `ark_moderation_get` | Foreground-only block-reason lookup for existing provider records; default-off flag + AK/SK, account-wide trusted local access only, not shared-key HTTP. [Bounds and live-unverified status](docs/moderation.md) |
 | **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url` | Retrieve persisted media inline by artifact ID, locate/copy it to a local path without Base64 round-trips, or durably persist a provider URL whose storage failed |
 | **Object storage** (optional) | `media_upload`, `media_presign` | Background-task upload of 1-50 Base64 or local-file media items to TOS or S3 with per-item results; foreground URL renewal for 1-100 object keys without re-uploading |
 | **Background jobs** | `ark_job_capabilities`, `ark_job_submit`, `ark_job_get`, `ark_job_cancel` | Ordinary MCP tools and the default way to submit and manage long-running work; no task-augmented execution required |
@@ -112,7 +113,8 @@ Key features:
   shared-team API key auth for network HTTP, Host/Origin protection, and body limits
 - **Runtime controls** — shared provider/principal concurrency, daily budget
   reservations, safe retries, task ownership, readiness with optional provider
-  health checks, per-IP HTTP rate limiting, metrics, and tracing
+  health checks, per-IP HTTP rate limiting, a dedicated ten-lookups-per-rolling-minute
+  moderation limiter per runtime, metrics, and tracing
 - **Offline regression coverage** — unit, contract, integration, HTTP security,
   E2E, and MCP conformance tests, plus documentation build/link checks
 
@@ -297,6 +299,10 @@ only when object storage credentials (TOS or S3) are configured, and
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `omnihuman_create_task`,
 `omnihuman_get_task`, and `omnihuman_cancel_task` appear only when
 `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is set.
+`ark_moderation_get` additionally requires
+`BYTEPLUS_MODELARK_MODERATION_ENABLED=true` and complete ModelArk AK/SK.
+The `ark_list_models.services` entry `moderation` reports configuration, not
+provider entitlement or permission to call it over shared-key HTTP.
 
 See [Configuration](docs/configuration.md) for the full environment
 variable reference.
@@ -387,6 +393,7 @@ make check-env     # Validate environment configuration
 | [Use Cases](docs/use-cases.md) | Common scenarios with example tool calls |
 | [Tools](docs/tools.md) | Tool reference with input/output tables |
 | [Private Asset Library](docs/assets.md) | Real-person, virtual portrait and copyright assets for Seedance (AK/SK) |
+| [Moderation Lookup](docs/moderation.md) | Existing blocked-record reasons, local access, eligibility and quota bounds; live success unverified |
 | [Security](docs/security.md) | Consolidated security model (auth, SSRF, body limits) |
 | [Runtime](docs/runtime.md) | Concurrency, budget, ownership, retry |
 | [Observability](docs/observability.md) | Structured logging, metrics, tracing |

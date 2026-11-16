@@ -58,6 +58,10 @@ def _assets(settings: Settings) -> bool:
     return settings.has_modelark_openapi
 
 
+def _moderation(settings: Settings) -> bool:
+    return settings.has_modelark_moderation
+
+
 def _asset_delete(settings: Settings) -> bool:
     return settings.has_modelark_openapi and settings.modelark_assets_allow_delete
 
@@ -217,6 +221,7 @@ CATALOG: tuple[CatalogEntry, ...] = (
         gate=_assets,
     ),
     _entry("ark_asset_list", "AssetPage", "assets:read", gate=_assets),
+    _entry("ark_moderation_get", "ModerationResult", "moderation:read", gate=_moderation),
     _entry("ark_asset_update", "AssetUpdateResult", "assets:write", gate=_assets),
     _entry(
         "ark_asset_verification_start",

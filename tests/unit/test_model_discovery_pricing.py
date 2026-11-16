@@ -1,15 +1,23 @@
 """Cached pricing must not turn model discovery into a provider request."""
 
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from typing import cast
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp import Context
 
-from ark_mcp.config.env import get_settings
+from ark_mcp.config.env import Settings, get_settings
 from ark_mcp.config.model_capabilities import refresh_capability_registry
 from ark_mcp.domain.pricing import ChargeItem, ModelPricing
 from ark_mcp.providers.modelark.pricing import catalog_name, get_price_book
+from ark_mcp.runtime import RuntimeServices
 from ark_mcp.tools.ark_list_models import ArkListModelsInput, ark_list_models
+
+
+def _context(settings: Settings) -> Context:
+    context = Mock(spec=Context)
+    context.lifespan_context = {"runtime": Mock(spec=RuntimeServices, settings=settings)}
+    return cast("Context", context)
 
 
 @pytest.mark.parametrize("max_age", [-1, 3600])
@@ -35,7 +43,7 @@ async def test_discovery_reads_cached_prices_without_network(
     fetch = AsyncMock(side_effect=AssertionError("Discovery must not query providers"))
     monkeypatch.setattr("ark_mcp.providers.modelark.pricing.PricingService.fetch", fetch)
     try:
-        result = await ark_list_models(ArkListModelsInput(kind="image"), cast("Any", None))
+        result = await ark_list_models(ArkListModelsInput(kind="image"), _context(settings))
         assert result.models
         model = next(
             item for item in result.models if item.model_id == settings.seedream_default_model
@@ -52,6 +60,6 @@ async def test_discovery_reads_cached_prices_without_network(
 
 
 async def test_missing_credentials_explain_unavailable_prices() -> None:
-    result = await ark_list_models(ArkListModelsInput(), cast("Any", None))
+    result = await ark_list_models(ArkListModelsInput(), _context(get_settings()))
     assert result.pricing_status == "unavailable"
     assert "AK/SK" in (result.pricing_note or "")

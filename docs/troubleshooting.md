@@ -170,6 +170,7 @@ If you experience timeouts:
 |---|---|---|---|---|
 | Create / generate / cancel / delete / MediaKit submit | `false` | `true` | No | It may have succeeded upstream. Do not retry blindly; reconcile by task ID, request ID, or `client_token` |
 | Task polls (Seedance, Seed 3D, ASR query, MediaKit get) | `true` | `false` | Yes | Safe to poll again |
+| `ark_moderation_get` | `true` | `false` | No | Honor retry guidance; another lookup consumes quota and its price is unspecified |
 | `seed_understand` / `seed_audio_understand` chat completion | `true` | `false` | No | Safe to retry, but a retry is a new billed completion; consider a longer `SEED_UNDERSTANDING_TIMEOUT_MS` or lower `reasoning_effort` |
 | Variation batch deadline | see `error.phase` | | No | `queued` (`QUEUE_TIMEOUT`) is safe to retry; `generating` is ambiguous |
 
@@ -296,6 +297,30 @@ fixed; clients cannot add scopes or select another identity. Account-wide
 asset and moderation tools are intentionally unavailable over shared HTTP,
 even if AK/SK or feature flags register them. Use a trusted local setup for
 administration rather than trying to grant a remote role.
+
+## Moderation Lookup
+
+`ark_moderation_get` requires `BYTEPLUS_MODELARK_MODERATION_ENABLED=true`
+(default off) and complete ModelArk AK/SK; STS also needs the session token.
+Use trusted stdio or local-mode loopback, not shared-key HTTP. Discovery's
+`moderation` service reports configuration, not entitlement.
+
+| Symptom | Meaning and action |
+|---|---|
+| Missing tool or denied over shared HTTP | `moderation:read` is intentionally excluded; use a trusted local setup, not extra remote scopes |
+| Missing from `ark_job_capabilities` or job/native-task rejection | Foreground-only by design; call directly |
+| Provider access denied | Check Advanced Creation Rights, whitelist activation and IAM `GetModerationResult`; configuration does not verify them |
+| `INVALID_INPUT` | Use a bare provider ID and explicit `task_id`, `asset_id` or `request_id`; trimmed ID must be 1-256 characters without internal whitespace, controls or schemes; no extra fields |
+| `NotFound.Id` | May be invalid, unblocked, expired or ineligible; records must be within fourteen days and after whitelist activation. Text and regular 2.5 request-ID lookup are unsupported; use `task_id` for 2.5 |
+| `LOCAL_RATE_LIMITED` | Ten lookups per rolling minute per runtime exhausted; no provider request sent. Honor retry delay |
+| `INVALID_RESPONSE` | Known provider response fields were malformed; retain only sanitized diagnostics, not raw bodies |
+| Empty `block_reasons` | Not proof of approval or safety; never automatically resubmit generation |
+
+There are no automatic retries or server-side lookup-result persistence.
+Live success remains unverified; 403, 404 or empty reasons do not validate it.
+For eligibility and isolated synthetic smoke instructions, see
+[moderation.md](moderation.md). Do not share real IDs, reasons, fixtures,
+screenshots or restricted source material in public diagnostics.
 
 ## Running Tests
 

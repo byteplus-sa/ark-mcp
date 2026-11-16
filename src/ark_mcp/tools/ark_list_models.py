@@ -7,7 +7,7 @@ from typing import Literal
 from fastmcp import Context
 from pydantic import BaseModel, Field
 
-from ark_mcp.config.env import Settings, get_settings
+from ark_mcp.config.env import Settings
 from ark_mcp.config.model_capabilities import (
     ImageCapabilities,
     ModelFamily,
@@ -18,6 +18,7 @@ from ark_mcp.config.model_capabilities import (
 )
 from ark_mcp.domain.pricing import ModelPricing, PricingStatus
 from ark_mcp.providers.modelark.pricing import get_price_book, live_pricing_enabled
+from ark_mcp.runtime import get_runtime
 from ark_mcp.tools.seed_audio_understand import MAX_AUDIO_INPUTS
 
 ModelKind = Literal["video", "image", "3d", "understanding"]
@@ -200,7 +201,7 @@ async def ark_list_models(input: ArkListModelsInput, ctx: Context) -> ArkListMod
     `services` shows which optional services are enabled and the setting that enables a
     disabled one.
     """
-    settings = get_settings()
+    settings = get_runtime(ctx).settings
     models = [model for model in describe_models(settings) if input.kind in (None, model.kind)]
     book = get_price_book()
     if live_pricing_enabled(settings) and book.is_fresh():
@@ -363,6 +364,13 @@ def describe_services(settings: Settings) -> list[ServiceStatus]:
             "asset_delete",
             settings.has_modelark_openapi and settings.modelark_assets_allow_delete,
             "Set BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true with the asset library configured.",
+        ),
+        (
+            "moderation",
+            settings.has_modelark_moderation,
+            "Set BYTEPLUS_MODELARK_MODERATION_ENABLED=true with BYTEPLUS_MODELARK_ACCESS_KEY "
+            "and BYTEPLUS_MODELARK_SECRET_KEY. Requires Advanced Creation Rights and whitelist "
+            "activation; configuration does not verify entitlement or shared HTTP access.",
         ),
     )
     return [

@@ -21,6 +21,7 @@ def all_services_enabled(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "BYTEPLUS_MODELARK_ACCESS_KEY": "AKLTtestopenapi",
         "BYTEPLUS_MODELARK_SECRET_KEY": "test-openapi-secret",  # pragma: allowlist secret
         "BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE": "true",
+        "BYTEPLUS_MODELARK_MODERATION_ENABLED": "true",
         "TOS_ACCESS_KEY": "ak-test-tos",  # pragma: allowlist secret
         "TOS_SECRET_KEY": "sk-test-tos",  # pragma: allowlist secret
         "TOS_BUCKET": "test-bucket",

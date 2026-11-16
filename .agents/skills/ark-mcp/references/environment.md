@@ -93,6 +93,9 @@ its task and MCP SDK dependencies.
 **Do not assume a fixed tool count.** A tool registers only when its gate
 passes; the server degrades to whatever is configured. `ark_list_models.services`
 and `seed-health://status` report what is on.
+The catalog contains 39 tools. The `moderation` service and
+`Moderation lookup configured` health line report configuration, not provider
+entitlement or shared-key permission.
 
 | Setting | Enables |
 |---|---|
@@ -104,6 +107,7 @@ and `seed-health://status` report what is on.
 | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task`. Separate Vision AI Bearer key; default off. Overrides: `BYTEPLUS_CV_BASE_URL`, `BYTEPLUS_OMNIHUMAN_REQ_KEY` |
 | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result` (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP...` keys) |
 | `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` + AK/SK | Additionally registers the irreversible `ark_asset_delete` (default off) |
+| `BYTEPLUS_MODELARK_MODERATION_ENABLED=true` + AK/SK | `ark_moderation_get`, foreground-only account-wide trusted stdio/local-mode loopback lookup (default off; STS also needs session token) |
 | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` (default backend) | `media_upload`, `media_presign` |
 | `OBJECT_STORAGE_BACKEND=s3` + `S3_ACCESS_KEY` + `S3_SECRET_KEY` + `S3_BUCKET` | Same two tools on S3 or S3-compatible storage (`S3_ENDPOINT`) |
 
@@ -129,6 +133,10 @@ Gotchas that follow from the gates:
   Discovery reads the cache only. Image and understanding estimates use
   recognized fresh rates, otherwise built-in rates. Configuring these keys
   also registers asset tools, but the fixed shared-key scopes exclude them.
+- **Moderation entitlement is separate:** Advanced Creation Rights, whitelist
+  activation and IAM `GetModerationResult` are required. For an isolated lookup,
+  disable pricing refresh with `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS=0`;
+  do not broaden a moderation-only IAM policy for assets or pricing.
 - A custom model ID must be bound (`SEEDREAM_MODEL_BINDINGS`,
   `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`,
   `SEED3D_MODEL_BINDINGS`); see [models-and-limits.md](models-and-limits.md).
@@ -143,7 +151,7 @@ Gotchas that follow from the gates:
 | `BYTEPLUS_MODELARK_BASE_URL` | `https://ark.ap-southeast.bytepluses.com/api/v3` | Key is region-scoped; must match |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL`, `SEED_SPEECH_ASR_BASE_URL` | `https://voice.ap-southeast-1.bytepluses.com` | Seed Audio / ASR hosts |
 | `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | Must be HTTPS |
-| `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | Asset library control plane (signed with AK/SK) |
+| `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | Assets, moderation and pricing control plane (signed with AK/SK) |
 | `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` / `_MAX_SECONDS` | `3` / `600` | Server-side ASR polling cadence and ceiling |
 | `BYTEPLUS_CONNECT_TIMEOUT_MS` / `BYTEPLUS_REQUEST_TIMEOUT_MS` | `10000` / `600000` | Provider connect and full-request timeouts |
 | `SEED_UNDERSTANDING_TIMEOUT_MS` | request timeout | `seed_understand` and `seed_audio_understand`; deep thinking can need more |
@@ -206,6 +214,8 @@ selected by the client. Provider credentials and feature gates still apply.
 Account-wide `assets:*` and `moderation:*` privileges are excluded. Use
 trusted local stdio for administration with the relevant provider gates;
 setting AK/SK or feature flags does not grant shared-key callers access.
+In particular, `moderation:read` is a catalog permission label, not a scope
+granted to shared HTTP. Loopback access requires `MCP_AUTH_MODE=local`.
 
 ## HTTP rate limiting and readiness
 
@@ -229,7 +239,8 @@ setting AK/SK or feature flags does not grant shared-key callers access.
 | Artifact store | Durable media, metadata, ownership, TTL cleanup; a billed output is never dropped because storage failed | `ARTIFACT_BACKEND` (`filesystem` default, or `object_storage`), `ARTIFACT_DIR` (`~/.ark-mcp/artifacts`), `ARTIFACT_TTL_SECONDS` (7 days), `ARTIFACT_SWEEP_INTERVAL_SECONDS` |
 | Ownership / budget / cache state | SQLite, single instance; task ID to principal mapping enforced for Seedance and 3D | `STATE_BACKEND=sqlite`, `STATE_PRUNE_MAX_AGE_DAYS` (30; minimum 14 for authenticated HTTP with regular 2.5 enabled), `PERSISTENCE_CACHE_MAX_SIZE` / `_TTL_SECONDS` |
 | Budget ledger | Per-principal UTC daily spend estimate, shared by the whole team on hosted HTTP; a call that would exceed the limit is rejected before it reaches the provider | `DAILY_BUDGET_USD` (`0` records without blocking) |
-| Provider limiters | Per-provider semaphore for every call; one shared-team principal semaphore on authenticated HTTP (stdio and local HTTP are bounded by the provider limit alone) | `PROVIDER_MAX_CONCURRENCY` (5), `PRINCIPAL_MAX_CONCURRENCY` (3) |
+| Provider limiters | Per-provider concurrency; one shared-team principal semaphore on authenticated HTTP (local mode skips the principal semaphore; moderation also has a dedicated quota guard) | `PROVIDER_MAX_CONCURRENCY` (5), `PRINCIPAL_MAX_CONCURRENCY` (3) |
+| Moderation quota | Ten admitted lookups per rolling minute per runtime, shared across callers/ID types; exhaustion returns `LOCAL_RATE_LIMITED` with no provider call; in-memory, not distributed | Fixed bound; independent of HTTP RPM and concurrency settings |
 | Safe downloader | SSRF-safe provider-output downloads with IP pinning and redirect validation; retries timeouts, network errors, 408/429/5xx with 1s, 2s, 4s backoff; never retries policy failures | `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` (120), `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` (3) |
 | Background jobs | FastMCP task backend behind `ark_job_*`; the default in-memory backend is process-local, so a restart discards active and retained jobs | `FASTMCP_DOCKET_URL` (`memory://`), `FASTMCP_DOCKET_CONCURRENCY` (10), `FASTMCP_TASKS_ENCRYPTION_KEY` (required for shared-key auth with Redis) |
 
@@ -250,6 +261,11 @@ setting AK/SK or feature flags does not grant shared-key callers access.
   are not shared across replicas.
 
 ### Retry policy
+
+`ark_moderation_get` bypasses automatic retries: at most one provider request
+per admitted foreground lookup, no result persistence. Lookup pricing is
+unspecified and live success remains unverified; see
+[Moderation Lookup](https://byteplus-sa.github.io/ark-mcp/moderation/).
 
 **Only safe failures are retried.** A provider error is retried (up to 3
 attempts, 0.25s base delay doubling to a 4s cap, 20% jitter, honouring
@@ -283,7 +299,7 @@ flowchart LR
 | Seed Speech | `X-Api-Key: <BYTEPLUS_SEED_SPEECH_API_KEY>` | Seed Audio and Speech-to-Text (told apart by `X-Api-Resource-Id`, not by key) |
 | VOD AI MediaKit | `Authorization: Bearer <BYTEPLUS_VOD_MEDIAKIT_API_KEY>` | Enhancement, transcode, subtitles, audio separation |
 | Vision AI (optional) | `Authorization: Bearer <BYTEPLUS_CV_API_KEY>` | OmniHuman 2.0 |
-| ModelArk OpenAPI (optional) | IAM AK/SK, V4 signatures | Private asset library |
+| ModelArk OpenAPI (optional) | IAM AK/SK, V4 signatures | Private asset library, opt-in moderation lookup and cached pricing |
 
 Inputs are validated against a model-capability registry before quota is spent
 ([models-and-limits.md](models-and-limits.md)). For tool inputs and outputs see

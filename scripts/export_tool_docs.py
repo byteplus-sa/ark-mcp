@@ -35,6 +35,11 @@ _REGISTRATION_GATES = {
     "_vod": "Requires BYTEPLUS_VOD_MEDIAKIT_API_KEY.",
     "_omnihuman": "Requires BYTEPLUS_OMNIHUMAN_ENABLED=true and BYTEPLUS_CV_API_KEY.",
     "_assets": "Requires BYTEPLUS_MODELARK_ACCESS_KEY and BYTEPLUS_MODELARK_SECRET_KEY.",
+    "_moderation": (
+        "Requires BYTEPLUS_MODELARK_MODERATION_ENABLED=true, BYTEPLUS_MODELARK_ACCESS_KEY "
+        "and BYTEPLUS_MODELARK_SECRET_KEY. Provider whitelist and Advanced Creation Rights "
+        "required; configuration does not verify entitlement. Denied to shared HTTP key holders."
+    ),
     "_asset_delete": (
         "Requires BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true, BYTEPLUS_MODELARK_ACCESS_KEY "
         "and BYTEPLUS_MODELARK_SECRET_KEY."

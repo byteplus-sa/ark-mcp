@@ -73,6 +73,18 @@ preflight running at the same time.
 
 ## Workflows
 
+### Inspect an existing content block
+
+For an eligible already-blocked material asset, call `ark_moderation_get`
+directly with `{"input":{"id":"synthetic-asset-id","type":"asset_id"}}`;
+use a bare ID, not `asset://`. This separate default-off feature requires
+AK/SK, `BYTEPLUS_MODELARK_MODERATION_ENABLED=true`, Advanced Creation Rights,
+whitelist activation and IAM `GetModerationResult`. It is account-wide trusted
+stdio/local-mode loopback only, never shared-key HTTP or background execution.
+Records must be within fourteen days and created after whitelist activation.
+Lookup does not alter moderation, make an asset Active, or prove safety;
+live success remains unverified. See [moderation.md](moderation.md) for bounds.
+
 ### Virtual character → Seedance
 
 1. Make or collect clearly fictional images of the character: a front-facing

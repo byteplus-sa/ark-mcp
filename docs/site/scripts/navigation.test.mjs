@@ -46,6 +46,23 @@ test("tool routes and exact MCP names remain unchanged", () => {
   ]);
 });
 
+test("moderation has its own section separate from asset management", () => {
+  const groups = toolReferenceGroups([
+    { name: "ark_moderation_get" },
+    { name: "ark_asset_list" },
+  ]);
+  assert.deepEqual(
+    groups.map((group) => group.label),
+    ["Asset library", "Moderation"],
+  );
+  assert.deepEqual(groups[1].items, [
+    {
+      label: "ark_moderation_get",
+      slug: "tool-reference/ark-moderation-get",
+    },
+  ]);
+});
+
 test("empty catalogs do not create empty navigation groups", () => {
   assert.deepEqual(toolReferenceGroups([]), []);
 });

@@ -84,7 +84,7 @@ def profile(frame, event, arg):
         and frame.f_code.co_name in {
             "_always", "_modelark", "_seed3d", "_seed_audio", "_stt",
             "_object_storage", "_vod", "_omnihuman", "_assets",
-            "_asset_delete",
+            "_asset_delete", "_moderation",
         }
     ):
         raise AssertionError("Exporter evaluated a registration gate")
@@ -369,6 +369,11 @@ def test_all_registration_gates_name_the_exact_environment_variables(
         "_vod": {"BYTEPLUS_VOD_MEDIAKIT_API_KEY"},
         "_omnihuman": {"BYTEPLUS_OMNIHUMAN_ENABLED", "BYTEPLUS_CV_API_KEY"},
         "_assets": {"BYTEPLUS_MODELARK_ACCESS_KEY", "BYTEPLUS_MODELARK_SECRET_KEY"},
+        "_moderation": {
+            "BYTEPLUS_MODELARK_ACCESS_KEY",
+            "BYTEPLUS_MODELARK_SECRET_KEY",
+            "BYTEPLUS_MODELARK_MODERATION_ENABLED",
+        },
         "_asset_delete": {
             "BYTEPLUS_MODELARK_ACCESS_KEY",
             "BYTEPLUS_MODELARK_SECRET_KEY",
@@ -383,8 +388,11 @@ def test_all_registration_gates_name_the_exact_environment_variables(
         assert variables == expected[entry.gate.__name__], entry.name
         if entry.gate.__name__ == "_always":
             assert "always" in gate.lower()
-        if entry.gate.__name__ in {"_seed3d", "_omnihuman", "_asset_delete"}:
+        if entry.gate.__name__ in {"_seed3d", "_omnihuman", "_asset_delete", "_moderation"}:
             assert "=true" in gate
+        if entry.gate.__name__ == "_moderation":
+            assert "whitelist" in gate.lower()
+            assert "shared" in gate.lower()
         if entry.gate.__name__ == "_object_storage":
             assert "OBJECT_STORAGE_BACKEND=tos" in gate
             assert "OBJECT_STORAGE_BACKEND=s3" in gate

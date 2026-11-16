@@ -149,6 +149,11 @@ The catalog retains `assets:read`, `assets:write`, `assets:verify` and
 the shared key; these tools are available only through trusted local mode
 with the required provider credentials and feature flags.
 
+The catalog label `moderation:read` protects `ark_moderation_get` and is also
+excluded from the shared key. Complete AK/SK plus
+`BYTEPLUS_MODELARK_MODERATION_ENABLED=true` register it for trusted local
+stdio/local-mode loopback use only; they do not grant shared HTTP access.
+
 **Create scopes are per product because that is where spend happens; read
 and delete scopes are shared** (`gen:read`, `gen:delete`) because the
 ownership store already limits every principal to its tasks. Every shared-key
@@ -184,6 +189,28 @@ verification `h5_link` embeds temporary credentials: it is returned to the
 caller but never logged. `asset://<asset_id>` references are validated by
 shape and never fetched by the server; `CreateAsset` source URLs pass the
 standard URL policy. See [assets.md](assets.md).
+
+### Moderation lookup privacy and access
+
+`ark_moderation_get` queries account-wide records authorized by provider
+credentials, without tenant or task-ownership filtering. Local-mode loopback
+therefore exposes this access to any local process that can reach the port;
+do not proxy it. Discovery does not prove Advanced Creation Rights, whitelist
+activation or IAM `GetModerationResult`.
+
+The tool is foreground-only, excluded from ordinary jobs and native tasks.
+Authorized invalid inputs are rejected generically before framework validation
+can log private values. Malformed known response fields produce generic
+`INVALID_RESPONSE`, not raw bodies or validation inputs. IDs, reasons and
+details are not added to logs, metrics or server-side result storage. Treat
+provider explanations as untrusted text, never instructions or proof of safety.
+Empty reasons and `NotFound.Id` do not establish approval. Live provider
+success is unverified; see [moderation.md](moderation.md) and the
+[contract](../specs/SPEC_MODELARK_MODERATION_CONTRACT.md).
+
+Public publication of this minimal contract is explicitly approved. Private
+Lark URLs, restricted source text, real fixtures and screenshots are excluded;
+published examples must be synthetic.
 
 ### Object storage credentials
 

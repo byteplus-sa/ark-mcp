@@ -13,13 +13,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import time
 from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any, ClassVar, cast
 
 import httpx
 
-from ark_mcp.config.env import get_settings
+from ark_mcp.config.env import Settings, get_settings
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError, ProviderName
 from ark_mcp.observability.logger import error as log_error
 from ark_mcp.providers.base import BaseHttpGateway
@@ -81,8 +83,9 @@ class ModelArkOpenApiGateway(BaseHttpGateway):
         base_url: str | None = None,
         timeout: float | None = None,
         connect_timeout: float | None = None,
+        settings: Settings | None = None,
     ) -> None:
-        settings = get_settings()
+        settings = settings or get_settings()
         self._credentials = credentials or OpenApiCredentials(
             access_key_id=settings.modelark_access_key,
             secret_access_key=settings.modelark_secret_key,
@@ -202,21 +205,24 @@ class ModelArkOpenApiGateway(BaseHttpGateway):
                 request_id = str(metadata["RequestId"])
 
         if status in {401, 403} or (code or "").startswith(("InvalidAccessKey", "InvalidSecret")):
+            permission = (
+                "GetModerationResult permission and Advanced Creation Rights with whitelist activation."
+                if operation == "GetModerationResult"
+                else "ArkFullAccess on the project."
+            )
             message = (
                 f"{message} Check BYTEPLUS_MODELARK_ACCESS_KEY / _SECRET_KEY (and "
                 "_SESSION_TOKEN for temporary AKTP... keys) and that the IAM user has "
-                "ArkFullAccess on the project."
+                f"{permission}"
             )
 
         throttled = status == 429 or (code or "") in _THROTTLE_CODES
         mutation = operation in MUTATING_ACTIONS
         ambiguous = mutation and status >= 500 and not throttled
         retryable = throttled or (status >= 500 and not mutation)
-        retry_after = response.headers.get("Retry-After")
-        try:
-            retry_after_seconds = float(retry_after) if retry_after is not None else None
-        except ValueError:
-            retry_after_seconds = None
+        retry_after_seconds = _parse_retry_after(
+            response.headers.get("Retry-After"), now=datetime.now(UTC)
+        )
 
         normalized = NormalizedProviderError(
             provider=cls.PROVIDER,
@@ -238,6 +244,22 @@ class ModelArkOpenApiGateway(BaseHttpGateway):
             request_id=request_id,
         )
         return ProviderError(normalized)
+
+
+def _parse_retry_after(value: str | None, *, now: datetime) -> float | None:
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                return None
+            seconds = max(0.0, (retry_at - now).total_seconds())
+        except (TypeError, ValueError, OverflowError):
+            return None
+    return seconds if math.isfinite(seconds) and seconds >= 0 else None
 
 
 def _metadata_error(body: Any) -> dict[str, Any] | None:

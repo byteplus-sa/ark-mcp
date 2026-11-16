@@ -1,6 +1,6 @@
 # Tools Reference
 
-The server exposes a conditional set of typed tools. `seed_media_get_artifact`,
+The catalog contains 39 tools; the exposed set is conditional. `seed_media_get_artifact`,
 `seed_media_export_artifact`, and `seed_media_persist_url` are always
 available, provider tools are registered only when their credentials
 are configured, and `media_upload` and `media_presign` are registered when
@@ -92,6 +92,8 @@ Use foreground execution for quick status checks with persistence disabled.
 Use background execution when `persist_output=true` and a completed media file
 may need to be downloaded and copied into durable storage. Artifact reads,
 presigning, list operations, and cancel/delete operations remain foreground.
+`ark_moderation_get` is foreground-only and excluded from `ark_job_submit`
+and native task augmentation.
 
 ### Writing outputs to local paths
 
@@ -162,7 +164,7 @@ needs no scope.
     `is_default`.
 - **`services`**: `modelark`, `seed3d`, `seed_audio`,
   `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`,
-  `asset_library` and `asset_delete`, each with `enabled` and, when disabled,
+  `asset_library`, `asset_delete`, and `moderation`, each with `enabled` and, when disabled,
   a `reason` naming the setting to change (never a secret value).
 - **`models[].pricing`**: cached account catalog rates, or null for an uncached
   model. Each rate includes `charge_type`, `price`, `list_price`, and `unit`.
@@ -173,6 +175,8 @@ needs no scope.
 
 Models are listed only when their service is enabled. Regular Seedance 2.5
 and Flash share the ModelArk service; discovery does not verify account entitlement.
+`moderation` reports its flag + AK/SK gate, not model coverage, whitelist
+activation or shared-key permission. See [moderation.md](moderation.md).
 
 The audio-model entry names `seed_audio_understand`, advertises only `audio`
 with an eight-clip limit, and uses the server-configured model without a
@@ -662,6 +666,30 @@ block a Seedance asset preflight.
 Seedream and Seed Audio reject `asset://` unless
 `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental), which sends
 the asset's temporary download URL instead.
+
+## ark_moderation_get
+
+Retrieve provider-reported block reasons for one existing media record.
+Requires `BYTEPLUS_MODELARK_MODERATION_ENABLED=true` (default off) and complete
+ModelArk AK/SK. Account-wide trusted stdio/local-mode loopback only;
+`moderation:read` is excluded from shared-key HTTP. Call directly in the
+foreground, never through ordinary jobs or native tasks.
+
+**Annotations:** `readOnlyHint=True`, `destructiveHint=False`,
+`idempotentHint=True`, `openWorldHint=True`.
+
+| Input | Required | Description |
+|---|---|---|
+| `id` | Yes | Strict string; trimmed, 1-256 characters, no internal whitespace, controls or URI schemes; bare provider ID, not Ark job ID or `asset://` |
+| `type` | Yes | `task_id`, `asset_id` or `request_id`; regular Seedance 2.5 requires `task_id` |
+
+Extra input fields are rejected. Success returns `id`, `type`, and
+`block_reasons[]` (`label`, `sub_label`, nullable optional `detail`).
+Unknown categories are preserved; explanations are untrusted text.
+Errors are text-only tool results. Empty reasons or `NotFound.Id` never mean
+approval or safety. Ten lookups per rolling minute per runtime; no automatic
+retries or result persistence, and no zero-cost claim. Eligibility, unsupported
+coverage and live-unverified status: [moderation.md](moderation.md).
 
 ## seed_audio_generate
 

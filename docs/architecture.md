@@ -68,6 +68,7 @@ flowchart LR
     Gateway -->|"X-Api-Key"| SeedSpeech["Seed Speech\nSeed Audio"]
     Gateway -->|"Bearer auth"| MediaKit["VOD AI MediaKit\nenhancement + transcode + subtitles + separation"]
     Gateway -->|"Bearer auth"| VisionCv["Vision AI\nOmniHuman 2.0"]
+    Gateway -->|"AK/SK V4 signing"| OpenApi["ModelArk OpenAPI\nassets + moderation lookup"]
     Server -.durable.-> Store["Artifact store\n(filesystem)"]
     Server -.state.-> Runtime["Runtime services\n(runtime.py)"]
 ```
@@ -91,6 +92,11 @@ flowchart LR
   and defaults to `https://mediakit.ap-southeast-1.bytepluses.com/api/v1`. Its
   success schemas are isolated in the adapters; the gateway accepts only known
   result shapes and rejects unknown shapes.
+- **ModelArk OpenAPI** (`providers/modelark/openapi.py`) — signed AK/SK control
+  plane for assets and opt-in `ark_moderation_get`. Moderation is account-wide
+  trusted stdio/local-mode loopback only, foreground-only, with one request,
+  no automatic retries or persistence. Shared-key HTTP excludes `moderation:read`.
+  Bounds and live-unverified status: [moderation.md](moderation.md).
 - These gateways extend `BaseHttpGateway` (`providers/base.py`), which wraps every
   outbound request in an OpenTelemetry span, records Prometheus
   provider metrics, and normalizes transport/HTTP errors into a single
@@ -126,6 +132,7 @@ Seedance, Seed 3D, and MediaKit get calls use optional task support: foreground
 execution remains available for short processing-status checks, while task
 augmentation protects the completed-output download and persistence path. List,
 presign, artifact-read, and cancel/delete operations stay foreground.
+Moderation lookup is also foreground-only and excluded from both task paths.
 
 ```mermaid
 sequenceDiagram
@@ -185,7 +192,7 @@ sequenceDiagram
     L->>R: close_runtime_services (artifact, ownership, object-key, budget, cache stores)
 ```
 
-`RuntimeServices` holds nine components (see [runtime.md](runtime.md) for
+`RuntimeServices` holds ten components (see [runtime.md](runtime.md) for
 full detail):
 
 | Field | Purpose |
@@ -197,6 +204,7 @@ full detail):
 | `object_key_ownership_store` | `SQLiteObjectKeyOwnershipStore` — uploaded-object ownership |
 | `budget_ledger` | `BudgetLedger` — per-principal UTC daily budget |
 | `provider_limiters` | `ProviderLimiters` — provider + principal concurrency |
+| `moderation_query_limiter` | `ModerationQueryLimiter` — ten lookups per rolling minute per runtime, shared across callers and ID types |
 | `task_artifact_cache` | `SQLiteTaskArtifactCache` — provider task → artifact ref cache |
 | `task_artifact_locks` | `TaskArtifactPersistenceLocks` — process-local per-task single-flight |
 
@@ -236,6 +244,10 @@ bucket semaphore (per provider, global, default 5), the principal semaphore
 (per `(tenant, principal)`, default 3; skipped in local mode), and — for parallel
 variation tools — a per-batch local semaphore (`max_concurrent=5`). All
 shared-key members share that principal semaphore and budget. See [runtime.md](runtime.md).
+Moderation uses the `modelark-openapi` concurrency bucket followed by its
+dedicated rolling-minute limiter, not the billable-generation budget flow.
+Its quota is in-memory, not shared across replicas or other account clients;
+lookup pricing is unspecified.
 
 ## Transports
 
