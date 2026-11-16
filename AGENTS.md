@@ -27,7 +27,8 @@ separate tools. The flow is discovery → create → poll:
   `seedance_2_5_flash`) uses the same tool, supports 480p/720p and 4-30s with
   reference/edit/extend features and 10 images / 5 videos / 5 audios, but no
   Draft mode. Regular 2.5 Drafts have a 14-day window for creation at or after
-  2026-10-28 10:00 UTC+8; earlier Drafts retain seven days. Empty bindings
+  2026-10-28 10:00 UTC+8; earlier Drafts retain seven days. Authenticated HTTP
+  with regular 2.5 enabled requires `STATE_PRUNE_MAX_AGE_DAYS >= 14`. Empty bindings
   add Flash alongside the selected default; explicit binding lists remain
   authoritative. Regular 2.5 remains the default. Retained regular 2.5 4K
   acceptance differs from current model-specific provider docs; see

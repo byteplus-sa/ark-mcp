@@ -16,7 +16,7 @@ from fastmcp import Context
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, model_validator
 
-from ark_mcp.config.env import get_settings
+from ark_mcp.config.env import SEEDANCE_DRAFT_MAX_AGE_DAYS, get_settings
 from ark_mcp.config.model_capabilities import VideoCapabilities
 from ark_mcp.domain.artifacts import MediaType
 from ark_mcp.domain.errors import ProviderError
@@ -212,7 +212,7 @@ DRAFT_REUSED_FIELDS = (
     "omni_reference_task_type",
 )
 DRAFT_EXTENDED_WINDOW_START = datetime(2026, 10, 28, 2, tzinfo=UTC)
-DRAFT_TASK_MAX_AGE = timedelta(days=14)
+DRAFT_TASK_MAX_AGE = timedelta(days=SEEDANCE_DRAFT_MAX_AGE_DAYS)
 DRAFT_LEGACY_TASK_MAX_AGE = timedelta(days=7)
 RECOMMENDED_POLL_AFTER_MS = 5000
 

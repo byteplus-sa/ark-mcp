@@ -98,6 +98,8 @@ Key features:
   Seedream 5.5 does not document this compatibility field; omit it unless verified
 - **Typed inputs** — Pydantic models validate all inputs before spending
   quota; unsupported combinations are rejected at the MCP layer
+- **Draft ownership retention** — authenticated HTTP with regular Seedance 2.5
+  enabled requires `STATE_PRUNE_MAX_AGE_DAYS >= 14`; the default is 30 days
 - **Timeout-safe long operations** — generation, transcription, large upload,
   and provider task-submission tools run in the background through the ordinary
   `ark_job_*` tools by default, or native MCP task augmentation on clients that

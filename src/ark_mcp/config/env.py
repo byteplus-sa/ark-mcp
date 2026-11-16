@@ -85,6 +85,7 @@ class SeedanceFamily(StrEnum):
 
 
 SEEDANCE_2_5_FLASH_MODEL_ID = "dreamina-seedance-2-5-flash-261115"
+SEEDANCE_DRAFT_MAX_AGE_DAYS = 14
 
 
 class SeedUnderstandingFamily(StrEnum):
@@ -496,7 +497,10 @@ class Settings(BaseSettings):
         default=30,
         ge=1,
         validation_alias="STATE_PRUNE_MAX_AGE_DAYS",
-        description="Maximum age in days for task-ownership, budget, and cache rows before pruning.",
+        description=(
+            "Maximum age in days for task-ownership, budget, and cache rows before pruning. "
+            "Authenticated HTTP with regular Seedance 2.5 requires at least 14 days."
+        ),
     )
     artifact_dir: str = Field(default="~/.ark-mcp/artifacts", validation_alias="ARTIFACT_DIR")
     artifact_ttl_seconds: int = Field(default=604800, validation_alias="ARTIFACT_TTL_SECONDS")
@@ -895,6 +899,21 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "API key auth requires MCP_API_KEY_SHA256 (64 lowercase hex characters)."
+            )
+        if (
+            self.mcp_transport == "http"
+            and self.mcp_auth_mode is AuthMode.API_KEY
+            and self.has_modelark
+            and any(
+                binding.family is SeedanceFamily.SEEDANCE_2_5
+                for binding in self.seedance_model_bindings
+            )
+            and self.state_prune_max_age_days < SEEDANCE_DRAFT_MAX_AGE_DAYS
+        ):
+            raise ValueError(
+                f"STATE_PRUNE_MAX_AGE_DAYS must be at least {SEEDANCE_DRAFT_MAX_AGE_DAYS} "
+                "for authenticated HTTP with regular Seedance 2.5, to retain Draft ownership "
+                "throughout its promotion window."
             )
         if (
             self.mcp_transport == "http"

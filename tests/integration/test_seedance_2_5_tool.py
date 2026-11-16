@@ -6,12 +6,16 @@ provider responses and a temp artifact store.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastmcp.server.auth import AccessToken
 
+from ark_mcp.config.env import Settings
 from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
 from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.modelark.seedance import SeedanceService
@@ -556,6 +560,116 @@ class TestSeedance25DraftMode:
                 assert len(captured) == 1
                 assert captured[0].resolution == "1080p"
                 assert captured[0].content[0].draft_task == {"id": "cgt-draft"}
+
+    @pytest.mark.parametrize("retention", [14, 30])
+    @pytest.mark.parametrize(
+        "age",
+        [
+            timedelta(days=8),
+            timedelta(days=13),
+            timedelta(days=14),
+            timedelta(days=14, seconds=1),
+        ],
+        ids=["eight-days", "thirteen-days", "at-expiry", "past-expiry"],
+    )
+    async def test_authenticated_draft_promotion_after_real_ownership_sweep(
+        self,
+        seedance_2_5_env: None,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        retention: int,
+        age: timedelta,
+    ) -> None:
+        from ark_mcp.runtime import (
+            _state_sweeper,
+            close_runtime_services,
+            create_runtime_services,
+            get_principal,
+        )
+
+        settings = Settings(
+            _env_file=None,
+            MCP_TRANSPORT="http",
+            MCP_AUTH_MODE="api_key",
+            MCP_API_KEY_SHA256="a" * 64,
+            STATE_PRUNE_MAX_AGE_DAYS=retention,
+            ARTIFACT_DIR=str(tmp_path / "artifacts"),
+        )
+        token = AccessToken(
+            token="redacted",
+            client_id="draft-owner",
+            scopes=["seedance:generate"],
+            claims={"sub": "draft-owner", "tenant_id": "draft-team"},
+        )
+        monkeypatch.setattr("ark_mcp.runtime.get_access_token", lambda: token)
+        created = datetime(2026, 10, 28, 2, tzinfo=UTC)
+        provider_reads: list[str] = []
+        provider_creates: list[Any] = []
+
+        async def mock_get(
+            self: GenerationTaskService, task_id: str
+        ) -> tuple[GenerationTaskResponse, str | None]:
+            provider_reads.append(task_id)
+            return _draft_task(created_at=created.isoformat()), None
+
+        async def mock_create(self: SeedanceService, request: Any) -> tuple[str, str | None]:
+            provider_creates.append(request)
+            return "cgt-final", None
+
+        monkeypatch.setattr(GenerationTaskService, "get_task", mock_get)
+        monkeypatch.setattr(GenerationTaskService, "close", _mock_close)
+        monkeypatch.setattr(SeedanceService, "create_task", mock_create)
+        monkeypatch.setattr(SeedanceService, "close", _mock_close)
+        runtime = await create_runtime_services(settings)
+        try:
+            ctx = FakeContext(lifespan_context={"runtime": runtime})
+            owner = get_principal(ctx)
+            assert not owner.is_local
+            with patch("ark_mcp.runtime.datetime", wraps=datetime) as clock:
+                clock.now.return_value = created
+                await runtime.ownership_store.record("modelark", "cgt-draft", owner)
+                clock.now.return_value = created + age
+                with (
+                    patch(
+                        "ark_mcp.runtime.asyncio.sleep",
+                        new=AsyncMock(side_effect=[None, asyncio.CancelledError]),
+                    ),
+                    pytest.raises(asyncio.CancelledError),
+                ):
+                    await _state_sweeper(runtime, settings)
+
+            request = SeedanceCreateTaskInput(draft_task_id="cgt-draft", dry_run=True)
+            for claims in [
+                {"sub": "other-owner", "tenant_id": "draft-team"},
+                {"sub": "draft-owner", "tenant_id": "other-team"},
+            ]:
+                token = token.model_copy(update={"claims": claims})
+                with pytest.raises(PermissionError, match="not owned"):
+                    await seedance_create_task(request, ctx)
+            assert provider_reads == []
+            token = token.model_copy(
+                update={"claims": {"sub": "draft-owner", "tenant_id": "draft-team"}}
+            )
+            with patch("ark_mcp.tools._seedance_shared.datetime", wraps=datetime) as clock:
+                clock.now.return_value = created + age
+                if age > timedelta(days=14):
+                    if retention == 14:
+                        with pytest.raises(PermissionError, match="not owned"):
+                            await seedance_create_task(request, ctx)
+                        assert provider_reads == []
+                    else:
+                        with pytest.raises(ValueError, match="more than 14 days ago"):
+                            await seedance_create_task(request, ctx)
+                        assert provider_reads == ["cgt-draft"]
+                else:
+                    result = await seedance_create_task(request, ctx)
+                    assert isinstance(result, SeedanceCreateTaskOutput)
+                    assert result.preview is not None
+                    assert result.preview.requests[0]["resolution"] == "1080p"
+                    assert provider_reads == ["cgt-draft"]
+            assert provider_creates == []
+        finally:
+            await close_runtime_services(runtime)
 
     @pytest.mark.parametrize(
         "created_at",
