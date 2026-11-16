@@ -4,6 +4,28 @@ Release entries below are historical records, not current setup instructions.
 For the removal of JWT authentication and migration to shared-key HTTP, see
 [breaking-change migration](self-hosting.md#breaking-change-migration).
 
+## [0.4.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.3.0...v0.4.0) (2026-11-16)
+
+
+### Features
+
+* add portable agent-guided MCP setup skill ([ca28509](https://github.com/byteplus-sa/ark-mcp/commit/ca2850965171b8e4f4069d55805993752e883a52))
+* add trusted local moderation block-reason lookup ([d9e14d3](https://github.com/byteplus-sa/ark-mcp/commit/d9e14d3dafd42eb009c90023af7532f0012818e3))
+* add trusted local moderation block-reason lookup ([2814db6](https://github.com/byteplus-sa/ark-mcp/commit/2814db644b92ace4befbf9b6a8a31a13b5f35757))
+* make BytePlus deployment and provider-key maintenance resumable ([9e23392](https://github.com/byteplus-sa/ark-mcp/commit/9e23392c43bad895c8820c49969ae7b0f56e9f5d))
+
+
+### Bug Fixes
+
+* align Seedance Flash limits and Draft expiry with GA ([0ea858b](https://github.com/byteplus-sa/ark-mcp/commit/0ea858b66b74c5b664259e1dc4c22c7c001b3d52))
+* align Seedance Flash references and Draft lifetime with GA contracts ([8eb9395](https://github.com/byteplus-sa/ark-mcp/commit/8eb939560471e458dbe139a7f7c646026fb4ab75))
+* retain authenticated Draft ownership through its promotion window ([1a3d693](https://github.com/byteplus-sa/ark-mcp/commit/1a3d693db6bc7029f3f0c0184cab6776640456f7))
+
+
+### Dependencies
+
+* allow uv-build 0.13 releases ([c503fda](https://github.com/byteplus-sa/ark-mcp/commit/c503fdaae943a0cfc689d6a57f04f5571502e27b))
+
 ## [0.3.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.2.0...v0.3.0) (2026-11-12)
 
 
