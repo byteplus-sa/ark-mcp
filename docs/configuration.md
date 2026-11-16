@@ -314,6 +314,26 @@ Account-wide asset scopes (`assets:read`, `assets:write`, `assets:verify`,
 `assets:delete`) are excluded from shared-key HTTP. Use trusted local stdio
 for asset administration; configuring AK/SK does not grant remote access.
 
+## Moderation lookup (AK/SK, opt-in)
+
+| Variable | Default | Description |
+|---|---|---|
+| `BYTEPLUS_MODELARK_MODERATION_ENABLED` | `false` | Registers foreground-only `ark_moderation_get` when complete ModelArk AK/SK is configured |
+
+Reuses the OpenAPI host, signing region and AK/SK above; temporary credentials
+also need `BYTEPLUS_MODELARK_SESSION_TOKEN`. A ModelArk Bearer key is not required.
+The account needs Advanced Creation Rights, whitelist activation and IAM
+`GetModerationResult`. Discovery's `moderation` service and health's
+`Moderation lookup configured` report configuration only, not entitlement.
+
+This is account-wide trusted stdio/local-mode loopback access, not tenant-scoped
+access. `moderation:read` is not granted to shared-key HTTP, even with the flag
+enabled. AK/SK also register asset tools and enable the pricing refresher;
+for isolated lookup set `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS=0`, without
+broadening a moderation-only IAM policy. The fixed ten-lookups-per-rolling-minute
+guard is independent of HTTP rate limits; live success remains unverified.
+See [moderation.md](moderation.md) for eligibility, validation and quota bounds.
+
 ## Object storage (TOS or S3, optional)
 
 The `media_upload` and `media_presign` tools are registered when the selected

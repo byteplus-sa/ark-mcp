@@ -48,3 +48,12 @@ An `ambiguous_completion=True` error that names an output audit
 with no artifact and no provider task ID to reconcile. Mark the operation
 failed and diagnose before any revised submission; never repeat the identical
 request.
+
+`ark_moderation_get` is a separate foreground-only lookup for an eligible
+existing provider ID, not an Ark job ID. It is excluded from `ark_job_submit`
+and native tasks, so a rejection with no provider ID is not automatically
+queryable. Default-off flag + AK/SK and trusted stdio/local-mode loopback access
+are required; `moderation:read` is not granted to shared HTTP. Empty/not-found
+is never approval. Ten lookups per rolling minute per runtime, no automatic
+retries or result persistence; live success unverified. See
+[lookup bounds](understanding-media-assets.md#moderation-lookup-ark_moderation_get).

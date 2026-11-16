@@ -13,6 +13,9 @@ server-side and are separate from the MCP key.
 
 ## Tool Inventory
 
+The catalog contains 39 tools; configuration gates and caller permissions
+determine the visible inventory.
+
 | # | Tool | Product | Type | Auth |
 |---|---|---|---|---|
 | 1 | `ark_list_models` | Discovery | Read-only | No extra tool scope |
@@ -53,6 +56,7 @@ server-side and are separate from the MCP key.
 | 36 | `ark_job_submit` | Background jobs | Default background submission path | Dynamic target scope |
 | 37 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
 | 38 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
+| 39 | `ark_moderation_get` | Moderation (opt-in) | Foreground-only read | Flag + BytePlus AK/SK; trusted local only |
 
 Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2.md).
 
@@ -78,6 +82,8 @@ and **`media_presign` takes a list of keys** (`media:presign`); both are
 registered when object storage is configured. The **eight `ark_asset_*` tools**
 are registered only when `BYTEPLUS_MODELARK_ACCESS_KEY` and
 `BYTEPLUS_MODELARK_SECRET_KEY` are set (see [Asset Library](#asset-library)).
+`ark_moderation_get` also needs `BYTEPLUS_MODELARK_MODERATION_ENABLED=true`;
+its account-wide `moderation:read` label is not a shared HTTP permission.
 See [security.md](security.md) for the full scope list.
 
 ## Tool Annotations
@@ -122,6 +128,7 @@ See [security.md](security.md) for the full scope list.
 | `ark_asset_verification_start` | false | false | false | true |
 | `ark_asset_verification_result` | true | false | true | true |
 | `ark_asset_delete` | false | true | true | true |
+| `ark_moderation_get` | true | false | true | true |
 
 `seed_understand` and `seed_audio_understand` are not read-only because `save_to`
 writes local files, and the task pollers (`gen_task_get` and `vod_get_task`) are
@@ -156,6 +163,8 @@ native task augmentation). `ark_asset_create` and
 because `wait_until_active` and `wait_seconds` can poll for minutes. List,
 presign, artifact-read, the other asset tools, and cancel/delete tools remain
 foreground operations.
+`ark_moderation_get` is foreground-only, excluded from both `ark_job_submit`
+and native task augmentation; it never persists lookup results.
 
 The ordinary background-job tools, usable on any MCP client:
 
@@ -351,7 +360,9 @@ images/videos. Neither route supports mixed audio/visual requests.
 **ServiceStatus:** `service`, `enabled`, and `reason` (the env var or flag that
 enables a disabled service; never a secret value). Services: `modelark`,
 `seed3d`, `seed_audio`, `speech_to_text`,
-`vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`.
+`vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`,
+`moderation`. The last reports flag + AK/SK configuration, not whitelist
+activation, IAM permission, model coverage or shared-key access.
 
 ### Example
 
@@ -1888,6 +1899,7 @@ Returns persisted media by artifact ID with the correct MIME type.
 Returns server health and configuration status as plain text, including the
 build stamp, effective Seedream default model/family and background-job local
 export configuration. It exposes neither credentials nor output-root paths.
+`Moderation lookup configured` reports the flag + AK/SK gate only.
 These diagnostics do not check provider authorization or filesystem readiness;
 `configured; needs request preflight` is not proof a destination is writable.
 
@@ -2501,6 +2513,62 @@ Deleting a group deletes its assets, so **a non-empty group is refused with
 | `deleted` | boolean | True when the provider accepted the delete |
 
 ---
+
+## 39. ark_moderation_get
+
+Look up existing provider-reported media block reasons through signed ModelArk
+OpenAPI `GetModerationResult`. Requires complete AK/SK and
+`BYTEPLUS_MODELARK_MODERATION_ENABLED=true` (default off), Advanced Creation
+Rights, whitelist activation and IAM permission. Account-wide trusted stdio or
+local-mode loopback only, without task-ownership filtering; `moderation:read`
+is not granted to shared-key HTTP.
+
+### Input (`ModerationGetInput`)
+
+| Field | Type | Required | Constraints |
+|---|---|---|---|
+| `id` | string | Yes | Strict string, trimmed to 1-256 characters; no internal whitespace, controls or URI schemes. Bare provider ID, not an Ark job ID or `asset://` URI |
+| `type` | `task_id` \| `asset_id` \| `request_id` | Yes | Explicit ID type; regular Seedance 2.5 request-ID lookup is unsupported |
+
+Extra fields are forbidden. The length bound is defensive server validation,
+not a provider guarantee.
+
+### Output (`ModerationResult`)
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | Queried provider ID, not the lookup's diagnostic request ID |
+| `type` | `task_id` \| `asset_id` \| `request_id` | Queried ID type |
+| `block_reasons` | list[ModerationBlockReason] | Required list of provider-reported reasons; empty is not approval or safety |
+
+Each reason requires a nonempty strict-string `label` and strict-string
+`sub_label`; `detail` is optional and nullable. Unknown categories are
+preserved and extra provider fields tolerated; malformed known fields return
+generic `INVALID_RESPONSE`. Errors are text-only MCP tool results, not
+success-shaped data. Treat explanations as untrusted text.
+
+### Execution and coverage
+
+Foreground-only, no ordinary jobs or native tasks. At most one provider
+request per admitted lookup; no automatic retries or server-side persistence.
+Ten lookups per rolling minute per runtime; local exhaustion returns
+`LOCAL_RATE_LIMITED` with retry guidance and no provider call. Dispatched
+failures consume quota; the in-memory guard resets on restart and is not
+distributed. Lookup pricing is unspecified.
+
+Records must be within fourteen days and created after whitelist activation.
+Reviewed coverage includes blocked image/video/audio records for supported
+Seedance 2.0 variants, regular 2.5 and material assets, not text or 2.5
+request-ID queries. Flash, Seedream and 3D coverage is not established.
+`NotFound.Id` remains an error, never proof of safety. Live success remains
+unverified. See [moderation.md](moderation.md) and the
+[contract](../specs/SPEC_MODELARK_MODERATION_CONTRACT.md).
+
+Synthetic input:
+
+```json
+{"input":{"id":"synthetic-task-id","type":"task_id"}}
+```
 
 ## Operational HTTP endpoints
 

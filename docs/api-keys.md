@@ -22,6 +22,7 @@ tool set.
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | `X-Api-Key: <key>` | Seed Audio (speech generation), Speech-to-Text (ASR) |
 | VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `Authorization: Bearer <key>` | Enhancement, transcode, subtitle burn-in/removal, audio separation, and poll tools |
 | Vision AI (OmniHuman) | `BYTEPLUS_CV_API_KEY` | `Authorization: Bearer <key>` | `omnihuman_*` tools (also needs `BYTEPLUS_OMNIHUMAN_ENABLED=true`) |
+| ModelArk OpenAPI | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` (+ session token for STS) | AK/SK V4 signing | Asset tools, cached pricing, and opt-in `ark_moderation_get`; account-wide administration is local-only |
 | TOS | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
 | S3 | `S3_ACCESS_KEY` + `S3_SECRET_KEY` + `S3_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
 
@@ -66,6 +67,23 @@ BYTEPLUS_MODELARK_API_KEY=your-modelark-key-here
 
 The base URL is region-scoped. If your account is in a different region, update
 `BYTEPLUS_MODELARK_BASE_URL` to match.
+
+## ModelArk OpenAPI (assets and moderation)
+
+Signed OpenAPI calls use BytePlus IAM AK/SK, not the ModelArk Bearer key.
+Configure `BYTEPLUS_MODELARK_ACCESS_KEY` and `BYTEPLUS_MODELARK_SECRET_KEY`
+together; temporary credentials also need `BYTEPLUS_MODELARK_SESSION_TOKEN`.
+See [asset configuration](configuration.md#private-asset-library-aksk) for the
+OpenAPI host and signing region.
+
+Moderation additionally needs `BYTEPLUS_MODELARK_MODERATION_ENABLED=true`
+(default off), Advanced Creation Rights, whitelist activation and IAM
+`GetModerationResult`. It is account-wide, foreground-only trusted stdio or
+local-mode loopback access; `moderation:read` is never granted to shared HTTP.
+AK/SK also configure asset tools and cached pricing. For a moderation-only IAM
+policy, disable pricing refresh with `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS=0`
+and do not grant unrelated permissions. Discovery verifies configuration only;
+live lookup success is unverified. See [moderation.md](moderation.md).
 
 ## Seed Speech
 

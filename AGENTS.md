@@ -63,6 +63,15 @@ separate tools. The flow is discovery → create → poll:
   registered only when `BYTEPLUS_MODELARK_ACCESS_KEY` and
   `BYTEPLUS_MODELARK_SECRET_KEY` are set. Seedance accepts `asset://<id>`
   references natively.
+- **Moderation lookup** — `ark_moderation_get` retrieves existing blocked-record
+  reasons through signed ModelArk OpenAPI. Default-off
+  `BYTEPLUS_MODELARK_MODERATION_ENABLED` + complete AK/SK; foreground-only,
+  account-wide trusted stdio/local-mode loopback access. `moderation:read` is
+  not granted to shared-key HTTP. Ten lookups per rolling minute per runtime,
+  no automatic retries or result persistence; empty/not-found is not approval.
+  Eligibility and live-unverified status: `docs/moderation.md` and
+  `specs/SPEC_MODELARK_MODERATION_CONTRACT.md`. The catalog contains 39 tools;
+  `ark_list_models.services` includes configuration-only `moderation`.
 - **Background jobs** — ordinary `ark_job_*` tools are the default route for
   long-running work through the FastMCP worker, since most clients cannot
   negotiate MCP task augmentation; native tasks remain supported for clients
@@ -83,7 +92,7 @@ Seedance, Seedream, Seed 3D, Seed 2.1 Understanding, and Seed Audio
 Understanding share the ModelArk data-plane host and Bearer authentication.
 Seed Audio and Speech-to-Text are
 hosted by Seed Speech and use `X-Api-Key`. VOD AI MediaKit uses a separate
-Bearer key. The asset library uses BytePlus IAM AK/SK with OpenAPI V4
+Bearer key. The asset library and moderation lookup use BytePlus IAM AK/SK with OpenAPI V4
 signatures. The server uses three provider gateways behind one normalized
 domain layer. See `plans/PLAN_ARK_SEED_MULTIMODAL_MCP.md` for the full
 design.
@@ -215,6 +224,9 @@ troubleshoot the server.
   dates. Prefer official BytePlus and Model Context Protocol sources.
 - **Secrets.** Never commit credentials, API keys, or provider response
   fixtures containing real media. Redact before saving examples.
+- **Moderation publication.** Public publication of the minimal integration
+  contract is explicitly approved; exclude private Lark URLs, restricted source
+  text, real fixtures and screenshots. Use synthetic samples only.
 
 ## Repository Hygiene
 

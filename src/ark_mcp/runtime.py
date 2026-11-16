@@ -12,7 +12,7 @@ import json
 import sqlite3
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, cast
@@ -28,6 +28,7 @@ from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.observability.metrics import BUDGET_REJECTIONS
+from ark_mcp.providers.modelark.moderation_limits import ModerationQueryLimiter
 from ark_mcp.providers.modelark.pricing import live_pricing_enabled, run_price_refresher
 from ark_mcp.security.auth_context import AuthContext, PrincipalContext
 from ark_mcp.security.safe_downloader import SafeDownloader
@@ -859,6 +860,7 @@ class RuntimeServices:
     provider_limiters: ProviderLimiters
     task_artifact_cache: TaskArtifactCache
     task_artifact_locks: TaskArtifactPersistenceLocks
+    moderation_query_limiter: ModerationQueryLimiter = field(default_factory=ModerationQueryLimiter)
 
 
 @dataclass(slots=True)

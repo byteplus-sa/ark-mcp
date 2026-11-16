@@ -19,6 +19,7 @@ const categories = [
   ["Avatars", (name) => name.startsWith("omnihuman_")],
   ["VOD AI MediaKit", (name) => name.startsWith("vod_")],
   ["Asset library", (name) => name.startsWith("ark_asset_")],
+  ["Moderation", (name) => name === "ark_moderation_get"],
   [
     "Uploads and artifacts",
     (name) => name.startsWith("media_") || name.startsWith("seed_media_"),

@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), audio (Seed Audio), video (Seedance 2.0, regular 2.5 with 4K, and 2.5 Flash at 480p/720p), 3D (Hyper3D, Hitem3d) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll, then seed_media_* for artifacts.
+description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), audio (Seed Audio), video (Seedance 2.0, regular 2.5 with 4K, and 2.5 Flash at 480p/720p), 3D (Hyper3D, Hitem3d) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library; look up existing moderation block reasons through trusted local foreground calls. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll, then seed_media_* for artifacts.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -29,11 +29,15 @@ stdio for administration. Provider keys stay on the server. Setup and rotation:
 | **Speech-to-text** | `speech_to_text` | transcript in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
 | **Object storage** | `media_upload`, `media_presign` | URLs in the result | TOS or S3 credentials |
 | **Asset library** (`asset://`) | eight `ark_asset_*` tools | — | `BYTEPLUS_MODELARK_ACCESS_KEY` + `_SECRET_KEY` |
+| **Moderation lookup** | `ark_moderation_get` (foreground-only, local-only) | `block_reasons` in the result | `BYTEPLUS_MODELARK_MODERATION_ENABLED=true` + AK/SK |
 | **Always registered** | `ark_list_models`, `ark_job_*`, `seed_media_*` | — | — |
 
 **Do not assume a tool exists.** A tool registers only when its gate passes;
 `ark_list_models.services` and the `seed-health://status` resource show what is
 on and which setting enables the rest.
+The catalog contains 39 tools, not a fixed visible count. The `moderation`
+service reports configuration only, not whitelist activation, coverage or
+shared-key permission.
 
 ## How to use this server
 
@@ -74,6 +78,8 @@ flowchart LR
   long): `gen_task_get`, `vod_get_task`, `omnihuman_get_task`,
   `seed_media_persist_url`, `ark_asset_create`, `ark_asset_verification_result`.
   Everything else is foreground.
+- **Moderation is foreground-only:** `ark_moderation_get` is excluded from
+  `ark_job_submit` and native task augmentation, even when enabled.
 - **Submit** with `ark_job_submit` and `{"input": {"tool_name": "<tool>",
   "arguments": {"input": {...tool input...}}}}`, then poll `ark_job_get` no
   faster than `poll_after_ms` and read the tool result from `result`
@@ -208,6 +214,17 @@ flowchart LR
   confirm with the user first). The `group_created_empty` cleanup hint on
   `ark_asset_create` only works when delete is enabled.
 
+### Moderation lookup
+
+With trusted stdio/local-mode loopback and the default-off flag + complete
+AK/SK, call `ark_moderation_get` directly using a bare provider ID and explicit
+`task_id`, `asset_id` or `request_id`, not an Ark job ID or `asset://`.
+This is account-wide access; `moderation:read` is never a shared HTTP scope.
+Ten lookups per rolling minute per runtime, no automatic retries or result
+persistence. Empty/not-found never establishes safety. Live success remains
+unverified. Read [lookup bounds](references/understanding-media-assets.md#moderation-lookup-ark_moderation_get)
+and [Moderation Lookup](https://byteplus-sa.github.io/ark-mcp/moderation/).
+
 ## Examples
 
 Seedance: submit, then poll in the foreground.
@@ -255,7 +272,7 @@ Read these only when you need the detail:
 
 - [tool-reference.md](references/tool-reference.md): per-product notes for Seedance, Seedream, Seed Audio, 3D, OmniHuman and VOD.
 - [polling-and-artifacts.md](references/polling-and-artifacts.md): pollers, cancel/delete, artifact tools, local paths, persistence fallbacks.
-- [understanding-media-assets.md](references/understanding-media-assets.md): understanding, speech-to-text, object storage, asset library.
+- [understanding-media-assets.md](references/understanding-media-assets.md): understanding, speech-to-text, object storage, asset library and local moderation lookup.
 - [models-and-limits.md](references/models-and-limits.md): per-family limits and model selection.
 - [workflows.md](references/workflows.md): background jobs in depth, production workflows, retry policy, common issues.
 - [environment.md](references/environment.md): credentials, flags, transport, auth, architecture.

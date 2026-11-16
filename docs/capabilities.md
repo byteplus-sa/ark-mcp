@@ -132,3 +132,16 @@ Use these ordinary MCP tools on clients without native task augmentation:
 Keep job IDs distinct from provider task IDs. Honor polling hints, inspect
 partial variation failures, and do not retry a potentially accepted create
 call automatically. Start with [Your First Tool Call](setup/first-run.md).
+
+## Moderation Lookup
+
+Use [ark_moderation_get](/ark-mcp/tool-reference/ark-moderation-get/) to retrieve
+reasons for an existing blocked provider record, not to screen new content.
+Requires the default-off `BYTEPLUS_MODELARK_MODERATION_ENABLED` flag + ModelArk
+AK/SK and account entitlement. Account-wide trusted stdio/local-mode loopback
+only; `moderation:read` is excluded from shared-key HTTP. Call directly in the
+foreground, not via `ark_job_submit` or native tasks.
+
+Ten lookups per rolling minute per runtime; no automatic retries or result
+persistence. Empty/not-found never means approval. Live success remains
+unverified; see [Moderation Lookup](moderation.md) for eligibility and bounds.

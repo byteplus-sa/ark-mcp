@@ -209,7 +209,7 @@ class Settings(BaseSettings):
         default="",
         validation_alias="BYTEPLUS_MODELARK_ACCESS_KEY",
         description=(
-            "BytePlus IAM access key ID for signed ModelArk OpenAPI calls (asset library). "
+            "BytePlus IAM access key ID for signed ModelArk OpenAPI calls (assets, moderation, pricing). "
             "Long-term (AKLT...) or STS temporary (AKTP..., requires the session token)."
         ),
     )
@@ -217,6 +217,15 @@ class Settings(BaseSettings):
         default="",
         validation_alias="BYTEPLUS_MODELARK_SECRET_KEY",
         description="BytePlus IAM secret access key paired with BYTEPLUS_MODELARK_ACCESS_KEY.",
+    )
+    modelark_moderation_enabled: bool = Field(
+        default=False,
+        validation_alias="BYTEPLUS_MODELARK_MODERATION_ENABLED",
+        description=(
+            "Enable account-wide moderation block-reason lookup for trusted local callers. "
+            "Requires AK/SK, Advanced Creation Rights and provider whitelist activation; "
+            "disabled by default and denied to shared HTTP key holders."
+        ),
     )
     modelark_session_token: str = Field(
         default="",
@@ -693,8 +702,13 @@ class Settings(BaseSettings):
 
     @property
     def has_modelark_openapi(self) -> bool:
-        """Whether AK/SK for signed ModelArk OpenAPI calls (asset library) are configured."""
+        """Whether AK/SK for signed ModelArk OpenAPI calls are configured."""
         return bool(self.modelark_access_key and self.modelark_secret_key)
+
+    @property
+    def has_modelark_moderation(self) -> bool:
+        """Whether moderation lookup is explicitly enabled with complete AK/SK."""
+        return self.modelark_moderation_enabled and self.has_modelark_openapi
 
     @property
     def has_tos(self) -> bool:

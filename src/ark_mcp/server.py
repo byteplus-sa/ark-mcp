@@ -73,6 +73,7 @@ from ark_mcp.tools._catalog import (  # noqa: E402
     ToolDefinition,
     resolve_tool_definition,
 )
+from ark_mcp.tools._moderation_validation import ModerationInputPrivacyMiddleware  # noqa: E402
 
 SERVER_INSTRUCTIONS = (
     "BytePlus multimodal generation server: Seedance video, Seedream images, Seed Audio, "
@@ -230,6 +231,8 @@ def create_server(
         middleware=[MetricsMiddleware()],
         app_settings=resolved_settings,
     )
+    if resolved_settings.has_modelark_moderation:
+        server.add_middleware(ModerationInputPrivacyMiddleware())
     server.add_extension(TenantTasksExtension(resolved_settings))
 
     @server.resource(
@@ -277,6 +280,7 @@ def create_server(
             f"Seedream default family: {_seedream_default_family(resolved_settings)}\n"
             f"Seed 3D configured: {resolved_settings.has_seed3d}\n"
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
+            f"Moderation lookup configured: {resolved_settings.has_modelark_moderation}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
             f"VOD AI MediaKit configured: {resolved_settings.has_vod_mediakit}\n"
             f"OmniHuman configured: {resolved_settings.has_omnihuman}\n"
@@ -418,6 +422,7 @@ def create_server(
     if not any(
         (
             resolved_settings.has_modelark,
+            resolved_settings.has_modelark_openapi,
             resolved_settings.has_seed_audio,
             resolved_settings.has_seed3d,
             resolved_settings.has_stt,

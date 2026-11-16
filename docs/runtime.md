@@ -7,7 +7,7 @@ describes its operational services, including concurrency limiting, the daily
 budget ledger, provider-task and object-key ownership, persistence caching,
 per-task persistence single-flight, and the provider retry policy.
 
-All state lives in a single SQLite database at
+Persistent ownership, budget and cache state lives in a single SQLite database at
 `<artifact_dir>/runtime.sqlite3` (default `artifact_dir` is `.artifacts`),
 shared by the ownership stores, budget ledger, and task-artifact cache. The
 ownership table also stores MCP task owners and atomic execution claims. The
@@ -30,6 +30,7 @@ replacement.
 | `object_key_ownership_store` | `SQLiteObjectKeyOwnershipStore` | `SQLiteObjectKeyOwnershipStore(database_path)` |
 | `budget_ledger` | `BudgetLedger` | `BudgetLedger(database_path, daily_limit_usd)` |
 | `provider_limiters` | `ProviderLimiters` | `ProviderLimiters(provider_limit, principal_limit)` |
+| `moderation_query_limiter` | `ModerationQueryLimiter` | process-local rolling-minute guard, ten admitted lookups |
 | `task_artifact_cache` | `TaskArtifactCache` | `SQLiteTaskArtifactCache(database_path, ttl_seconds, max_size)` |
 | `task_artifact_locks` | `TaskArtifactPersistenceLocks` | process-local lock registry |
 
@@ -37,14 +38,16 @@ replacement.
 `ownership_store`, `object_key_ownership_store`, `budget_ledger`, and
 `task_artifact_cache`. The `SafeDownloader` is closed **indirectly** —
 `FilesystemArtifactStore.close()` calls `self._downloader.close()`. The
-provider/principal limiters and per-task lock registry have no close method.
+provider/principal limiters, moderation quota guard and per-task lock registry
+have no close method.
 
 ## Concurrency limiters (`ProviderLimiters`)
 
 Two distinct layers, acquired together for every billable call:
 
 - **Provider-level** — one global `asyncio.Semaphore` per provider bucket:
-  `"modelark"`, `"seed-speech"`, `"vod-mediakit"`, `"tos"`, and `"s3"`.
+  `"modelark"`, `"modelark-openapi"`, `"seed-speech"`, `"vod-mediakit"`,
+  `"vision-cv"`, `"tos"`, and `"s3"`.
   Each is independently sized to `provider_limit`, so the default cap is five
   concurrent calls per provider rather than five shared across all providers.
 - **Principal-level** — one `asyncio.Semaphore(principal_limit)` per
@@ -58,7 +61,8 @@ of the call.
 
 For a **local principal** (stdio transport, or HTTP local mode), the
 per-principal semaphore is **skipped**: a single trusted local caller is
-bounded only by the provider limit. Without this, the default
+bounded by the provider limit for concurrency; moderation also has a dedicated
+ten-lookups-per-rolling-minute guard. Without this semaphore exemption, the default
 `PRINCIPAL_MAX_CONCURRENCY=3` would silently cap *all* concurrent calls across
 every provider at 3 — below the per-provider limit of 5 — making parallel
 local generation appear to "serialize under load." The per-principal bound
@@ -83,8 +87,9 @@ cancel its waiters.
 
 ## Concurrency and timeouts
 
-**Parallel tool calls are bounded only by the limiters above.** Slow responses
-come from provider latency, not from a server-wide lock. The other bounds:
+Parallel calls use the concurrency limiters above; moderation additionally
+uses its dedicated rolling-minute guard below. There is no server-wide
+serialization lock. The other bounds:
 
 | Bound | Default | Code | Effect |
 |---|---|---|---|
@@ -103,6 +108,22 @@ come from provider latency, not from a server-wide lock. The other bounds:
 - **Large media should not travel inside JSON-RPC.** Use `media_upload` with a
   file path (stdio) or the presign and direct-upload path; the body limit only
   bounds inlined Base64.
+
+## Moderation query quota
+
+`RuntimeServices.moderation_query_limiter` admits ten lookups per rolling minute,
+shared across callers and ID types in one runtime. `ark_moderation_get` acquires
+the `modelark-openapi` concurrency slot before reserving quota. Exhaustion
+returns `LOCAL_RATE_LIMITED` promptly with a retry delay and no provider call.
+Dispatched failures and cancelled reservations consume quota; cancellation
+while waiting for concurrency does not. All paths release concurrency and close
+any per-call client. The in-memory guard resets on restart and does not coordinate
+replicas or other account clients; provider throttling remains authoritative.
+
+Lookup is foreground-only, account-wide trusted local access, without task
+ownership filtering, automatic retries or result persistence. It does not use
+the billable-generation budget flow; pricing is unspecified, not zero.
+See [moderation.md](moderation.md) for eligibility and live-unverified status.
 
 ## Artifact persistence single-flight
 
@@ -358,6 +379,7 @@ Timeout classification depends on whether the call can create provider state:
 | Mutation | Seedance/Seed 3D create, cancel, delete; Seedream/Seed Audio generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
 | Read-only poll | Seedance and Seed 3D `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
 | Chat completion | `seed_understand`, `seed_audio_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
+| Moderation lookup | `ark_moderation_get` | `retryable=True`, `ambiguous_completion=False` | No; one request per admitted lookup |
 
 MediaKit polls apply the same rule to their own transport normalizer:
 poll timeouts and connection failures are retryable and non-ambiguous, while
