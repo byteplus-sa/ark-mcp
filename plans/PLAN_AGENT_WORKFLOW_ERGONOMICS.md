@@ -80,7 +80,7 @@ def normalize_timeout(cls, operation: str, *, side_effect: bool = True) -> Provi
 
 Pass `side_effect=False` for:
 - `SeedUnderstandingService.generate` (`chat_completion`)
-- Seedance `get_task` / `list_tasks`, Seed3D get/list, and ASR result queries
+- Seedance `get_task` / `list_tasks` and ASR result queries
 - VOD get-task queries. These do **not** go through `normalize_timeout`: they
   use `normalize_ambiguous_transport_error` (`vod_mediakit/enhancement.py:146`,
   plus `transcode.py`, `subtitles.py`, `separate_voice.py`). Give that helper
@@ -180,7 +180,7 @@ and Seedance 2.5 variation tools.
    `ArtifactPersistenceError`. If item 2 fails, item 1's already stored
    artifact disappears from the output too. Change this so each item is
    handled separately:
-   - **URL outputs** (Seedream `url`, Seedance video, Seed3D, VOD): on final
+   - **URL outputs** (Seedream `url`, Seedance video, VOD): on final
      failure, return an unpersisted `ArtifactRef` (`id="provider-url"`,
      `uri=<provider URL>`, `source_expires_at`) with a `persistence_error` on
      that item. Stored items are always kept.
@@ -473,8 +473,7 @@ Rules:
 
 Add optional `output_path: str | None` to `seedream_generate_image`,
 `seedream_edit_image`, `seed_audio_generate`, `seedance_get_task` (when
-`persist_output`), the Hyper3D/Hitem3D get-task tools, and the VOD get-task
-tools. Add `output_dir` to the `*_variations` tools.
+`persist_output`), and the VOD get-task tools. Add `output_dir` to the `*_variations` tools.
 
 - `output_path` is a file path, or a directory when it ends in `/`. A directory
   gets `<artifact_id>.<ext>`. For a result with more than one artifact
@@ -563,8 +562,6 @@ class SeedanceGetTasksOutput(BaseModel):
   applies to persistence.
 - Ownership checks match `seedance_get_task` for each ID. An unowned ID goes to
   `errors`; it does not fail the batch.
-- Also add `hyper3d_get_tasks` / `hitem3d_get_tasks` only if they are
-  requested. They are not in scope here.
 
 ---
 
@@ -653,7 +650,6 @@ Where the code departs from the plan:
   - internal SSE streaming for understanding (1.4); only
     `SEED_UNDERSTANDING_TIMEOUT_MS` shipped
   - the rolling queue-latency median and its Prometheus histogram (Phase 4)
-  - `hyper3d_get_tasks` / `hitem3d_get_tasks`
 - **Assumption to verify live:** when a task omits
   `execution_expires_after`, the 48h default is assumed and flagged as
   `expires_at_estimated=true`.

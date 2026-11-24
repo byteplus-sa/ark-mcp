@@ -149,7 +149,7 @@ directed by Stephen Chow) is billed at 1.1× the video price.
 |---|---|
 | Seedance 2.0 / 2.5 (`images`, `videos`, `audios`) | The server passes `asset://` through unchanged. A Seedance 2.5 image asset was accepted in a live provider test; video/audio assets and Seedance 2.0 remain unverified. With AK/SK set, a `GetAsset` preflight (`SEEDANCE_ASSET_PREFLIGHT`) stops the call before billing if an asset is `Processing` or `Failed`. An asset the account can't look up does not block. |
 | Seedream (`images`) and Seed Audio (`audio_references`, `image_reference`) | **Not native.** The provider returned HTTP 400 in the 2026-09-24 probe. With `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=off` (default) the tool rejects `asset://` locally. With `resolve` (experimental, needs AK/SK) it swaps in the asset's temporary `GetAsset` URL after checking it is `Active` and the right type. |
-| Everything else (understanding, 3D, VOD, speech-to-text) | Rejected. |
+| Everything else (understanding, VOD, speech-to-text) | Rejected. |
 
 > **Resolve mode caveat.** In resolve mode the model receives an ordinary URL,
 > without the asset library's trust or authorization guarantees, and provider

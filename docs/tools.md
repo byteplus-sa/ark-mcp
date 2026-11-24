@@ -1,6 +1,6 @@
 # Tools Reference
 
-The catalog contains 39 tools; the exposed set is conditional. `seed_media_get_artifact`,
+The catalog contains 37 tools; the exposed set is conditional. `seed_media_get_artifact`,
 `seed_media_export_artifact`, and `seed_media_persist_url` are always
 available, provider tools are registered only when their credentials
 are configured, and `media_upload` and `media_presign` are registered when
@@ -59,8 +59,6 @@ interval:
 - `speech_to_text`
 - `seedream_generate_image` (generation, editing, variations, and dry runs)
 - `seedance_create_task` (every Seedance model, including variations and dry runs)
-- `hyper3d_create_task`
-- `hitem3d_create_task`
 - `omnihuman_create_task` (when `BYTEPLUS_OMNIHUMAN_ENABLED=true`)
 - `seed_understand`
 - `seed_audio_understand`
@@ -75,9 +73,9 @@ holding a tool call open, and polls `ark_job_get` until it reaches a terminal
 status. A task-capable client can instead call the tool with task metadata and
 poll `tasks/get`. Either way the terminal response contains the final tool
 output, and a foreground direct call to a required target is rejected before
-any provider request is made. For Seedance, Seed 3D, and MediaKit
+any provider request is made. For Seedance and MediaKit
 create/submit tools, the background job covers the provider submission; its
-result contains the provider task ID. **Poll Seedance and 3D tasks with
+result contains the provider task ID. **Poll Seedance tasks with
 `gen_task_get` and MediaKit tasks with `vod_get_task`; never resubmit a create
 tool to poll**, because that starts a second billed task.
 
@@ -145,7 +143,7 @@ needs no scope.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `kind` | `"video"` \| `"image"` \| `"3d"` \| `"understanding"` | No | Filter to one kind; omit for all |
+| `kind` | `"video"` \| `"image"` \| `"understanding"` | No | Filter to one kind; omit for all |
 
 ### Output
 
@@ -157,12 +155,11 @@ needs no scope.
     resolution, audio-only input, `task_types`, `output_formats`.
   - `image`: reference maximum, output formats, batch support, sizes,
     transparent-background support.
-  - `3d`: text-to-3D support, reference maximum, file formats, seed support.
   - `understanding`: modalities accepted by the named `tool`, media-part maximum, thinking,
     reasoning efforts, response formats. Both the default model for requests
     with audio and the default for requests without audio are marked
     `is_default`.
-- **`services`**: `modelark`, `seed3d`, `seed_audio`,
+- **`services`**: `modelark`, `seed_audio`,
   `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`,
   `asset_library`, `asset_delete`, and `moderation`, each with `enabled` and, when disabled,
   a `reason` naming the setting to change (never a secret value).
@@ -293,7 +290,7 @@ Persist a temporary provider output URL as a durable artifact. Use it when a
 generation or retrieval result returned an artifact with `id="provider-url"`
 and a `persistence_error`: the output was generated and billed, but could not
 be stored at the time. Call it before the provider URL expires (2 hours for
-audio, 24 hours for image, video, and 3D). Always registered; uses the
+audio, 24 hours for images and video). Always registered; uses the
 `media:upload` scope in `api_key` mode.
 
 Only trusted BytePlus provider hosts are accepted. The URL goes through the
@@ -311,7 +308,7 @@ background.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `url` | string | Yes | Temporary HTTPS provider URL, typically the `uri` of an `ArtifactRef` whose `id` is `provider-url` |
-| `media_type` | "image" \| "audio" \| "video" \| "three_d" | Yes | Logical media type of the output |
+| `media_type` | "image" \| "audio" \| "video" | Yes | Logical media type of the output |
 | `mime_type` | string | Yes | Expected MIME type (e.g. `video/mp4`); a specific provider `Content-Type` takes precedence |
 | `source_expires_at` | string | No | ISO-8601 expiry of the provider URL, copied from the original `ArtifactRef.source_expires_at` |
 
@@ -1134,15 +1131,14 @@ Draft step 2 (render the final video from a succeeded Draft):
 
 ## gen_task_get
 
-Check the status and outputs of **any** ModelArk generation task: Seedance
-video (2.0, regular 2.5, and 2.5 Flash), Hyper3D, and Hitem3d. Pass every task ID you
-are waiting on in one call. Registered when `BYTEPLUS_MODELARK_API_KEY` is set
-(not gated by the 3D flag) and uses the `gen:read` scope in `api_key` mode.
+Check the status and outputs of video tasks for configured Seedance models,
+including 2.0, regular 2.5, and 2.5 Flash. Pass every task ID you are waiting on in
+one call. Requires `BYTEPLUS_MODELARK_API_KEY` and the `gen:read` scope in
+`api_key` mode.
 
-The server makes one provider list call per page of 20 task IDs (at most
-three), filtered by the requested IDs, and re-fetches individually only the
-tasks missing from the list or reported succeeded without their primary
-video/model-file URL; a last-frame URL alone is not sufficient.
+The server makes one provider list call per page of 20 task IDs, up to three
+pages. It fetches full details for omitted tasks, entries without a model ID,
+and succeeded Seedance entries without a video URL.
 Persistence uses a per-task single-flight cache. Later polls fill missing or
 failed outputs without downloading cached successful outputs again. MOV
 outputs retain `video/quicktime` and `.mov` filenames on directory export.
@@ -1157,7 +1153,7 @@ outputs retain `video/quicktime` and `.mov` filenames on directory export.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `task_ids` | list[string] | Yes | 1-50 ModelArk generation task IDs from `seedance_create_task`, `hyper3d_create_task`, or `hitem3d_create_task` (not Ark job IDs); duplicates are ignored |
+| `task_ids` | list[string] | Yes | 1-50 provider task IDs from `seedance_create_task`. Duplicates are ignored |
 | `persist_output` | boolean | No | Copy each succeeded task's outputs into durable storage, once per task (default: **false**) |
 | `output_dir` | string | No | Local directory for each succeeded task's files (`<artifact_id>.<ext>`); stdio only, requires `persist_output=true`. See [local output paths](#writing-outputs-to-local-paths) |
 | `overwrite` | boolean | No | Allow `output_dir` writes to replace existing files (default: false) |
@@ -1179,16 +1175,16 @@ Each `GenTask` contains:
 | Field | Description |
 |---|---|
 | `task_id`, `model` | Provider task ID and the model that ran it |
-| `family` | Registry family of the model; `null` when the model is not configured on this server |
-| `kind` | `video`, `3d`, or `unknown`, from the registry binding for `model` |
+| `family` | Configured Seedance model family |
+| `kind` | `video` |
 | `status` | `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `expired` |
 | `created_at`, `updated_at` | ISO-8601 creation and last status-change times |
-| `outputs` | List of `TaskOutputFile`: roles `video` and `last_frame` for video tasks, `model_file` for 3D tasks. Empty until the task succeeds |
+| `outputs` | List of `TaskOutputFile`: roles `video` and optional `last_frame`. Empty until the task succeeds |
 | `error` | Provider failure `code` and `message` when failed |
 | `usage` | Token usage reported by the provider |
-| `draft` | `true` for a Seedance Draft task (480p preview); pass `task_id` as `draft_task_id` within 14 days of creation (7 if created before 2026-10-28 10:00 UTC+8). `null` for 3D |
-| `settings` | Video generation settings echoed by the provider; `null` for 3D |
-| `queue` | Server-derived queue timing for a queued or running video task (below); `null` once finished and for 3D |
+| `draft` | `true` for a Seedance Draft task (480p preview); pass `task_id` as `draft_task_id` within 14 days of creation (7 if created before 2026-10-28 10:00 UTC+8). |
+| `settings` | Video generation settings echoed by the provider when available |
+| `queue` | Server-derived queue timing for a queued or running video task (below); `null` once finished |
 
 Each `TaskOutputFile` carries `role`, the expiring provider `source_url`
 (about 24 hours, kept even when persistence is skipped or fails),
@@ -1197,8 +1193,9 @@ Each `TaskOutputFile` carries `role`, the expiring provider `source_url`
 exported), and a safe `persistence_issue` when the copy failed. Re-persist a
 failed output with `seed_media_persist_url` before its source URL expires.
 
-Task IDs not created by the caller are reported in `errors` instead of failing
-the call. A failure of the provider list call itself fails the whole call.
+Task IDs not created by the caller are reported in `errors`. Tasks whose model
+ID has no Seedance binding return `NOT_FOUND`. A failure of the provider list
+call itself fails the whole call.
 
 `queue` (`SeedanceQueueInfo`) is set only while the task is `queued` or
 `running` and is `null` once it finishes. It is derived by this server from the
@@ -1239,8 +1236,7 @@ them locally) through a background job:
 
 ### Polling workflow
 
-1. Submit a create tool (`seedance_create_task`, `hyper3d_create_task`, or
-   `hitem3d_create_task`) through `ark_job_submit`, poll
+1. Submit `seedance_create_task` through `ark_job_submit`, poll
    `ark_job_get`, and read the provider `task_id` (or every variation's task
    ID) from the job result.
 2. Call `gen_task_get` in the foreground with all the task IDs and the default
@@ -1254,8 +1250,8 @@ them locally) through a background job:
 
 ## gen_task_list
 
-List your ModelArk generation tasks (Seedance video and 3D), **newest first**,
-from the last 7 days (the provider's list window). Registered when
+List your tasks for configured Seedance models, **newest first**, from the last
+7 days (the provider's list window). Registered when
 `BYTEPLUS_MODELARK_API_KEY` is set and uses the `gen:read` scope in `api_key` mode. Use
 `gen_task_get` for outputs.
 
@@ -1269,13 +1265,13 @@ from the last 7 days (the provider's list window). Registered when
 | `page_size` | integer | No | Maximum tasks to return (1-100, default 20) |
 | `cursor` | string | No | Opaque `next_cursor` from a previous call made with the same filters |
 | `status` | `queued` \| `running` \| `succeeded` \| `failed` \| `cancelled` \| `expired` | No | Only return tasks in this status |
-| `model` | string | No | Only return tasks run by this exact model ID |
+| `model` | string | No | Only return tasks run by this exact configured Seedance model ID |
 | `task_ids` | list[string] | No | Only return these task IDs (up to 100); IDs the caller does not own are skipped |
 
 ### Output
 
 Returns `GenTaskPage` with `tasks` (newest first) and `next_cursor`. Each
-summary has `task_id`, `model`, `kind` (`video`, `3d`, or `unknown`),
+summary has `task_id`, `model`, `kind` (`video`),
 `status`, `created_at`, and `error` (when failed). Follow `next_cursor` until
 it is `null`. **A page may hold fewer than `page_size` tasks while
 `next_cursor` is non-null**, so keep paging.
@@ -1292,10 +1288,10 @@ listed.
 
 ## gen_task_cancel_or_delete
 
-Cancel (queued) or delete (terminal) any ModelArk generation task: Seedance,
-Hyper3D, or Hitem3d. Registered when `BYTEPLUS_MODELARK_API_KEY` is set and
-uses the `gen:delete` scope in `api_key` mode. A deleted task's outputs are no longer
-retrievable through `gen_task_get`.
+Cancel a queued task or delete a terminal task for a configured Seedance model.
+Requires `BYTEPLUS_MODELARK_API_KEY` and the `gen:delete` scope in `api_key` mode.
+The tool verifies the model binding before issuing DELETE. Deleting the task
+makes its outputs unavailable through `gen_task_get`.
 
 **Annotations:** `readOnlyHint=False`, `destructiveHint=True`,
 `idempotentHint=False`, `openWorldHint=True`
@@ -1304,7 +1300,7 @@ retrievable through `gen_task_get`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `task_id` | string | Yes | ModelArk generation task ID |
+| `task_id` | string | Yes | Seedance provider task ID |
 | `mode` | "cancel" \| "delete" | Yes | Operation mode |
 | `expected_status` | "queued" \| "succeeded" \| "failed" \| "expired" | Yes | Expected current status |
 | `confirm` | true | Yes | Explicit confirmation required |
@@ -1745,40 +1741,3 @@ Returns `MediaPresignOutput` with `items` in input order (each with
 `request_id`), plus `succeeded` and `failed`. **Failures are per key**:
 `INVALID_KEY` (malformed key), `NOT_OWNED` (not uploaded by the caller),
 `INTERNAL`, or a provider error code. Check `failed`.
-
-## hyper3d_create_task / hitem3d_create_task
-
-Create an asynchronous 3D generation task. Both tools are gated by
-`BYTEPLUS_MODELARK_3D_ENABLED=true` (disabled by default) and reuse the
-ModelArk API key.
-
-**Execution:** Required background job for provider submission. Read the
-provider task ID from its background result.
-
-- `hyper3d_create_task` (Hyper3d-Gen2): text-to-3D and/or image-to-3D
-  (1-5 images). Exposes `seed`, `callback_url`, and model text-command
-  parameters (`material`, `mesh_mode`, `quality_override`, `addons`,
-  `use_original_alpha`, `bbox_condition`, `ta_pose`, `subdivision_level`,
-  `file_format`, `hd_texture`).
-- `hitem3d_create_task` (Hitem3d-2.0): image-to-3D only (1-4 images).
-  Exposes `callback_url` and model text-command parameters (`resolution`,
-  `face`, `file_format`, `request_type`, `multi_images_bit`).
-
-### Output
-
-Returns `Seed3DCreateTaskOutput` with `task_id`, `status="queued"`, and a
-recommended polling delay.
-
-### Polling, listing, and cancelling 3D tasks
-
-3D tasks share the ModelArk generation task lifecycle with Seedance:
-
-- **Poll** with [`gen_task_get`](#gen_task_get). A 3D task reports
-  `kind="3d"` and one `model_file` output (usually a zip) once it succeeds.
-  Poll in the foreground with `persist_output=false`, then call it through
-  `ark_job_submit` with `persist_output=true` (and optionally `output_dir`) to
-  copy the file into durable storage (`seed-media://artifacts/{id}`).
-- **List** with [`gen_task_list`](#gen_task_list) (last 7 days; filter by
-  `model` to see only Hyper3D or Hitem3d tasks).
-- **Cancel or delete** with
-  [`gen_task_cancel_or_delete`](#gen_task_cancel_or_delete).

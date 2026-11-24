@@ -13,11 +13,13 @@ import binascii
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field
 
+from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.models import GenTaskStatus, TaskError
 from ark_mcp.observability.logger import info as log_info
@@ -26,7 +28,6 @@ from ark_mcp.providers.modelark.schemas import GenerationTaskResponse
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import OwnedTask, get_principal, get_runtime
 from ark_mcp.tools._errors import provider_error_result
-from ark_mcp.tools._generation_tasks_shared import TaskKind, classify_task
 from ark_mcp.tools._task_execution import context_log
 
 LIST_WINDOW = timedelta(days=7)
@@ -61,9 +62,7 @@ class GenTaskSummary(BaseModel):
 
     task_id: str = Field(..., description="Provider task ID; pass it to gen_task_get for outputs.")
     model: str = Field(..., description="Model ID that ran the task.")
-    kind: TaskKind = Field(
-        ..., description="Output kind from the registry binding for model: video, 3d, or unknown."
-    )
+    kind: Literal["video"] = Field("video", description="Output kind for Seedance tasks.")
     status: GenTaskStatus = Field(..., description="Task status.")
     created_at: str = Field(..., description="ISO-8601 task creation time.")
     error: TaskError | None = Field(None, description="Failure details when the task failed.")
@@ -91,7 +90,7 @@ TOOL_ANNOTATIONS = {
 
 
 async def gen_task_list(input: GenTaskListInput, ctx: Context) -> GenTaskPage | ToolResult:
-    """List your ModelArk generation tasks (Seedance video and 3D), newest first.
+    """List your tasks from configured Seedance models, newest first.
 
     Covers tasks created in the last 7 days, the provider's list window. Filter
     by status, model, or task_ids, and follow next_cursor until it is null;
@@ -137,7 +136,13 @@ async def _list_local(
         else (len(response.data) == input.page_size)
     )
     next_cursor = _encode_cursor({"page": page_num + 1}, filter_hash) if more else None
-    return GenTaskPage(tasks=[_summary(task) for task in response.data], next_cursor=next_cursor)
+    registry = get_capability_registry()
+    tasks = [
+        _summary(task)
+        for task in response.data
+        if registry.resolve_task_model(task.model) is not None
+    ]
+    return GenTaskPage(tasks=tasks, next_cursor=next_cursor)
 
 
 async def _list_owned(
@@ -148,6 +153,7 @@ async def _list_owned(
     before = _owned_position(_decode_cursor(input.cursor, filter_hash))
     since = datetime.now(UTC) - LIST_WINDOW
     wanted = set(input.task_ids) if input.task_ids is not None else None
+    registry = get_capability_registry()
 
     tasks: list[GenTaskSummary] = []
     for _ in range(MAX_SLICES_PER_PAGE):
@@ -160,7 +166,7 @@ async def _list_owned(
         found = await _fetch_slice(service, input, [row.task_id for row in candidates])
         for row in candidates:
             task = found.get(row.task_id)
-            if task is None:
+            if task is None or registry.resolve_task_model(task.model) is None:
                 continue
             tasks.append(_summary(task))
             if len(tasks) == input.page_size:
@@ -195,14 +201,12 @@ async def _fetch_slice(
 
 
 def _summary(task: GenerationTaskResponse) -> GenTaskSummary:
-    _family, kind = classify_task(task.model)
     error = None
     if task.error and (task.error.code or task.error.message):
         error = TaskError(code=task.error.code or None, message=task.error.message)
     return GenTaskSummary(
         task_id=task.id,
         model=task.model,
-        kind=kind,
         status=GenTaskStatus(task.status),
         created_at=task_timestamp(task.created_at),
         error=error,

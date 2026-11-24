@@ -51,7 +51,7 @@ def e2e_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> object:
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test-modelark")
     monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-test-speech")
     monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-key")
-    monkeypatch.setenv("BYTEPLUS_MODELARK_3D_ENABLED", "false")
+    monkeypatch.setenv("BYTEPLUS_OMNIHUMAN_ENABLED", "false")
     monkeypatch.setenv("TOS_ACCESS_KEY", "ak-test-tos")
     monkeypatch.setenv("TOS_SECRET_KEY", "sk-test-tos")
     monkeypatch.setenv("TOS_BUCKET", "test-bucket")
@@ -284,7 +284,7 @@ class TestBackgroundJobCompatibility:
         assert targets["seed_understand"]["task_mode"] == "required"
         assert targets["gen_task_get"]["task_mode"] == "optional"
         assert "input" in targets["seed_understand"]["input_schema"]["properties"]
-        assert "hyper3d_create_task" not in targets
+        assert "omnihuman_create_task" not in targets
 
     @pytest.mark.parametrize("tool_name", ["gen_task_list", "ark_job_submit"])
     async def test_legacy_client_rejects_non_background_target(
@@ -335,14 +335,19 @@ class TestBackgroundJobCompatibility:
                     "ark_job_submit",
                     {
                         "input": {
-                            "tool_name": "hyper3d_create_task",
-                            "arguments": {"input": {"image_url": "https://example.com/a.png"}},
+                            "tool_name": "omnihuman_create_task",
+                            "arguments": {
+                                "input": {
+                                    "image": "https://example.com/avatar.png",
+                                    "audio": "https://example.com/voice.wav",
+                                }
+                            },
                         }
                     },
                 )
 
         submission_metric.assert_called_once_with(
-            target="hyper3d_create_task",
+            target="omnihuman_create_task",
             status="rejected",
             path="compatibility",
         )

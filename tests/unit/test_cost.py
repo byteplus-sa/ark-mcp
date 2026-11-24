@@ -203,27 +203,6 @@ class TestLogCostEstimate:
             )
 
 
-class TestEstimateCost3D:
-    """Tests for estimate_cost with 3d product."""
-
-    def test_hyper3d_default(self) -> None:
-        from ark_mcp.tools._cost import COST_PER_3D_TASK_HYPER3D
-
-        assert estimate_cost(product="3d", variations=1) == COST_PER_3D_TASK_HYPER3D
-
-    def test_hitem3d_family(self) -> None:
-        from ark_mcp.tools._cost import COST_PER_3D_TASK_HITEM3D
-
-        cost = estimate_cost(product="3d", variations=2, seed3d_family="seed3d_hitem3d")
-        assert cost == round(2 * COST_PER_3D_TASK_HITEM3D, 2)
-
-    def test_hyper3d_family(self) -> None:
-        from ark_mcp.tools._cost import COST_PER_3D_TASK_HYPER3D
-
-        cost = estimate_cost(product="3d", variations=1, seed3d_family="seed3d_hyper3d")
-        assert cost == COST_PER_3D_TASK_HYPER3D
-
-
 class TestVideoCostByFamily:
     """Video pricing follows the registry family, not the model ID text."""
 

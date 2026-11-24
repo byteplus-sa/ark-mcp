@@ -207,7 +207,6 @@ server was constructed with explicit settings instead of environment defaults.
 | `COST_PER_VIDEO_TASK` | `0.07` USD (`0.35` for Seedance 2.5) |
 | `COST_PER_STT_SECOND` | `0.0006` USD |
 | `COST_UNDERSTANDING_INPUT_PER_MTOK` / `_OUTPUT_PER_MTOK` | `0.50` / `3.00` USD |
-| `COST_PER_3D_TASK_HYPER3D` / `_HITEM3D` | `0.25` / `1.0` USD |
 | `DEFAULT_MAX_CONCURRENT` | `5` |
 
 `estimate_cost(product, variations, ..., model_id=None)`:
@@ -218,7 +217,6 @@ server was constructed with explicit settings instead of environment defaults.
 | `"understanding"` | Live: `InferencePrompt` and `InferenceCompletion` per-K-token prices scaled to millions of tokens. Built-in: the per-Mtok constants. Uses `prompt_tokens` and `max_tokens` |
 | `"audio"` | `round(variations * max(duration_seconds, 10) * 0.0031, 2)` — **floor of 10 seconds per variation** |
 | `"video"` | `round(variations * 0.07, 2)` (Seedance 2.5 uses `0.35`); live video prices are token-based and not yet used |
-| `"3d"` | Per-task built-in rate by family; live prices are not yet used |
 | `"stt"` | Built-in per-second rate with a 10 second floor |
 | (any other) | `0.0` |
 
@@ -376,8 +374,8 @@ Timeout classification depends on whether the call can create provider state:
 
 | Call | Examples | Timeout result | Auto-retried? |
 |---|---|---|---|
-| Mutation | Seedance/Seed 3D create, cancel, delete; Seedream/Seed Audio generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
-| Read-only poll | Seedance and Seed 3D `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
+| Mutation | Seedance create, cancel, delete; Seedream/Seed Audio generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
+| Read-only poll | Seedance `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
 | Chat completion | `seed_understand`, `seed_audio_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
 | Moderation lookup | `ark_moderation_get` | `retryable=True`, `ambiguous_completion=False` | No; one request per admitted lookup |
 

@@ -82,7 +82,7 @@ def profile(frame, event, arg):
         event == "call"
         and frame.f_globals.get("__name__") == "ark_mcp.tools._catalog"
         and frame.f_code.co_name in {
-            "_always", "_modelark", "_seed3d", "_seed_audio", "_stt",
+            "_always", "_modelark", "_seed_audio", "_stt",
             "_object_storage", "_vod", "_omnihuman", "_assets",
             "_asset_delete", "_moderation",
         }
@@ -154,7 +154,6 @@ def test_export_is_identical_with_hostile_inherited_configuration(tmp_path: Path
             "FASTMCP_LOG_LEVEL": "not-a-log-level",
             "BYTEPLUS_MODELARK_API_KEY": SYNTHETIC_ENV_CANARY,
             "BYTEPLUS_MODELARK_ACCESS_KEY": SYNTHETIC_ENV_CANARY,
-            "BYTEPLUS_MODELARK_3D_ENABLED": "not-a-boolean",
             "SEEDANCE_MODEL_BINDINGS": "not-json",
             "OBJECT_STORAGE_BACKEND": "not-a-backend",
             "S3_ACCESS_KEY": SYNTHETIC_ENV_CANARY,
@@ -267,8 +266,6 @@ def test_model_tables_only_document_catalog_tools() -> None:
         ("seedance_create_task", "seedance_default_model"),
         ("seed_understand", "seed_understanding_default_model"),
         ("seed_audio_understand", "seed_audio_understanding_model"),
-        ("hyper3d_create_task", "hyper3d_default_model"),
-        ("hitem3d_create_task", "hitem3d_default_model"),
         ("omnihuman_create_task", "omnihuman_req_key"),
     ],
 )
@@ -354,7 +351,6 @@ def test_all_registration_gates_name_the_exact_environment_variables(
     expected = {
         "_always": set(),
         "_modelark": {"BYTEPLUS_MODELARK_API_KEY"},
-        "_seed3d": {"BYTEPLUS_MODELARK_API_KEY", "BYTEPLUS_MODELARK_3D_ENABLED"},
         "_seed_audio": {"BYTEPLUS_SEED_SPEECH_API_KEY"},
         "_stt": {"BYTEPLUS_SEED_SPEECH_API_KEY"},
         "_object_storage": {
@@ -388,7 +384,7 @@ def test_all_registration_gates_name_the_exact_environment_variables(
         assert variables == expected[entry.gate.__name__], entry.name
         if entry.gate.__name__ == "_always":
             assert "always" in gate.lower()
-        if entry.gate.__name__ in {"_seed3d", "_omnihuman", "_asset_delete", "_moderation"}:
+        if entry.gate.__name__ in {"_omnihuman", "_asset_delete", "_moderation"}:
             assert "=true" in gate
         if entry.gate.__name__ == "_moderation":
             assert "whitelist" in gate.lower()

@@ -1,7 +1,7 @@
 """Seedance adapter — asynchronous video generation task management.
 
 Translates domain input models to provider DTOs and creates Seedance tasks.
-Retrieval, listing and deletion are shared with 3D tasks in
+Retrieval, listing and deletion use
 ``generation_tasks.GenerationTaskService``.
 """
 

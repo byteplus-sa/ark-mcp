@@ -75,8 +75,6 @@ For the removal of JWT authentication and migration to shared-key HTTP, see
 * add Draft mode to Seedance 2.5 and 2.5 Premium ([4eb616c](https://github.com/byteplus-sa/ark-mcp/commit/4eb616c0826900d39e0bb09110e4f7a4d913ab3f))
 * add Draft mode to Seedance 2.5 and 2.5 Premium ([b523fe6](https://github.com/byteplus-sa/ark-mcp/commit/b523fe69f350a6cd370c4cea299c718c2d703c32))
 * add field descriptions to all MCP tool output models for client usability ([00c87d0](https://github.com/byteplus-sa/ark-mcp/commit/00c87d086db2d8d48fb25e273a6f3dd5d34eb086))
-* add Hyper3D and Hitem3d 3D generation tools ([c0a1385](https://github.com/byteplus-sa/ark-mcp/commit/c0a1385ac2599f835091f47669db658acff969c3))
-* add Hyper3D and Hitem3d 3D generation tools ([2271d84](https://github.com/byteplus-sa/ark-mcp/commit/2271d84146eedd15f5bd81e8493cf7a4c5f31885))
 * add media_presign tool and S3 object storage docs ([#12](https://github.com/byteplus-sa/ark-mcp/issues/12)) ([946d437](https://github.com/byteplus-sa/ark-mcp/commit/946d437e53dc37637240a29593972df2eefa9bc5))
 * add media_upload tool backed by BytePlus TOS ([88515c5](https://github.com/byteplus-sa/ark-mcp/commit/88515c5534d6eab806ce2d1bfebb78e5048e5d62))
 * add MediaKit enhancement task retrieval ([ebd4987](https://github.com/byteplus-sa/ark-mcp/commit/ebd49879f8f9216fe9b4b84024c0853c96ea7a93))
@@ -169,7 +167,6 @@ For the removal of JWT authentication and migration to shared-key HTTP, see
 * bootstrap the agreed release and update the root lockfile version ([181a02d](https://github.com/byteplus-sa/ark-mcp/commit/181a02d722bdf3e71f49b434f2707d3e51c589cd))
 * complete background task admission telemetry ([e7a9d15](https://github.com/byteplus-sa/ark-mcp/commit/e7a9d15355d4e719a9c1e9b5a450f5350e4fff1f))
 * correct release bootstrap and lockfile version updates ([c721d77](https://github.com/byteplus-sa/ark-mcp/commit/c721d77cc21590b8b010cce50ca56e9cb5e6ea4f))
-* correct Seed3D model IDs and Hyper3D artifact persistence ([e6fb0eb](https://github.com/byteplus-sa/ark-mcp/commit/e6fb0eb77f8deb14408ef93ace3d74506f900146))
 * default Seedream 5.0 prompt optimization to standard ([7691489](https://github.com/byteplus-sa/ark-mcp/commit/7691489e87742a7dd56baf1c36d09b20e1ceb10d))
 * default Seedream 5.0 prompt optimization to standard ([ea5d6fa](https://github.com/byteplus-sa/ark-mcp/commit/ea5d6fa67e27de2fc17b249b0fa0d24d3dd7b57d))
 * document background sweeper and guard registry login ([25317cd](https://github.com/byteplus-sa/ark-mcp/commit/25317cd5ada4db344a97bbbdc87f1bfd28b5b444))
@@ -274,7 +271,7 @@ For the removal of JWT authentication and migration to shared-key HTTP, see
 * sync modelark-mcp skill with transcode and presign patterns ([02ed56b](https://github.com/byteplus-sa/ark-mcp/commit/02ed56b0762e946e7496f293f8110589cb134fe4))
 * **tools:** add actual model IDs to parameter descriptions and SKILL.md ([6794e5c](https://github.com/byteplus-sa/ark-mcp/commit/6794e5c8ac5e7eb0df5ae6cfa0032fe4923b037c))
 * **tools:** add parameter descriptions to all tool input models ([a80065a](https://github.com/byteplus-sa/ark-mcp/commit/a80065a6de436b0ea427ce33a3c2f55a7924b6f1))
-* update AGENTS.md and modelark-mcp skill for 3D and latest MCP ([#46](https://github.com/byteplus-sa/ark-mcp/issues/46)) ([0e3e578](https://github.com/byteplus-sa/ark-mcp/commit/0e3e57851c94545f5046f19dadbd096dd0cd85ea))
+* update AGENTS.md and modelark-mcp skill for the latest MCP ([#46](https://github.com/byteplus-sa/ark-mcp/issues/46)) ([0e3e578](https://github.com/byteplus-sa/ark-mcp/commit/0e3e57851c94545f5046f19dadbd096dd0cd85ea))
 * update modelark-mcp skill with Seedance 2.5 and seed_understand tools ([3417dff](https://github.com/byteplus-sa/ark-mcp/commit/3417dffe2b180a3fb84f745a6e5d09a729dc2130))
 
 

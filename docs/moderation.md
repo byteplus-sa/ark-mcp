@@ -48,7 +48,7 @@ legal or safety findings. Empty reasons never establish approval.
 The reviewed provider contract covers blocked image, video, and audio records
 for supported Seedance 2.0 variants, regular Seedance 2.5, and material assets.
 Text queries and regular Seedance 2.5 request-ID lookup are unsupported; use
-`task_id` for 2.5. Seedream, 3D, and Flash coverage is not established.
+`task_id` for 2.5. Seedream and Flash coverage is not established.
 
 Records must be within fourteen days and created after whitelist activation.
 `NotFound.Id` remains an error: it can mean an invalid, unblocked, expired, or

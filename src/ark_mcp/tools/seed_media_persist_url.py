@@ -9,8 +9,6 @@ size limits as generation-time persistence.
 
 from __future__ import annotations
 
-from typing import Literal
-
 from fastmcp import Context
 from pydantic import BaseModel, Field
 
@@ -30,8 +28,8 @@ class SeedMediaPersistUrlInput(BaseModel):
         max_length=8192,
         description="Provider output URL, usually the uri of an ArtifactRef with id 'provider-url'. BytePlus hosts only.",
     )
-    media_type: Literal["image", "audio", "video", "three_d"] = Field(
-        ..., description="Media type of the output."
+    media_type: MediaType = Field(
+        ..., description="Media type of the output: image, audio, or video."
     )
     mime_type: str = Field(
         ...,
@@ -57,14 +55,14 @@ async def seed_media_persist_url(
     """Persist a provider output URL as a durable artifact and return its ArtifactRef.
 
     Use when a generation result has an artifact with id 'provider-url' and a persistence_error,
-    before the URL expires (2h audio, 24h image/video/3D). Non-BytePlus hosts are rejected.
+    before the URL expires (2h audio, 24h image/video). Non-BytePlus hosts are rejected.
     """
     await context_log(ctx, "info", "Persisting provider output URL")
     runtime = get_runtime(ctx)
     try:
         ref = await runtime.artifact_store.copy_from_trusted_url(
             url=input.url,
-            media_type=MediaType(input.media_type),
+            media_type=input.media_type,
             mime_type=input.mime_type,
             source_expires_at=input.source_expires_at,
             auth=get_principal(ctx),

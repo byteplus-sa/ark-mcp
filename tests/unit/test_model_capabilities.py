@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from ark_mcp.config.model_capabilities import (
     ImageCapabilities,
     ModelFamily,
-    Seed3DCapabilities,
     VideoCapabilities,
     get_capability_registry,
     refresh_capability_registry,
@@ -281,42 +280,6 @@ class TestSeedance25Capabilities:
             os.environ["SEEDANCE_DEFAULT_MODEL"] = old_default
             refresh_settings()
             refresh_capability_registry()
-
-
-class TestSeed3DCapabilities:
-    """Tests for the Seed3D capability registry."""
-
-    def test_hyper3d_default_resolution(self) -> None:
-        from ark_mcp.config.env import get_settings
-
-        registry = get_capability_registry()
-        settings = get_settings()
-        caps = registry.get_seed3d_capabilities(default_model=settings.hyper3d_default_model)
-        assert isinstance(caps, Seed3DCapabilities)
-        assert caps.family is ModelFamily.SEED3D_HYPER3D
-        assert caps.supports_text_to_3d is True
-        assert caps.max_reference_images == 5
-
-    def test_hitem3d_default_resolution(self) -> None:
-        from ark_mcp.config.env import get_settings
-
-        registry = get_capability_registry()
-        settings = get_settings()
-        caps = registry.get_seed3d_capabilities(default_model=settings.hitem3d_default_model)
-        assert isinstance(caps, Seed3DCapabilities)
-        assert caps.family is ModelFamily.SEED3D_HITEM3D
-        assert caps.supports_text_to_3d is False
-        assert caps.max_reference_images == 4
-
-    def test_unknown_seed3d_model_raises(self) -> None:
-        registry = get_capability_registry()
-        with pytest.raises(ValueError, match=r"not configured.*ark_list_models\(kind='3d'\)"):
-            registry.get_seed3d_capabilities("not-a-real-model")
-
-    def test_seed3d_typo_suggests_the_configured_model(self) -> None:
-        registry = get_capability_registry()
-        with pytest.raises(ValueError, match="Did you mean 'hyper3d-gen2-260112'"):
-            registry.get_seed3d_capabilities("hyper3d-gen2")
 
 
 @pytest.fixture

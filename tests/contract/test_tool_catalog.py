@@ -91,7 +91,7 @@ async def test_gated_tools_are_skipped_without_credentials() -> None:
 async def test_server_instructions_name_only_registered_tools(all_services_enabled: None) -> None:
     server = create_server(get_settings())
     names = {tool.name for tool in await server.list_tools()}
-    pattern = r"\b(?:ark|seed|seedance|seedream|hyper3d|hitem3d|vod|omnihuman|gen|media|speech)_[a-z0-9_]+\b"
+    pattern = r"\b(?:ark|seed|seedance|seedream|vod|omnihuman|gen|media|speech)_[a-z0-9_]+\b"
     mentioned = set(re.findall(pattern, SERVER_INSTRUCTIONS))
     assert mentioned
     assert mentioned - names == set()

@@ -71,8 +71,8 @@ done. Never paste keys into chat or client configuration.
 | Video enhancement, transcoding, subtitles, audio separation | VOD AI MediaKit |
 | Talking avatars | Vision AI, plus OmniHuman access |
 
-See [Provider Keys](../api-keys.md) for where to obtain each key. 3D, Flash
-and other optional products may have extra account access requirements.
+See [Provider Keys](../api-keys.md) for where to obtain each key. Optional
+models and products such as Flash may have extra account access requirements.
 Regular Seedance 2.5 4K uses the same model and key, without another flag.
 You do not need to configure every service.
 

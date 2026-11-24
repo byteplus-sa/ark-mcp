@@ -348,7 +348,7 @@ is pulled before credentials are removed. Failed private-image pulls can use
 fresh credentials without rewriting runtime configuration.
 
 The provider file must also be a same-owner regular mode-`0600` file. Only the
-four product bearer keys, ModelArk/Seed Audio base URLs, supported 3D/OmniHuman
+four product bearer keys, ModelArk/Seed Audio base URLs, supported OmniHuman
 feature flags and spend/rate/concurrency/retention limits are copied.
 IAM, JWT, object-storage credentials and custom model bindings are **not**
 copied. This CLI creates three independent secrets once: team key, Redis

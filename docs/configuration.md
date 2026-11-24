@@ -40,10 +40,6 @@ client is missing tools and that warning is absent, look at
 | `SEEDANCE_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_UNDERSTANDING_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings |
 | `SEED_AUDIO_UNDERSTANDING_MODEL` | `seed-2-0-lite-260428` | Model/endpoint ID used by `seed_audio_understand`. Any ModelArk model that accepts Chat Completions `input_audio` parts with deep thinking works; change it when a newer audio-capable model ships |
-| `BYTEPLUS_MODELARK_3D_ENABLED` | `false` | Feature flag for 3D generation (Hyper3D + Hitem3d); reuses the ModelArk key, disabled by default |
-| `HYPER3D_DEFAULT_MODEL` | `hyper3d-gen2` | Default Hyper3D model/endpoint ID |
-| `HITEM3D_DEFAULT_MODEL` | `hitem3d-2-0` | Default Hitem3d model/endpoint ID |
-| `SEED3D_MODEL_BINDINGS` | empty | JSON list of `{model_id, family}` bindings (`hyper3d` or `hitem3d`) |
 | `BYTEPLUS_OMNIHUMAN_ENABLED` | `false` | Feature flag for OmniHuman 2.0 (`omnihuman_*` tools); requires `BYTEPLUS_CV_API_KEY` |
 | `BYTEPLUS_CV_BASE_URL` | `https://openapi.cv.bytepluses.com` | HTTPS Vision AI base URL |
 | `BYTEPLUS_OMNIHUMAN_REQ_KEY` | `realman_avatar_picture_omni20_cv` | Service identifier sent as `req_key`; change only if BytePlus issues a new one |
@@ -198,10 +194,9 @@ FastMCP enforces the fixed ordinary scope allowlist:
 - `seed:audio:generate`
 - `seedream:generate`
 - `seedance:create`
-- `gen:read`, `gen:delete` (`gen_task_*` tools for Seedance and 3D tasks)
+- `gen:read`, `gen:delete` (`gen_task_*` tools for Seedance tasks)
 - `seed:asr:transcribe`
 - `understanding:read`
-- `hyper3d:create`, `hitem3d:create`
 - `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`
 - `vod:enhance`
 - `vod:transcode`

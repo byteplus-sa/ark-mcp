@@ -219,12 +219,10 @@ still require their server-side credentials and feature flags.
 |---|---|
 | `seedream:generate` | Image generation, variations, editing |
 | `seedance:create` | Create video tasks with `seedance_create_task` (all generations) |
-| `gen:read` / `gen:delete` | Poll/list or cancel/delete Seedance and 3D tasks |
+| `gen:read` / `gen:delete` | Poll/list or cancel/delete Seedance tasks |
 | `seed:audio:generate` | Audio generation and variations |
 | `seed:asr:transcribe` | `speech_to_text` |
 | `understanding:read` | `seed_understand`, `seed_audio_understand` |
-| `hyper3d:create` | Hyper3D text-to-3D tasks |
-| `hitem3d:create` | Hitem3D image-to-3D tasks |
 | `omnihuman:create` / `omnihuman:read` / `omnihuman:cancel` | OmniHuman 2.0 image-plus-audio video tasks |
 | `vod:enhance`, `vod:transcode`, `vod:subtitle:add`, `vod:subtitle:remove`, `vod:extract` / `vod:read` | VOD processing / polling |
 | `media:upload` / `media:presign` | Upload reference media and persist provider URLs / mint read URLs |

@@ -20,6 +20,7 @@ from fastmcp import Context
 from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field, model_validator
 
+from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.providers.modelark.generation_tasks import GenerationTaskService
@@ -38,7 +39,7 @@ class GenTaskCancelOrDeleteInput(BaseModel):
 
     task_id: str = Field(
         ...,
-        description="Generation task ID (Seedance, Hyper3D or Hitem3d).",
+        description="Seedance generation task ID.",
     )
     mode: Literal["cancel", "delete"] = Field(
         ...,
@@ -87,7 +88,7 @@ class GenTaskCancelOrDeleteOutput(BaseModel):
 async def gen_task_cancel_or_delete(
     input: GenTaskCancelOrDeleteInput, ctx: Context
 ) -> GenTaskCancelOrDeleteOutput | ToolResult:
-    """Cancel a queued task or delete a finished one (Seedance or 3D). Destructive.
+    """Cancel a queued Seedance task or delete a finished one. Destructive.
 
     Cancelled tasks cannot be resumed; deleted tasks' outputs are no longer retrievable.
     The call is refused unless expected_status matches the task's actual status.
@@ -114,6 +115,9 @@ async def gen_task_cancel_or_delete(
         return provider_error_result(exc)
     finally:
         await service.close()
+
+    if get_capability_registry().resolve_task_model(task.model) is None:
+        raise ValueError("Task is unavailable for the configured Seedance models.")
 
     await ctx.report_progress(progress=40, total=100)
 

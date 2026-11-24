@@ -6,10 +6,9 @@ Here are common scenarios and how to achieve them.
 The JSON blocks below show tool input payloads. Wrap the payload for
 generation, variation, transcription, upload, understanding, and
 provider-submission tools in `ark_job_submit`, or invoke those tools with MCP
-task augmentation on a client that negotiates it. For Seedance, Seed 3D, and
-MediaKit
-retrieval, poll in foreground with `persist_output=false`, then use the
-`ark_job_*` path (or optional task augmentation) with `persist_output=true`
+task augmentation on a client that negotiates it. For Seedance and MediaKit
+retrieval, poll in the foreground with `persist_output=false`, then use
+`ark_job_submit` or task augmentation with `persist_output=true`
 when downloading a completed output.
 
 In the workflows below, **background result** means the original tool result
@@ -199,7 +198,7 @@ provider ID to `gen_task_get`.
 
 ## 10. Polling for Video Completion
 
-Check the status of one or more video (or 3D) generation tasks.
+Check the status of one or more Seedance video tasks.
 
 **Tool:** `gen_task_get`
 
@@ -291,7 +290,7 @@ Pass `next_cursor` back as `cursor` with the same filters until it is `null`.
 
 ## 14. Cancel or Delete a Video Task
 
-Cancel a queued task or delete a completed one (Seedance or 3D).
+Cancel a queued task or delete a completed one in Seedance.
 
 **Tool:** `gen_task_cancel_or_delete`
 

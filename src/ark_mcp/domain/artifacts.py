@@ -21,7 +21,6 @@ class MediaType(StrEnum):
     IMAGE = "image"
     AUDIO = "audio"
     VIDEO = "video"
-    THREE_D = "three_d"
 
 
 class ArtifactPersistenceIssue(BaseModel):
@@ -49,7 +48,7 @@ class ArtifactRef(BaseModel):
 
     id: str = Field(..., description="Unique artifact identifier.")
     uri: str = Field(..., description="MCP resource URI (seed-media://artifacts/{id}).")
-    media_type: MediaType = Field(..., description="image, audio, video or three_d.")
+    media_type: MediaType = Field(..., description="image, audio, or video.")
     mime_type: str = Field(..., description="MIME type, e.g. image/png.")
     bytes: int | None = Field(default=None, description="Size in bytes.")
     sha256: str | None = Field(default=None, description="SHA-256 hex digest.")

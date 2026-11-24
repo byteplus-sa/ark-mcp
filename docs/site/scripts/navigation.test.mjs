@@ -2,14 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { toolReferenceGroups } from "./navigation.mjs";
 
-test("audio, understanding, 3D and avatars have separate tool sections", () => {
+test("audio, understanding and avatars have separate tool sections", () => {
   const names = [
     "seed_audio_generate",
     "speech_to_text",
     "seed_understand",
     "seed_audio_understand",
-    "hyper3d_create_task",
-    "hitem3d_create_task",
     "omnihuman_create_task",
     "omnihuman_get_task",
     "omnihuman_cancel_task",
@@ -22,10 +20,6 @@ test("audio, understanding, 3D and avatars have separate tool sections", () => {
   assert.deepEqual(entries.Understanding, [
     "seed_understand",
     "seed_audio_understand",
-  ]);
-  assert.deepEqual(entries["3D"], [
-    "hyper3d_create_task",
-    "hitem3d_create_task",
   ]);
   assert.deepEqual(entries.Avatars, [
     "omnihuman_create_task",

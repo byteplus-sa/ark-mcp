@@ -102,28 +102,6 @@
       }
     ]
   },
-  "hyper3d_create_task": {
-    "selection": "Omit `model` for `HYPER3D_DEFAULT_MODEL`, or pass an exact ID bound to `hyper3d` in `SEED3D_MODEL_BINDINGS`.",
-    "models": [
-      {
-        "name": "Hyper3D Gen 2",
-        "id": "`hyper3d-gen2-260112`",
-        "availability": "`BYTEPLUS_MODELARK_3D_ENABLED=true` and ModelArk key; disabled by default.",
-        "capabilities": "Text and/or up to 5 reference images; seed support; GLB/OBJ/USDZ/FBX/STL; asynchronous tasks polled with `gen_task_get`."
-      }
-    ]
-  },
-  "hitem3d_create_task": {
-    "selection": "Omit `model` for `HITEM3D_DEFAULT_MODEL`, or pass an exact ID bound to `hitem3d` in `SEED3D_MODEL_BINDINGS`.",
-    "models": [
-      {
-        "name": "Hitem3d 2.0",
-        "id": "`hitem3d-2-0-251223`",
-        "availability": "`BYTEPLUS_MODELARK_3D_ENABLED=true` and ModelArk key; disabled by default.",
-        "capabilities": "1-4 reference images required; no text-only generation or seed; OBJ/GLB/STL/FBX/USDZ; asynchronous tasks polled with `gen_task_get`."
-      }
-    ]
-  },
   "omnihuman_create_task": {
     "selection": "This tool has no per-call `model` argument. The identifier is a Vision AI service `req_key`, configurable with `BYTEPLUS_OMNIHUMAN_REQ_KEY`, not a ModelArk model ID.",
     "models": [

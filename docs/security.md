@@ -119,12 +119,10 @@ tool → scope mapping is the `scope` column of the static tool catalog
 | `seed:audio:generate` | `seed_audio_generate` (single clip or variations) |
 | `seedream:generate` | `seedream_generate_image` (generation, editing, variations, and dry runs) |
 | `seedance:create` | `seedance_create_task` (every Seedance model, including variations and dry runs) |
-| `gen:read` | `gen_task_get`, `gen_task_list` (Seedance, Hyper3D and Hitem3d tasks) |
+| `gen:read` | `gen_task_get`, `gen_task_list` (Seedance tasks) |
 | `gen:delete` | `gen_task_cancel_or_delete` |
 | `seed:asr:transcribe` | `speech_to_text` |
 | `understanding:read` | `seed_understand`, `seed_audio_understand` |
-| `hyper3d:create` | `hyper3d_create_task` |
-| `hitem3d:create` | `hitem3d_create_task` |
 | `omnihuman:create` | `omnihuman_create_task` |
 | `omnihuman:read` | `omnihuman_get_task` |
 | `omnihuman:cancel` | `omnihuman_cancel_task` |

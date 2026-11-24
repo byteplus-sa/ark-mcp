@@ -7,6 +7,7 @@ metadata, and TTL cleanup. Used for local ``stdio`` deployment.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import tempfile
 import uuid
@@ -32,7 +33,6 @@ from ark_mcp.observability.metrics import ARTIFACT_OPERATIONS
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import (
     decode_base64_safely,
-    validate_3d_mime,
     validate_audio_mime,
     validate_image_mime,
     validate_video_mime,
@@ -86,7 +86,7 @@ def trusted_host_policy(extra_suffixes: tuple[str, ...] = ()) -> Callable[[str],
 
 
 # Generic binary content-types that carry no useful file-type signal. When a
-# provider returns one of these for a known file extension (e.g. .glb), keep
+# provider returns one of these for a known file extension (e.g. .mp4), keep
 # the caller-supplied MIME type instead of adopting the generic header.
 _GENERIC_OCTET_STREAM: frozenset[str] = frozenset(
     {
@@ -113,22 +113,6 @@ def _translate_download_error(exc: SafeDownloadError) -> ArtifactPersistenceErro
     )
 
 
-def _mime_to_media_type(mime_type: str) -> MediaType:
-    """Infer the logical media type from a MIME type."""
-    if mime_type.startswith("image/"):
-        return MediaType.IMAGE
-    if mime_type.startswith("audio/"):
-        return MediaType.AUDIO
-    if mime_type.startswith("video/"):
-        return MediaType.VIDEO
-    if mime_type.startswith("model/") or mime_type in {
-        "application/zip",
-        "application/x-zip-compressed",
-    }:
-        return MediaType.THREE_D
-    return MediaType.IMAGE  # Conservative default
-
-
 _MIME_TO_EXT: dict[str, str] = {
     "audio/wav": ".wav",
     "audio/mpeg": ".mp3",
@@ -144,11 +128,6 @@ _MIME_TO_EXT: dict[str, str] = {
     "video/mp4": ".mp4",
     "video/quicktime": ".mov",
     "video/webm": ".webm",
-    "application/zip": ".zip",
-    "application/x-zip-compressed": ".zip",
-    "model/gltf-binary": ".glb",
-    "model/gltf+json": ".gltf",
-    "model/vnd.usdz+zip": ".usdz",
 }
 
 
@@ -288,7 +267,6 @@ class FilesystemArtifactStore(ArtifactStore):
             "image": validate_image_mime,
             "audio": validate_audio_mime,
             "video": validate_video_mime,
-            "three_d": validate_3d_mime,
         }[media_type](mime_type)
 
         owner = auth or AuthContext()
@@ -413,8 +391,6 @@ class FilesystemArtifactStore(ArtifactStore):
         if not meta_path.exists():
             raise FileNotFoundError("Artifact metadata not found.")
 
-        import json
-
         raw_metadata = json.loads(meta_path.read_text())
         if raw_metadata.get("schema_version") == 2:
             return ArtifactMetadata.model_validate(raw_metadata)
@@ -425,6 +401,30 @@ class FilesystemArtifactStore(ArtifactStore):
             tenant_id="local",
         )
 
+    def _delete_expired_artifact(self, meta_file: Path, now: datetime) -> bool:
+        if meta_file.is_symlink():
+            return False
+
+        metadata = json.loads(meta_file.read_text())
+        ref = metadata["ref"] if metadata.get("schema_version") == 2 else metadata
+        expires_at = ref.get("expires_at")
+        if not expires_at or datetime.fromisoformat(expires_at) > now:
+            return False
+
+        artifact_id = ref["id"]
+        if self._metadata_path(artifact_id) != meta_file:
+            raise ValueError("Artifact ID does not match its metadata path.")
+
+        for blob in meta_file.parent.glob(f"{artifact_id}*"):
+            if blob == meta_file:
+                continue
+            if blob.name != artifact_id and not blob.name.startswith(f"{artifact_id}."):
+                continue
+            if blob.is_file() or blob.is_symlink():
+                blob.unlink(missing_ok=True)
+        meta_file.unlink()
+        return True
+
     async def delete_expired(self, now: datetime | None = None) -> int:
         """Delete expired artifacts. Returns the number deleted."""
         if now is None:
@@ -433,17 +433,8 @@ class FilesystemArtifactStore(ArtifactStore):
 
         for meta_file in self._base_dir.rglob("*.meta.json"):
             try:
-                metadata = self._load_metadata(meta_file)
-                expires_str = metadata.ref.expires_at
-                if expires_str:
-                    expires_dt = datetime.fromisoformat(expires_str)
-                    if expires_dt <= now:
-                        artifact_id = metadata.ref.id
-                        artifact_path = self._find_artifact(artifact_id)
-                        if artifact_path.exists():
-                            artifact_path.unlink()
-                        meta_file.unlink()
-                        deleted += 1
+                if self._delete_expired_artifact(meta_file, now):
+                    deleted += 1
             except Exception as exc:
                 log_warning(
                     "artifact_cleanup_error",

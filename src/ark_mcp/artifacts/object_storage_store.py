@@ -38,7 +38,6 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import (
     decode_base64_safely,
-    validate_3d_mime,
     validate_audio_mime,
     validate_image_mime,
     validate_video_mime,
@@ -57,7 +56,6 @@ def _validate_mime(media_type: MediaType, mime_type: str) -> None:
         "image": validate_image_mime,
         "audio": validate_audio_mime,
         "video": validate_video_mime,
-        "three_d": validate_3d_mime,
     }[media_type](mime_type)
 
 

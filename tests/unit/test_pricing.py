@@ -69,8 +69,6 @@ class TestCatalogName:
         [
             ("dreamina-seedance-2-5-260628", "dreamina-seedance-2-5"),
             ("example-model-pro-260915", "example-model-pro"),
-            ("hitem3d-2-0-251223", "hitem3d-2-0"),
-            ("hyper3d-gen2-260112", "hyper3d-gen2"),
             ("dola-seed-evolving", "dola-seed-evolving"),
             ("seedream-5-0", "seedream-5-0"),
             ("model-20260628", "model"),

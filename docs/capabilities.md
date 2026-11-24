@@ -17,7 +17,7 @@ execution guidance. The tables below help you choose a starting point.
 | --- | --- | --- |
 | Generate or edit images | [seedream_generate_image](/ark-mcp/tool-reference/seedream-generate-image/) | ModelArk key; reference edits, point/bbox edits, variations and `dry_run` |
 | Create video | [seedance_create_task](/ark-mcp/tool-reference/seedance-create-task/) | ModelArk key; select an enabled Seedance model, then poll the provider task |
-| Poll video/3D tasks | [gen_task_get](/ark-mcp/tool-reference/gen-task-get/) | Batch status checks; lightweight calls can skip output persistence |
+| Poll Seedance tasks | [gen_task_get](/ark-mcp/tool-reference/gen-task-get/) | Batch status checks; lightweight calls can skip output persistence |
 | List or cancel/delete tasks | [gen_task_list](/ark-mcp/tool-reference/gen-task-list/), [gen_task_cancel_or_delete](/ark-mcp/tool-reference/gen-task-cancel-or-delete/) | Owned-task lifecycle; cancellation/deletion has provider-specific semantics |
 
 [Seedream 5.5](/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5) is the built-in image default
@@ -52,18 +52,6 @@ available in Ark MCP.
 Seed Audio Understanding is not the Seed Speech ASR service. It uses a
 server-configured ModelArk model; do not pass an audio clip to `seed_understand`.
 Understanding and transcription are provider operations, not free setup tests.
-
-<span id="3d-and-avatars"></span>
-
-## 3D
-
-| Task | Tool | Requirements |
-| --- | --- | --- |
-| Text/image to 3D | [hyper3d_create_task](/ark-mcp/tool-reference/hyper3d-create-task/) | ModelArk key and `BYTEPLUS_MODELARK_3D_ENABLED=true` |
-| Image to 3D | [hitem3d_create_task](/ark-mcp/tool-reference/hitem3d-create-task/) | Same 3D gate |
-
-3D results use the shared `gen_task_*` lifecycle. The 3D feature is disabled
-by default.
 
 ## Avatars
 

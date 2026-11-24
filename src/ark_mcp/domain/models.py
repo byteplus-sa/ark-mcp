@@ -16,7 +16,7 @@ from ark_mcp.domain.media import HttpsUrl
 
 
 class GenTaskStatus(StrEnum):
-    """Lifecycle state of a ModelArk generation task (Seedance, Hyper3D, Hitem3d)."""
+    """Lifecycle state of a Seedance generation task."""
 
     QUEUED = "queued"
     RUNNING = "running"
@@ -33,7 +33,7 @@ class GenTaskStatus(StrEnum):
 
 VodTaskStatus = Literal["processing", "succeeded", "failed"]
 
-TaskOutputRole = Literal["video", "last_frame", "model_file", "voice", "background", "music", "sfx"]
+TaskOutputRole = Literal["video", "last_frame", "voice", "background", "music", "sfx"]
 
 
 class TaskError(BaseModel):
@@ -70,7 +70,7 @@ class TaskOutputFile(BaseModel):
     role: TaskOutputRole = Field(
         ...,
         description=(
-            "Output kind: video, last_frame (Seedance), model_file (3D), or voice, background, "
+            "Output kind: video, last_frame (Seedance), or voice, background, "
             "music, sfx (VOD audio separation)."
         ),
     )

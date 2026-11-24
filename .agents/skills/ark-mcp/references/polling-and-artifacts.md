@@ -6,7 +6,7 @@ How to poll asynchronous provider tasks, what the persistence layer does with fi
 
 | Task ID comes from | Poll | Clean up |
 |---|---|---|
-| `seedance_create_task`, `hyper3d_create_task`, `hitem3d_create_task` | `gen_task_get` (1-50 IDs per call), `gen_task_list` | `gen_task_cancel_or_delete` |
+| `seedance_create_task` | `gen_task_get` (1-50 IDs per call), `gen_task_list` | `gen_task_cancel_or_delete` |
 | `vod_*` submit tools | `vod_get_task` with `task_id` **and the echoed `operation`** | none |
 | `omnihuman_create_task` | `omnihuman_get_task` | `omnihuman_cancel_task` |
 
@@ -37,17 +37,16 @@ flowchart LR
 
 ## Generation tasks: `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete`
 
-One toolset serves Seedance (every model generation) and Hyper3D/Hitem3d. It needs `BYTEPLUS_MODELARK_API_KEY` and is **not** gated by the 3D flag. Authenticated callers see tasks owned by their principal; every shared-key member uses the same `shared-team` principal, including for cancellation.
+These tools serve configured Seedance models and require `BYTEPLUS_MODELARK_API_KEY`. Authenticated callers see tasks owned by their principal; every shared-key member uses the same `shared-team` principal, including for cancellation.
 
 ### `gen_task_get`
 
 - **Batch every ID you are waiting on into one call** (1-50, duplicates ignored). Results come back in request order.
-- **Per-ID problems never fail the call.** They land in `errors`: `NOT_OWNED` (task created by another principal, or never created through this server), `NOT_FOUND` (the provider has no such task, for example past its retention), or a provider code. Check `errors` as well as each task's own `error`.
+- **Per-ID problems never fail the call.** They land in `errors`: `NOT_OWNED` (task created by another principal, or never created through this server), `NOT_FOUND` (the provider has no such task or its model ID has no Seedance binding on this server), or a provider code. Check `errors` as well as each task's own `error`.
 - **Statuses:** `queued`, `running`, `succeeded`, `failed`, `cancelled`, `expired`; `unknown` for an unrecognised provider value. Terminal means `succeeded`, `failed`, `cancelled` or `expired`.
 - **Stop polling when `all_terminal` is true.** Otherwise wait `recommended_poll_after_ms` (5000) between calls.
 - **`queue` (video tasks, queued or running only) is derived from the task's own timestamps.** ModelArk publishes no queue position or ETA; relay `queue.hint` rather than estimating. `expires_at` is when the provider fails an unfinished task; `expires_at_estimated=true` means the 48 h default was assumed.
-- **`outputs` is empty until `succeeded`.** Video tasks produce `video` and `last_frame`; 3D tasks produce `model_file` (usually a zip). Each output always keeps its `source_url` (expires in about 24 h); `persistence` is `not_requested`, `persisted` or `failed`.
-- **Tasks whose model is not configured on this server have `kind: "unknown"` and are never persisted.** Their outputs stay `not_requested` even with `persist_output=true`; copy them with `seed_media_persist_url` before the URL expires.
+- **`outputs` is empty until `succeeded`.** Seedance tasks return `video` and, when available, `last_frame`. Each output always keeps its `source_url` (expires in about 24 h); `persistence` is `not_requested`, `persisted` or `failed`.
 - **Draft tasks:** a succeeded Seedance Draft reports `draft: true`; pass its `task_id` as `draft_task_id` to `seedance_create_task` within 14 days of `created_at` (7 if created before 2026-10-28 10:00 UTC+8). Retain the ID: `gen_task_list` still covers only seven days.
 - **`output_dir`** (stdio only) writes each succeeded task's files as `<artifact_id>.<ext>` and requires `persist_output=true`. MOV video outputs retain `video/quicktime` and the `.mov` extension, including when their download uses a generic Content-Type.
 
@@ -55,12 +54,12 @@ One toolset serves Seedance (every model generation) and Hyper3D/Hitem3d. It nee
 
 - **Window: tasks created in the last 7 days, newest first.** Older tasks cannot be listed, but may still answer `gen_task_get`.
 - **Keep every filter identical while paging, including `page_size`.** A cursor issued for different filters is rejected with an error asking you to repeat the original filters or start without a cursor.
-- **Follow `next_cursor` until it is `null`.** A page can hold fewer than `page_size` tasks while the cursor is still non-null, because non-local (authenticated HTTP) callers are paged through their owned IDs from the ownership store in slices and tasks outside the filter are skipped.
+- **Follow `next_cursor` until it is `null`.** A page can hold fewer than `page_size` tasks while the cursor is still non-null, because non-local (authenticated HTTP) callers are paged through their owned IDs from the ownership store in slices and tasks outside the filter are skipped. Tasks without a configured Seedance model are also skipped.
 - Entries carry no outputs; use `gen_task_get` for those. `task_ids` filters to IDs you own (others are skipped silently).
 
 ### `gen_task_cancel_or_delete`
 
-**Destructive. `expected_status` must equal the task's current status** or the call is refused (re-fetch with `gen_task_get` and retry). The handler checks ownership, fetches the status, then issues the provider DELETE.
+**Destructive. `expected_status` must equal the task's current status** or the call is refused (re-fetch with `gen_task_get` and retry). The handler checks ownership, verifies the Seedance model binding and task status, then issues the provider DELETE.
 
 | Current status | Allowed | Effect |
 |---|---|---|
@@ -92,7 +91,7 @@ Persisted outputs are `ArtifactRef`s whose `uri` is a stable `seed-media://artif
 
 ### Retention and access
 
-- **Provider URLs expire fast: 2 h for audio, 24 h for ModelArk image/video/3D, about 1 h for OmniHuman video.** Durable artifacts survive 7 days by default (`ARTIFACT_TTL_SECONDS`; see [environment.md](environment.md)).
+- **Provider URLs expire fast: 2 h for audio, 24 h for ModelArk image/video, about 1 h for OmniHuman video.** Durable artifacts survive 7 days by default (`ARTIFACT_TTL_SECONDS`; see [environment.md](environment.md)).
 - **Artifacts are owner-checked** against the calling principal. Shared-key members can read one another's team artifacts. The `seed-media://artifacts/{artifact_id}` resource needs a canonical UUID and returns the bytes with the right MIME type; in `api_key` mode it checks the fixed team's `artifacts:read` scope.
 - **`seed_media_get_artifact` returns the whole file as Base64 in context.** Use it only for small files or remote (HTTP) deployments with no shared filesystem; on stdio prefer the export tool or a local `output_path`.
 - **`seed_media_export_artifact` is stdio only.** Without `destination_path` it returns the artifact's path inside the store (`copied=false`), which is only possible when the store is on the local filesystem; with an object-storage backend it errors and asks for a `destination_path`. With `destination_path` (absolute, inside an allowed output root) it writes an atomic copy (`copied=true`). An existing file with different content is replaced only with `overwrite=true`; identical content always succeeds.
@@ -131,7 +130,7 @@ because the store has no size cap for that source.
 
 Persists a temporary provider URL as a durable artifact, for `provider-url` fallbacks and for task outputs whose `persistence` is `failed`.
 
-- **Pass the artifact's own `media_type`, `mime_type` and `source_expires_at`.** For a task output, use its `source_url` and role (video `video/mp4`, `last_frame` image, 3D `model_file` per its extension).
+- **Pass the artifact's own `media_type`, `mime_type` and `source_expires_at`.** For a task output, use its `source_url` and role (video `video/mp4`, `last_frame` image).
 - **Only trusted BytePlus provider hosts are accepted**, through the same downloader, host allowlist, redirect checks and size limits as generation-time persistence. Anything else is rejected, so it cannot be used to fetch arbitrary URLs.
 - **Retry before the source expires.** A failure returns an error with the persistence code and `retryable`; a non-retryable code such as a size-limit breach will not succeed on retry (see `artifact_limit_bytes`).
 - In `api_key` mode it checks the fixed team's `media:upload` scope. It is not idempotent: each success creates a new artifact.

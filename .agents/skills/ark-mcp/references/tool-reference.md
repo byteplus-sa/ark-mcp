@@ -8,7 +8,6 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 - [Seedance](#seedance)
 - [Seedream](#seedream)
 - [Seed Audio](#seed-audio)
-- [Seed 3D](#seed-3d-hyper3d-and-hitem3d)
 - [OmniHuman](#omnihuman)
 - [VOD AI MediaKit](#vod-ai-mediakit)
 
@@ -196,26 +195,6 @@ Needs `BYTEPLUS_SEED_SPEECH_API_KEY`. `seed_audio_generate` produces a full-scen
 - **Variations:** no seed exists, so variations differ only by sampling. With `variations > 1`, `artifact`, `duration_seconds`, `billing_duration_seconds` and `subtitle` are **null**; everything is in `summary` (`total`, `succeeded`, `failed`, per-variation `artifact` or `error`). `output_path` must then be a directory ending in `/`.
 - `billing_duration_seconds` can differ from the actual `duration_seconds`.
 
-## Seed 3D (Hyper3D and Hitem3d)
-
-Needs `BYTEPLUS_MODELARK_3D_ENABLED=true` and the ModelArk key. **Check availability first**: if `ark_list_models` reports `seed3d` disabled or the create tools are absent, report 3D unavailable; configuration docs alone prove nothing about the running server.
-
-**Choosing:** `hyper3d_create_task` for text-to-3D or image-to-3D (prompt and/or up to 5 images; seed, PBR/Shaded/All/None materials, Raw/Quad meshes, HD textures, T-pose, bounding box). `hitem3d_create_task` for image-to-3D only (1-4 images; resolution, face count, geometry-only versus textured, multi-view bitmap). Both return `task_id` with `status="queued"`; **both are polled, cancelled and deleted with `gen_task_get` / `gen_task_cancel_or_delete`**, same lifecycle as Seedance.
-
-- A model ID from the other family is rejected with a pointer to the right tool. `model` comes from `ark_list_models(kind='3d')`; omit for the configured default.
-- **Hyper3D:** `prompt` is English, max 400 characters, and required when no images are given. `subdivision_level` is ignored when `quality_override` is set. `quality_override` ranges differ by mesh mode (Raw 500-1M, Quad 1000-200K). `file_format` defaults to `glb`.
-- **Hitem3d:** `multi_images_bit` marks which views are present in front/back/left/right order and may contain only `0` and `1` (`"1010"` = front + left). `file_format` defaults to `obj`; `request_type` 3 (default) is geometry plus texture.
-- Input images accept URLs or Base64; no `asset://`.
-- The finished `model_file` output is a **zip package** whose provider URL lasts about 24 hours; persist it from `gen_task_get` with `persist_output=true` in the background ([polling-and-artifacts.md](polling-and-artifacts.md)).
-
-### 3D delivery contract
-
-**Provider success delivers a generated package, not a Blender-ready or approved asset.** Before handing a result to a DCC workflow:
-
-- Retain the immutable package and record provider family and model, request and reference hashes, the Ark job ID and the provider task ID as separate values, artifact ID, byte size, SHA-256, requested format, material/topology settings, usage, and source URL expiry.
-- Prefer GLB for a first Blender handoff (mesh, hierarchy, materials and textures travel together). Extract into a new bounded directory, reject absolute paths and parent traversal, and never overwrite the provider archive.
-- Import into a quarantine collection, then normalize units, scale, axes, origin, transforms, geometry, normals, UVs, materials, textures and rig readiness. Record the normalized working-copy hash and viewport review separately from the provider package.
-- **A 3D asset supplies structure and appearance, not motion.** It becomes Seedance motion authority only after an animated video render is deliberately selected and bound for a supported video-reference mode. Keep 3D generation, Blender normalization, previz rendering and Seedance generation as distinct operations with their own task IDs, costs, statuses and review evidence.
 
 ## OmniHuman
 

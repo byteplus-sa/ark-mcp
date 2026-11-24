@@ -1,6 +1,6 @@
 # Durable Artifacts
 
-Provider media URLs expire — 2 hours for audio, 24 hours for image/video/3D —
+Provider media URLs expire — 2 hours for audio, 24 hours for image/video —
 so the server persists every generated output to a local store and
 re-exposes it as a stable MCP resource `seed-media://artifacts/{artifact_id}`.
 This document describes the artifact store, its lifecycle, and the
@@ -68,7 +68,7 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 | `local_path` | `str \| None` | `None` | absolute local path written for `output_path` / `output_dir` |
 | `export_error` | `str \| None` | `None` | why the requested local copy was not written |
 
-`MediaType` is a `StrEnum`: `IMAGE`, `AUDIO`, `VIDEO`, `THREE_D`.
+`MediaType` is a `StrEnum`: `IMAGE`, `AUDIO`, `VIDEO`.
 
 ## The store protocol (`artifacts/store.py`)
 
@@ -91,11 +91,11 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 ### `put_base64` / `copy_from_trusted_url` flow (`_store_bytes`)
 
 1. Apply the source's size policy. Trusted URL downloads cap images and audio
-   at 10 MiB and video and 3D at 200 MiB. Inline provider output uses the same
-   limits for images, video and 3D. The store decodes inline generated audio
-   without a file-size cap, so Seed Audio can save WAVs larger than 10 MiB.
+   at 10 MiB and video at 200 MiB. Inline images and video use the same limits.
+   The store decodes inline generated audio without a file-size cap, so Seed
+   Audio can save WAVs larger than 10 MiB.
 2. Validate the MIME via `validate_image_mime` / `validate_audio_mime` /
-   `validate_video_mime` / `validate_3d_mime`.
+   `validate_video_mime`.
 3. Resolve `owner = auth or AuthContext()`.
 4. Generate `artifact_id = str(uuid.uuid4())`, compute `sha256`.
 5. `expires_at = now + ttl_seconds`; build `ArtifactRef(uri=f"seed-media://artifacts/{artifact_id}", ...)`.
@@ -146,7 +146,7 @@ The reference takes one of two shapes:
 
 | `id` | Used for | Where the bytes are |
 |---|---|---|
-| `provider-url` | URL outputs (Seedream `url`, Seedance video/last frame, Seed 3D files) and inline outputs that also came with a provider URL | `uri` is the temporary provider URL, valid until `source_expires_at` |
+| `provider-url` | URL outputs (Seedream `url`, Seedance video/last frame) and inline outputs that also came with a provider URL | `uri` is the temporary provider URL, valid until `source_expires_at` |
 | `inline-fallback` | Inline Base64 outputs with no provider URL (Seed Audio, Seedream `b64_json`) | `fallback_data`, up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables) |
 
 Inline Base64 is retried once against the store before falling back. An inline
@@ -162,7 +162,7 @@ downloader and limits, and returns a new durable `ArtifactRef`.
 In variation batches, a variation whose output was generated but not stored
 reports `error.phase="persisting"`.
 
-For Seedance and Seed 3D get tools, an unpersisted result is not cached, so the
+For `gen_task_get`, an unpersisted result is not cached, so the
 next poll with `persist_output=true` tries again while the provider URL is
 still valid. MediaKit get tools keep their per-output persistence status
 (`persisted`, `failed`, ...) alongside the provider `source_url`.

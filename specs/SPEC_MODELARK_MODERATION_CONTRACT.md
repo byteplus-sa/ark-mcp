@@ -91,7 +91,8 @@ Provider requirements: Advanced Creation Rights, whitelist activation, IAM
 `GetModerationResult`, fourteen-day records created after whitelist activation.
 Documented image/video/audio coverage includes supported Seedance 2.0 variants,
 regular 2.5, and material assets. Text and 2.5 request-ID queries are excluded;
-Flash, Seedream, and 3D support is not claimed. Lookup pricing is unspecified.
+coverage of Seedance Flash and Seedream is unverified. Lookup pricing is
+unspecified.
 
 Offline validation is covered by `tests/unit/test_moderation.py`,
 `tests/contract/test_modelark_moderation.py`,

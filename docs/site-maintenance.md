@@ -85,7 +85,7 @@ so standalone copies do not depend on an Ark source checkout.
 resolvable local references, as well as the guide's paths and setup boundary.
 Documentation CI also runs for changes to this skill.
 
-Audio, Understanding, 3D and Avatars have separate navigation groups and
+Audio, Understanding and Avatars have separate navigation groups and
 capability sections. Navigation tests ensure category membership and stable
 tool routes; uncategorized or duplicate catalog entries fail the build.
 The BytePlus logo uses the original light/dark SVGs from the reference site
