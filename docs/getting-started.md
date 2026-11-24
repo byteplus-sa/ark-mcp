@@ -81,6 +81,6 @@ Developing or deploying the server? Use [Transports](transports.md),
 
 ## Next Steps
 
-- [Choose a Tool](capabilities.md) for images, video, audio, understanding, 3D and avatars.
+- [Choose a Tool](capabilities.md) for images, video, audio, understanding and avatars.
 - [Update and Roll Back](setup/updating.md) for an existing installation.
 - [Migrating to 0.2.0](migration-0.2.md) when upgrading old 0.1.x prompts or clients.

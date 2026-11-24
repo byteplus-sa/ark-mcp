@@ -3,11 +3,13 @@
 > **Historical migration guide:** this page records the 0.1.x to 0.2.0
 > transition, including the JWT scopes used at that time. It is not current
 > authentication setup advice. Current hosted HTTP accepts only a shared MCP
-> key; see [breaking-change migration](self-hosting.md#breaking-change-migration).
+> key. See [breaking-change migration](self-hosting.md#breaking-change-migration).
+> The current `gen_task_*` tools serve Seedance video tasks exclusively. Consult
+> the [tool catalog](api-reference.md#tool-inventory) for current capabilities.
 
 **0.2.0 consolidates the tool surface.** One tool per product capability
 replaces the per-model, per-variation and per-operation tools of 0.1.x. With
-every service enabled, `tools/list` now returns **38 tools**. **There is no
+every service enabled, `tools/list` returned **38 tools** in 0.2.0. **There is no
 compatibility layer**: clients, prompts, skills and dashboards that name a
 removed tool must switch to its replacement.
 

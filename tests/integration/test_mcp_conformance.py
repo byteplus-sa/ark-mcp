@@ -23,12 +23,14 @@ from ark_mcp.server import create_server
 @pytest.fixture
 def configured_server(
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Set test env vars and re-register tools with fake credentials."""
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
     monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-test")
     monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-key")
-    monkeypatch.setenv("BYTEPLUS_MODELARK_3D_ENABLED", "false")
+    if hasattr(request, "param"):
+        monkeypatch.setenv("BYTEPLUS_MODELARK_3D_ENABLED", request.param)
     monkeypatch.setenv("TOS_ACCESS_KEY", "ak-test-tos")
     monkeypatch.setenv("TOS_SECRET_KEY", "sk-test-tos")
     monkeypatch.setenv("TOS_BUCKET", "test-bucket")
@@ -90,26 +92,12 @@ def s3_only_server(
     get_settings.cache_clear()
 
 
-@pytest.fixture
-def seed3d_server(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
-    monkeypatch.setenv("BYTEPLUS_MODELARK_3D_ENABLED", "true")
-
-    get_settings.cache_clear()
-
-    yield SimpleNamespace(mcp=create_server(get_settings()))
-
-    get_settings.cache_clear()
-
-
 class TestToolDiscovery:
     """Verify configured tools are discoverable when credentials are set."""
 
+    @pytest.mark.parametrize("configured_server", ["true"], indirect=True)
     async def test_all_tools_registered(self, configured_server: None) -> None:
-        server = configured_server
-        tools = await server.mcp.list_tools()
+        tools = await configured_server.mcp.list_tools()
         tool_names = {t.name for t in tools}
         assert tool_names == {
             "ark_job_cancel",
@@ -280,38 +268,16 @@ class TestToolDiscovery:
         assert tool.task_config.mode == "required"
         assert '"4k"' in json.dumps(tool.parameters)
 
-    async def test_seed3d_create_and_retrieval_task_modes(self, seed3d_server: None) -> None:
-        tools = await seed3d_server.mcp.list_tools()
-        tools_by_name = {tool.name: tool for tool in tools}
-
-        for name in {"hyper3d_create_task", "hitem3d_create_task"}:
-            tool = tools_by_name[name]
-            assert tool.task_config.mode == "required"
-            assert tool.task_config.poll_interval == timedelta(seconds=2)
-
-        assert tools_by_name["gen_task_get"].task_config.mode == "optional"
-        for name in {"gen_task_list", "gen_task_cancel_or_delete"}:
-            assert tools_by_name[name].task_config.mode == "forbidden"
-        removed = {
-            "hyper3d_get_task",
-            "hitem3d_get_task",
-            "hyper3d_list_tasks",
-            "hitem3d_list_tasks",
-        }
-        assert not removed & tools_by_name.keys()
-
     async def test_compatibility_registry_covers_all_task_enabled_tools(
         self,
         configured_server: None,
-        seed3d_server: None,
         omnihuman_server: None,
     ) -> None:
         configured_tools = await configured_server.mcp.list_tools()
-        seed3d_tools = await seed3d_server.mcp.list_tools()
         omnihuman_tools = await omnihuman_server.mcp.list_tools()
         task_enabled_names = {
             tool.name
-            for tool in [*configured_tools, *seed3d_tools, *omnihuman_tools]
+            for tool in [*configured_tools, *omnihuman_tools]
             if tool.task_config.mode in {"required", "optional"}
         }
 

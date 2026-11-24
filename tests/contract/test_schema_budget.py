@@ -10,6 +10,8 @@ Seedream provenance, local image inspection and price-source fields add a
 further 2,000 output characters without expanding the tool inventory.
 Moderation adds one foreground-only tool and 1,222 model-facing characters
 (88,890 total measured), plus 1,376 output characters (136,523 total measured).
+The Seedance-only generation task surface measures 82,823 model-facing and
+133,953 output characters across 37 tools.
 """
 
 from __future__ import annotations
@@ -19,9 +21,9 @@ import json
 from ark_mcp.config.env import get_settings
 from ark_mcp.server import create_server
 
-MAX_TOOLS = 39
-MAX_MODEL_FACING_CHARS = 89_000
-MAX_OUTPUT_SCHEMA_CHARS = 137_000
+MAX_TOOLS = 37
+MAX_MODEL_FACING_CHARS = 83_000
+MAX_OUTPUT_SCHEMA_CHARS = 134_500
 
 
 async def test_tool_schemas_stay_within_budget(all_services_enabled: None) -> None:

@@ -63,7 +63,7 @@ def _entry_params(entry: dict[str, Any]) -> tuple[str | None, list[dict[str, Any
 
 def audit(catalog: dict[str, list[dict[str, Any]]]) -> list[Finding]:
     """Compare every configured video and image binding with its catalog entry."""
-    image_caps, video_caps, _, _ = get_capability_registry().configured_models()
+    image_caps, video_caps, _ = get_capability_registry().configured_models()
     findings: list[Finding] = []
     for model_id, video in video_caps.items():
         findings.extend(_audit_video(model_id, video, catalog.get(model_id)))

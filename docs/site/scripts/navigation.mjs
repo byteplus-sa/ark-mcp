@@ -15,7 +15,6 @@ const categories = [
     "Understanding",
     (name) => ["seed_understand", "seed_audio_understand"].includes(name),
   ],
-  ["3D", (name) => name.startsWith("hyper3d_") || name.startsWith("hitem3d_")],
   ["Avatars", (name) => name.startsWith("omnihuman_")],
   ["VOD AI MediaKit", (name) => name.startsWith("vod_")],
   ["Asset library", (name) => name.startsWith("ark_asset_")],

@@ -77,13 +77,13 @@ from ark_mcp.tools._moderation_validation import ModerationInputPrivacyMiddlewar
 
 SERVER_INSTRUCTIONS = (
     "BytePlus multimodal generation server: Seedance video, Seedream images, Seed Audio, "
-    "Seed 3D (Hyper3D, Hitem3d), OmniHuman avatar video, Seed multimodal and audio "
+    "OmniHuman avatar video, Seed multimodal and audio "
     "understanding, Speech-to-Text, and (when configured) VOD AI MediaKit processing and a "
     "private asset library. Call ark_list_models first: `model` accepts only the exact "
     "configured IDs it returns, and it lists per-model limits and which optional services "
     "are enabled. Run long-running tools through ark_job_submit and ark_job_get; this is the "
     "default path because most clients do not support MCP tasks, and native task "
-    "augmentation also works. Poll Seedance and 3D tasks with gen_task_get, VOD tasks with "
+    "augmentation also works. Poll Seedance tasks with gen_task_get, VOD tasks with "
     "vod_get_task (pass the operation the create tool returned), and OmniHuman tasks with "
     "omnihuman_get_task; never resubmit a create tool to poll. "
     "Generated media is persisted as seed-media:// resources; reference private assets as "
@@ -278,7 +278,6 @@ def create_server(
             f"ModelArk configured: {resolved_settings.has_modelark}\n"
             f"Seedream default model: {resolved_settings.seedream_default_model}\n"
             f"Seedream default family: {_seedream_default_family(resolved_settings)}\n"
-            f"Seed 3D configured: {resolved_settings.has_seed3d}\n"
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Moderation lookup configured: {resolved_settings.has_modelark_moderation}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
@@ -424,7 +423,6 @@ def create_server(
             resolved_settings.has_modelark,
             resolved_settings.has_modelark_openapi,
             resolved_settings.has_seed_audio,
-            resolved_settings.has_seed3d,
             resolved_settings.has_stt,
             resolved_settings.has_vod_mediakit,
             resolved_settings.has_omnihuman,
@@ -455,7 +453,6 @@ def create_server(
         auth_mode=resolved_settings.mcp_auth_mode.value,
         modelark_configured=resolved_settings.has_modelark,
         seed_audio_configured=resolved_settings.has_seed_audio,
-        seed3d_configured=resolved_settings.has_seed3d,
         stt_configured=resolved_settings.has_stt,
         vod_mediakit_configured=resolved_settings.has_vod_mediakit,
         omnihuman_configured=resolved_settings.has_omnihuman,

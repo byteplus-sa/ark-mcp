@@ -93,17 +93,16 @@ its task and MCP SDK dependencies.
 **Do not assume a fixed tool count.** A tool registers only when its gate
 passes; the server degrades to whatever is configured. `ark_list_models.services`
 and `seed-health://status` report what is on.
-The catalog contains 39 tools. The `moderation` service and
+The catalog contains 37 tools. The `moderation` service and
 `Moderation lookup configured` health line report configuration, not provider
 entitlement or shared-key permission.
 
 | Setting | Enables |
 |---|---|
 | (always) | `ark_list_models`, `ark_job_*`, `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url`, `seed-health://status` |
-| `BYTEPLUS_MODELARK_API_KEY` | `seedream_generate_image`, `seedance_create_task`, `gen_task_get` / `gen_task_list` / `gen_task_cancel_or_delete` (also the poll tools for 3D), `seed_understand`, `seed_audio_understand` |
+| `BYTEPLUS_MODELARK_API_KEY` | `seedream_generate_image`, `seedance_create_task`, `gen_task_get` / `gen_task_list` / `gen_task_cancel_or_delete`, `seed_understand`, `seed_audio_understand` |
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | `seed_audio_generate`, `speech_to_text` (one key, both products) |
 | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `vod_get_task` |
-| `BYTEPLUS_MODELARK_3D_ENABLED=true` + ModelArk key | `hyper3d_create_task`, `hitem3d_create_task` (default off; reuses the ModelArk key) |
 | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task`. Separate Vision AI Bearer key; default off. Overrides: `BYTEPLUS_CV_BASE_URL`, `BYTEPLUS_OMNIHUMAN_REQ_KEY` |
 | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result` (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP...` keys) |
 | `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` + AK/SK | Additionally registers the irreversible `ark_asset_delete` (default off) |
@@ -113,8 +112,7 @@ entitlement or shared-key permission.
 
 Gotchas that follow from the gates:
 
-- **`gen_task_*` registers whenever ModelArk is configured**, not only with the
-  3D flag.
+- **ModelArk configuration registers the `gen_task_*` tools** for Seedance tasks.
 - **Seedance asset references need only the ModelArk key**: `asset://<id>` is
   accepted natively. AK/SK are needed to manage assets, and for the optional
   pre-submit check (`SEEDANCE_ASSET_PREFLIGHT`, default `true`, needs AK/SK).
@@ -138,8 +136,7 @@ Gotchas that follow from the gates:
   disable pricing refresh with `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS=0`;
   do not broaden a moderation-only IAM policy for assets or pricing.
 - A custom model ID must be bound (`SEEDREAM_MODEL_BINDINGS`,
-  `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`,
-  `SEED3D_MODEL_BINDINGS`); see [models-and-limits.md](models-and-limits.md).
+  `SEEDANCE_MODEL_BINDINGS`, `SEED_UNDERSTANDING_MODEL_BINDINGS`); see [models-and-limits.md](models-and-limits.md).
 - Empty Seedance bindings add Flash alongside the selected default; explicit
   lists remain authoritative. Use `seedance_2_5_flash` for Flash endpoints.
   Regular 2.5 remains the default; there is no separate Flash tool or flag.
@@ -199,11 +196,10 @@ selected by the client. Provider credentials and feature gates still apply.
 |---|---|
 | `seedream:generate` | `seedream_generate_image` |
 | `seedance:create` | `seedance_create_task` |
-| `gen:read` / `gen:delete` | `gen_task_get`, `gen_task_list` / `gen_task_cancel_or_delete` (Seedance and 3D tasks) |
+| `gen:read` / `gen:delete` | `gen_task_get`, `gen_task_list` / `gen_task_cancel_or_delete` (Seedance tasks) |
 | `seed:audio:generate` | `seed_audio_generate` |
 | `seed:asr:transcribe` | `speech_to_text` |
 | `understanding:read` | `seed_understand`, `seed_audio_understand` |
-| `hyper3d:create`, `hitem3d:create` | `hyper3d_create_task`, `hitem3d_create_task` |
 | `omnihuman:create` / `:read` / `:cancel` | `omnihuman_create_task` / `omnihuman_get_task` / `omnihuman_cancel_task` |
 | `vod:enhance`, `vod:transcode`, `vod:extract`, `vod:subtitle:add`, `vod:subtitle:remove` | The matching `vod_*` submit tool (`vod_separate_audio` is `vod:extract`) |
 | `vod:read` | `vod_get_task` |
@@ -237,7 +233,7 @@ granted to shared HTTP. Loopback access requires `MCP_AUTH_MODE=local`.
 | Service | Behaviour | Settings |
 |---|---|---|
 | Artifact store | Durable media, metadata, ownership, TTL cleanup; a billed output is never dropped because storage failed | `ARTIFACT_BACKEND` (`filesystem` default, or `object_storage`), `ARTIFACT_DIR` (`~/.ark-mcp/artifacts`), `ARTIFACT_TTL_SECONDS` (7 days), `ARTIFACT_SWEEP_INTERVAL_SECONDS` |
-| Ownership / budget / cache state | SQLite, single instance; task ID to principal mapping enforced for Seedance and 3D | `STATE_BACKEND=sqlite`, `STATE_PRUNE_MAX_AGE_DAYS` (30; minimum 14 for authenticated HTTP with regular 2.5 enabled), `PERSISTENCE_CACHE_MAX_SIZE` / `_TTL_SECONDS` |
+| Ownership / budget / cache state | SQLite, single instance; task ID to principal mapping enforced for Seedance | `STATE_BACKEND=sqlite`, `STATE_PRUNE_MAX_AGE_DAYS` (30; minimum 14 for authenticated HTTP with regular 2.5 enabled), `PERSISTENCE_CACHE_MAX_SIZE` / `_TTL_SECONDS` |
 | Budget ledger | Per-principal UTC daily spend estimate, shared by the whole team on hosted HTTP; a call that would exceed the limit is rejected before it reaches the provider | `DAILY_BUDGET_USD` (`0` records without blocking) |
 | Provider limiters | Per-provider concurrency; one shared-team principal semaphore on authenticated HTTP (local mode skips the principal semaphore; moderation also has a dedicated quota guard) | `PROVIDER_MAX_CONCURRENCY` (5), `PRINCIPAL_MAX_CONCURRENCY` (3) |
 | Moderation quota | Ten admitted lookups per rolling minute per runtime, shared across callers/ID types; exhaustion returns `LOCAL_RATE_LIMITED` with no provider call; in-memory, not distributed | Fixed bound; independent of HTTP RPM and concurrency settings |
@@ -295,7 +291,7 @@ flowchart LR
 
 | Provider | Auth | Products |
 |---|---|---|
-| ModelArk data plane | `Authorization: Bearer <BYTEPLUS_MODELARK_API_KEY>` | Seedream, Seedance, 3D (Hyper3D, Hitem3d), Seed 2.1 and audio understanding |
+| ModelArk data plane | `Authorization: Bearer <BYTEPLUS_MODELARK_API_KEY>` | Seedream, Seedance, Seed 2.1 and audio understanding |
 | Seed Speech | `X-Api-Key: <BYTEPLUS_SEED_SPEECH_API_KEY>` | Seed Audio and Speech-to-Text (told apart by `X-Api-Resource-Id`, not by key) |
 | VOD AI MediaKit | `Authorization: Bearer <BYTEPLUS_VOD_MEDIAKIT_API_KEY>` | Enhancement, transcode, subtitles, audio separation |
 | Vision AI (optional) | `Authorization: Bearer <BYTEPLUS_CV_API_KEY>` | OmniHuman 2.0 |

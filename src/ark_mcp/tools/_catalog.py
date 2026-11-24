@@ -30,10 +30,6 @@ def _modelark(settings: Settings) -> bool:
     return settings.has_modelark
 
 
-def _seed3d(settings: Settings) -> bool:
-    return settings.has_seed3d
-
-
 def _seed_audio(settings: Settings) -> bool:
     return settings.has_seed_audio
 
@@ -298,20 +294,6 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "understanding:read",
         background="required",
         gate=_modelark,
-    ),
-    _entry(
-        "hyper3d_create_task",
-        "Seed3DCreateTaskOutput",
-        "hyper3d:create",
-        background="required",
-        gate=_seed3d,
-    ),
-    _entry(
-        "hitem3d_create_task",
-        "Seed3DCreateTaskOutput",
-        "hitem3d:create",
-        background="required",
-        gate=_seed3d,
     ),
 )
 

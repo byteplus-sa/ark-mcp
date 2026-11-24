@@ -10,8 +10,6 @@ from pydantic import BaseModel, Field
 from ark_mcp.config.env import Settings
 from ark_mcp.config.model_capabilities import (
     ImageCapabilities,
-    ModelFamily,
-    Seed3DCapabilities,
     UnderstandingCapabilities,
     VideoCapabilities,
     get_capability_registry,
@@ -21,14 +19,10 @@ from ark_mcp.providers.modelark.pricing import get_price_book, live_pricing_enab
 from ark_mcp.runtime import get_runtime
 from ark_mcp.tools.seed_audio_understand import MAX_AUDIO_INPUTS
 
-ModelKind = Literal["video", "image", "3d", "understanding"]
+ModelKind = Literal["video", "image", "understanding"]
 UnderstandingModality = Literal["image", "video", "audio"]
 
 VIDEO_TOOL = "seedance_create_task"
-SEED3D_TOOLS: dict[ModelFamily, str] = {
-    ModelFamily.SEED3D_HYPER3D: "hyper3d_create_task",
-    ModelFamily.SEED3D_HITEM3D: "hitem3d_create_task",
-}
 IMAGE_TOOL = "seedream_generate_image"
 UNDERSTANDING_TOOL = "seed_understand"
 AUDIO_UNDERSTANDING_TOOL = "seed_audio_understand"
@@ -39,7 +33,7 @@ class ArkListModelsInput(BaseModel):
 
     kind: ModelKind | None = Field(
         None,
-        description="Filter to one model kind: video, image, 3d, or understanding. Omit to list every configured kind.",
+        description="Filter to one model kind: video, image, or understanding. Omit to list every configured kind.",
     )
 
 
@@ -110,15 +104,6 @@ class ImageModelLimits(BaseModel):
     )
 
 
-class Seed3DModelLimits(BaseModel):
-    """Per-model limits for a Seed 3D model."""
-
-    supports_text_to_3d: bool = Field(..., description="Whether a text-only prompt is accepted.")
-    max_reference_images: int = Field(..., description="Maximum reference images per request.")
-    file_formats: list[str] = Field(..., description="Accepted file_format values.")
-    supports_seed: bool = Field(..., description="Whether a seed is accepted.")
-
-
 class UnderstandingModelLimits(BaseModel):
     """Per-model limits for a multimodal understanding model."""
 
@@ -152,7 +137,6 @@ class ModelInfo(BaseModel):
     )
     video: VideoModelLimits | None = Field(None, description="Limits for video models.")
     image: ImageModelLimits | None = Field(None, description="Limits for image models.")
-    seed3d: Seed3DModelLimits | None = Field(None, description="Limits for 3D models.")
     understanding: UnderstandingModelLimits | None = Field(
         None, description="Limits for understanding models."
     )
@@ -228,13 +212,9 @@ def describe_models(settings: Settings) -> list[ModelInfo]:
     """Describe every configured binding whose service is enabled."""
     if not settings.has_modelark:
         return []
-    image_caps, video_caps, understanding_caps, seed3d_caps = (
-        get_capability_registry().configured_models()
-    )
+    image_caps, video_caps, understanding_caps = get_capability_registry().configured_models()
     models = [_video_info(caps, settings) for caps in video_caps.values()]
     models += [_image_info(caps, settings) for caps in image_caps.values()]
-    if settings.has_seed3d:
-        models += [_seed3d_info(caps, settings) for caps in seed3d_caps.values()]
     models += [_understanding_info(caps, settings) for caps in understanding_caps.values()]
     return models
 
@@ -288,23 +268,6 @@ def _image_info(caps: ImageCapabilities, settings: Settings) -> ModelInfo:
     )
 
 
-def _seed3d_info(caps: Seed3DCapabilities, settings: Settings) -> ModelInfo:
-    defaults = {settings.hyper3d_default_model, settings.hitem3d_default_model}
-    return ModelInfo(
-        model_id=caps.model_id,
-        family=caps.family.value,
-        kind="3d",
-        is_default=caps.model_id in defaults,
-        tool=SEED3D_TOOLS[caps.family],
-        seed3d=Seed3DModelLimits(
-            supports_text_to_3d=caps.supports_text_to_3d,
-            max_reference_images=caps.max_reference_images,
-            file_formats=list(caps.supported_file_formats),
-            supports_seed=caps.supports_seed,
-        ),
-    )
-
-
 def _understanding_info(caps: UnderstandingCapabilities, settings: Settings) -> ModelInfo:
     is_audio_model = caps.model_id == settings.seed_audio_understanding_model
     modalities: list[UnderstandingModality] = []
@@ -341,11 +304,6 @@ def describe_services(settings: Settings) -> list[ServiceStatus]:
     )
     services = (
         ("modelark", settings.has_modelark, "Set BYTEPLUS_MODELARK_API_KEY."),
-        (
-            "seed3d",
-            settings.has_seed3d,
-            "Set BYTEPLUS_MODELARK_3D_ENABLED=true and BYTEPLUS_MODELARK_API_KEY.",
-        ),
         ("seed_audio", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("speech_to_text", settings.has_stt, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("vod_mediakit", settings.has_vod_mediakit, "Set BYTEPLUS_VOD_MEDIAKIT_API_KEY."),

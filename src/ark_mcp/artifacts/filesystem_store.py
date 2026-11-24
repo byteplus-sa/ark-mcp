@@ -31,7 +31,6 @@ from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import (
     decode_base64_safely,
     get_media_limits,
-    validate_3d_mime,
     validate_audio_mime,
     validate_image_mime,
     validate_video_mime,
@@ -85,7 +84,7 @@ def trusted_host_policy(extra_suffixes: tuple[str, ...] = ()) -> Callable[[str],
 
 
 # Generic binary content-types that carry no useful file-type signal. When a
-# provider returns one of these for a known file extension (e.g. .glb), keep
+# provider returns one of these for a known file extension (e.g. .mp4), keep
 # the caller-supplied MIME type instead of adopting the generic header.
 _GENERIC_OCTET_STREAM: frozenset[str] = frozenset(
     {
@@ -112,22 +111,6 @@ def _translate_download_error(exc: SafeDownloadError) -> ArtifactPersistenceErro
     )
 
 
-def _mime_to_media_type(mime_type: str) -> MediaType:
-    """Infer the logical media type from a MIME type."""
-    if mime_type.startswith("image/"):
-        return MediaType.IMAGE
-    if mime_type.startswith("audio/"):
-        return MediaType.AUDIO
-    if mime_type.startswith("video/"):
-        return MediaType.VIDEO
-    if mime_type.startswith("model/") or mime_type in {
-        "application/zip",
-        "application/x-zip-compressed",
-    }:
-        return MediaType.THREE_D
-    return MediaType.IMAGE  # Conservative default
-
-
 _MIME_TO_EXT: dict[str, str] = {
     "audio/wav": ".wav",
     "audio/mpeg": ".mp3",
@@ -143,11 +126,6 @@ _MIME_TO_EXT: dict[str, str] = {
     "video/mp4": ".mp4",
     "video/quicktime": ".mov",
     "video/webm": ".webm",
-    "application/zip": ".zip",
-    "application/x-zip-compressed": ".zip",
-    "model/gltf-binary": ".glb",
-    "model/gltf+json": ".gltf",
-    "model/vnd.usdz+zip": ".usdz",
 }
 
 
@@ -213,7 +191,6 @@ class FilesystemArtifactStore(ArtifactStore):
             "image": limits.image_max_bytes,
             "audio": limits.audio_max_bytes,
             "video": limits.video_max_bytes,
-            "three_d": limits.three_d_max_bytes,
         }[media_type]
         raw = decode_base64_safely(data, max_bytes, label=media_type)
         return await self._store_bytes(raw, media_type, mime_type, source_expires_at, auth)
@@ -239,7 +216,6 @@ class FilesystemArtifactStore(ArtifactStore):
             "image": limits.image_max_bytes,
             "audio": limits.audio_max_bytes,
             "video": limits.video_max_bytes,
-            "three_d": limits.three_d_max_bytes,
         }[media_type]
         try:
             downloaded = await self._downloader.download(
@@ -301,7 +277,6 @@ class FilesystemArtifactStore(ArtifactStore):
             "image": limits.image_max_bytes,
             "audio": limits.audio_max_bytes,
             "video": limits.video_max_bytes,
-            "three_d": limits.three_d_max_bytes,
         }[media_type]
         if len(raw) > max_bytes:
             raise ValueError(
@@ -311,7 +286,6 @@ class FilesystemArtifactStore(ArtifactStore):
             "image": validate_image_mime,
             "audio": validate_audio_mime,
             "video": validate_video_mime,
-            "three_d": validate_3d_mime,
         }[media_type](mime_type)
 
         owner = auth or AuthContext()

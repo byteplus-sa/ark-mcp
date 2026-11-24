@@ -25,8 +25,6 @@ SHARED_TEAM_SCOPES = (
     "gen:delete",
     "seed:asr:transcribe",
     "understanding:read",
-    "hyper3d:create",
-    "hitem3d:create",
     "omnihuman:create",
     "omnihuman:read",
     "omnihuman:cancel",

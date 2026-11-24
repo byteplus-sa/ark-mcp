@@ -56,19 +56,6 @@ _ALLOWED_VIDEO_MIMES: frozenset[str] = frozenset(
     }
 )
 
-_ALLOWED_3D_MIMES: frozenset[str] = frozenset(
-    {
-        "application/zip",
-        "application/x-zip-compressed",
-        "model/gltf-binary",
-        "model/gltf+json",
-        "application/octet-stream",
-        "binary/octet-stream",
-        "model/vnd.usdz+zip",
-        "text/plain",
-    }
-)
-
 
 class MediaLimits(BaseModel):
     """Size limits (in bytes) for each media type."""
@@ -77,12 +64,10 @@ class MediaLimits(BaseModel):
     audio_max_seconds: int = 30
     image_max_bytes: int = 10 * 1024 * 1024  # 10 MB
     video_max_bytes: int = 200 * 1024 * 1024  # 200 MB
-    three_d_max_bytes: int = 200 * 1024 * 1024  # 200 MB
 
     ALLOWED_AUDIO_MIMES: ClassVar[frozenset[str]] = _ALLOWED_AUDIO_MIMES
     ALLOWED_IMAGE_MIMES: ClassVar[frozenset[str]] = _ALLOWED_IMAGE_MIMES
     ALLOWED_VIDEO_MIMES: ClassVar[frozenset[str]] = _ALLOWED_VIDEO_MIMES
-    ALLOWED_3D_MIMES: ClassVar[frozenset[str]] = _ALLOWED_3D_MIMES
 
 
 def get_media_limits() -> MediaLimits:
@@ -121,17 +106,6 @@ def validate_video_mime(mime_type: str | None) -> None:
     if normalized not in _ALLOWED_VIDEO_MIMES:
         raise MediaValidationError(
             f"Video MIME type '{mime_type}' is not allowed. Allowed: {sorted(_ALLOWED_VIDEO_MIMES)}"
-        )
-
-
-def validate_3d_mime(mime_type: str | None) -> None:
-    """Validate that the MIME type is an allowed 3D model/archive format."""
-    if mime_type is None:
-        return
-    normalized = mime_type.lower().split(";")[0].strip()
-    if normalized not in _ALLOWED_3D_MIMES:
-        raise MediaValidationError(
-            f"3D MIME type '{mime_type}' is not allowed. Allowed: {sorted(_ALLOWED_3D_MIMES)}"
         )
 
 

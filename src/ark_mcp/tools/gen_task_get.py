@@ -1,8 +1,8 @@
-"""``gen_task_get`` tool — check ModelArk generation tasks (Seedance, Hyper3D, Hitem3d).
+"""``gen_task_get`` tool — check Seedance generation tasks.
 
 Tasks are fetched with one ``list_tasks(filter.task_ids=...)`` call per page;
-any task the list omits, and any succeeded task whose list entry lacks output
-URLs, is re-fetched individually.
+the tool retrieves full details for omitted tasks, entries without a model ID,
+and succeeded Seedance entries without the video URL.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from fastmcp.tools import ToolResult
 from pydantic import BaseModel, Field
 
 from ark_mcp.artifacts.export import export_ref, prepare_local_export
+from ark_mcp.config.model_capabilities import get_capability_registry
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.models import GenTaskLookupError
 from ark_mcp.observability.logger import info as log_info
@@ -28,8 +29,6 @@ from ark_mcp.tools._generation_tasks_shared import (
     GenTask,
     build_gen_task,
     build_outputs,
-    classify_task,
-    needs_full_fetch,
     persist_task_outputs,
 )
 from ark_mcp.tools._local_export import output_dir_field, overwrite_field
@@ -48,9 +47,7 @@ class GenTaskGetInput(BaseModel):
         min_length=1,
         max_length=50,
         description=(
-            "1-50 ModelArk generation task IDs returned by seedance_create_task, "
-            "hyper3d_create_task, or hitem3d_create_task (not ark_job IDs). Duplicates are "
-            "ignored."
+            "1-50 provider task IDs returned by seedance_create_task. Duplicates are ignored."
         ),
     )
     persist_output: bool = Field(
@@ -92,13 +89,13 @@ TOOL_ANNOTATIONS = {
 
 
 async def gen_task_get(input: GenTaskGetInput, ctx: Context) -> GenTaskGetOutput | ToolResult:
-    """Check status and outputs of ModelArk generation tasks (Seedance video, 3D).
+    """Check status and outputs of tasks from configured Seedance models.
 
     Pass every task ID in one call. queued or running is not a failure: poll again after
     recommended_poll_after_ms, never resubmit the create tool (that bills a second task).
     Provider output URLs expire in about 24 hours; once all_terminal is true, call again
     through ark_job_submit with persist_output=true to keep durable artifacts. IDs the
-    caller does not own are listed in errors.
+    caller does not own and tasks with unbound model IDs are listed in errors.
     """
     task_error = persistence_requires_task(ctx, input.persist_output)
     if task_error is not None:
@@ -133,19 +130,29 @@ async def gen_task_get(input: GenTaskGetInput, ctx: Context) -> GenTaskGetOutput
         await context_log(ctx, "error", f"Failed to list tasks: {exc.message}")
         return provider_error_result(exc)
 
+    registry = get_capability_registry()
     tasks: list[GenTask] = []
     for task_id in owned:
         task = found.get(task_id)
         if task is None:
             continue
-        family, kind = classify_task(task.model)
+        caps = registry.resolve_task_model(task.model)
+        if caps is None:
+            errors.append(
+                GenTaskLookupError(
+                    task_id=task_id,
+                    code="NOT_FOUND",
+                    message="Task is unavailable for the configured Seedance models.",
+                )
+            )
+            continue
         persisted = None
-        if input.persist_output and task.status == "succeeded" and kind != "unknown":
-            persisted = await persist_task_outputs(runtime, owner, task, kind)
+        if input.persist_output and task.status == "succeeded":
+            persisted = await persist_task_outputs(runtime, owner, task)
             for role, ref in persisted.items():
                 persisted[role] = await export_ref(runtime.artifact_store, ref, target, auth=owner)
-        outputs = build_outputs(task, kind, persisted)
-        tasks.append(build_gen_task(task, family=family, kind=kind, outputs=outputs))
+        outputs = build_outputs(task, persisted)
+        tasks.append(build_gen_task(task, family=caps.family.value, outputs=outputs))
 
     active = sum(1 for task in tasks if task.status not in TERMINAL_STATUSES)
     log_info("generation_tasks_retrieved", requested=len(task_ids), found=len(tasks), active=active)
@@ -174,12 +181,20 @@ async def _fetch_tasks(
             if len(found) >= len(owned) or not page.data:
                 break
 
-        refetch = [
-            task_id
-            for task_id in owned
-            if task_id not in found
-            or needs_full_fetch(found[task_id], classify_task(found[task_id].model)[1])
-        ]
+        registry = get_capability_registry()
+        refetch = []
+        for task_id in owned:
+            task = found.get(task_id)
+            if (
+                task is None
+                or not task.model
+                or (
+                    registry.resolve_task_model(task.model) is not None
+                    and task.status == "succeeded"
+                    and task.video_url is None
+                )
+            ):
+                refetch.append(task_id)
         limiter = asyncio.Semaphore(_MAX_CONCURRENT_FETCHES)
 
         async def fetch(task_id: str) -> tuple[str, GenerationTaskResponse | ProviderError]:

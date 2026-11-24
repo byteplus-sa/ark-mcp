@@ -18,7 +18,7 @@ tool set.
 
 | Service | Env var | Auth header | Tools it enables |
 |---|---|---|---|
-| ModelArk | `BYTEPLUS_MODELARK_API_KEY` | `Authorization: Bearer <key>` | Seedream, Seedance, image/video/audio understanding, and gated 3D tools |
+| ModelArk | `BYTEPLUS_MODELARK_API_KEY` | `Authorization: Bearer <key>` | Seedream, Seedance, image/video/audio understanding |
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | `X-Api-Key: <key>` | Seed Audio (speech generation), Speech-to-Text (ASR) |
 | VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `Authorization: Bearer <key>` | Enhancement, transcode, subtitle burn-in/removal, audio separation, and poll tools |
 | Vision AI (OmniHuman) | `BYTEPLUS_CV_API_KEY` | `Authorization: Bearer <key>` | `omnihuman_*` tools (also needs `BYTEPLUS_OMNIHUMAN_ENABLED=true`) |
@@ -40,8 +40,8 @@ only when preparing the file yourself.
 
 ## ModelArk
 
-ModelArk provides **Seedream**, **Seedance**, multimodal understanding and
-the gated 3D tools. The key is sent as a Bearer token.
+ModelArk provides **Seedream**, **Seedance**, and multimodal understanding.
+The key is sent as a Bearer token.
 
 **Env vars:**
 

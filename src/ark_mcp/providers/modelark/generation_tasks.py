@@ -1,9 +1,4 @@
-"""ModelArk generation task reads — shared by Seedance, Hyper3D and Hitem3d.
-
-Every asynchronous ModelArk generation task lives behind the same
-``/contents/generations/tasks`` endpoints, so retrieval, listing and deletion
-use one service regardless of which product created the task.
-"""
+"""Retrieve, list and delete Seedance tasks through the ModelArk API."""
 
 from __future__ import annotations
 

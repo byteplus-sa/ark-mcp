@@ -155,7 +155,6 @@ def configured_model_ids(settings: Settings | None = None) -> list[str]:
     binding_groups = (
         resolved.seedream_model_bindings,
         resolved.seedance_model_bindings,
-        resolved.seed3d_model_bindings,
         resolved.seed_understanding_model_bindings,
     )
     model_ids = [binding.model_id for bindings in binding_groups for binding in bindings]

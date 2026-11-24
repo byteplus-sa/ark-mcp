@@ -399,7 +399,7 @@ in [`PLAN_MODELARK_ASSET_LIBRARY_VALIDATION.md`](PLAN_MODELARK_ASSET_LIBRARY_VAL
 - `src/ark_mcp/tools/ark_asset_*.py`: one module per tool, as in the table
   above.
 - `src/ark_mcp/server.py`: an `if settings.has_asset_library:` block using the
-  tuple-list registration pattern from Seed 3D. Scopes: `assets:read`,
+  tool catalog registration pattern. Scopes: `assets:read`,
   `assets:write`, `assets:delete`, `assets:verify`. Health and readiness
   report `modelark-openapi`.
 - `src/ark_mcp/background_jobs.py`: `ark_asset_create` and

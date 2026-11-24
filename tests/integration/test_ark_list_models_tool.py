@@ -43,6 +43,17 @@ async def test_lists_every_configured_kind(configured: None) -> None:
     models = _by_id(await _list_models({}))
     assert {model["kind"] for model in models.values()} == {"video", "image", "understanding"}
     seedance_2_5 = models["dreamina-seedance-2-5-260628"]
+    assert set(seedance_2_5) == {
+        "family",
+        "image",
+        "is_default",
+        "kind",
+        "model_id",
+        "pricing",
+        "tool",
+        "understanding",
+        "video",
+    }
     assert seedance_2_5["tool"] == "seedance_create_task"
     assert seedance_2_5["video"]["duration_seconds"] == [4, 30]
     assert seedance_2_5["video"]["supports_draft"] is True
@@ -105,9 +116,20 @@ async def test_understanding_discovery_matches_named_tool_schema(
 
 async def test_disabled_services_explain_how_to_enable_them(configured: None) -> None:
     services = {item["service"]: item for item in (await _list_models({}))["services"]}
+    assert set(services) == {
+        "asset_delete",
+        "asset_library",
+        "modelark",
+        "moderation",
+        "object_storage",
+        "omnihuman",
+        "seed_audio",
+        "speech_to_text",
+        "vod_mediakit",
+    }
     assert services["modelark"] == {"service": "modelark", "enabled": True, "reason": None}
-    assert "seedance_2_5_premium" not in services
-    assert services["seed3d"]["enabled"] is False
+    assert services["omnihuman"]["enabled"] is False
+    assert "BYTEPLUS_OMNIHUMAN_ENABLED" in services["omnihuman"]["reason"]
 
 
 async def test_reasons_never_contain_secret_values(configured: None) -> None:
@@ -131,9 +153,10 @@ async def test_no_models_without_modelark_key(monkeypatch: pytest.MonkeyPatch) -
         refresh_capability_registry()
 
 
-async def test_invalid_kind_is_rejected(configured: None) -> None:
+@pytest.mark.parametrize("kind", ["3d", "audio"])
+async def test_invalid_kind_is_rejected(configured: None, kind: str) -> None:
     async with Client(create_server(get_settings())) as client:
         result = await client.call_tool(
-            "ark_list_models", {"input": {"kind": "audio"}}, raise_on_error=False
+            "ark_list_models", {"input": {"kind": kind}}, raise_on_error=False
         )
     assert result.is_error

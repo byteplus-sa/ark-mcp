@@ -35,7 +35,6 @@ def artifact_limit_bytes(media_type: MediaType) -> int:
         MediaType.IMAGE: limits.image_max_bytes,
         MediaType.AUDIO: limits.audio_max_bytes,
         MediaType.VIDEO: limits.video_max_bytes,
-        MediaType.THREE_D: limits.three_d_max_bytes,
     }[MediaType(media_type)]
 
 

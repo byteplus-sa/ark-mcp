@@ -48,7 +48,7 @@ class SeedMediaExportArtifactOutput(BaseModel):
 
     artifact_id: str = Field(..., description="Artifact identifier.")
     path: str = Field(..., description="Absolute on-disk path of the file.")
-    media_type: MediaType = Field(..., description="image, audio, video, or three_d.")
+    media_type: MediaType = Field(..., description="image, audio, or video.")
     mime_type: str = Field(..., description="MIME type of the stored content.")
     bytes: int = Field(..., description="Size in bytes.")
     sha256: str | None = Field(None, description="SHA-256 hex digest.")

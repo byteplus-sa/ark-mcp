@@ -19,8 +19,6 @@ test("model-backed tool pages each show one supported-model table", () => {
     "seed_audio_generate",
     "seed_understand",
     "seed_audio_understand",
-    "hyper3d_create_task",
-    "hitem3d_create_task",
     "omnihuman_create_task",
     "speech_to_text",
   ]) {

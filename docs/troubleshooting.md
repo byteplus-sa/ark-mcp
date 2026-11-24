@@ -96,7 +96,7 @@ still succeeded; nothing was lost yet:
 - `id="provider-url"`: `uri` is the temporary provider URL, valid until
   `persistence_error.source_url_expires_at`. Call `seed_media_persist_url`
   with that `uri`, `media_type`, `mime_type`, and `source_expires_at` before
-  it expires. For Seedance and Seed 3D, polling the get tool again with
+  it expires. For Seedance, polling `gen_task_get` again with
   `persist_output=true` also retries persistence.
 - `id="inline-fallback"`: the bytes are in `fallback_data` (Base64). Save them
   directly; they are not stored anywhere else.
@@ -150,7 +150,7 @@ to one `gen_task_get` call until `all_terminal` is `true`.
 - `running` tasks cannot be cancelled or deleted — wait for completion
 - `cancelled` tasks cannot be deleted
 
-The `gen_task_cancel_or_delete` tool (Seedance and 3D tasks) requires `expected_status` to
+The `gen_task_cancel_or_delete` tool requires `expected_status` to
 match the actual status, preventing accidental destructive actions.
 
 ## Timeout on Long Generations
@@ -169,7 +169,7 @@ If you experience timeouts:
 | Call | `retryable` | `ambiguous_completion` | Server retries? | What to do |
 |---|---|---|---|---|
 | Create / generate / cancel / delete / MediaKit submit | `false` | `true` | No | It may have succeeded upstream. Do not retry blindly; reconcile by task ID, request ID, or `client_token` |
-| Task polls (Seedance, Seed 3D, ASR query, MediaKit get) | `true` | `false` | Yes | Safe to poll again |
+| Task polls (Seedance, ASR query, MediaKit get) | `true` | `false` | Yes | Safe to poll again |
 | `ark_moderation_get` | `true` | `false` | No | Honor retry guidance; another lookup consumes quota and its price is unspecified |
 | `seed_understand` / `seed_audio_understand` chat completion | `true` | `false` | No | Safe to retry, but a retry is a new billed completion; consider a longer `SEED_UNDERSTANDING_TIMEOUT_MS` or lower `reasoning_effort` |
 | Variation batch deadline | see `error.phase` | | No | `queued` (`QUEUE_TIMEOUT`) is safe to retry; `generating` is ambiguous |
@@ -208,7 +208,7 @@ operations rather than keeping the original foreground request open.
   metadata, retain the returned MCP task ID, and poll `tasks/get` at the
   advertised interval until terminal.
 - For long video and VOD work, the background result contains the provider
-  task ID. Poll `gen_task_get` (Seedance, 3D) or `vod_get_task` (VOD, with the
+  task ID. Poll `gen_task_get` (Seedance) or `vod_get_task` (VOD, with the
   echoed `operation`) in the foreground; both default to
   `persist_output=false`. Then run the poller once through `ark_job_submit`
   with `persist_output=true` to keep the outputs. Never resubmit the create
@@ -229,7 +229,7 @@ required-task provider tool directly and do not switch it to foreground mode.
    `poll_after_ms` until terminal.
 4. Read the original tool output from `result.structured_content`.
 
-This remains a real background task on the same worker. For a Seedance, Seed 3D,
+This remains a real background task on the same worker. For a Seedance
 or VOD submission, the provider task ID appears inside the completed original
 result and must be retained separately. A missing target usually means its
 provider credential or feature flag is unavailable, or the target is excluded

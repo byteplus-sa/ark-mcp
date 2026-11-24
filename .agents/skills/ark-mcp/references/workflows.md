@@ -15,7 +15,7 @@ they can.
 
 | Mode | Tools |
 |---|---|
-| **Required**: a direct foreground call is rejected before the provider is contacted | `seedance_create_task`, `seedream_generate_image`, `seed_audio_generate`, `hyper3d_create_task`, `hitem3d_create_task`, `omnihuman_create_task`, `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `seed_understand`, `seed_audio_understand`, `speech_to_text`, `media_upload` |
+| **Required**: a direct foreground call is rejected before the provider is contacted | `seedance_create_task`, `seedream_generate_image`, `seed_audio_generate`, `omnihuman_create_task`, `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `seed_understand`, `seed_audio_understand`, `speech_to_text`, `media_upload` |
 | **Optional**: foreground by default; background for long waits or persistence | `gen_task_get`, `vod_get_task`, `omnihuman_get_task`, `seed_media_persist_url`, `ark_asset_create`, `ark_asset_verification_result` |
 | **Foreground only** | everything else (`ark_list_models`, `gen_task_list`, `gen_task_cancel_or_delete`, `omnihuman_cancel_task`, `media_presign`, artifact reads, the other `ark_asset_*` tools) |
 
@@ -31,7 +31,7 @@ they can.
    two seconds) until `status` is `completed`, `failed`, or `cancelled`.
 4. Read the original tool result from `result` (use `result.structured_content`);
    `result.is_error` marks a target-tool error. Provider task IDs (Seedance,
-   3D, VOD, OmniHuman) are inside that result.
+   VOD, OmniHuman) are inside that result.
 5. `ark_job_cancel` stops the local worker only. A provider operation already
    accepted by BytePlus keeps running and billing.
 
@@ -73,7 +73,7 @@ terminal `ark_job_get.result` or `tasks/get` response.
 
 ### Resumable async generation
 
-For Seedance and Seed 3D, and equally for VOD and OmniHuman:
+For Seedance, VOD and OmniHuman:
 
 1. Check limits with `ark_list_models`; for Seedance and Seedream also run a
    `dry_run: true` call to confirm the request and `estimated_cost_usd`.
@@ -233,20 +233,6 @@ Task success proves generation finished, not that the brief was met.
 5. Mark the take `review`; optionally make an H.264 proxy for HEVC masters
    and keep the original.
 
-### Post-generation 3D QA
-
-1. Validate package type, byte size and SHA-256; keep the original archive.
-2. Inspect archive paths before extracting and confirm the requested format
-   exists.
-3. Import into an isolated DCC collection; record object, mesh, face,
-   material, texture, UV, and armature counts.
-4. Measure dimensions, units, axes, origin, transforms, normals,
-   non-manifold geometry, missing textures, rig readiness. A wrong scale or
-   missing materials usually means the provider and DCC disagree on units,
-   axes or textures: normalize a working copy, never the provider artifact.
-5. Mark the asset `review`. Provider success and a clean import are not
-   creative approval.
-
 ## Error handling
 
 ### Provider errors
@@ -272,7 +258,7 @@ honoring `Retry-After` (also capped at 4 s). After that the error reaches you.
 | Operation | Timeout result | Server retries? | You should |
 |---|---|---|---|
 | Create / generate / cancel / delete / MediaKit submit | `retryable=false`, `ambiguous_completion=true` | No | Reconcile by task or request ID; do not resubmit |
-| Task polls (Seedance, 3D, OmniHuman, VOD, ASR query) | `retryable=true`, `ambiguous_completion=false` | Yes | Poll again |
+| Task polls (Seedance, OmniHuman, VOD, ASR query) | `retryable=true`, `ambiguous_completion=false` | Yes | Poll again |
 | `seed_understand`, `seed_audio_understand` | `retryable=true`, `ambiguous_completion=false` | No for timeouts (429/5xx still retried) | Safe to retry, but each attempt is billed |
 
 - Connection and transport failures are retryable on reads; on mutation
@@ -298,7 +284,7 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Tool missing from the tool list | Provider key or feature flag not set (`BYTEPLUS_MODELARK_3D_ENABLED`, `BYTEPLUS_OMNIHUMAN_ENABLED` plus a separate `BYTEPLUS_CV_API_KEY`, AK/SK, `TOS_*`/`S3_*`) | See [environment.md](environment.md) |
+| Tool missing from the tool list | Provider key or feature flag not set (`BYTEPLUS_OMNIHUMAN_ENABLED` plus a separate `BYTEPLUS_CV_API_KEY`, AK/SK, `TOS_*`/`S3_*`) | See [environment.md](environment.md) |
 | `Request is not valid for model ...` (Seedance, Seedream) | Request breaks that model's limits; every violation is listed | Fix each item or pick another model from `ark_list_models`; re-check with `dry_run: true` |
 | Model not found | Unknown ID (exact IDs only) | Use the did-you-mean hint or `ark_list_models` |
 | Artifact has `persistence_error` | Billed output, storage failed after retries | `id="provider-url"`: `seed_media_persist_url` before `source_url_expires_at`; `id="inline-fallback"`: bytes are in `fallback_data` |
@@ -314,7 +300,6 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
 | `omnihuman_create_task` rejects a `seed-media://` input | Filesystem artifact backend cannot mint provider-readable URLs | `ARTIFACT_BACKEND=object_storage`, or `media_upload` and pass the presigned URL |
 | `omnihuman_get_task` fails with `InvalidParameter ... audio` | Audio is validated only after submission (4-300 s, wav/mp3, under 15 MB; 300 s WAV is 26-58 MB) | Fix the audio (MP3 or shorter) and resubmit; never unchanged |
 | OmniHuman error `50510` | Provider content pre-filter rejected the image or audio | Use different compliant inputs; never retry unchanged |
-| 3D task failed with `AbilityProcessingError` | Transient provider error | Re-submit the same task; the input is not invalid |
 | HTTP `401` | Missing, wrong or rotated-out shared MCP key | Configure the current key privately as a bearer header; never paste it into chat |
 | Administrative tool unavailable on shared HTTP | Fixed team scopes exclude account-wide asset and moderation operations | Use an authorized local setup; scopes cannot be added to the shared key |
 
@@ -333,10 +318,9 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
   and video (schema-enforced reviews via `response_format`, `json_retry=1`,
   `save_to` with `return_content="none"`), `seed_audio_understand` for audio
   reasoning, `speech_to_text` for word-level timings.
-- **Verify saved media, not task status** (see the QA sections), and keep 3D
-  generation, DCC normalization, and approval as distinct steps.
-- **Persist before cleaning up.** Provider URLs expire (2 h audio, 24 h
-  image/video/3D); `gen_task_cancel_or_delete` removes retrievable outputs.
+- **Verify saved media before approval** (see the QA section).
+- **Persist before cleaning up.** Provider URLs expire (2 h Seed Audio, 24 h
+  image/video); `gen_task_cancel_or_delete` removes retrievable outputs.
 - **Write straight to the project on stdio** with `output_path`,
   `output_dir`, or `save_to` instead of a follow-up export, and check
   `local_path` / `export_error`. Inside `ark_job_submit` see

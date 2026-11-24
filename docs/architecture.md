@@ -113,10 +113,9 @@ persistence is attempted separately as a best-effort operation (under the
 
 ## Long-running task flow
 
-Generation and variation calls, transcription, uploads, multimodal
-understanding, and Seedance, Seed 3D, and MediaKit submissions are registered
-with `execution.taskSupport="required"` and a two-second recommended poll
-interval. FastMCP's Docket worker runs the existing tool handler after returning
+Seedance and MediaKit submissions, generation and variation calls,
+transcription, uploads, and multimodal understanding are registered with
+`execution.taskSupport="required"` and a two-second recommended poll interval. FastMCP's Docket worker runs the existing tool handler after returning
 the MCP task ID, while the handler retains the normal provider timeout, budget,
 concurrency, error, and usage accounting paths.
 
@@ -128,7 +127,7 @@ delegates creation, status, and cancellation to the pinned FastMCP task
 backend. It does not introduce a second queue or execute provider work inside
 the foreground request.
 
-Seedance, Seed 3D, and MediaKit get calls use optional task support: foreground
+Seedance and MediaKit get calls use optional task support: foreground
 execution remains available for short processing-status checks, while task
 augmentation protects the completed-output download and persistence path. List,
 presign, artifact-read, and cancel/delete operations stay foreground.

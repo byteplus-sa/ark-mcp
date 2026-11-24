@@ -33,11 +33,8 @@ separate tools. The flow is discovery → create → poll:
   authoritative. Regular 2.5 remains the default. Retained regular 2.5 4K
   acceptance differs from current model-specific provider docs; see
   `docs/models.md` for the contract caveat.
-- **Seed 3D** — asynchronous 3D model generation through ModelArk (Hyper3D
-  text-to-3D and Hitem3d image-to-3D). Gated by `BYTEPLUS_MODELARK_3D_ENABLED`;
-  disabled by default.
 - **Generation tasks** — `gen_task_get`, `gen_task_list` and
-  `gen_task_cancel_or_delete` poll, list and cancel Seedance and 3D tasks
+  `gen_task_cancel_or_delete` poll, list and cancel Seedance tasks
   (scopes `gen:read` / `gen:delete`).
 - **OmniHuman 2.0** — image + audio to talking-avatar video through BytePlus
   Vision AI (`omnihuman_create_task`, `omnihuman_get_task`,
@@ -70,14 +67,14 @@ separate tools. The flow is discovery → create → poll:
   not granted to shared-key HTTP. Ten lookups per rolling minute per runtime,
   no automatic retries or result persistence; empty/not-found is not approval.
   Eligibility and live-unverified status: `docs/moderation.md` and
-  `specs/SPEC_MODELARK_MODERATION_CONTRACT.md`. The catalog contains 39 tools;
+  `specs/SPEC_MODELARK_MODERATION_CONTRACT.md`. The catalog contains 37 tools;
   `ark_list_models.services` includes configuration-only `moderation`.
 - **Background jobs** — ordinary `ark_job_*` tools are the default route for
   long-running work through the FastMCP worker, since most clients cannot
   negotiate MCP task augmentation; native tasks remain supported for clients
   that can.
 - **Durable artifacts** — MCP resources for generated media whose provider URLs
-  expire (2h for audio, 24h for image/video/3D).
+  expire (2h for audio, 24h for image/video).
 - **Transports** — local `stdio` first, with protected Streamable HTTP as a
   deployable option (both natively supported by FastMCP). Hosted HTTP uses only
   `MCP_AUTH_MODE=api_key` with `MCP_API_KEY_SHA256`, never the raw key.
@@ -88,7 +85,7 @@ separate tools. The flow is discovery → create → poll:
   tests, with the tenant claim key fixed to `tenant_id`. See
   `docs/self-hosting.md` for generation and rotation.
 
-Seedance, Seedream, Seed 3D, Seed 2.1 Understanding, and Seed Audio
+Seedance, Seedream, Seed 2.1 Understanding, and Seed Audio
 Understanding share the ModelArk data-plane host and Bearer authentication.
 Seed Audio and Speech-to-Text are
 hosted by Seed Speech and use `X-Api-Key`. VOD AI MediaKit uses a separate

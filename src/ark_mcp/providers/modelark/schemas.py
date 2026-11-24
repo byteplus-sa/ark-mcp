@@ -158,9 +158,8 @@ class GenerationTaskErrorDetail(BaseModel):
 class GenerationTaskResponse(BaseModel):
     """Full task object from the ModelArk generation task retrieve/list APIs.
 
-    Seedance, Hyper3D and Hitem3d tasks share this shape; outputs live in the
-    ``content`` object under ``video_url``/``last_frame_url`` (video) or
-    ``file_url`` (3D).
+    Seedance outputs live in the ``content`` object under ``video_url``
+    and ``last_frame_url``.
     """
 
     id: str
@@ -194,11 +193,6 @@ class GenerationTaskResponse(BaseModel):
         """Extract the last frame URL from the content object."""
         return self._content_url("last_frame_url")
 
-    @property
-    def file_url(self) -> str | None:
-        """Extract the generated 3D file URL from the content object."""
-        return self._content_url("file_url")
-
     def _content_url(self, key: str) -> str | None:
         if not isinstance(self.content, dict):
             return None
@@ -220,34 +214,6 @@ class GenerationTaskListResponse(BaseModel):
     )
     total: int = 0
     has_more: bool | None = None
-
-
-# ---------------------------------------------------------------------------
-# Seed3D 3D generation task API
-# ---------------------------------------------------------------------------
-
-
-class Seed3DContentItem(BaseModel):
-    """Content item for the Seed3D task creation request."""
-
-    type: str = Field(..., description="text or image_url")
-    text: str | None = None
-    image_url: dict[str, str] | None = None
-
-
-class Seed3DCreateProviderRequest(BaseModel):
-    """Raw request body for ``POST /contents/generations/tasks`` (3D)."""
-
-    model: str
-    content: list[Seed3DContentItem] = Field(default_factory=list)
-    seed: int | None = None
-    callback_url: str | None = None
-
-
-class Seed3DCreateProviderResponse(BaseModel):
-    """Response from ``POST /contents/generations/tasks`` (3D)."""
-
-    id: str
 
 
 # ---------------------------------------------------------------------------

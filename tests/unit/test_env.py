@@ -52,35 +52,6 @@ class TestSettings:
         )
         assert configured.has_vod_mediakit
 
-    def test_seed3d_disabled_by_default(self) -> None:
-        settings = Settings(_env_file=None, BYTEPLUS_MODELARK_API_KEY="sk-test")
-        assert not settings.seed3d_enabled
-        assert not settings.has_seed3d
-
-    def test_seed3d_requires_both_flag_and_key(self) -> None:
-        assert not Settings(_env_file=None, BYTEPLUS_MODELARK_3D_ENABLED=True).has_seed3d
-        assert Settings(
-            _env_file=None,
-            BYTEPLUS_MODELARK_API_KEY="sk-test",  # pragma: allowlist secret
-            BYTEPLUS_MODELARK_3D_ENABLED=True,
-        ).has_seed3d
-
-    def test_seed3d_bindings_built_from_defaults(self) -> None:
-        settings = Settings(_env_file=None)
-        ids = [binding.model_id for binding in settings.seed3d_model_bindings]
-        assert settings.hyper3d_default_model in ids
-        assert settings.hitem3d_default_model in ids
-
-    def test_seed3d_duplicate_bindings_rejected(self) -> None:
-        with pytest.raises(ValueError, match="duplicate IDs"):
-            Settings(
-                _env_file=None,
-                SEED3D_MODEL_BINDINGS=[
-                    {"model_id": "m1", "family": "hyper3d"},
-                    {"model_id": "m1", "family": "hitem3d"},
-                ],
-            )
-
     def test_removed_premium_settings_do_not_add_bindings(self) -> None:
         settings = Settings(
             _env_file=None,
