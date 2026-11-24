@@ -91,11 +91,11 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 ### `put_base64` / `copy_from_trusted_url` flow (`_store_bytes`)
 
 1. Apply the source's size policy. Trusted URL downloads cap images and audio
-   at 10 MiB and video and 3D at 200 MiB. Inline provider output uses the same
-   limits for images, video and 3D. The store decodes inline generated audio
-   without a file-size cap, so Seed Audio can save WAVs larger than 10 MiB.
+   at 10 MiB and video at 200 MiB. Inline images and video use the same limits.
+   The store decodes inline generated audio without a file-size cap, so Seed
+   Audio can save WAVs larger than 10 MiB.
 2. Validate the MIME via `validate_image_mime` / `validate_audio_mime` /
-   `validate_video_mime` / `validate_3d_mime`.
+   `validate_video_mime`.
 3. Resolve `owner = auth or AuthContext()`.
 4. Generate `artifact_id = str(uuid.uuid4())`, compute `sha256`.
 5. `expires_at = now + ttl_seconds`; build `ArtifactRef(uri=f"seed-media://artifacts/{artifact_id}", ...)`.

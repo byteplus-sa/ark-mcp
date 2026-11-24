@@ -15,7 +15,7 @@ removed tool must switch to its replacement.
 
 ```mermaid
 flowchart LR
-  D["ark_list_models<br/>what can I use?"] --> C["create<br/>seedance_create_task<br/>seedream_generate_image<br/>seed_audio_generate<br/>vod_* / hyper3d / hitem3d"]
+  D["ark_list_models<br/>what can I use?"] --> C["create<br/>seedance_create_task<br/>seedream_generate_image<br/>seed_audio_generate<br/>vod_*"]
   C --> P["poll<br/>gen_task_get / gen_task_list<br/>vod_get_task"]
   P --> A["artifacts<br/>seed_media_*"]
 ```
@@ -59,17 +59,6 @@ flowchart LR
   include Flash; non-empty lists are unchanged and must add it explicitly.
   Regular 2.5 remains the default. See
   [Flash configuration](configuration.md#seedance-25-flash).
-
-### 3D
-
-| 0.1.x tool | 0.2.0 replacement |
-|---|---|
-| `hyper3d_get_task`, `hitem3d_get_task` | `gen_task_get` |
-| `hyper3d_list_tasks`, `hitem3d_list_tasks` | `gen_task_list` |
-| `hyper3d_cancel_or_delete_task`, `hitem3d_cancel_or_delete_task` | `gen_task_cancel_or_delete` |
-
-The create tools `hyper3d_create_task` and `hitem3d_create_task` are
-unchanged.
 
 ### Seedream (images)
 
@@ -139,8 +128,8 @@ This section is historical: the current server rejects `jwt` mode.
 
 | Removed | Replacement |
 |---|---|
-| `seedance:read`, `hyper3d:read`, `hitem3d:read` | `gen:read` |
-| `seedance:delete`, `hyper3d:delete`, `hitem3d:delete` | `gen:delete` |
+| `seedance:read` | `gen:read` |
+| `seedance:delete` | `gen:delete` |
 
 **Until the identity provider grants `gen:read` and `gen:delete`, those
 principals cannot poll or cancel tasks.** Ownership checks are unchanged: a
