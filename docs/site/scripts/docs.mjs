@@ -154,12 +154,9 @@ export function toolPage(tool) {
       : tool.background === "optional"
         ? "Use a direct foreground call for lightweight operations. Submit through `ark_job_submit` when output persistence or a large download may take time. The full arguments still include the `input` wrapper."
         : "Call this tool directly. It is not a background-job target.";
-  const providerTasks = [
-    "seedance_",
-    "omnihuman_",
-    "vod_",
-    "gen_task_",
-  ].some((prefix) => name.startsWith(prefix));
+  const providerTasks = ["seedance_", "omnihuman_", "vod_", "gen_task_"].some(
+    (prefix) => name.startsWith(prefix),
+  );
   return `---
 title: ${JSON.stringify(name)}
 description: ${JSON.stringify(`Inputs, outputs, setup requirements and execution guidance for ${name}.`)}

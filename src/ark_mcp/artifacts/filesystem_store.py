@@ -7,6 +7,7 @@ metadata, and TTL cleanup. Used for local ``stdio`` deployment.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import tempfile
 import uuid
@@ -410,8 +411,6 @@ class FilesystemArtifactStore(ArtifactStore):
         if not meta_path.exists():
             raise FileNotFoundError("Artifact metadata not found.")
 
-        import json
-
         raw_metadata = json.loads(meta_path.read_text())
         if raw_metadata.get("schema_version") == 2:
             return ArtifactMetadata.model_validate(raw_metadata)
@@ -422,6 +421,30 @@ class FilesystemArtifactStore(ArtifactStore):
             tenant_id="local",
         )
 
+    def _delete_expired_artifact(self, meta_file: Path, now: datetime) -> bool:
+        if meta_file.is_symlink():
+            return False
+
+        metadata = json.loads(meta_file.read_text())
+        ref = metadata["ref"] if metadata.get("schema_version") == 2 else metadata
+        expires_at = ref.get("expires_at")
+        if not expires_at or datetime.fromisoformat(expires_at) > now:
+            return False
+
+        artifact_id = ref["id"]
+        if self._metadata_path(artifact_id) != meta_file:
+            raise ValueError("Artifact ID does not match its metadata path.")
+
+        for blob in meta_file.parent.glob(f"{artifact_id}*"):
+            if blob == meta_file:
+                continue
+            if blob.name != artifact_id and not blob.name.startswith(f"{artifact_id}."):
+                continue
+            if blob.is_file() or blob.is_symlink():
+                blob.unlink(missing_ok=True)
+        meta_file.unlink()
+        return True
+
     async def delete_expired(self, now: datetime | None = None) -> int:
         """Delete expired artifacts. Returns the number deleted."""
         if now is None:
@@ -430,17 +453,8 @@ class FilesystemArtifactStore(ArtifactStore):
 
         for meta_file in self._base_dir.rglob("*.meta.json"):
             try:
-                metadata = self._load_metadata(meta_file)
-                expires_str = metadata.ref.expires_at
-                if expires_str:
-                    expires_dt = datetime.fromisoformat(expires_str)
-                    if expires_dt <= now:
-                        artifact_id = metadata.ref.id
-                        artifact_path = self._find_artifact(artifact_id)
-                        if artifact_path.exists():
-                            artifact_path.unlink()
-                        meta_file.unlink()
-                        deleted += 1
+                if self._delete_expired_artifact(meta_file, now):
+                    deleted += 1
             except Exception as exc:
                 log_warning(
                     "artifact_cleanup_error",

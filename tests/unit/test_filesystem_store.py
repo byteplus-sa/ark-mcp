@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import uuid
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
@@ -186,6 +187,53 @@ class TestFilesystemArtifactStore:
         # Verify it's gone.
         with pytest.raises(FileNotFoundError):
             await store.get(ref.id)
+
+    @pytest.mark.parametrize("schema_version", [1, 2])
+    async def test_delete_expired_removes_storage_for_retired_media(
+        self, store: FilesystemArtifactStore, schema_version: int
+    ) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        expired = await store.put_base64("eA==", media_type="image", mime_type="image/png")
+        available = await store.put_base64("eQ==", media_type="image", mime_type="image/png")
+        location = await store.locate(expired.id)
+        assert location.path is not None
+        retired_path = location.path.rename(location.path.with_suffix(".obsolete"))
+        unrelated = retired_path.with_name(f"{expired.id}-unrelated.txt")
+        unrelated.write_text("keep")
+        meta_path = location.path.with_suffix(".meta.json")
+        payload = json.loads(meta_path.read_text())
+        payload["ref"].update(
+            media_type="retired", expires_at=(now - timedelta(seconds=1)).isoformat()
+        )
+        meta_path.write_text(json.dumps(payload if schema_version == 2 else payload["ref"]))
+
+        assert await store.delete_expired(now=now) == 1
+        assert not retired_path.exists()
+        assert not meta_path.exists()
+        assert unrelated.read_text() == "keep"
+        assert (await store.get(available.id)).data == b"y"
+
+    async def test_delete_expired_skips_sidecar_that_names_a_different_artifact(
+        self, store: FilesystemArtifactStore
+    ) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        mismatched = await store.put_base64("eA==", media_type="image", mime_type="image/png")
+        available = await store.put_base64("eQ==", media_type="image", mime_type="image/png")
+        location = await store.locate(mismatched.id)
+        assert location.path is not None
+        meta_path = location.path.with_suffix(".meta.json")
+        payload = json.loads(meta_path.read_text())
+        now = datetime.now(UTC)
+        payload["ref"].update(id=available.id, expires_at=(now - timedelta(seconds=1)).isoformat())
+        meta_path.write_text(json.dumps(payload))
+
+        assert await store.delete_expired(now=now) == 0
+        assert location.path.is_file()
+        assert meta_path.is_file()
+        assert (await store.get(available.id)).data == b"y"
 
 
 @pytest.mark.parametrize(
