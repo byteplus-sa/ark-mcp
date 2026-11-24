@@ -21,6 +21,8 @@ from ark_mcp.artifacts.store import (
     ArtifactPersistenceErrorCode,
     ArtifactStore,
     StoredArtifact,
+    artifact_base64_limit_bytes,
+    artifact_limit_bytes,
 )
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
@@ -30,7 +32,6 @@ from ark_mcp.observability.metrics import ARTIFACT_OPERATIONS
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import (
     decode_base64_safely,
-    get_media_limits,
     validate_3d_mime,
     validate_audio_mime,
     validate_image_mime,
@@ -208,14 +209,7 @@ class FilesystemArtifactStore(ArtifactStore):
         auth: AuthContext | None = None,
     ) -> ArtifactRef:
         """Store Base64-encoded media and return a durable artifact reference."""
-        limits = get_media_limits()
-        max_bytes = {
-            "image": limits.image_max_bytes,
-            "audio": limits.audio_max_bytes,
-            "video": limits.video_max_bytes,
-            "three_d": limits.three_d_max_bytes,
-        }[media_type]
-        raw = decode_base64_safely(data, max_bytes, label=media_type)
+        raw = decode_base64_safely(data, artifact_base64_limit_bytes(media_type), label=media_type)
         return await self._store_bytes(raw, media_type, mime_type, source_expires_at, auth)
 
     async def copy_from_trusted_url(
@@ -234,13 +228,7 @@ class FilesystemArtifactStore(ArtifactStore):
         Validates URL, MIME, and size before storage.
         """
         trusted_hosts = trusted_host_policy(extra_trusted_host_suffixes)
-        limits = get_media_limits()
-        max_bytes = {
-            "image": limits.image_max_bytes,
-            "audio": limits.audio_max_bytes,
-            "video": limits.video_max_bytes,
-            "three_d": limits.three_d_max_bytes,
-        }[media_type]
+        max_bytes = artifact_limit_bytes(media_type)
         try:
             downloaded = await self._downloader.download(
                 url,
@@ -296,17 +284,6 @@ class FilesystemArtifactStore(ArtifactStore):
         auth: AuthContext | None,
     ) -> ArtifactRef:
         """Store raw bytes atomically and return an ``ArtifactRef``."""
-        limits = get_media_limits()
-        max_bytes = {
-            "image": limits.image_max_bytes,
-            "audio": limits.audio_max_bytes,
-            "video": limits.video_max_bytes,
-            "three_d": limits.three_d_max_bytes,
-        }[media_type]
-        if len(raw) > max_bytes:
-            raise ValueError(
-                f"{media_type} size ({len(raw)} bytes) exceeds limit ({max_bytes} bytes)."
-            )
         {
             "image": validate_image_mime,
             "audio": validate_audio_mime,

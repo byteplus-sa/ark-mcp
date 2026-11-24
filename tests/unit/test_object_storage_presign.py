@@ -54,7 +54,12 @@ class FakeDownloader:
         key = url.split("store.example.com/", 1)[1].split("?", 1)[0]
         if key not in self._gateway.objects:
             raise SafeDownloadError("download_failed", "missing", retryable=False)
-        return _Downloaded(self._gateway.objects[key])
+        body = self._gateway.objects[key]
+        max_bytes = kwargs["max_bytes"]
+        assert isinstance(max_bytes, int)
+        if len(body) > max_bytes:
+            raise SafeDownloadError("too_large", "oversized", retryable=False)
+        return _Downloaded(body)
 
     async def close(self) -> None: ...
 
@@ -84,6 +89,18 @@ OTHER = AuthContext(principal_id="mallory", tenant_id="t1")
 class TestPresign:
     def test_object_store_is_presignable(self, store: ObjectStorageArtifactStore) -> None:
         assert isinstance(store, PresignableArtifactStore)
+
+    async def test_large_inline_audio_round_trips(self, store: ObjectStorageArtifactStore) -> None:
+        raw = b"\x00" * (10 * 1024 * 1024 + 1)
+        data = base64.b64encode(raw).decode("ascii")
+        ref = await store.put_base64(data, MediaType.AUDIO, "audio/pcm", auth=OWNER)
+
+        assert ref.bytes == len(raw)
+        with pytest.raises(PermissionError):
+            await store.get(ref.id, auth=OTHER)
+        stored = await store.get(ref.id, auth=OWNER)
+        assert stored.data == raw
+        assert stored.mime_type == "audio/pcm"
 
     async def test_returns_presigned_url_for_data_object_and_ref(
         self, store: ObjectStorageArtifactStore, gateway: FakeGateway

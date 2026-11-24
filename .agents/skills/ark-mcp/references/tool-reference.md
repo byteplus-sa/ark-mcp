@@ -189,6 +189,7 @@ Needs `BYTEPLUS_SEED_SPEECH_API_KEY`. `seed_audio_generate` produces a full-scen
 
 - **References: one kind only.** `audio_references` (up to 3: `speaker` ID, `url`, or `base64`) steer voice or scene; `image_reference` gives visual context. **Passing both is rejected.**
 - **Base64 reference audio** is checked against the media limit (30 s by default for WAV) and the audio size cap before submission; prefer a URL for longer material.
+- **Generated audio returned as Base64** has no file-size cap in the artifact store. In stdio mode, use `seed_media_export_artifact` to get the saved file path for large outputs.
 - **`asset://` references** are rejected by default and follow `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE` like Seedream (see above); only Seedance uses them natively.
 - **`text_prompt` is 1-3000 characters**; a line such as `Max duration: 20 seconds` in the prompt is only used for the cost estimate, not enforced.
 - **Subtitles** (`output.subtitle`, `subtitle_type` `utterance` or `word`) are returned on the single-call result only.

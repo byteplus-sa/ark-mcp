@@ -427,6 +427,7 @@ async def test_base64_store_failure_returns_inline_fallback() -> None:
     assert ref.id == INLINE_FALLBACK_ARTIFACT_ID
     assert ref.fallback_data == data
     assert ref.persistence_error is not None
+    assert ref.persistence_error.artifact_limit_bytes is None
 
 
 async def test_base64_store_failure_above_cap_raises(monkeypatch: pytest.MonkeyPatch) -> None:
