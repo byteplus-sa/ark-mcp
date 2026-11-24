@@ -269,7 +269,7 @@ A durable reference to persisted media.
 | `code` | string | `untrusted_output_host`, `output_too_large`, `invalid_output_mime`, `source_expired`, `download_failed`, or `storage_failed` |
 | `message` | string | Credential- and URL-safe failure message |
 | `retryable` | boolean | Whether persistence may succeed if attempted again |
-| `artifact_limit_bytes` | integer | Maximum size accepted by the durable artifact policy |
+| `artifact_limit_bytes` | integer \| null | Byte cap for this source, or `null` for uncapped inline audio |
 | `source_url_expires_at` | string \| null | When the unpersisted provider URL (the artifact's `uri`) expires |
 
 Recover a `provider-url` artifact with `seed_media_persist_url` before
