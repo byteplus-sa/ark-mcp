@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import io
+import wave
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -799,6 +801,45 @@ class TestHealthResourceE2E:
 
 class TestSeedAudioE2E:
     """Verify Seed Audio executes through the MCP protocol surface."""
+
+    async def test_background_job_exports_large_wav_without_provider_url(
+        self, e2e_server: object
+    ) -> None:
+        mcp: FastMCP = e2e_server.mcp  # type: ignore[attr-defined]
+        wav_size = 20 * 1024 * 1024 + 768 * 1024
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as writer:
+            writer.setparams((2, 2, 48000, 0, "NONE", "not compressed"))
+            writer.writeframes(b"\x00" * (wav_size - 44))
+        wav = buffer.getvalue()
+
+        with respx.mock:
+            route = respx.post("https://voice.test.example.com/api/v3/tts/create").mock(
+                return_value=httpx.Response(
+                    200,
+                    json={"code": 0, "audio": base64.b64encode(wav).decode("ascii")},
+                )
+            )
+            async with _foreground_client(mcp) as client:
+                _, result = await _call_compatibility_tool(
+                    client,
+                    "seed_audio_generate",
+                    {"input": {"text_prompt": "Test generated speech"}},
+                )
+                assert result["is_error"] is False
+                ref = result["structured_content"]["artifact"]
+                assert ref["bytes"] == wav_size
+                exported = await client.call_tool(
+                    "seed_media_export_artifact", {"input": {"artifact_id": ref["id"]}}
+                )
+            assert route.call_count == 1
+
+        path = Path(exported.structured_content["path"])
+        assert path.suffix == ".wav"
+        assert path.read_bytes() == wav
+        with wave.open(str(path), "rb") as reader:
+            assert reader.getframerate() == 48000
+            assert reader.getnframes() == (wav_size - 44) // 4
 
     async def test_generates_and_persists_audio(
         self, e2e_server: object, monkeypatch: pytest.MonkeyPatch

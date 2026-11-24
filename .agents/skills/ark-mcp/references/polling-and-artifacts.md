@@ -121,6 +121,11 @@ When durable storage fails after the store's own download retries, the call stil
 
 Above the inline cap a Base64 output that cannot be stored becomes a tool error. Oversized or invalid Base64 is a validation error, not a storage failure. A `provider-url` artifact cannot be written locally (its `export_error` says to persist it first); an `inline-fallback` artifact can.
 
+The artifact store has no file-size cap for generated audio received as
+Base64. The `inline-fallback` size cap applies when storage fails. In that
+case `persistence_error.artifact_limit_bytes` is null for inline audio
+because the store has no size cap for that source.
+
 ### `seed_media_persist_url`
 
 Persists a temporary provider URL as a durable artifact, for `provider-url` fallbacks and for task outputs whose `persistence` is `failed`.

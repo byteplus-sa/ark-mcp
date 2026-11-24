@@ -11,7 +11,7 @@ further 2,000 output characters without expanding the tool inventory.
 Moderation adds one foreground-only tool and 1,222 model-facing characters
 (88,890 total measured), plus 1,376 output characters (136,523 total measured).
 The Seedance-only generation task surface measures 82,823 model-facing and
-133,953 output characters across 37 tools.
+134,356 output characters across 37 tools.
 """
 
 from __future__ import annotations

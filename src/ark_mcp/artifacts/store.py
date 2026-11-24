@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.security.auth_context import AuthContext
+from ark_mcp.security.media_policy import get_media_limits
 
 ArtifactPersistenceErrorCode = Literal[
     "untrusted_output_host",
@@ -28,6 +29,21 @@ ArtifactPersistenceErrorCode = Literal[
     "download_failed",
     "storage_failed",
 ]
+
+
+def artifact_limit_bytes(media_type: MediaType) -> int:
+    """Return the byte cap for downloading an artifact from a provider URL."""
+    limits = get_media_limits()
+    return {
+        MediaType.IMAGE: limits.image_max_bytes,
+        MediaType.AUDIO: limits.audio_max_bytes,
+        MediaType.VIDEO: limits.video_max_bytes,
+    }[media_type]
+
+
+def artifact_base64_limit_bytes(media_type: MediaType) -> int | None:
+    """Return the byte cap for inline provider output, if applicable."""
+    return None if media_type == MediaType.AUDIO else artifact_limit_bytes(media_type)
 
 
 class ArtifactPersistenceError(ValueError):

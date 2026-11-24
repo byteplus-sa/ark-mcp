@@ -126,12 +126,13 @@ def check_base64_size(data: str, max_bytes: int, *, label: str = "media") -> int
     return estimated
 
 
-def decode_base64_safely(data: str, max_bytes: int, *, label: str = "media") -> bytes:
-    """Decode Base64 data with size limit enforcement.
+def decode_base64_safely(data: str, max_bytes: int | None, *, label: str = "media") -> bytes:
+    """Decode strict Base64, enforcing a byte cap when provided.
 
-    Raises MediaValidationError if the decoded size exceeds max_bytes.
+    Raises MediaValidationError for invalid Base64 or when the decoded size exceeds the cap.
     """
-    check_base64_size(data, max_bytes, label=label)
+    if max_bytes is not None:
+        check_base64_size(data, max_bytes, label=label)
     try:
         return base64.b64decode(data, validate=True)
     except Exception as exc:

@@ -90,16 +90,20 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 
 ### `put_base64` / `copy_from_trusted_url` flow (`_store_bytes`)
 
-1. Enforce `get_media_limits()` per media category against `len(raw)`
-   (image/audio 10 MiB, video 200 MiB).
+1. Apply the source's size policy. Trusted URL downloads cap images and audio
+   at 10 MiB and video and 3D at 200 MiB. Inline provider output uses the same
+   limits for images, video and 3D. The store decodes inline generated audio
+   without a file-size cap, so Seed Audio can save WAVs larger than 10 MiB.
 2. Validate the MIME via `validate_image_mime` / `validate_audio_mime` /
-   `validate_video_mime`.
+   `validate_video_mime` / `validate_3d_mime`.
 3. Resolve `owner = auth or AuthContext()`.
 4. Generate `artifact_id = str(uuid.uuid4())`, compute `sha256`.
 5. `expires_at = now + ttl_seconds`; build `ArtifactRef(uri=f"seed-media://artifacts/{artifact_id}", ...)`.
 6. Atomic-write the artifact bytes, then atomic-write the
    `ArtifactMetadata` sidecar.
 7. Increment `ark_mcp_artifact_operations_total{operation="put", status="success", media_type}`.
+
+Object storage uses the recorded audio size to bound reads of stored audio.
 
 `copy_from_trusted_url` passes a host-suffix allowlist
 (`.bytepluses.com`, `.byteplus.com`, `.byteplusvod.com`, `.bytedance.com`,
@@ -135,7 +139,7 @@ fails after the retries above, the tool call still succeeds and the returned
 | `code` | `untrusted_output_host`, `output_too_large`, `invalid_output_mime`, `source_expired`, `download_failed`, or `storage_failed` |
 | `message` | credential- and URL-safe explanation |
 | `retryable` | whether persisting again may succeed |
-| `artifact_limit_bytes` | size limit of the durable artifact policy for this media type |
+| `artifact_limit_bytes` | byte cap for the artifact source, or `null` for uncapped inline audio |
 | `source_url_expires_at` | when the unpersisted provider URL expires |
 
 The reference takes one of two shapes:
