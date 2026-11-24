@@ -37,7 +37,7 @@ class ArtifactPersistenceIssue(BaseModel):
     ] = Field(description="Failure category.")
     message: str = Field(description="Safe failure message (no credentials or URLs).")
     retryable: bool = Field(description="Whether retrying persistence later may succeed.")
-    artifact_limit_bytes: int = Field(description="Maximum durable artifact size in bytes.")
+    artifact_limit_bytes: int | None = Field(description="Source byte cap. Null for inline audio.")
     source_url_expires_at: str | None = Field(
         default=None,
         description="ISO-8601 expiry of the unpersisted provider URL (the artifact uri).",

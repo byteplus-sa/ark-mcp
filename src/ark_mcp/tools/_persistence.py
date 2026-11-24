@@ -14,13 +14,17 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from ark_mcp.artifacts.store import ArtifactPersistenceError, ArtifactStore
+from ark_mcp.artifacts.store import (
+    ArtifactPersistenceError,
+    ArtifactStore,
+    artifact_base64_limit_bytes,
+    artifact_limit_bytes,
+)
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.artifacts import ArtifactPersistenceIssue, ArtifactRef, MediaType
 from ark_mcp.domain.models import VariationError
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.security.auth_context import AuthContext
-from ark_mcp.security.media_policy import get_media_limits
 
 PROVIDER_URL_ARTIFACT_ID = "provider-url"
 INLINE_FALLBACK_ARTIFACT_ID = "inline-fallback"
@@ -28,37 +32,28 @@ INLINE_FALLBACK_ARTIFACT_ID = "inline-fallback"
 _STORAGE_FAILED_MESSAGE = "Provider output could not be written to artifact storage."
 
 
-def artifact_limit_bytes(media_type: MediaType) -> int:
-    """Return the durable artifact size limit for ``media_type`` in bytes."""
-    limits = get_media_limits()
-    return {
-        MediaType.IMAGE: limits.image_max_bytes,
-        MediaType.AUDIO: limits.audio_max_bytes,
-        MediaType.VIDEO: limits.video_max_bytes,
-        MediaType.THREE_D: limits.three_d_max_bytes,
-    }[MediaType(media_type)]
-
-
 def persistence_issue(
     exc: ArtifactPersistenceError | None,
     media_type: MediaType,
     *,
     source_url_expires_at: str | None = None,
+    inline: bool = False,
 ) -> ArtifactPersistenceIssue:
     """Build a URL-safe persistence issue; ``exc=None`` means an internal storage error."""
+    limit = artifact_base64_limit_bytes(media_type) if inline else artifact_limit_bytes(media_type)
     if exc is None:
         return ArtifactPersistenceIssue(
             code="storage_failed",
             message=_STORAGE_FAILED_MESSAGE,
             retryable=True,
-            artifact_limit_bytes=artifact_limit_bytes(media_type),
+            artifact_limit_bytes=limit,
             source_url_expires_at=source_url_expires_at,
         )
     return ArtifactPersistenceIssue(
         code=exc.code,
         message=exc.safe_message,
         retryable=exc.retryable,
-        artifact_limit_bytes=artifact_limit_bytes(media_type),
+        artifact_limit_bytes=limit,
         source_url_expires_at=source_url_expires_at,
     )
 
@@ -187,7 +182,7 @@ async def persist_base64(
         bytes=_decoded_size(data),
         created_at=datetime.now(UTC).isoformat(),
         source_expires_at=source_expires_at,
-        persistence_error=persistence_issue(last_exc, media_type),
+        persistence_error=persistence_issue(last_exc, media_type, inline=True),
         fallback_data=data,
     )
 

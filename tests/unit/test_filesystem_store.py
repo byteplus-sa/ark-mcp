@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import uuid
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -303,37 +302,22 @@ async def test_copy_translates_invalid_mime(tmp_path: Path) -> None:
     assert exc_info.value.retryable is False
 
 
-async def test_copy_preserves_artifact_size_ceiling(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_copy_rejects_audio_url_above_ten_mib(tmp_path: Path) -> None:
+    url = "https://media.bytepluses.com/output.wav"
     downloader = StubDownloader(
         result=DownloadedMedia(
-            body=b"1234567",
-            content_type="video/mp4",
-            final_url="https://media.bytepluses.com/output.mp4",
+            body=b"\x00" * (10 * 1024 * 1024 + 1),
+            content_type="audio/wav",
+            final_url=url,
         )
     )
     store = FilesystemArtifactStore(
         artifact_dir=str(tmp_path),
         downloader=downloader,  # type: ignore[arg-type]
     )
-    monkeypatch.setattr(
-        "ark_mcp.artifacts.filesystem_store.get_media_limits",
-        lambda: SimpleNamespace(
-            image_max_bytes=4,
-            audio_max_bytes=4,
-            video_max_bytes=6,
-            three_d_max_bytes=6,
-        ),
-    )
     try:
         with pytest.raises(ArtifactPersistenceError) as exc_info:
-            await store.copy_from_trusted_url(
-                "https://media.bytepluses.com/output.mp4",
-                media_type="video",
-                mime_type="video/mp4",
-            )
+            await store.copy_from_trusted_url(url, media_type="audio", mime_type="audio/wav")
     finally:
         await store.close()
 
