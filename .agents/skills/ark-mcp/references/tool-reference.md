@@ -10,7 +10,6 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 - [Seed Audio](#seed-audio)
 - [Seed TTS 3.0](#seed-tts-30)
 - [OmniHuman](#omnihuman)
-- [VOD AI MediaKit](#vod-ai-mediakit)
 
 ## Variations and dry runs
 
@@ -249,27 +248,3 @@ Needs `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` (a Vision AI k
 - **Sources:** `image` and `audio` are public HTTPS URLs or `seed-media://artifacts/<id>`. Image limits: common formats (jpeg, png, webp, bmp, tiff, gif, heic, heif), under 30 MB, aspect 0.4-2.5, each side 300-6000 px. Audio: wav or mp3, under 15 MB, 4-300 s. **The video length follows the audio.**
 - **`seed-media://` inputs need `ARTIFACT_BACKEND=object_storage`** so the server can presign them (1-hour URL). Otherwise `media_upload` the file and pass the presigned URL. The artifact's media type, MIME type and size are checked and reported as safe errors.
 - `prompt` is optional scene, motion and camera guidance (max 2000 characters; zh, en, ja, ko, es-MX, id). `watermark` defaults to `true`.
-
-## VOD AI MediaKit
-
-Needs `BYTEPLUS_VOD_MEDIAKIT_API_KEY`. Five submit tools (`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`) share one poller, **`vod_get_task`**.
-
-### Submit-then-poll contract
-
-- **Read `task_id` and `operation` from the submit result and pass both to `vod_get_task`.** The echoed `operation` is `enhance`, `transcode`, `add_subtitles`, `remove_subtitles` or `separate_audio`; a task cannot be read with a different `operation`.
-- **Every submit is a non-idempotent, open-world mutation and is never retried automatically.** A timeout or 5xx may mean the provider already started work (ambiguous completion). Do not resubmit blindly.
-- `vod_add_subtitles` and `vod_remove_subtitles` accept a **`client_token`** (1-64 printable ASCII characters): reuse the same token to reconcile an ambiguous submission instead of creating a duplicate. The other three submit tools have no token, so confirm with the user before re-submitting after an ambiguous failure.
-- `vod_get_task` defaults to `persist_output=false` (foreground poll). `persist_output=true` copies finished outputs into the artifact store once per task and requires background execution; provider URLs are preserved in the result even when persistence is skipped or fails. See [polling-and-artifacts.md](polling-and-artifacts.md).
-- Submit results are `status="accepted"` with `recommended_poll_after_ms` (a heuristic).
-
-### Source URL rules
-
-**All sources must be public HTTPS URLs; private and link-local hosts are rejected.** The provider downloads the source asynchronously after submission, so **the URL must stay fetchable until the provider has it**. A presigned URL can expire first (default TTL 1800 s, configurable 60-604800 s via `TOS_PRESIGN_TTL_SECONDS` / `S3_PRESIGN_TTL_SECONDS`) and fail the task. For local files, upload with `media_upload` and `expires_in_seconds` of about 3600, check `failed` and `items[].error`, and pass the item's `url`; or use a stable public URL.
-
-### Per-operation notes
-
-- **`vod_enhance_video`**: tiers `fast` (latency, input up to 2K, output up to 4K), `standard` (balanced; honors `scene`), `professional` (highest quality and cost, the default). `resolution` and `resolution_limit` are mutually exclusive (default `4k`). `scene` applies only to `standard`; `enhance_style` is not supported by `fast`; `fps` above the source interpolates (stay within 4x), `null` keeps the source rate. **The result may be `accepted` (poll it) or `succeeded` directly** with `source_url`; `persistence` (`not_applicable`, `not_requested`, `persisted`, `failed`) reports the best-effort durable copy, which is capped at 200 MiB, so **retain `source_url` even when the copy fails**. `estimated_cost_usd` is always null.
-- **`vod_transcode_video`**: the defaults reproduce a portrait-to-720x720 letterbox profile (h264, CRF 25, `scale_type=2`). Set `video.scale_type`/`scale_mode` explicitly for other targets; width/height apply only with `scale_type=2`, short/long side only with `scale_type=1`. `fps_mode` matters only when `fps` is set; HDR is converted to SDR unless `is_hdr_to_sdr=false`.
-- **`vod_add_subtitles`**: burns an SRT/VTT/ASS file (`subtitle_url`, wins if both are given) or inline cues into the video; at least one is required. Cues need nonblank text, a nonnegative `start_time` and a later `end_time`. Output is an MP4.
-- **`vod_remove_subtitles`**: default `subtitle` mode erases recognized dialogue subtitles; **`text` mode is broader and also erases titles, labels and watermarks**. Normalized rectangles, time segments and OCR thresholds narrow the work. `project` and `model_version` are legacy extensions, omitted by default.
-- **`vod_separate_audio`**: exactly one of `audio_url` or `video_url`. `scene` `Audio` / `Music` yields voice plus background; `Drama` / `Narrate` yields voice, music and sfx. Typically tens of seconds but can take minutes: **keep polling until a terminal state** rather than giving up on the first `processing`. A provider `failed` with `AbilityProcessingError` or `InternalError` has been transient in practice: re-submit the same source before concluding the input is bad. `output_path` for the poller must be a directory ending in `/` (several tracks).

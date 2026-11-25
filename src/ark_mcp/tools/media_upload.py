@@ -70,9 +70,7 @@ class UploadRequest(BaseModel):
         ge=60,
         le=604800,
         description=(
-            "Presigned URL validity in seconds (60-604800). Defaults to the configured presign "
-            "TTL. VOD tools fetch source URLs asynchronously, so use a long TTL (e.g. 3600) for "
-            "uploads destined for VOD enhancement, transcoding, subtitle, or audio-separation tools."
+            "Presigned URL validity in seconds (60-604800). Defaults to the configured presign TTL."
         ),
     )
 
@@ -252,8 +250,7 @@ class MediaUploadInput(BaseModel):
         ge=60,
         le=604800,
         description=(
-            "Presigned URL validity in seconds for every item; defaults to the server presign "
-            "TTL. Use >= 3600 for URLs destined for vod_* tools, which fetch asynchronously."
+            "Presigned URL validity in seconds for every item. Defaults to the server presign TTL."
         ),
     )
     max_concurrent: int = Field(4, ge=1, le=8, description="Concurrent uploads.")

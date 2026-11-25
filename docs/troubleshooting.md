@@ -168,8 +168,8 @@ If you experience timeouts:
 
 | Call | `retryable` | `ambiguous_completion` | Server retries? | What to do |
 |---|---|---|---|---|
-| Create / generate / cancel / delete / MediaKit submit | `false` | `true` | No | It may have succeeded upstream. Do not retry blindly; reconcile by task ID, request ID, or `client_token` |
-| Task polls (Seedance, ASR query, MediaKit get) | `true` | `false` | Yes | Safe to poll again |
+| Create / generate / cancel / delete | `false` | `true` | No | It may have succeeded upstream. Do not retry blindly; reconcile by task ID, request ID, or `client_token` |
+| Task polls (Seedance, OmniHuman, ASR query) | `true` | `false` | Yes | Safe to poll again |
 | `ark_moderation_get` | `true` | `false` | No | Honor retry guidance; another lookup consumes quota and its price is unspecified |
 | `seed_understand` / `seed_audio_understand` chat completion | `true` | `false` | No | Safe to retry, but a retry is a new billed completion; consider a longer `SEED_UNDERSTANDING_TIMEOUT_MS` or lower `reasoning_effort` |
 | Variation batch deadline | see `error.phase` | | No | `queued` (`QUEUE_TIMEOUT`) is safe to retry; `generating` is ambiguous |
@@ -207,11 +207,11 @@ operations rather than keeping the original foreground request open.
 - On a task-capable client, you may instead invoke those tools with MCP task
   metadata, retain the returned MCP task ID, and poll `tasks/get` at the
   advertised interval until terminal.
-- For long video and VOD work, the background result contains the provider
-  task ID. Poll `gen_task_get` (Seedance) or `vod_get_task` (VOD, with the
-  echoed `operation`) in the foreground; both default to
-  `persist_output=false`. Then run the poller once through `ark_job_submit`
-  with `persist_output=true` to keep the outputs. Never resubmit the create
+- For Seedance video and OmniHuman avatars, the background result contains
+  the provider task ID. Poll `gen_task_get` (Seedance) or `omnihuman_get_task`
+  (OmniHuman) in the foreground with `persist_output=false`. Then run the
+  poller once through `ark_job_submit` with `persist_output=true` to keep the
+  outputs. Never resubmit the create
   tool to poll.
 - If a client disconnects after task acceptance, reconcile with the returned
   MCP task ID or provider task ID rather than resubmitting (see
@@ -230,7 +230,7 @@ required-task provider tool directly and do not switch it to foreground mode.
 4. Read the original tool output from `result.structured_content`.
 
 This remains a real background task on the same worker. For a Seedance
-or VOD submission, the provider task ID appears inside the completed original
+or OmniHuman submission, the provider task ID appears inside the completed original
 result and must be retained separately. A missing target usually means its
 provider credential or feature flag is unavailable, or the target is excluded
 from the fixed shared-team scopes.

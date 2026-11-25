@@ -31,7 +31,6 @@ _REGISTRATION_GATES = {
         "with TOS_ACCESS_KEY, TOS_SECRET_KEY and TOS_BUCKET; or OBJECT_STORAGE_BACKEND=s3 "
         "with S3_ACCESS_KEY, S3_SECRET_KEY and S3_BUCKET."
     ),
-    "_vod": "Requires BYTEPLUS_VOD_MEDIAKIT_API_KEY.",
     "_omnihuman": "Requires BYTEPLUS_OMNIHUMAN_ENABLED=true and BYTEPLUS_CV_API_KEY.",
     "_assets": "Requires BYTEPLUS_MODELARK_ACCESS_KEY and BYTEPLUS_MODELARK_SECRET_KEY.",
     "_moderation": (

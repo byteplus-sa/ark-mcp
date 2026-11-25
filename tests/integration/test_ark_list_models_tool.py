@@ -132,7 +132,6 @@ async def test_disabled_services_explain_how_to_enable_them(configured: None) ->
         "seed_audio",
         "seed_tts",
         "speech_to_text",
-        "vod_mediakit",
     }
     assert services["modelark"] == {"service": "modelark", "enabled": True, "reason": None}
     assert services["omnihuman"]["enabled"] is False

@@ -51,7 +51,6 @@ _TRUSTED_EXACT_HOSTS: frozenset[str] = frozenset()
 _TRUSTED_HOST_SUFFIXES: tuple[str, ...] = (
     ".bytepluses.com",
     ".byteplus.com",
-    ".byteplusvod.com",
     ".bytedance.com",
     ".bytednsdoc.com",
     ".volces.com",

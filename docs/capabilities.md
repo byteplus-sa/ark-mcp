@@ -69,23 +69,6 @@ Understanding and transcription are provider operations, not free setup tests.
 
 OmniHuman has its own poller and cancel tool. Avatars are disabled by default.
 
-## Media Processing
-
-VOD AI MediaKit has a separate Bearer key,
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY`. Submit its operations in the background and
-poll with `vod_get_task`, preserving the returned `operation`.
-
-| Task | Tool |
-| --- | --- |
-| Enhance/upscale video | [vod_enhance_video](/ark-mcp/tool-reference/vod-enhance-video/) |
-| Change codec, container, resolution or bitrate | [vod_transcode_video](/ark-mcp/tool-reference/vod-transcode-video/) |
-| Burn subtitles | [vod_add_subtitles](/ark-mcp/tool-reference/vod-add-subtitles/) |
-| Erase subtitles/on-screen text | [vod_remove_subtitles](/ark-mcp/tool-reference/vod-remove-subtitles/) |
-| Separate voice and background audio | [vod_separate_audio](/ark-mcp/tool-reference/vod-separate-audio/) |
-| Retrieve MediaKit task status/results | [vod_get_task](/ark-mcp/tool-reference/vod-get-task/) |
-
-Do not use ModelArk `gen_task_get` to poll a VOD task.
-
 ## Uploads and Outputs
 
 | Task | Tool |

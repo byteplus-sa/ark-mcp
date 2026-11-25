@@ -83,7 +83,7 @@ def profile(frame, event, arg):
         and frame.f_globals.get("__name__") == "ark_mcp.tools._catalog"
         and frame.f_code.co_name in {
             "_always", "_modelark", "_seed_audio", "_stt",
-            "_object_storage", "_vod", "_omnihuman", "_assets",
+            "_object_storage", "_omnihuman", "_assets",
             "_asset_delete", "_moderation",
         }
     ):
@@ -362,7 +362,6 @@ def test_all_registration_gates_name_the_exact_environment_variables(
             "S3_SECRET_KEY",
             "S3_BUCKET",
         },
-        "_vod": {"BYTEPLUS_VOD_MEDIAKIT_API_KEY"},
         "_omnihuman": {"BYTEPLUS_OMNIHUMAN_ENABLED", "BYTEPLUS_CV_API_KEY"},
         "_assets": {"BYTEPLUS_MODELARK_ACCESS_KEY", "BYTEPLUS_MODELARK_SECRET_KEY"},
         "_moderation": {

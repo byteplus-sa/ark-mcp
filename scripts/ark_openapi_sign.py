@@ -2,9 +2,7 @@
 """Sign a ModelArk OpenAPI (service=ark, v2024-01-01) request and run it with curl.
 
 Phase 0 probe helper for plans/PLAN_MODELARK_ASSET_LIBRARY.md. Implements the
-BytePlus OpenAPI v4 HMAC-SHA256 signature (see
-specs/SPEC_VOD_OPENAPI_PROVIDER_CONTRACT.md) with service ``ark``. Never prints
-credentials.
+BytePlus OpenAPI v4 HMAC-SHA256 signature with service ``ark``. Never prints credentials.
 
 Env: BYTEPLUS_MODELARK_ACCESS_KEY, BYTEPLUS_MODELARK_SECRET_KEY,
      optional BYTEPLUS_MODELARK_SESSION_TOKEN (STS/TSP temporary credentials).

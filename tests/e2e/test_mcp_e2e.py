@@ -50,7 +50,6 @@ ARK_BASE = "https://ark.test.example.com/api/v3"
 def e2e_server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> object:
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test-modelark")
     monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-test-speech")
-    monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-key")
     monkeypatch.setenv("BYTEPLUS_OMNIHUMAN_ENABLED", "false")
     monkeypatch.setenv("TOS_ACCESS_KEY", "ak-test-tos")
     monkeypatch.setenv("TOS_SECRET_KEY", "sk-test-tos")
@@ -172,12 +171,6 @@ class TestToolDiscovery:
                 "speech_to_text",
                 "media_upload",
                 "media_presign",
-                "vod_enhance_video",
-                "vod_transcode_video",
-                "vod_separate_audio",
-                "vod_add_subtitles",
-                "vod_remove_subtitles",
-                "vod_get_task",
             }
 
     async def test_tool_has_input_schema(self, e2e_server: object) -> None:

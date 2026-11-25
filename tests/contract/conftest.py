@@ -14,7 +14,6 @@ def all_services_enabled(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name, value in {
         "BYTEPLUS_MODELARK_API_KEY": "sk-test",  # pragma: allowlist secret
         "BYTEPLUS_SEED_SPEECH_API_KEY": "sk-test",  # pragma: allowlist secret
-        "BYTEPLUS_VOD_MEDIAKIT_API_KEY": "test-mediakit-key",  # pragma: allowlist secret
         "BYTEPLUS_CV_API_KEY": "test-cv-key",  # pragma: allowlist secret
         "BYTEPLUS_OMNIHUMAN_ENABLED": "true",
         "BYTEPLUS_MODELARK_ACCESS_KEY": "AKLTtestopenapi",

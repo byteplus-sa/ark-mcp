@@ -60,15 +60,6 @@ class TestNormalizedProviderError:
         )
         assert error.provider == "modelark"
 
-    def test_vod_mediakit_provider(self) -> None:
-        error = NormalizedProviderError(
-            provider="byteplus-vod-mediakit",
-            operation="enhance_video",
-            message="failed",
-            retryable=False,
-        )
-        assert error.provider == "byteplus-vod-mediakit"
-
     def test_empty_message(self) -> None:
         error = NormalizedProviderError(
             provider="modelark",

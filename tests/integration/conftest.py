@@ -22,10 +22,8 @@ def test_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Set test environment variables with fake credentials."""
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test-modelark")
     monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-test-speech")
-    monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-key")
     monkeypatch.setenv("BYTEPLUS_MODELARK_BASE_URL", "https://ark.test.example.com/api/v3")
     monkeypatch.setenv("BYTEPLUS_SEED_AUDIO_BASE_URL", "https://voice.test.example.com")
-    monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_BASE_URL", "https://mediakit.test.example.com/api/v1")
     monkeypatch.setenv("SEED_SPEECH_ASR_BASE_URL", "https://voice.test.example.com")
     monkeypatch.setenv("SEEDREAM_DEFAULT_MODEL", "dola-seedream-5-0-pro-260628")
     # Pinned, not inherited: settings read the working directory's .env, so a

@@ -7,7 +7,6 @@ How to poll asynchronous provider tasks, what the persistence layer does with fi
 | Task ID comes from | Poll | Clean up |
 |---|---|---|
 | `seedance_create_task` | `gen_task_get` (1-50 IDs per call), `gen_task_list` | `gen_task_cancel_or_delete` |
-| `vod_*` submit tools | `vod_get_task` with `task_id` **and the echoed `operation`** | none |
 | `omnihuman_create_task` | `omnihuman_get_task` | `omnihuman_cancel_task` |
 
 **A provider task ID is not an Ark `job_id`.** The create tool's background result carries the provider ID; `ark_job_get` only reports on the job that submitted it.
@@ -27,11 +26,11 @@ flowchart LR
     C --> D[seed-media:// artifacts<br/>+ optional local copy]
 ```
 
-- **Foreground poll, then one persist run.** Poll with `persist_output=false` (the default for `gen_task_get` and `vod_get_task`) for quick status checks. When the task is terminal, run the same poller once through `ark_job_submit` with `persist_output=true` so downloading and storing cannot exhaust the client deadline.
+- **Foreground poll, then one persist run.** Poll with `persist_output=false` (the default for `gen_task_get`) for quick status checks. When the task is terminal, run the same poller once through `ark_job_submit` with `persist_output=true` so downloading and storing cannot exhaust the client deadline.
 - **`persist_output=true` needs background execution** (`ark_job_submit` or native task augmentation). In a foreground call it returns an error result telling you to use `persist_output=false`.
 - **`omnihuman_get_task` defaults to `persist_output=true`**, so a foreground status check must pass `false` explicitly.
 - **Never resubmit a create tool to poll.** `queued`, `running` and `processing` are not failures, and a second create call starts a second billed task. After a local timeout, disconnect or client restart, poll the same task ID again.
-- **Persistence is cached per task and output.** Concurrent and repeated polls reuse each cached durable copy. Missing or failed generation outputs can be persisted later without copying successful siblings again. VOD audio tracks are cached as each completes, so cancellation during a later track retains the completed tracks.
+- **Persistence is cached per task and output.** Concurrent and repeated polls reuse each cached durable copy. Missing or failed generation outputs can be persisted later without copying successful siblings again.
 - Local files written by a persist run (`output_dir`, `output_path`) need `OUTPUT_ROOTS` on the server; see [background-job-output.md](background-job-output.md).
 
 ```json
@@ -75,14 +74,6 @@ These tools serve configured Seedance models and require `BYTEPLUS_MODELARK_API_
 
 A mode that does not fit `expected_status` (cancel with `succeeded`, delete with `queued`) is rejected before any provider call.
 
-## VOD AI MediaKit: `vod_get_task`
-
-- **One poller for all five operations** (`enhance`, `transcode`, `separate_audio`, `add_subtitles`, `remove_subtitles`). Pass the `operation` the submit tool echoed. A wrong `operation` surfaces as a provider not-found or invalid-response error with a hint to check `operation`.
-- **Statuses:** `processing` (queued or running, poll again), `succeeded`, `failed`; the raw label is `provider_status`. Unlike `gen_task_get` there is no `all_terminal` flag and no recommended delay; poll every few seconds. Read-only provider GETs are retried on 429/5xx and timeouts.
-- **Outputs:** role `video` for enhance, transcode and both subtitle operations; `voice`, `background`, `music`, `sfx` for `separate_audio` (only the tracks the provider returned). `source_url` is always kept and expires in about 24 h; check each output's `persistence`.
-- **`output_path` (stdio only, needs `persist_output=true`):** a file path or a directory ending in `/`. **`separate_audio` requires a directory** and writes every returned track into it; a file path is rejected before any provider call.
-- Durable copies obey the media size caps (defaults 200 MB per video, 10 MB per audio track; see [environment.md](environment.md)). A persistence failure never erases the provider's success, and a cache-update failure only logs a warning.
-
 ## OmniHuman: `omnihuman_get_task`, `omnihuman_cancel_task`
 
 - **Statuses:** `queued`, `running`, `succeeded`, `failed`, `canceled` (single l), `expired` (the provider dropped the task; resubmit), `not_found` (unknown, or older than 12 h; the provider keeps tasks 12 h).
@@ -112,7 +103,7 @@ with the artifact, especially for PCM.
 - **Absolute path inside an allowed output root:** the client's MCP roots, else `OUTPUT_ROOTS`. With neither, path writing is disabled.
 - **Validated before any provider call**, so a bad path never costs a billed generation.
 - **Need persistence:** `output_path`/`output_dir` require `persist=true` / `persist_output=true`; Seed TTS always persists without a switch.
-- **`output_path` ending in `/` is a directory**, files named `<artifact_id>.<ext>`. A directory is required when a call can produce several files: `seedream_generate_image` with `variations > 1` or `max_images > 1`, `seed_audio_generate` with `variations > 1`, and `vod_get_task` for `separate_audio`.
+- **`output_path` ending in `/` is a directory**, files named `<artifact_id>.<ext>`. A directory is required when a call can produce several files: `seedream_generate_image` with `variations > 1` or `max_images > 1`, or `seed_audio_generate` with `variations > 1`.
 - **`output_dir`** is the `gen_task_get` equivalent; **`save_to`** (with `overwrite`) writes the answer of `seed_understand` and `seed_audio_understand`.
 - **A failed local write never fails the call.** The durable artifact is kept and the `ArtifactRef` reports `local_path` on success or `export_error` on failure. Always read these fields.
 - Inside `ark_job_submit` there are no MCP roots, so these options need `OUTPUT_ROOTS` on the server and are otherwise rejected before any provider call; see [background-job-output.md](background-job-output.md).

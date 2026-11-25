@@ -10,10 +10,15 @@ import httpx
 import pytest
 from fastmcp.server.auth import AccessToken, TokenVerifier
 
-from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
-from ark_mcp.providers.vod_mediakit.schemas import EnhancementSubmission
+from ark_mcp.providers.seed_speech.schemas import SeedAudioProviderResponse
+from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 from ark_mcp.server import create_server
 from tests.integration.test_http_security import _http_settings
+
+
+@pytest.fixture(autouse=True)
+def configure_seed_audio(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "test-speech-key")
 
 
 class TenantVerifier(TokenVerifier):
@@ -30,7 +35,7 @@ class TenantVerifier(TokenVerifier):
         return AccessToken(
             token=token,
             client_id="shared-client",
-            scopes=[] if token == "no-scope" else ["vod:enhance"],
+            scopes=[] if token == "no-scope" else ["seed:audio:generate"],
             claims=claims,
             subject="alice" if self.principal_source == "subject" else None,
         )
@@ -94,10 +99,8 @@ async def submit(client: httpx.AsyncClient, token: str = "tenant-a") -> dict[str
         token,
         "tools/call",
         {
-            "name": "vod_enhance_video",
-            "arguments": {
-                "input": {"video_url": "https://example.com/input.mp4", "persist": False}
-            },
+            "name": "seed_audio_generate",
+            "arguments": {"input": {"text_prompt": "Generate a short tone", "persist": False}},
         },
     )
 
@@ -149,21 +152,22 @@ async def test_task_results_enforce_owner_tenant(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, principal_source: str
 ) -> None:
     provider = AsyncMock(
-        return_value=EnhancementSubmission(
-            status="succeeded", output_url="https://output.example.com/private.mp4"
+        return_value=(
+            SeedAudioProviderResponse(url="https://output.example.com/private.wav"),
+            "audio-log-id",
         )
     )
-    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", provider)
-    monkeypatch.setattr(VodMediaKitEnhancementService, "close", AsyncMock())
+    monkeypatch.setattr(SeedAudioService, "generate", provider)
+    monkeypatch.setattr(SeedAudioService, "close", AsyncMock())
     async with task_client(tmp_path, principal_source) as client:
         task_id = (await submit(client))["result"]["taskId"]
         result = await terminal(client, task_id)
         assert "result" in result, result
         assert result["result"]["result"]["isError"] is False
-        assert result["result"]["result"]["structuredContent"]["source_url"].endswith("private.mp4")
+        assert result["result"]["result"]["structuredContent"]["source_url"].endswith("private.wav")
         other = await request_task(client, "tenant-b", "tasks/get", {"taskId": task_id})
         assert "error" in other
-        assert "private.mp4" not in str(other)
+        assert "private.wav" not in str(other)
     provider.assert_awaited_once()
 
 
@@ -173,15 +177,15 @@ async def test_other_tenant_cannot_access_running_task(
 ) -> None:
     started, release = asyncio.Event(), asyncio.Event()
 
-    async def enhance(*args: Any, **kwargs: Any) -> EnhancementSubmission:
+    async def generate(*args: Any, **kwargs: Any) -> tuple[SeedAudioProviderResponse, str]:
         started.set()
         await release.wait()
-        return EnhancementSubmission(
-            status="succeeded", output_url="https://output.example.com/private.mp4"
-        )
+        return SeedAudioProviderResponse(
+            url="https://output.example.com/private.wav"
+        ), "audio-log-id"
 
-    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", enhance)
-    monkeypatch.setattr(VodMediaKitEnhancementService, "close", AsyncMock())
+    monkeypatch.setattr(SeedAudioService, "generate", generate)
+    monkeypatch.setattr(SeedAudioService, "close", AsyncMock())
     async with task_client(tmp_path) as client:
         task_id = (await submit(client))["result"]["taskId"]
         await asyncio.wait_for(started.wait(), 5)
@@ -202,7 +206,7 @@ async def test_missing_tenant_rejected_before_submission(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     provider = AsyncMock()
-    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", provider)
+    monkeypatch.setattr(SeedAudioService, "generate", provider)
     async with task_client(tmp_path) as client:
         result = await submit(client, "missing-tenant")
         assert "error" in result or result.get("result", {}).get("isError") is True
@@ -222,7 +226,7 @@ async def test_owner_can_cancel_running_task(
 ) -> None:
     started, cancelled, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
-    async def enhance(*args: Any, **kwargs: Any) -> EnhancementSubmission:
+    async def generate(*args: Any, **kwargs: Any) -> tuple[SeedAudioProviderResponse, str]:
         started.set()
         try:
             await release.wait()
@@ -230,8 +234,8 @@ async def test_owner_can_cancel_running_task(
             cancelled.set()
         raise AssertionError("Provider wait unexpectedly completed")
 
-    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", enhance)
-    monkeypatch.setattr(VodMediaKitEnhancementService, "close", AsyncMock())
+    monkeypatch.setattr(SeedAudioService, "generate", generate)
+    monkeypatch.setattr(SeedAudioService, "close", AsyncMock())
     async with task_client(tmp_path) as client:
         task_id = (await submit(client))["result"]["taskId"]
         await asyncio.wait_for(started.wait(), 5)
@@ -251,12 +255,13 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     provider = AsyncMock(
-        return_value=EnhancementSubmission(
-            status="succeeded", output_url="https://output.example.com/private.mp4"
+        return_value=(
+            SeedAudioProviderResponse(url="https://output.example.com/private.wav"),
+            "audio-log-id",
         )
     )
-    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", provider)
-    monkeypatch.setattr(VodMediaKitEnhancementService, "close", AsyncMock())
+    monkeypatch.setattr(SeedAudioService, "generate", provider)
+    monkeypatch.setattr(SeedAudioService, "close", AsyncMock())
 
     async with task_client(tmp_path) as client:
         no_scope_capabilities = await compatibility_call(
@@ -277,8 +282,8 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
             target["tool_name"]
             for target in authorized_capabilities["result"]["structuredContent"]["targets"]
         }
-        assert "vod_enhance_video" in authorized_targets
-        assert "vod_get_task" not in authorized_targets
+        assert "seed_audio_generate" in authorized_targets
+        assert "gen_task_get" not in authorized_targets
 
         missing_tenant = await compatibility_call(
             client,
@@ -286,10 +291,10 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
             "ark_job_submit",
             {
                 "input": {
-                    "tool_name": "vod_enhance_video",
+                    "tool_name": "seed_audio_generate",
                     "arguments": {
                         "input": {
-                            "video_url": "https://example.com/input.mp4",
+                            "text_prompt": "Generate a short tone",
                             "persist": False,
                         }
                     },
@@ -304,10 +309,10 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
             "ark_job_submit",
             {
                 "input": {
-                    "tool_name": "vod_enhance_video",
+                    "tool_name": "seed_audio_generate",
                     "arguments": {
                         "input": {
-                            "video_url": "https://example.com/input.mp4",
+                            "text_prompt": "Generate a short tone",
                             "persist": False,
                         }
                     },
@@ -322,10 +327,10 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
             "ark_job_submit",
             {
                 "input": {
-                    "tool_name": "vod_enhance_video",
+                    "tool_name": "seed_audio_generate",
                     "arguments": {
                         "input": {
-                            "video_url": "https://example.com/input.mp4",
+                            "text_prompt": "Generate a short tone",
                             "persist": False,
                         }
                     },
@@ -342,12 +347,12 @@ async def test_compatibility_jobs_enforce_scope_and_tenant_ownership(
                 {"input": {"job_id": job_id}},
             )
             assert other_tenant["result"]["isError"] is True
-            assert "private.mp4" not in str(other_tenant)
+            assert "private.wav" not in str(other_tenant)
 
         completed = await compatibility_terminal(client, "tenant-a", job_id)
 
     assert completed["result"]["structuredContent"]["status"] == "completed"
     tool_result = completed["result"]["structuredContent"]["result"]
     assert tool_result["is_error"] is False
-    assert tool_result["structured_content"]["source_url"].endswith("private.mp4")
+    assert tool_result["structured_content"]["source_url"].endswith("private.wav")
     provider.assert_awaited_once()

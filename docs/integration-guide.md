@@ -57,7 +57,7 @@ change; the standard `ark_job_*` protocol surface is the portable contract.
 2. Call `ark_job_submit` with `tool_name` and the exact `arguments` object the
    original tool accepts.
 3. Store the returned Ark `job_id`. The original tool can also return a
-   separate Seedance, VOD or OmniHuman provider task ID.
+   separate Seedance or OmniHuman provider task ID.
 4. Poll `ark_job_get` no faster than `poll_after_ms` until `status` is terminal.
 5. Read the original MCP tool result from `result`. For provider-submission
    tools, its `structured_content` contains the provider task ID.
@@ -319,10 +319,10 @@ If only some products' tools are registered:
 
 - No ModelArk key → no `seedream_generate_image`, `seedance_create_task`,
   `gen_task_*`, `seed_understand`, or `seed_audio_understand`
-- No Seed Speech key → no `seed_audio_generate`, `seed_tts_generate` or `speech_to_text`
-- Optional products (OmniHuman, VOD MediaKit, object storage, asset
-  library) also need their own keys or feature flags; see
-  [Configuration](configuration.md).
+- No Seed Speech key → no `seed_audio_generate`, `seed_tts_generate`, or
+  `speech_to_text`.
+- Optional capabilities (OmniHuman, object storage, asset library) also need
+  their own keys or feature flags. See [Configuration](configuration.md).
 
 `ark_list_models` reports which optional services are enabled.
 

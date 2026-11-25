@@ -126,12 +126,6 @@ tool → scope mapping is the `scope` column of the static tool catalog
 | `omnihuman:create` | `omnihuman_create_task` |
 | `omnihuman:read` | `omnihuman_get_task` |
 | `omnihuman:cancel` | `omnihuman_cancel_task` |
-| `vod:enhance` | `vod_enhance_video` |
-| `vod:transcode` | `vod_transcode_video` |
-| `vod:subtitle:add` | `vod_add_subtitles` |
-| `vod:subtitle:remove` | `vod_remove_subtitles` |
-| `vod:read` | All MediaKit task polling tools |
-| `vod:extract` | `vod_separate_audio` |
 | `media:upload` | `media_upload`, `seed_media_persist_url` |
 | `media:presign` | `media_presign` |
 | `artifacts:read` | MCP resource `seed-media://artifacts/{artifact_id}`, `seed_media_get_artifact`, `seed_media_export_artifact` |
@@ -164,10 +158,8 @@ scope: job tools enforce the target tool's scope at submit time, and
 The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
 routes are **not** scope-protected at the FastMCP layer. Seed Audio, Seed TTS and
 speech-to-text tools are registered only when `BYTEPLUS_SEED_SPEECH_API_KEY`
-is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
-`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
-`vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. The `media_upload` and
+is set. Seedream/Seedance tools are registered only when
+`BYTEPLUS_MODELARK_API_KEY` is set. The `media_upload` and
 `media_presign` tools are registered only when object storage credentials are set (TOS:
 `TOS_ACCESS_KEY` / `TOS_SECRET_KEY` / `TOS_BUCKET`, or S3:
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` with
@@ -345,7 +337,7 @@ downloader accepts.
 
 `FilesystemArtifactStore` restricts `copy_from_trusted_url` to provider hosts
 via suffix allowlist: `.bytepluses.com`, `.byteplus.com`, `.bytedance.com`,
-`.bytednsdoc.com`, `.volces.com`, `.byteplusvod.com`,
+`.bytednsdoc.com`, `.volces.com`,
 `.tos-ap-southeast.bytepluses.com`. A caller may extend the list for one download
 only: `omnihuman_get_task` additionally trusts `.tiktokcdn.com`, where OmniHuman
 output videos are served, so `seed_media_persist_url` and `speech_to_text` still
@@ -357,14 +349,6 @@ allowlist, full SSRF validation and IP pinning, per-hop redirect
 re-validation, and the per-media-type size limits. Any host outside the
 allowlist is rejected; the tool cannot be used to fetch arbitrary URLs. It
 requires the fixed team's `media:upload` scope in `api_key` mode.
-
-For VOD AI MediaKit, video processing and artifact persistence are separate
-outcomes. The tool always preserves a successful provider output URL for the
-authorized caller, then best-effort downloads it through this SSRF-safe path.
-Outputs above the 200 MiB video limit or failing host/MIME/download/storage
-checks return `persistence="failed"` without changing provider success into a
-provider failure. Full source URLs and credentials are excluded from logs and
-safe error messages.
 
 ## Local output paths
 
@@ -463,15 +447,10 @@ with an under-reported size could bypass it. The provider enforces the
 - `truststore.inject_into_ssl()` runs at module import in `server.py` and
   `__main__.py`, so Python uses the macOS Keychain for TLS verification.
 - Provider base URLs (`BYTEPLUS_MODELARK_BASE_URL`,
-  `BYTEPLUS_SEED_AUDIO_BASE_URL`, `BYTEPLUS_VOD_MEDIAKIT_BASE_URL`) are
+  `BYTEPLUS_SEED_AUDIO_BASE_URL`, `BYTEPLUS_CV_BASE_URL`) are
   validated at settings load: must be
   `https://` with a hostname and no embedded credentials; trailing slash
   stripped.
-- VOD AI MediaKit requests are authenticated with
-  `Authorization: Bearer ${BYTEPLUS_VOD_MEDIAKIT_API_KEY}`; the key is never
-  logged, returned, or accepted as a tool argument.
-- Inline `subtitle_text` is treated as sensitive content and is redacted from
-  structured logs together with prompt, subtitle, media URL, and credential fields.
 
 ## Settings caching
 

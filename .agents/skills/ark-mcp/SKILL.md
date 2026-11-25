@@ -1,6 +1,6 @@
 ---
 name: ark-mcp
-description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), full-scene audio (Seed Audio), text-to-speech (Seed TTS 3.0), video (Seedance 2.0, regular 2.5 with 4K, and 2.5 Flash at 480p/720p) and OmniHuman avatar video; run VOD MediaKit enhance, transcode, subtitle and audio separation; understand images, video and audio; transcribe speech; manage the asset library; look up existing moderation block reasons through trusted local foreground calls. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (supported variations, dry_run), then gen_task_get, vod_get_task or omnihuman_get_task to poll provider tasks, then seed_media_* for artifacts.
+description: Use the BytePlus Ark Seed multimodal MCP server to generate images (Seedream), full-scene audio (Seed Audio), text-to-speech (Seed TTS 3.0), video (Seedance 2.0, regular 2.5 with 4K, and 2.5 Flash at 480p/720p) and OmniHuman avatar video; understand images, video and audio; transcribe speech; manage the asset library; look up existing moderation block reasons through trusted local foreground calls. Flow - ark_list_models for exact model IDs and limits, then one create tool per product through ark_job_submit (supported variations, dry_run), then gen_task_get or omnihuman_get_task to poll provider tasks, then seed_media_* for artifacts.
 ---
 
 # Ark Seed Multimodal MCP Server
@@ -24,7 +24,6 @@ stdio for administration. Provider keys stay on the server. Setup and rotation:
 | **Seed Audio** | `seed_audio_generate` | artifact in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
 | **Seed TTS 3.0** text-to-speech | `seed_tts_generate` | complete persisted audio in the result | Same Seed Speech key and `BYTEPLUS_SEED_AUDIO_BASE_URL` |
 | **OmniHuman 2.0** avatar video | `omnihuman_create_task` | `omnihuman_get_task`, `omnihuman_cancel_task` | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` |
-| **VOD MediaKit** | `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio` | `vod_get_task` | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` |
 | **Understanding** | `seed_understand`, `seed_audio_understand` | answer in the result | `BYTEPLUS_MODELARK_API_KEY` |
 | **Speech-to-text** | `speech_to_text` | transcript in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
 | **Object storage** | `media_upload`, `media_presign` | URLs in the result | TOS or S3 credentials |
@@ -35,7 +34,7 @@ stdio for administration. Provider keys stay on the server. Setup and rotation:
 **Do not assume a tool exists.** A tool registers only when its gate passes;
 `ark_list_models.services` and the `seed-health://status` resource show what is
 on and which setting enables the rest.
-The catalog contains 38 tools, not a fixed visible count. The `moderation`
+The catalog contains 32 tools, not a fixed visible count. The `moderation`
 service reports configuration only, not whitelist activation, coverage or
 shared-key permission.
 
@@ -45,7 +44,7 @@ shared-key permission.
 flowchart LR
     discover["1 Discover<br/>ark_list_models"] --> create["2 Create<br/>one tool per product<br/>via ark_job_submit"]
     create --> job["ark_job_get<br/>background result"]
-    job -->|"task_id: Seedance, VOD, OmniHuman"| poll["3 Poll<br/>gen_task_get, vod_get_task,<br/>omnihuman_get_task"]
+    job -->|"task_id: Seedance, OmniHuman"| poll["3 Poll<br/>gen_task_get,<br/>omnihuman_get_task"]
     job -->|"Seedream, Seed Audio, Seed TTS"| artifacts["4 Artifacts<br/>seed_media_*"]
     job -->|"understanding, STT"| text["answer in result"]
     poll -->|"persist_output=true"| artifacts
@@ -60,10 +59,8 @@ flowchart LR
    [Background jobs](#background-jobs)). Use `variations` instead of looking
    for variation tools, and `dry_run` (Seedance, Seedream) to check a request
    and its cost without billing.
-3. **Poll.** Seedance with `gen_task_get`; VOD with `vod_get_task`
-   **and the `operation` the create tool echoed**; OmniHuman with
-   `omnihuman_get_task`. **Never resubmit a create tool to poll**; that bills
-   a second task.
+3. **Poll.** Use `gen_task_get` for Seedance and `omnihuman_get_task` for
+   OmniHuman. Resubmitting a create tool starts a second billed task.
 4. **Keep artifacts.** `seed_media_get_artifact`, `seed_media_export_artifact`,
    `seed_media_persist_url`, and `seed-media://` resources.
 
@@ -75,7 +72,7 @@ flowchart LR
   call): every create tool above, `seed_understand`, `seed_audio_understand`,
   `speech_to_text`, and `media_upload`.
 - **Optional** (foreground works; background only to persist output or wait
-  long): `gen_task_get`, `vod_get_task`, `omnihuman_get_task`,
+  long): `gen_task_get`, `omnihuman_get_task`,
   `seed_media_persist_url`, `ark_asset_create`, `ark_asset_verification_result`.
   Everything else is foreground.
 - **Moderation is foreground-only:** `ark_moderation_get` is excluded from
@@ -189,23 +186,22 @@ flowchart LR
 
 ### Polling and persistence
 
-- **Two phases.** Poll `gen_task_get` / `vod_get_task` in the foreground
-  (`persist_output` defaults to `false`; pass every task ID in one
-  `gen_task_get` call). When `all_terminal` is true (VOD: `status` is
-  `succeeded`), run the poller **once** through `ark_job_submit` with
-  `persist_output=true` to keep the outputs. `omnihuman_get_task` defaults to
-  `true`; pass `false` for a foreground poll.
+- **Two phases.** Poll `gen_task_get` with every Seedance task ID in one
+  foreground call. It defaults to `persist_output=false`. Poll OmniHuman
+  tasks with `omnihuman_get_task` and pass `persist_output=false` explicitly.
+  When `all_terminal` is true for Seedance or the OmniHuman task succeeds, run
+  the poller once through `ark_job_submit` with `persist_output=true` to keep
+  completed outputs.
 - `queued` / `running` / `processing` is not a failure. Wait
   `recommended_poll_after_ms` (default 5000).
-- Provider URLs expire: **2 hours for Seed Audio, 24 hours for image, video and
-  MediaKit output, 1 hour for OmniHuman**. An artifact with id `provider-url`
+- Provider URLs expire: **2 hours for Seed Audio, 24 hours for ModelArk image and
+  video, and 1 hour for OmniHuman**. An artifact with id `provider-url`
   and a `persistence_error` is still usable until then; recover it with
   `seed_media_persist_url`.
 - `output_path`, `output_dir`, `save_to` write to local disk on **stdio only**,
   inside the client's MCP roots (or `OUTPUT_ROOTS`), and need persistence
   (`persist` / `persist_output`). A directory ending in `/` is required when
-  several files are written (variations, `max_images > 1`, VOD
-  `separate_audio`).
+  several files are written (variations or `max_images > 1`).
   Seed TTS always persists and has no provider URL or `persist` switch.
 
 ### Media upload and assets
@@ -218,8 +214,7 @@ flowchart LR
 - **`media_upload` and `media_presign` items fail independently.** Always check
   `failed` and `items[].error` (`media_presign` codes: `INVALID_KEY`,
   `NOT_OWNED`, `INTERNAL`, or a provider code). Only an over-size request
-  (`MEDIA_UPLOAD_BATCH_MAX_BYTES`) fails the whole call. Use a long
-  `expires_in_seconds` (e.g. 3600) for URLs that `vod_*` tools fetch later.
+  (`MEDIA_UPLOAD_BATCH_MAX_BYTES`) fails the whole call.
 - An uploaded `object_key` also works as an `ark_asset_create` source.
 - **Asset library management is unavailable over shared-key HTTP.** Use a
   trusted local setup with AK/SK for the management workflow below. Existing
@@ -293,7 +288,7 @@ each returned `asset_uri` as `images: ["asset://asset-..."]` to
 
 Read these only when you need the detail:
 
-- [tool-reference.md](references/tool-reference.md): per-product notes for Seedance, Seedream, Seed Audio, Seed TTS, OmniHuman and VOD.
+- [tool-reference.md](references/tool-reference.md): per-product notes for Seedance, Seedream, Seed Audio, Seed TTS and OmniHuman.
 - [polling-and-artifacts.md](references/polling-and-artifacts.md): pollers, cancel/delete, artifact tools, local paths, persistence fallbacks.
 - [understanding-media-assets.md](references/understanding-media-assets.md): understanding, speech-to-text, object storage, asset library and local moderation lookup.
 - [models-and-limits.md](references/models-and-limits.md): per-family limits and model selection.

@@ -48,9 +48,6 @@
       "audios": [{ "kind": "url", "url": "https://example.com/recording.wav" }]
     }
   },
-  "vod_enhance_video": {
-    "input": { "video_url": "https://example.com/video.mp4" }
-  },
   "gen_task_get": {
     "input": { "task_ids": ["cgt-example-replace-me"], "persist_output": false }
   }

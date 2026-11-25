@@ -14,7 +14,6 @@ source:
   - https://bytedance.sg.larkoffice.com/docx/TvIbdjCuHoHpytxDIH3l4TLJgdc   # TSP bytedcli guide (internal, accessed 2026-09-24)
 related:
   - "[[PLAN_MODELARK_ASSET_LIBRARY]]"
-  - "[[SPEC_VOD_OPENAPI_PROVIDER_CONTRACT]]"
 ---
 <!-- markdownlint-disable MD013 MD025 -->
 

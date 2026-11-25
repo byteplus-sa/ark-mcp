@@ -28,7 +28,6 @@ def configured_server(
     """Set test env vars and re-register tools with fake credentials."""
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test")
     monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-test")
-    monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-key")
     if hasattr(request, "param"):
         monkeypatch.setenv("BYTEPLUS_MODELARK_3D_ENABLED", request.param)
     monkeypatch.setenv("TOS_ACCESS_KEY", "ak-test-tos")
@@ -65,7 +64,6 @@ def no_creds_server(
                 _env_file=None,
                 BYTEPLUS_MODELARK_API_KEY="",
                 BYTEPLUS_SEED_SPEECH_API_KEY="",
-                BYTEPLUS_VOD_MEDIAKIT_API_KEY="",
             )
         )
     )
@@ -120,12 +118,6 @@ class TestToolDiscovery:
             "speech_to_text",
             "media_upload",
             "media_presign",
-            "vod_enhance_video",
-            "vod_transcode_video",
-            "vod_separate_audio",
-            "vod_add_subtitles",
-            "vod_remove_subtitles",
-            "vod_get_task",
             "ark_asset_group_ensure",
             "ark_asset_group_list",
             "ark_asset_create",
@@ -218,11 +210,6 @@ class TestToolDiscovery:
             "seed_audio_understand",
             "seedream_generate_image",
             "seedance_create_task",
-            "vod_enhance_video",
-            "vod_transcode_video",
-            "vod_separate_audio",
-            "vod_add_subtitles",
-            "vod_remove_subtitles",
         }
         assert required_task_names <= tools_by_name.keys()
 
@@ -240,7 +227,7 @@ class TestToolDiscovery:
         server = configured_server
         tools = await server.mcp.list_tools()
         tools_by_name = {tool.name: tool for tool in tools}
-        optional_task_names = {"gen_task_get", "vod_get_task"}
+        optional_task_names = {"gen_task_get", "seed_media_persist_url"}
         assert optional_task_names <= tools_by_name.keys()
 
         for name in optional_task_names:
@@ -333,13 +320,6 @@ class TestToolDiscovery:
                 for property_schema in model_schema["properties"].values()
             )
 
-    async def test_vod_mediakit_tool_not_registered_without_its_key(
-        self, no_creds_server: None
-    ) -> None:
-        tools = await no_creds_server.mcp.list_tools()
-        names = {tool.name for tool in tools}
-        assert not {name for name in names if name.startswith("vod_")}
-
     async def test_media_upload_registered_with_s3_only(self, s3_only_server: None) -> None:
         server = s3_only_server
         tools = await server.mcp.list_tools()
@@ -398,42 +378,6 @@ class TestToolAnnotations:
         assert tool.annotations is not None
         assert tool.annotations.destructive_hint is True
         assert tool.annotations.read_only_hint is False
-
-    async def test_vod_enhance_annotations(self, configured_server: None) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_enhance_video")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False
-        assert tool.annotations.destructive_hint is False
-        assert tool.annotations.idempotent_hint is False
-        assert tool.annotations.open_world_hint is True
-
-    async def test_vod_transcode_submit_annotations(self, configured_server: None) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_transcode_video")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False
-        assert tool.annotations.destructive_hint is False
-        assert tool.annotations.idempotent_hint is False
-        assert tool.annotations.open_world_hint is True
-
-    async def test_vod_get_task_annotations(self, configured_server: None) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_get_task")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False  # output_path can write local files
-        assert tool.annotations.destructive_hint is False
-        assert tool.annotations.idempotent_hint is True
-        assert tool.annotations.open_world_hint is False
-
-    async def test_vod_separate_audio_annotations(self, configured_server: None) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_separate_audio")
-        assert tool.annotations is not None
-        assert tool.annotations.read_only_hint is False
-        assert tool.annotations.destructive_hint is False
-        assert tool.annotations.idempotent_hint is False
-        assert tool.annotations.open_world_hint is True
 
 
 class TestInputSchemas:
@@ -545,77 +489,6 @@ class TestInputSchemas:
         assert schema is not None
         input_props = schema["properties"]["input"]["properties"]
         assert {"task_id", "mode", "expected_status", "confirm"} <= input_props.keys()
-
-    async def test_vod_enhance_schema_is_self_describing(self, configured_server: None) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_enhance_video")
-        assert tool.description is not None
-        assert "accepted result carries a task_id" in tool.description
-        assert "vod_get_task" in tool.description
-        assert "always returned" not in tool.description
-        input_schema = tool.parameters["properties"]["input"]
-        assert input_schema["required"] == ["video_url"]
-        assert all("description" in field for field in input_schema["properties"].values())
-        assert tool.output_schema is not None
-        task_description = tool.output_schema["properties"]["task_id"]["description"]
-        assert "vod_get_task" in task_description
-        assert "synchronous result" not in task_description
-        assert all(
-            "description" in field or "$ref" in field
-            for field in tool.output_schema["properties"].values()
-        )
-
-    async def test_vod_get_task_schema_is_self_describing(self, configured_server: None) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_get_task")
-        assert tool.description is not None
-        input_schema = tool.parameters["properties"]["input"]
-        assert set(input_schema["required"]) == {"task_id", "operation"}
-        assert all("description" in field for field in input_schema["properties"].values())
-        assert tool.output_schema is not None
-        assert tool.output_schema["properties"]["status"]["description"]
-        assert all(
-            "description" in field or "$ref" in field
-            for field in tool.output_schema["properties"].values()
-        )
-
-    async def test_vod_transcode_submit_schema_is_self_describing(
-        self, configured_server: None
-    ) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_transcode_video")
-        assert tool.description is not None
-        assert "vod_get_task" in tool.description
-        input_schema = tool.parameters["properties"]["input"]
-        assert input_schema["required"] == ["video_url"]
-        assert all("description" in field for field in input_schema["properties"].values())
-        assert tool.output_schema is not None
-        assert tool.output_schema["properties"]["task_id"]["description"]
-        assert all(
-            "description" in field or "$ref" in field
-            for field in tool.output_schema["properties"].values()
-        )
-
-    async def test_vod_separate_audio_schema_is_self_describing(
-        self, configured_server: None
-    ) -> None:
-        tools = await configured_server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "vod_separate_audio")
-        assert tool.description is not None
-        assert "vod_get_task" in tool.description
-        input_schema = tool.parameters["properties"]["input"]
-        assert "audio_url" in input_schema["properties"]
-        assert "video_url" in input_schema["properties"]
-        assert "scene" in input_schema["properties"]
-        assert "output_format" in input_schema["properties"]
-        assert "required" not in input_schema
-        assert all("description" in field for field in input_schema["properties"].values())
-        assert tool.output_schema is not None
-        assert tool.output_schema["properties"]["task_id"]["description"]
-        assert all(
-            "description" in field or "$ref" in field
-            for field in tool.output_schema["properties"].values()
-        )
 
 
 class TestOutputSchemas:

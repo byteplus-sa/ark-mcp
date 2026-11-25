@@ -24,11 +24,9 @@ client is missing tools and that warning is absent, look at
 |---|---|---|
 | `BYTEPLUS_MODELARK_API_KEY` | empty | Enables Seedream, Seedance, and Seed 2.1 understanding; sent as Bearer auth |
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | empty | Enables Seed Audio, Seed TTS 3.0 and speech-to-text; sent as `X-Api-Key` |
-| `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | empty | Enables MediaKit enhancement, transcode, subtitle burn-in/removal, audio-separation, and poll tools; sent as Bearer auth |
 | `BYTEPLUS_CV_API_KEY` | empty | BytePlus Vision AI Bearer key for OmniHuman; tools also need `BYTEPLUS_OMNIHUMAN_ENABLED=true` |
 | `BYTEPLUS_MODELARK_BASE_URL` | AP Southeast ModelArk URL | HTTPS data-plane base URL |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL` | AP Southeast Seed Speech URL | Shared HTTPS service base URL for Seed Audio and Seed TTS 3.0 |
-| `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | HTTPS VOD AI MediaKit convenience-endpoint base URL |
 | `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-5-261028` | Default image model/endpoint ID (Seedream 5.5; account authorization required) |
 | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | `standard` | Mode 5.0 Pro sends when a caller omits `prompt_optimization`: `standard` (prompt-following quality) or `fast` (lower latency). Both are provider-accepted; an explicit per-call value wins |
 | `SEEDANCE_DEFAULT_MODEL` | `dreamina-seedance-2-5-260628` | Default video model/endpoint ID used by `seedance_create_task` when `model` is omitted (Seedance 2.5; was 2.0 before the tool consolidation, see the [upgrade note](#seedance-default-model-upgrade-note)) |
@@ -157,9 +155,7 @@ feature flag is required. Flash cost previews currently reuse the static
 2.5 per-task fallback, not its token-based provider price.
 
 Credentials are startup-only. If a provider key is absent, its tools are not
-registered. Specifically, `vod_enhance_video` is registered independently
-when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is non-empty; it does not require the
-ModelArk key. Provider base URLs must use HTTPS, include a hostname, and must
+registered. Provider base URLs must use HTTPS, include a hostname, and must
 not contain embedded credentials.
 
 ## Transport and authentication
@@ -198,12 +194,6 @@ FastMCP enforces the fixed ordinary scope allowlist:
 - `seed:asr:transcribe`
 - `understanding:read`
 - `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`
-- `vod:enhance`
-- `vod:transcode`
-- `vod:subtitle:add`
-- `vod:subtitle:remove`
-- `vod:read`
-- `vod:extract`
 - `media:upload`
 - `media:presign`
 - `artifacts:read`
@@ -253,54 +243,6 @@ URL, Base64, or a local file path (stdio only).
 Fixed team scope for speech-to-text:
 
 - `seed:asr:transcribe`
-
-## VOD AI MediaKit
-
-`vod_enhance_video` is registered when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is
-set. The tool supports the `fast`, `standard`, and `professional` enhancement
-tiers with target resolutions from 240p to 8K (4K for `fast`) and defaults to
-`professional`/`4k`/`high`/24 fps. It serializes the project label upstream as
-case-sensitive `Project` for `standard`/`professional`. Submission returns an asynchronous
-task ID and `operation="enhance"` for `vod_get_task`, the single MediaKit
-poller, which returns and best-effort persists completed outputs. The submit POST is not retried automatically.
-Convenience-endpoint pricing is not yet confirmed, so the tool does not emit a
-cost estimate.
-
-`vod_transcode_video` and `vod_get_task` are also registered when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `vod_transcode_video` submits an async
-transcoding task (codec, container format, scaling, bitrate, frame rate, HDR);
-`vod_get_task` with `operation="transcode"` polls it and best-effort persists
-the completed output.
-The transcode request/status contract is verified from the official AI MediaKit
-API reference; the output URL hostname (`*.byteplusvod.com`) is confirmed and
-trusted for durable persistence. `queue_id`/`Project` request params remain
-unverified and are not exposed.
-
-`vod_add_subtitles` and `vod_remove_subtitles` (polled with `vod_get_task`,
-`operation="add_subtitles"` or `"remove_subtitles"`) use the same API key.
-Addition accepts a public HTTPS SRT, VTT, or ASS file or inline timed cues and
-burns them into the output video. Removal defaults to dialogue-subtitle mode;
-the broader `text` mode may also erase titles, labels, or watermarks. Both
-submit asynchronously, use `client_token` to reconcile ambiguous submissions,
-and preserve the provider URL when optional durable persistence is skipped or
-fails. The optional `project` and removal `model_version` fields are legacy
-convenience-endpoint extensions and are omitted unless explicitly supplied.
-
-## VOD AI MediaKit audio separation
-
-`vod_separate_audio` and `vod_get_task` are registered when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set, sharing the same Bearer-authenticated
-convenience surface as enhancement and transcoding.
-
-`vod_separate_audio` submits a `POST /api/v1/tools/separate-voice` task from a
-public HTTPS `audio_url` or `video_url` (exactly one) plus an optional `scene`
-(`Audio` default, `Music`, `Drama`, `Narrate`) and `output_format` (`aac`
-default, `mp3`, `wav`, `m4a`, `flac`). `vod_get_task` with
-`operation="separate_audio"` polls `GET /api/v1/tasks/{task_id}` and returns
-each separated track (`voice`, `background`, `music`, `sfx`) as an output with
-its expiring `source_url` (valid 24 hours) plus a durable `artifact` reference
-when best-effort persistence succeeds. An `output_path` directory receives
-every track.
 
 ## Private asset library (AK/SK)
 

@@ -81,10 +81,6 @@ def normalize_timeout(cls, operation: str, *, side_effect: bool = True) -> Provi
 Pass `side_effect=False` for:
 - `SeedUnderstandingService.generate` (`chat_completion`)
 - Seedance `get_task` / `list_tasks` and ASR result queries
-- VOD get-task queries. These do **not** go through `normalize_timeout`: they
-  use `normalize_ambiguous_transport_error` (`vod_mediakit/enhancement.py:146`,
-  plus `transcode.py`, `subtitles.py`, `separate_voice.py`). Give that helper
-  the same `side_effect` keyword and pass `False` from the GET/query paths.
 
 Keep `side_effect=True` (the default) for all create, generate, cancel, and
 delete calls.
@@ -180,7 +176,7 @@ and Seedance 2.5 variation tools.
    `ArtifactPersistenceError`. If item 2 fails, item 1's already stored
    artifact disappears from the output too. Change this so each item is
    handled separately:
-   - **URL outputs** (Seedream `url`, Seedance video, VOD): on final
+   - **URL outputs** (Seedream images and Seedance video): on final
      failure, return an unpersisted `ArtifactRef` (`id="provider-url"`,
      `uri=<provider URL>`, `source_expires_at`) with a `persistence_error` on
      that item. Stored items are always kept.
@@ -191,15 +187,11 @@ and Seedance 2.5 variation tools.
      store once. If it still fails, return the base64 inline in a
      `fallback_data` field, capped at `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`
      (default 8 MB). Above the cap, return the error. Never drop it silently.
-5. **Shared persistence-issue model.** Promote `VodArtifactPersistenceIssue`
-   (`_vod_shared.py:10-25`) to `domain/artifacts.py` as
-   `ArtifactPersistenceIssue`. It must be a **strict superset** of the VOD
-   model: keep `code`, `message`, `retryable`, and `artifact_limit_bytes`, with
-   the same names and descriptions. Add only an optional
-   `source_url_expires_at`. The provider URL goes on the fallback
-   `ArtifactRef.uri`, **never** in the issue's `message`, which stays safe to
-   log and free of URLs as documented. Keep `VodArtifactPersistenceIssue` as a
-   type alias so the VOD output schemas don't change.
+5. **Shared persistence-issue model.** Define `ArtifactPersistenceIssue` in
+   `domain/artifacts.py` with `code`, `message`, `retryable`,
+   `artifact_limit_bytes`, and optional `source_url_expires_at`. Keep the
+   provider URL on the fallback `ArtifactRef.uri` and keep the issue message
+   safe to log.
 6. **Fix the variation fallthrough.** In every variation tool, catch
    `ArtifactPersistenceError` explicitly instead of letting it reach
    `except Exception` and be reported as `UNEXPECTED_ERROR`.
@@ -253,7 +245,6 @@ finishes, so a long reasoning run can hit the httpx read timeout
   `persistence_error`. The budget is committed.
 - Seed Audio: a store failure returns `fallback_data` below the cap and the
   error above it.
-- VOD output schema snapshot unchanged (the alias works).
 
 ## Phase 2 — `seed_understand` output control and strict JSON
 
@@ -473,7 +464,7 @@ Rules:
 
 Add optional `output_path: str | None` to `seedream_generate_image`,
 `seedream_edit_image`, `seed_audio_generate`, `seedance_get_task` (when
-`persist_output`), and the VOD get-task tools. Add `output_dir` to the `*_variations` tools.
+`persist_output`). Add `output_dir` to the `*_variations` tools.
 
 - `output_path` is a file path, or a directory when it ends in `/`. A directory
   gets `<artifact_id>.<ext>`. For a result with more than one artifact
@@ -552,12 +543,9 @@ class SeedanceGetTasksOutput(BaseModel):
   for each ID only if a live check (open question 2) shows the list payload
   leaves `content` out.
 - **Dedupe** `task_ids` before fetching (keep the first occurrence's order).
-- **Serialize persistence per task.** `seedance_get_task` has no single-flight
-  lock around persistence today, while the VOD tools use
-  `task_artifact_locks.acquire` (`vod_get_enhancement_task.py:154`). Add the
-  same lock around the check-cache → download → store → cache sequence in the
-  shared Seedance persistence helper, so overlapping polls or batches never
-  download the same video twice. `seedance_get_task` benefits too.
+- **Serialize persistence per task.** Use `task_artifact_locks.acquire`
+  around the check-cache → download → store → cache sequence in the shared
+  Seedance persistence helper so overlapping polls or batches reuse one copy.
 - Keep the existing `persistence_requires_task` gate that `seedance_get_task`
   applies to persistence.
 - Ownership checks match `seedance_get_task` for each ID. An unowned ID goes to

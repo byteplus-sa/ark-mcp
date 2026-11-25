@@ -13,7 +13,7 @@ server-side and are separate from the MCP key.
 
 ## Tool Inventory
 
-The catalog contains 38 tools; configuration gates and caller permissions
+The catalog contains 32 tools; configuration gates and caller permissions
 determine the visible inventory.
 
 | # | Tool | Product | Type | Auth |
@@ -28,34 +28,28 @@ determine the visible inventory.
 | 8 | `gen_task_get` | Seedance video tasks | Optional background retrieval | ModelArk |
 | 9 | `gen_task_list` | Seedance video tasks | Read-only | ModelArk |
 | 10 | `gen_task_cancel_or_delete` | Seedance video tasks | Destructive | ModelArk |
-| 11 | `vod_enhance_video` | VOD AI MediaKit (optional) | Required background submission | MediaKit Bearer |
-| 12 | `vod_transcode_video` | VOD AI MediaKit (optional) | Required background submission | MediaKit Bearer |
-| 13 | `vod_separate_audio` | VOD AI MediaKit (optional) | Required background submission | MediaKit Bearer |
-| 14 | `vod_add_subtitles` | VOD AI MediaKit (optional) | Required background submission | MediaKit Bearer |
-| 15 | `vod_remove_subtitles` | VOD AI MediaKit (optional) | Required background submission | MediaKit Bearer |
-| 16 | `vod_get_task` | VOD AI MediaKit (optional) | Optional background retrieval | MediaKit Bearer |
-| 17 | `omnihuman_create_task` | OmniHuman 2.0 (flag-gated) | Required background submission | Vision AI Bearer |
-| 18 | `omnihuman_get_task` | OmniHuman 2.0 (flag-gated) | Optional background retrieval | Vision AI Bearer |
-| 19 | `omnihuman_cancel_task` | OmniHuman 2.0 (flag-gated) | Destructive | Vision AI Bearer |
-| 20 | `seed_media_get_artifact` | Artifacts | Read-only | Local / shared key |
-| 21 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local stdio |
-| 22 | `seed_media_persist_url` | Artifacts | Optional background task | Local / shared key |
-| 23 | `media_upload` | Object storage (optional) | Required background task (1-50 files) | TOS / S3 |
-| 24 | `media_presign` | Object storage (optional) | Read-only (1-100 keys) | TOS / S3 |
-| 25 | `ark_asset_group_ensure` | Asset library (optional) | Write | BytePlus AK/SK |
-| 26 | `ark_asset_group_list` | Asset library (optional) | Read-only | BytePlus AK/SK |
-| 27 | `ark_asset_create` | Asset library (optional) | Optional background task | BytePlus AK/SK |
-| 28 | `ark_asset_list` | Asset library (optional) | Read-only | BytePlus AK/SK |
-| 29 | `ark_asset_update` | Asset library (optional) | Write | BytePlus AK/SK |
-| 30 | `ark_asset_verification_start` | Asset library (optional) | Write | BytePlus AK/SK |
-| 31 | `ark_asset_verification_result` | Asset library (optional) | Optional background retrieval | BytePlus AK/SK |
-| 32 | `ark_asset_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
-| 33 | `ark_job_capabilities` | Background jobs | Read-only ordinary tool | Local / shared key |
-| 34 | `ark_job_submit` | Background jobs | Default background submission path | Dynamic target scope |
-| 35 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
-| 36 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
-| 37 | `ark_moderation_get` | Moderation (opt-in) | Foreground-only read | Flag + BytePlus AK/SK; trusted local only |
-| 38 | `seed_tts_generate` | Seed TTS 3.0 | Required background task | Seed Speech |
+| 11 | `omnihuman_create_task` | OmniHuman 2.0 (flag-gated) | Required background submission | Vision AI Bearer |
+| 12 | `omnihuman_get_task` | OmniHuman 2.0 (flag-gated) | Optional background retrieval | Vision AI Bearer |
+| 13 | `omnihuman_cancel_task` | OmniHuman 2.0 (flag-gated) | Destructive | Vision AI Bearer |
+| 14 | `seed_media_get_artifact` | Artifacts | Read-only | Local / shared key |
+| 15 | `seed_media_export_artifact` | Artifacts | Locate (read-only) or copy (stdio only) | Local stdio |
+| 16 | `seed_media_persist_url` | Artifacts | Optional background task | Local / shared key |
+| 17 | `media_upload` | Object storage (optional) | Required background task (1-50 files) | TOS / S3 |
+| 18 | `media_presign` | Object storage (optional) | Read-only (1-100 keys) | TOS / S3 |
+| 19 | `ark_asset_group_ensure` | Asset library (optional) | Write | BytePlus AK/SK |
+| 20 | `ark_asset_group_list` | Asset library (optional) | Read-only | BytePlus AK/SK |
+| 21 | `ark_asset_create` | Asset library (optional) | Optional background task | BytePlus AK/SK |
+| 22 | `ark_asset_list` | Asset library (optional) | Read-only | BytePlus AK/SK |
+| 23 | `ark_asset_update` | Asset library (optional) | Write | BytePlus AK/SK |
+| 24 | `ark_asset_verification_start` | Asset library (optional) | Write | BytePlus AK/SK |
+| 25 | `ark_asset_verification_result` | Asset library (optional) | Optional background retrieval | BytePlus AK/SK |
+| 26 | `ark_asset_delete` | Asset library (optional) | Destructive (opt-in) | BytePlus AK/SK |
+| 27 | `ark_job_capabilities` | Background jobs | Read-only ordinary tool | Local / shared key |
+| 28 | `ark_job_submit` | Background jobs | Default background submission path | Dynamic target scope |
+| 29 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
+| 30 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
+| 31 | `ark_moderation_get` | Moderation (opt-in) | Foreground-only read | Flag + BytePlus AK/SK; trusted local only |
+| 32 | `seed_tts_generate` | Seed TTS 3.0 | Required background task | Seed Speech |
 
 Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2.md).
 
@@ -75,9 +69,8 @@ no additional tool, model, or feature flag is needed.
 The three `gen_task_*` tools poll, list, and cancel or delete tasks for configured
 Seedance models. They are registered whenever ModelArk is configured and
 require `gen:read` (`gen_task_get`, `gen_task_list`) or `gen:delete`
-(`gen_task_cancel_or_delete`) in `api_key` mode. `vod_get_task` polls **every VOD AI
-MediaKit task**, is registered when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set, and
-requires `vod:read`. **`media_upload` takes a list of files** (`media:upload`)
+(`gen_task_cancel_or_delete`) in `api_key` mode. **`media_upload` takes a list
+of files** (`media:upload`)
 and **`media_presign` takes a list of keys** (`media:presign`); both are
 registered when object storage is configured. The **eight `ark_asset_*` tools**
 are registered only when `BYTEPLUS_MODELARK_ACCESS_KEY` and
@@ -105,12 +98,6 @@ See [security.md](security.md) for the full scope list.
 | `seed_media_get_artifact` | true | false | true | false |
 | `seed_media_export_artifact` | false | false | true | false |
 | `speech_to_text` | true | false | true | false |
-| `vod_enhance_video` | false | false | false | true |
-| `vod_transcode_video` | false | false | false | true |
-| `vod_separate_audio` | false | false | false | true |
-| `vod_add_subtitles` | false | false | false | true |
-| `vod_remove_subtitles` | false | false | false | true |
-| `vod_get_task` | false | false | true | false |
 | `omnihuman_create_task` | false | false | false | true |
 | `omnihuman_get_task` | false | false | true | true |
 | `omnihuman_cancel_task` | false | true | false | true |
@@ -130,16 +117,16 @@ See [security.md](security.md) for the full scope list.
 | `ark_moderation_get` | true | false | true | true |
 
 `seed_understand` and `seed_audio_understand` are not read-only because `save_to`
-writes local files, and the task pollers (`gen_task_get` and `vod_get_task`) are
-not read-only because `output_dir`/`output_path` write local files.
+writes local files. `gen_task_get` can also write local files through
+`output_dir`.
 
 ## Background Execution
 
 Generation tools (`seed_tts_generate`, `seed_audio_generate`,
 `seedream_generate_image`, including supported variations and dry runs),
 `speech_to_text`, `media_upload`, `seed_understand`, `seed_audio_understand`,
-and Seedance and MediaKit submissions declare `execution.taskSupport="required"`.
-By default, discover them
+and the Seedance and OmniHuman create tools declare
+`execution.taskSupport="required"`. By default, discover them
 with `ark_job_capabilities`, submit them through `ark_job_submit`, and poll
 `ark_job_get` at the advertised two-second interval until terminal. A
 task-capable client may instead invoke them with MCP task metadata and read the
@@ -150,15 +137,15 @@ In this reference, **background result** means the original tool result under
 terminal `ark_job_get.result`, or the terminal `tasks/get` response on the
 native path.
 
-The task pollers `gen_task_get` (Seedance) and `vod_get_task`
-(MediaKit), and `seed_media_persist_url`, declare
+The task pollers `gen_task_get` (Seedance) and `omnihuman_get_task`
+(OmniHuman), and `seed_media_persist_url`, declare
 `execution.taskSupport="optional"` because a processing-status check is short,
 but a successful response with `persist_output=true` may download a large
 artifact. Use foreground execution with persistence disabled for quick polling,
-then background execution to retrieve and persist completed output. **Both
-pollers default to `persist_output=false`**, so a plain foreground call is a
-status poll; pass `persist_output=true` only through `ark_job_submit` (or
-native task augmentation). `ark_asset_create` and
+then background execution to retrieve and persist completed output.
+`gen_task_get` defaults to `persist_output=false`. Pass `false` explicitly when polling
+`omnihuman_get_task` in the foreground. Pass `persist_output=true` only
+through `ark_job_submit` or native task augmentation. `ark_asset_create` and
 `ark_asset_verification_result` also declare `execution.taskSupport="optional"`
 because `wait_until_active` and `wait_seconds` can poll for minutes. List,
 presign, artifact-read, the other asset tools, and cancel/delete tools remain
@@ -185,11 +172,12 @@ provider task IDs are separate identifiers.
 ## Local Output Paths
 
 On stdio transport, these fields write output straight to a local file:
-`output_path` on `seedream_generate_image`, `seed_audio_generate`, `seed_tts_generate`, and
-`vod_get_task`; `output_dir` on `gen_task_get`; `save_to` on `seed_understand`
-and `seed_audio_understand`; and `destination_path` on
-`seed_media_export_artifact`. Each comes with an `overwrite` boolean (default
-`false`).
+`output_path` on `seedream_generate_image`, `seed_audio_generate`,
+`seed_tts_generate`, and `omnihuman_get_task`, `output_dir` on
+`gen_task_get`, `save_to` on `seed_understand` and
+`seed_audio_understand`, and `destination_path` on
+`seed_media_export_artifact`. Each comes with an `overwrite` boolean
+(default `false`).
 
 | Rule | Behavior |
 |---|---|
@@ -197,14 +185,12 @@ and `seed_audio_understand`; and `destination_path` on
 | Path form | Absolute. `output_path` names a file, or a directory when it ends with `/` (files named `<artifact_id>.<ext>`) |
 | Allowed roots | Client MCP roots (`roots/list`) first, otherwise `OUTPUT_ROOTS`; with neither, path writing is disabled. Inside `ark_job_submit` there are no MCP roots, so `OUTPUT_ROOTS` is required |
 | Timing | Validated before any provider call |
-| Preconditions | `persist=true` (generation tools) or `persist_output=true` (task pollers); Seed TTS always persists and has no `persist` switch. A directory is required for `seedream_generate_image` with `variations > 1` or `max_images > 1`, `seed_audio_generate` with `variations > 1`, and `vod_get_task` with `operation="separate_audio"` |
+| Preconditions | `persist=true` (generation tools) or `persist_output=true` (task pollers); Seed TTS always persists and has no `persist` switch. A directory is required for `seedream_generate_image` with `variations > 1` or `max_images > 1` or for `seed_audio_generate` with `variations > 1` |
 | Existing files | Replaced only with `overwrite=true`; identical content is success |
 | Failure | A failed local write never fails the call; see `ArtifactRef.local_path` / `export_error` |
 
 `gen_task_get` writes every persisted output of each succeeded task (video or
 last frame) into `output_dir` as `<artifact_id>.<ext>`.
-`vod_get_task` with `separate_audio` writes **every** separated track into the
-`output_path` directory.
 `seedream_generate_image` and `seed_audio_generate` with `variations > 1` write
 **every** succeeded variation into the `output_path` directory (see
 `summary.variations[].artifact.local_path`).
@@ -362,7 +348,7 @@ images/videos. Neither route supports mixed audio/visual requests.
 **ServiceStatus:** `service`, `enabled`, and `reason` (the env var or flag that
 enables a disabled service; never a secret value). Services: `modelark`,
 `seed_audio`, `seed_tts`, `speech_to_text`,
-`vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`,
+`omnihuman`, `object_storage`, `asset_library`, `asset_delete`,
 `moderation`. The last reports flag + AK/SK configuration, not whitelist
 activation, IAM permission, model coverage or shared-key access.
 
@@ -1346,7 +1332,7 @@ Returns `GenTaskGetOutput`:
 | `kind` | `"video"` | Seedance output kind |
 | `status` | GenTaskStatus | `queued`, `running`, `succeeded`, `failed`, `cancelled`, or `expired` |
 | `created_at` / `updated_at` | string | ISO-8601 |
-| `outputs` | list[TaskOutputFile] | `video` and optional `last_frame` once the task succeeds. Same shape as in [`vod_get_task`](#16-vod_get_task) |
+| `outputs` | list[TaskOutputFile] | `video` and optional `last_frame` once the task succeeds |
 | `error` | TaskError \| null | Provider `code` and `message` when failed |
 | `usage` | TaskUsage \| null | `prompt_tokens`, `completion_tokens`, `total_tokens` when reported |
 | `draft` | boolean \| null | `true` for a Seedance Draft task (480p preview); once it has succeeded, pass its `task_id` as `draft_task_id` within 14 days of `created_at` (7 if created before 2026-10-28 10:00 UTC+8) |
@@ -1358,6 +1344,17 @@ Without persistence, each output carries its expiring `source_url` and
 **once per task** under a single-flight lock, so overlapping polls never
 download the same file twice; a storage failure returns the provider URL with
 `persistence="failed"` and a later poll retries.
+
+**TaskOutputFile:**
+
+| Field | Type | Description |
+|---|---|---|
+| `role` | string | `video` or `last_frame` |
+| `artifact` | ArtifactRef \| null | Durable artifact when persisted; `local_path` set when also exported |
+| `source_url` | string \| null | Expiring provider URL (about 24 hours), **kept even when persistence is skipped or fails** |
+| `source_expires_at` | string \| null | ISO-8601 expected expiry of `source_url` |
+| `persistence` | `"not_requested"` \| `"persisted"` \| `"failed"` | Persistence outcome, independent of task success |
+| `persistence_issue` | ArtifactPersistenceIssue \| null | Safe explanation when persistence failed |
 
 ### SeedanceQueueInfo
 
@@ -1534,322 +1531,7 @@ outputs unavailable through `gen_task_get`.
 
 ---
 
-## 11. vod_enhance_video
-
-Enhance a public HTTPS video through the Bearer-authenticated BytePlus VOD AI
-MediaKit convenience endpoint. The tool is registered only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured and requires the `vod:enhance`
-scope in `api_key` mode.
-
-The tool selects an enhancement tier (`fast`, `standard`, or `professional`) and a
-target resolution from 240p up to 8K (`fast` tops out at 4K) or a short-side pixel
-limit. `standard` and `professional` submit to `/tools/enhance-video`; `fast` submits
-to `/tools/enhance-video-fast`. Defaults preserve the previous profile:
-`professional` / `4k` / `high` / 24 fps. Retrieve
-the provider task ID and `operation` (`"enhance"`) from the background result,
-then poll them with [`vod_get_task`](#16-vod_get_task). The POST is non-idempotent
-and is never retried automatically because a timeout may occur after the provider
-began processing.
-
-### Input
-
-| Field | Type | Required | Default | Constraints |
-|---|---|---|---|---|
-| `video_url` | URL | Yes | — | Public HTTPS source; private, loopback, and link-local targets rejected |
-| `tool_version` | `"fast"` \| `"standard"` \| `"professional"` | No | `"professional"` | Enhancement tier; `fast` uses its own endpoint |
-| `resolution` | `"240p"` … `"4k"`, `"6k"`, `"8k"` | No | `"4k"` when `resolution_limit` is unset | `fast` accepts up to `"4k"`; mutually exclusive with `resolution_limit` |
-| `resolution_limit` | integer | No | — | 128–4320 (128–2160 for `fast`); short-side pixels, aspect ratio preserved |
-| `bitrate_level` | `"low"` \| `"medium"` \| `"high"` | No | `"high"` | Ignored when `bitrate` is set |
-| `bitrate` | integer | No | — | kbps, 10–150000 |
-| `fps` | number \| null | No | `24` | 15–120; `null` keeps the source frame rate |
-| `scene` | `"common"` \| `"ugc"` \| `"short_series"` \| `"aigc"` \| `"old_film"` | No | `"common"` | Effective for `standard` only; not sent for `fast` |
-| `enhance_style` | `"hd"` \| `"natural"` | No | — | `standard`/`professional` only; rejected for `fast` |
-| `project` | string | No | `"default"` | 1–128 characters; serialized upstream as `Project` |
-| `input_duration_seconds` | number \| null | No | `null` | Positive; reserved for future pricing support |
-| `persist` | boolean | No | `true` | Best-effort durable artifact copy |
-
-### Output
-
-Returns `VodEnhanceVideoOutput` with provider `byteplus-vod-mediakit`,
-`status="accepted"`, task/request IDs, and `operation="enhance"`. If the provider directly returns a
-completed result, status is `succeeded` and `source_url` is preserved whether
-persistence succeeds, is skipped, or fails.
-
-When `persist=true`, the server attempts an SSRF-safe copy into the artifact
-store. Video persistence is capped at 200 MiB. `persistence` is one of
-`not_applicable`, `persisted`, `failed`, or `not_requested`; `persistence_issue` safely explains
-a failure without exposing the URL or credential. `video` contains the durable
-`ArtifactRef` only when persistence succeeds. `estimated_cost_usd` is always
-`null` until the convenience endpoint's pricing and billing-unit mapping are
-confirmed.
-
-The asynchronous acceptance and completed task shapes are verified by sanitized
-live probes. Unknown shapes fail closed.
-
-### Example
-
-```json
-{
-  "video_url": "https://media.example.com/source.mp4",
-  "tool_version": "fast",
-  "resolution": "1080p",
-  "bitrate_level": "medium",
-  "fps": null,
-  "persist": true
-}
-```
-
----
-
-## 12. vod_transcode_video
-
-Submit an asynchronous BytePlus VOD AI MediaKit video transcoding task through
-the Bearer-authenticated convenience endpoint. Registered only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured; requires the `vod:transcode`
-scope in `api_key` mode.
-
-The request body and `video` object field names and enums are verified from the
-official AI MediaKit API reference. The default options reproduce the verified
-portrait-to-720x720 letterbox profile. Submission returns `status="accepted"`
-with a `task_id` and `operation="transcode"` for polling via
-[`vod_get_task`](#16-vod_get_task). The non-idempotent
-POST is never retried automatically because a timeout may occur after the
-provider began processing.
-
-### Input
-
-| Field | Type | Required | Default | Constraints |
-|---|---|---|---|---|
-| `video_url` | URL | Yes | — | Public HTTPS source; private, loopback, and link-local targets rejected |
-| `container_format` | `"MP4"` \| `"FLV"` \| `"MPEGTS"` | No | `"MP4"` | Output container format |
-| `video` | VodTranscodeVideoOptions | No | default profile | See below |
-
-**VodTranscodeVideoOptions:**
-
-| Field | Type | Default | Constraints |
-|---|---|---|---|
-| `codec` | `"h264"` \| `"h265"` | `"h264"` | Output video codec |
-| `scale_type` | `0` \| `1` \| `2` | `2` | `0` follow source, `1` long/short-side limit, `2` width/height limit |
-| `scale_mode` | `0` \| `1` \| `2` | `2` | `0` no upsampling, `1` stretch, `2` letterbox with black bars |
-| `scale_width` | integer \| null | `null` | px [0,4320]; only when `scale_type=2`; defaults to 720 |
-| `scale_height` | integer \| null | `null` | px [0,4320]; only when `scale_type=2`; defaults to 720 |
-| `scale_short` | integer \| null | `null` | px [0,4320]; only when `scale_type=1` |
-| `scale_long` | integer \| null | `null` | px [0,4320]; only when `scale_type=1` |
-| `bitrate_mode` | `"crf"` \| `"abr"` \| `"cbr"` | `"crf"` | Bitrate control mode |
-| `bitrate_crf` | integer | `25` | [0,51]; only used when `bitrate_mode=crf` |
-| `bitrate_kbps` | integer | `2000` | kbps [10,50000] |
-| `fps_mode` | `"vfr"` \| `"cfr"` | `"vfr"` | Only takes effect after `fps` is set |
-| `fps` | integer \| null | `null` | [1,240]; unset keeps source rate |
-| `is_hdr_to_sdr` | boolean | `true` | Convert HDR to SDR; false keeps HDR |
-
-### Output
-
-Returns `VodTranscodeVideoOutput` with `provider` `byteplus-vod-mediakit`,
-`status="accepted"`, task/request IDs, `operation="transcode"`, and a
-server-side heuristic `recommended_poll_after_ms`.
-
-### Example
-
-```json
-{
-  "video_url": "https://media.example.com/portrait.mp4",
-  "container_format": "MP4",
-  "video": {
-    "scale_type": 2,
-    "scale_width": 720,
-    "scale_height": 720,
-    "scale_mode": 2
-  }
-}
-```
-
----
-
-## 13. vod_separate_audio
-
-Submit an asynchronous BytePlus VOD AI MediaKit voice and background audio
-separation task via `POST /api/v1/tools/separate-voice`. The tool is registered
-when `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is configured and requires the
-`vod:extract` scope in `api_key` mode.
-
-Input takes a public HTTPS source URL and separation options:
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `audio_url` | string | No | Public HTTPS audio URL (mp3, m4a, wav). Exactly one of `audio_url`/`video_url` |
-| `video_url` | string | No | Public HTTPS video URL (mp4, flv, ts, avi, mov, wmv, mkv). Exactly one of `audio_url`/`video_url` |
-| `scene` | string | No | `Audio` (default), `Music`, `Drama`, `Narrate` |
-| `output_format` | string | No | `aac` (default), `mp3`, `wav`, `m4a`, `flac` |
-
-Returns `VodSeparateAudioOutput` with `provider` `byteplus-vod-mediakit`,
-`status` `accepted`, `operation="separate_audio"`, the provider `request_id` and
-`provider_log_id`. Run it in the background, then pass the provider task ID and
-`operation` from its result to [`vod_get_task`](#16-vod_get_task). The mutation is never retried
-automatically because completion is ambiguous after a timeout.
-
-### Example
-
-```json
-// Input
-{ "video_url": "https://example.com/clip.mp4", "scene": "Drama" }
-
-// Output
-{
-  "provider": "byteplus-vod-mediakit",
-  "status": "accepted",
-  "request_id": "20260820...",
-  "provider_log_id": "20260820...",
-  "task_id": "amk-tool-separate-voice-...",
-  "operation": "separate_audio",
-  "recommended_poll_after_ms": 3000
-}
-```
-
----
-
-## 14. vod_add_subtitles
-
-Submit `POST /tools/add-subtitle-to-video` using the configured MediaKit Bearer
-key and the `vod:subtitle:add` scope in `api_key` mode. `video_url` is required and must be a
-public HTTPS URL. Provide at least one of `subtitle_url` (SRT, VTT, or ASS) or
-`subtitles`, where every inline cue has nonblank `subtitle_text` and an
-`end_time` greater than its nonnegative `start_time`. A subtitle file takes
-priority when both forms are present.
-
-Optional style fields control the position preset, positive pixel font size,
-RGBA color, and MediaKit font. `client_token` is at most 64 printable ASCII
-characters; callback payloads are capped at 512 UTF-8 bytes. `callback_url`
-must be public HTTPS. `project` is a legacy case-sensitive `Project` extension
-and is omitted by default. The accepted output includes `task_id`,
-`operation="add_subtitles"`, request IDs, and a 5-second initial polling
-heuristic. Poll with [`vod_get_task`](#16-vod_get_task).
-
----
-
-## 15. vod_remove_subtitles
-
-Submit `POST /tools/erase-video-subtitle-pro` using `vod:subtitle:remove`.
-`mode="subtitle"` removes recognized dialogue subtitles; the broader
-`mode="text"` may also remove titles, labels, or watermarks. Encoding mode is
-`quality` or `size`. Optional precision controls include one-to-twenty
-normalized erasure rectangles, selected/skipped time segments, and subtitle
-OCR size/centering thresholds. Callback, queue, and `client_token` fields match
-subtitle addition. The legacy `model_version` (`v4`/`v5`) and `project` fields
-are omitted unless explicitly supplied. The output includes the task ID,
-`operation="remove_subtitles"`, and a 15-second initial polling heuristic. Poll
-with [`vod_get_task`](#16-vod_get_task).
-
----
-
-## 16. vod_get_task
-
-**One poller for every VOD AI MediaKit task.** Pass the `task_id` and
-`operation` that any `vod_*` create tool returned (`vod_enhance_video`,
-`vod_transcode_video`, `vod_separate_audio`, `vod_add_subtitles`, or
-`vod_remove_subtitles`). Registered only when `BYTEPLUS_VOD_MEDIAKIT_API_KEY`
-is configured; requires the `vod:read` scope in `api_key` mode. Only the principal
-that created the task can poll it.
-
-**`processing` is not a failure: poll again later and never resubmit the create
-tool**, because each submission starts a new billed task.
-
-### Input
-
-| Field | Type | Required | Default | Constraints |
-|---|---|---|---|---|
-| `task_id` | string | Yes | — | MediaKit task ID from a `vod_*` create tool; 1-256 chars of `A-Z a-z 0-9 . _ : -` |
-| `operation` | `"enhance"` \| `"transcode"` \| `"separate_audio"` \| `"add_subtitles"` \| `"remove_subtitles"` | Yes | — | Echoed as `operation` by the create tool |
-| `persist_output` | boolean | No | **`false`** | Copy finished outputs into durable artifacts once per task. `true` requires background execution (`ark_job_submit` or native task augmentation); leave `false` for a foreground status poll |
-| `output_path` | string | No | — | Local file, or directory ending `/`; **a directory is required for `separate_audio`**, which writes every track. Stdio only, requires `persist_output=true`; see [Local Output Paths](#local-output-paths) |
-| `overwrite` | boolean | No | `false` | Replace existing files at `output_path` |
-
-### Output
-
-Returns `VodTaskOutput`:
-
-| Field | Type | Description |
-|---|---|---|
-| `provider` | `"byteplus-vod-mediakit"` | Provider surface |
-| `task_id` | string | MediaKit task ID |
-| `operation` | string | Operation that created the task |
-| `status` | `"processing"` \| `"succeeded"` \| `"failed"` | Normalized status |
-| `provider_status` | string \| null | Raw provider status label |
-| `request_id` | string \| null | Provider diagnostic request ID |
-| `created_at` / `finished_at` | string \| null | ISO-8601 timestamps |
-| `duration_seconds` | number \| null | Output duration (input duration for `separate_audio`) |
-| `resolution` | string \| null | Output resolution (enhance, transcode, subtitles) |
-| `fps` | number \| null | Output frame rate (enhance) |
-| `video_codec` | string \| null | Output video codec (transcode) |
-| `tool_version` | string \| null | Enhancement tier (enhance) |
-| `outputs` | list[TaskOutputFile] | Finished outputs; empty unless `succeeded` |
-| `error` | TaskError \| null | `code` and safe `message`; set only when `failed` |
-
-**TaskOutputFile** (shared with `gen_task_get`):
-
-| Field | Type | Description |
-|---|---|---|
-| `role` | string | `video` (enhance, transcode, subtitles) or `voice` / `background` / `music` / `sfx` (`separate_audio`) |
-| `artifact` | ArtifactRef \| null | Durable artifact when persisted; `local_path` set when also exported |
-| `source_url` | string \| null | Expiring provider URL (about 24 hours), **kept even when persistence is skipped or fails** |
-| `source_expires_at` | string \| null | ISO-8601 expected expiry of `source_url` |
-| `persistence` | `"not_requested"` \| `"persisted"` \| `"failed"` | Persistence outcome, independent of task success |
-| `persistence_issue` | ArtifactPersistenceIssue \| null | Safe explanation when persistence failed |
-
-With `persist_output=true`, the first successful poll copies each output into
-the artifact store **once per task**: concurrent polls share one copy and the
-artifacts are cached by task ID for later polls. A persistence failure never
-changes provider success.
-
-### Task Statuses
-
-| Status | Meaning |
-|---|---|
-| `processing` | Queued or running; poll again |
-| `succeeded` | At least one entry in `outputs` |
-| `failed` | `error` populated; `outputs` empty |
-
-### Example
-
-```json
-// Foreground status poll (persist_output defaults to false)
-{ "task_id": "amk-tool-transcode-video-112738623234", "operation": "transcode" }
-
-// Once succeeded: run once through ark_job_submit to keep every separated track
-{
-  "task_id": "amk-tool-separate-voice-...",
-  "operation": "separate_audio",
-  "persist_output": true,
-  "output_path": "/Users/me/out/stems/"
-}
-
-// Output (succeeded, separate_audio)
-{
-  "provider": "byteplus-vod-mediakit",
-  "task_id": "amk-tool-separate-voice-...",
-  "operation": "separate_audio",
-  "status": "succeeded",
-  "provider_status": "completed",
-  "duration_seconds": 120.5,
-  "outputs": [
-    {
-      "role": "voice",
-      "artifact": { "id": "...", "uri": "seed-media://artifacts/...", "media_type": "audio", "mime_type": "audio/aac", "bytes": 1787924 },
-      "source_url": "https://vod.ap-southeast-1.byteplusvod.com/voice.aac?sign=...",
-      "persistence": "persisted"
-    },
-    {
-      "role": "background",
-      "artifact": { "id": "...", "uri": "seed-media://artifacts/...", "media_type": "audio", "mime_type": "audio/aac", "bytes": 1787924 },
-      "source_url": "https://vod.ap-southeast-1.byteplusvod.com/background.aac?sign=...",
-      "persistence": "persisted"
-    }
-  ]
-}
-```
-
----
-
-## 17–19. omnihuman_create_task / omnihuman_get_task / omnihuman_cancel_task
+## 11–13. omnihuman_create_task / omnihuman_get_task / omnihuman_cancel_task
 
 Registered when `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is
 set. Scopes: `omnihuman:create`, `omnihuman:read`, `omnihuman:cancel`.
@@ -1905,7 +1587,7 @@ These diagnostics do not check provider authorization or filesystem readiness;
 
 ---
 
-## 20. seed_media_get_artifact
+## 14. seed_media_get_artifact
 
 Retrieve persisted media by artifact ID. Returns the raw media bytes
 (Base64-encoded) with MIME type, SHA-256 hash, and byte count. Use this to
@@ -1949,7 +1631,7 @@ Always registered; requires `artifacts:read` in `api_key` mode.
 
 ---
 
-## 21. seed_media_export_artifact
+## 15. seed_media_export_artifact
 
 Locate or copy a persisted media artifact on the local filesystem. Returns the
 absolute on-disk path instead of streaming Base64 through the MCP context.
@@ -2001,7 +1683,7 @@ file is never silently overwritten (identical content is accepted).
 
 ---
 
-## 22. seed_media_persist_url
+## 16. seed_media_persist_url
 
 Persist a temporary provider output URL as a durable artifact. Use it to
 recover an `ArtifactRef` with `id="provider-url"` and a `persistence_error`
@@ -2032,7 +1714,7 @@ retryable.
 
 ---
 
-## 23. media_upload
+## 17. media_upload
 
 Upload **1-50 files** to object storage (TOS or S3) in one call and return a
 presigned HTTPS GET URL per file. Registered when the selected object-storage
@@ -2049,7 +1731,7 @@ references, which are URL-only.
 | Field | Type | Required | Default | Constraints |
 |---|---|---|---|---|
 | `items` | list[MediaUploadItem] | Yes | — | 1-50 files |
-| `expires_in_seconds` | integer | No | configured presign TTL | 60–604800, applied to every item. Use a long value (e.g. 3600) for URLs destined for `vod_*` tools, which fetch asynchronously |
+| `expires_in_seconds` | integer | No | configured presign TTL | 60–604800, applied to every item |
 | `max_concurrent` | integer | No | `4` | 1-8 uploads at once |
 
 **MediaUploadItem:**
@@ -2149,7 +1831,7 @@ same owner and can presign team uploads.
 
 ---
 
-## 24. media_presign
+## 18. media_presign
 
 Mint fresh presigned HTTPS GET URLs for **1-100 objects** already in storage
 (TOS or S3), without re-uploading. Use it when a reference URL from
@@ -2165,7 +1847,7 @@ other keys succeed, so check `failed`.
 | Field | Type | Required | Constraints |
 |---|---|---|---|
 | `object_keys` | list[string] | Yes | 1-100 keys from prior `media_upload` calls (e.g. `references/video/<uuid>`). Alphanumeric, `-`, `_`, `/`; must not start with `/` or `-` or contain empty segments |
-| `expires_in_seconds` | integer | No | 60–604800, applied to every key; defaults to the configured presign TTL. Use a long value (e.g. 3600) for `vod_*` inputs |
+| `expires_in_seconds` | integer | No | 60–604800, applied to every key; defaults to the configured presign TTL |
 
 ### Output
 
@@ -2240,14 +1922,14 @@ Pass the returned `asset_uri` (`asset://<asset_id>`) to Seedance. See
 
 | # | Tool | Scope | Execution |
 |---|---|---|---|
-| 25 | `ark_asset_group_ensure` | `assets:write` | Foreground |
-| 26 | `ark_asset_group_list` | `assets:read` | Foreground |
-| 27 | `ark_asset_create` | `assets:write` | Optional background |
-| 28 | `ark_asset_list` | `assets:read` | Foreground |
-| 29 | `ark_asset_update` | `assets:write` | Foreground |
-| 30 | `ark_asset_verification_start` | `assets:verify` | Foreground |
-| 31 | `ark_asset_verification_result` | `assets:verify` | Optional background |
-| 32 | `ark_asset_delete` | `assets:delete` | Foreground |
+| 19 | `ark_asset_group_ensure` | `assets:write` | Foreground |
+| 20 | `ark_asset_group_list` | `assets:read` | Foreground |
+| 21 | `ark_asset_create` | `assets:write` | Optional background |
+| 22 | `ark_asset_list` | `assets:read` | Foreground |
+| 23 | `ark_asset_update` | `assets:write` | Foreground |
+| 24 | `ark_asset_verification_start` | `assets:verify` | Foreground |
+| 25 | `ark_asset_verification_result` | `assets:verify` | Optional background |
+| 26 | `ark_asset_delete` | `assets:delete` | Foreground |
 
 **Replacements for the former single-purpose tools:** group creation is now
 `ark_asset_group_ensure`; reading groups or assets by ID is `group_ids` on
@@ -2286,7 +1968,7 @@ it to Seedance), `created_at`, `updated_at`, `last_inference_time`.
 
 ---
 
-## 25. ark_asset_group_ensure
+## 19. ark_asset_group_ensure
 
 Return the **single AIGC group named exactly `subject`**, creating it if absent.
 Keeps all assets of one subject (a fictional character, mascot, or product) in
@@ -2313,7 +1995,7 @@ LivenessFace group from `ark_asset_verification_result` instead.
 
 ---
 
-## 26. ark_asset_group_list
+## 20. ark_asset_group_list
 
 List groups by fuzzy name and type, **or read up to 20 groups by ID**.
 
@@ -2342,7 +2024,7 @@ and **an unreadable ID goes to `errors[]` instead of failing the call**.
 
 ---
 
-## 27. ark_asset_create
+## 21. ark_asset_create
 
 Add files of **one subject** to one group and return `asset://` references.
 Each source is registered with `CreateAsset` (rate-limited by
@@ -2379,7 +2061,7 @@ and `name` (≤64 chars, search only).
 
 ---
 
-## 28. ark_asset_list
+## 22. ark_asset_list
 
 List assets by group, type, status, or fuzzy name, **or read up to 20 assets by
 ID**.
@@ -2412,7 +2094,7 @@ still be used by ID.
 
 ---
 
-## 29. ark_asset_update
+## 23. ark_asset_update
 
 Rename an asset, **or rename and re-describe a group**, in one tool.
 
@@ -2438,7 +2120,7 @@ Pass **exactly one** of `asset_id` / `group_id`, and at least one of `name` /
 
 ---
 
-## 30. ark_asset_verification_start
+## 24. ark_asset_verification_start
 
 Start real-person (liveness) verification so a consenting person's face can be
 used in Seedance. Returns an H5 link for **the person to open themselves**.
@@ -2462,7 +2144,7 @@ used in Seedance. Returns an H5 link for **the person to open themselves**.
 
 ---
 
-## 31. ark_asset_verification_result
+## 25. ark_asset_verification_result
 
 Get the LivenessFace group created by a finished verification. **Optional
 background task** (useful when `wait_seconds` is large).
@@ -2485,7 +2167,7 @@ background task** (useful when `wait_seconds` is large).
 
 ---
 
-## 32. ark_asset_delete
+## 26. ark_asset_delete
 
 **Permanently delete one asset or one group.** Irreversible. Registered only
 when `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`. Check `last_inference_time`
@@ -2514,7 +2196,7 @@ Deleting a group deletes its assets, so **a non-empty group is refused with
 
 ---
 
-## 37. ark_moderation_get
+## 31. ark_moderation_get
 
 Look up existing provider-reported media block reasons through signed ModelArk
 OpenAPI `GetModerationResult`. Requires complete AK/SK and
@@ -2570,7 +2252,7 @@ Synthetic input:
 {"input":{"id":"synthetic-task-id","type":"task_id"}}
 ```
 
-## 38. seed_tts_generate
+## 32. seed_tts_generate
 
 Text-to-speech with `dola-seed-tts-3.0`, distinct from full-scene Seed Audio.
 Requires `seed:audio:generate` in `api_key` mode and background execution

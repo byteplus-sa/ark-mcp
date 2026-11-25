@@ -35,7 +35,6 @@ never chat, shell history, Terraform or committed files. Store a JSON object:
 |---|---|---|
 | ModelArk | `BYTEPLUS_MODELARK_API_KEY` | Image/video generation and multimodal understanding |
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | Seed Audio, Seed TTS 3.0 and speech-to-text; no new bundle field |
-| VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | Video processing and audio separation |
 | Vision AI | `BYTEPLUS_CV_API_KEY` | Enabled OmniHuman avatar generation |
 
 Obtain dedicated deployment keys from the corresponding service, following
@@ -47,7 +46,6 @@ the empty entries below are examples of deliberately disabled services.
 {
   "BYTEPLUS_MODELARK_API_KEY": "ENTER-REAL-KEY-IN-PRIVATE-CONSOLE",
   "BYTEPLUS_SEED_SPEECH_API_KEY": "",
-  "BYTEPLUS_VOD_MEDIAKIT_API_KEY": "",
   "BYTEPLUS_CV_API_KEY": ""
 }
 ```

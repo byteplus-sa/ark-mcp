@@ -171,7 +171,6 @@ test("utility and unknown tools do not inherit unrelated model tables", () => {
     "ark_list_models",
     "gen_task_get",
     "media_upload",
-    "vod_get_task",
     "unknown_tool",
     "",
   ]) {

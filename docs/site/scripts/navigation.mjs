@@ -22,7 +22,6 @@ const categories = [
     (name) => ["seed_understand", "seed_audio_understand"].includes(name),
   ],
   ["Avatars", (name) => name.startsWith("omnihuman_")],
-  ["VOD AI MediaKit", (name) => name.startsWith("vod_")],
   ["Asset library", (name) => name.startsWith("ark_asset_")],
   ["Moderation", (name) => name === "ark_moderation_get"],
   [

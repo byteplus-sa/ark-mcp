@@ -1,8 +1,7 @@
 """BytePlus OpenAPI V4 (HMAC-SHA256) request signing.
 
 Implements the signature scheme documented at
-https://docs.byteplus.com/en/docs/byteplus-platform/reference-how-to-calculate-a-signature
-and specified in ``specs/SPEC_VOD_OPENAPI_PROVIDER_CONTRACT.md``:
+https://docs.byteplus.com/en/docs/byteplus-platform/reference-how-to-calculate-a-signature:
 
 - Canonical request: ``METHOD\\n/\\nCanonicalQueryString\\nCanonicalHeaders\\n``
   ``SignedHeaders\\nHexEncode(Hash(Payload))``

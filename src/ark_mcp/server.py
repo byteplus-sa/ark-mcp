@@ -77,14 +77,12 @@ from ark_mcp.tools._moderation_validation import ModerationInputPrivacyMiddlewar
 
 SERVER_INSTRUCTIONS = (
     "BytePlus multimodal generation server: Seedance video, Seedream images, Seed Audio, "
-    "OmniHuman avatar video, Seed multimodal and audio "
-    "understanding, Speech-to-Text, and (when configured) VOD AI MediaKit processing and a "
-    "private asset library. Call ark_list_models first: `model` accepts only the exact "
+    "OmniHuman avatar video, Seed multimodal and audio understanding, Speech-to-Text, "
+    "and a private asset library. Call ark_list_models first: `model` accepts only the exact "
     "configured IDs it returns, and it lists per-model limits and which optional services "
     "are enabled. Run long-running tools through ark_job_submit and ark_job_get; this is the "
     "default path because most clients do not support MCP tasks, and native task "
-    "augmentation also works. Poll Seedance tasks with gen_task_get, VOD tasks with "
-    "vod_get_task (pass the operation the create tool returned), and OmniHuman tasks with "
+    "augmentation also works. Poll Seedance tasks with gen_task_get and OmniHuman tasks with "
     "omnihuman_get_task; never resubmit a create tool to poll. "
     "Generated media is persisted as seed-media:// resources; reference private assets as "
     "asset://<asset_id> in Seedance."
@@ -281,7 +279,6 @@ def create_server(
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Moderation lookup configured: {resolved_settings.has_modelark_moderation}\n"
             f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
-            f"VOD AI MediaKit configured: {resolved_settings.has_vod_mediakit}\n"
             f"OmniHuman configured: {resolved_settings.has_omnihuman}\n"
             f"TOS configured: {resolved_settings.has_tos}\n"
             f"S3 configured: {resolved_settings.has_s3}\n"
@@ -369,24 +366,6 @@ def create_server(
             finally:
                 await stt_gw.close()
 
-        if resolved_settings.has_vod_mediakit:
-            from ark_mcp.providers.vod_mediakit.client import VodMediaKitGateway
-
-            vod_gw = VodMediaKitGateway(
-                api_key=resolved_settings.vod_mediakit_api_key,
-                base_url=resolved_settings.vod_mediakit_base_url,
-                timeout=resolved_settings.request_timeout_ms / 1000,
-                connect_timeout=resolved_settings.connect_timeout_ms / 1000,
-            )
-            try:
-                providers["vod_mediakit"] = (
-                    "reachable"
-                    if await vod_gw.health_check(timeout_seconds=timeout)
-                    else "unreachable"
-                )
-            finally:
-                await vod_gw.close()
-
         if resolved_settings.has_omnihuman:
             from ark_mcp.providers.vision_cv.client import VisionCvGateway
 
@@ -424,7 +403,6 @@ def create_server(
             resolved_settings.has_modelark_openapi,
             resolved_settings.has_seed_audio,
             resolved_settings.has_stt,
-            resolved_settings.has_vod_mediakit,
             resolved_settings.has_omnihuman,
         )
     ):
@@ -454,7 +432,6 @@ def create_server(
         modelark_configured=resolved_settings.has_modelark,
         seed_audio_configured=resolved_settings.has_seed_audio,
         stt_configured=resolved_settings.has_stt,
-        vod_mediakit_configured=resolved_settings.has_vod_mediakit,
         omnihuman_configured=resolved_settings.has_omnihuman,
         object_storage_backend=resolved_settings.object_storage_backend,
         artifact_backend=resolved_settings.artifact_backend,

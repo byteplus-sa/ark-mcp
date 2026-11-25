@@ -64,13 +64,6 @@ Policy (per the module docstring): never log prompt text, full media URLs,
 Base64, subtitles, or credentials. Redaction is a safety net; call sites
 avoid passing these fields in the first place.
 
-`vod_enhance_video` and `vod_get_task` log lifecycle and safe
-persistence messages only. Their
-source and output URLs and Bearer credential are not logged. A successful
-enhancement whose best-effort artifact copy fails remains a successful tool
-result with `persistence="failed"`; operators should therefore monitor the
-returned persistence field in addition to MCP/provider success metrics.
-
 ## Prometheus metrics (`observability/metrics.py`)
 
 Nine metrics total — 6 Counters + 3 Histograms. **There are no Gauges.**
@@ -103,12 +96,6 @@ labels). All Histograms use the `prometheus_client` default buckets
 > use the `model` field in the structured logs: `seedance_task_created` (and
 > `seedance_create_task_complete`) for a single task, and
 > `seedance_variations_complete` for a variations call.
-
-VOD AI MediaKit mutation POSTs are intentionally not passed through the automatic
-retry helper because they are non-idempotent and a timeout may be ambiguous.
-Consequently, `ark_mcp_retry_attempts_total` should not increase for the
-submission. Read-only task polling may retry provider-marked
-retryable failures such as HTTP 429.
 
 ### `MetricsMiddleware`
 

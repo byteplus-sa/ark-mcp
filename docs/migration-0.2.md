@@ -15,8 +15,8 @@ removed tool must switch to its replacement.
 
 ```mermaid
 flowchart LR
-  D["ark_list_models<br/>what can I use?"] --> C["create<br/>seedance_create_task<br/>seedream_generate_image<br/>seed_audio_generate<br/>vod_*"]
-  C --> P["poll<br/>gen_task_get / gen_task_list<br/>vod_get_task"]
+  D["ark_list_models<br/>what can I use?"] --> C["create<br/>seedance_create_task<br/>seedream_generate_image<br/>seed_audio_generate"]
+  C --> P["poll<br/>gen_task_get / gen_task_list"]
   P --> A["artifacts<br/>seed_media_*"]
 ```
 
@@ -82,18 +82,6 @@ flowchart LR
 With `variations > 1`, `artifact`, `duration_seconds` and
 `billing_duration_seconds` are null and `summary` carries the per-variation
 results.
-
-### VOD AI MediaKit
-
-| 0.1.x tool | 0.2.0 replacement |
-|---|---|
-| `vod_get_enhancement_task` | `vod_get_task` with `operation="enhance"` |
-| `vod_get_transcode_task` | `vod_get_task` with `operation="transcode"` |
-| `vod_get_audio_separation` | `vod_get_task` with `operation="separate_audio"` |
-| `vod_get_subtitle_addition_task` | `vod_get_task` with `operation="add_subtitles"` |
-| `vod_get_subtitle_removal_task` | `vod_get_task` with `operation="remove_subtitles"` |
-
-Every `vod_*` create tool echoes the `operation` value to pass back.
 
 ### Object storage
 
