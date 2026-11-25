@@ -23,11 +23,11 @@ client is missing tools and that warning is absent, look at
 | Variable | Default | Purpose |
 |---|---|---|
 | `BYTEPLUS_MODELARK_API_KEY` | empty | Enables Seedream, Seedance, and Seed 2.1 understanding; sent as Bearer auth |
-| `BYTEPLUS_SEED_SPEECH_API_KEY` | empty | Enables Seed Audio and speech-to-text; sent as `X-Api-Key` |
+| `BYTEPLUS_SEED_SPEECH_API_KEY` | empty | Enables Seed Audio, Seed TTS 3.0 and speech-to-text; sent as `X-Api-Key` |
 | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | empty | Enables MediaKit enhancement, transcode, subtitle burn-in/removal, audio-separation, and poll tools; sent as Bearer auth |
 | `BYTEPLUS_CV_API_KEY` | empty | BytePlus Vision AI Bearer key for OmniHuman; tools also need `BYTEPLUS_OMNIHUMAN_ENABLED=true` |
 | `BYTEPLUS_MODELARK_BASE_URL` | AP Southeast ModelArk URL | HTTPS data-plane base URL |
-| `BYTEPLUS_SEED_AUDIO_BASE_URL` | AP Southeast Seed Speech URL | HTTPS service base URL |
+| `BYTEPLUS_SEED_AUDIO_BASE_URL` | AP Southeast Seed Speech URL | Shared HTTPS service base URL for Seed Audio and Seed TTS 3.0 |
 | `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | HTTPS VOD AI MediaKit convenience-endpoint base URL |
 | `SEEDREAM_DEFAULT_MODEL` | `dola-seedream-5-5-261028` | Default image model/endpoint ID (Seedream 5.5; account authorization required) |
 | `SEEDREAM_PROMPT_OPTIMIZATION_MODE` | `standard` | Mode 5.0 Pro sends when a caller omits `prompt_optimization`: `standard` (prompt-following quality) or `fast` (lower latency). Both are provider-accepted; an explicit per-call value wins |
@@ -191,7 +191,7 @@ account-wide admin scopes. See [shared-key setup and rotation](self-hosting.md#s
 The internal tenant claim key is fixed to `tenant_id`, not an operator setting.
 FastMCP enforces the fixed ordinary scope allowlist:
 
-- `seed:audio:generate`
+- `seed:audio:generate` (`seed_audio_generate` and `seed_tts_generate`)
 - `seedream:generate`
 - `seedance:create`
 - `gen:read`, `gen:delete` (`gen_task_*` tools for Seedance tasks)
@@ -214,10 +214,29 @@ There is no automatic ownership transfer. Preserve SQLite, Redis, artifacts
 and the snapshot encryption key; follow
 [the migration procedure](self-hosting.md#breaking-change-migration).
 
+## Seed TTS 3.0
+
+`seed_tts_generate` reuses `BYTEPLUS_SEED_SPEECH_API_KEY` and
+`BYTEPLUS_SEED_AUDIO_BASE_URL` (default
+`https://voice.ap-southeast-1.bytepluses.com`); there is no new key, host,
+model-binding variable or feature flag. The model is literal
+`dola-seed-tts-3.0`. Discovery reports service `seed_tts` and a `kind="audio"`
+entry with `tts` limits. Configuration does not establish provider entitlement.
+
+The tool shares `seed:audio:generate` with full-scene Seed Audio but requires
+`voice_id` and exactly one `text` or `ssml`. Run through `ark_job_submit` or
+native tasks. Provider HTTP JSONL is aggregated into a complete persisted
+artifact, not streamed live over MCP; there is no `persist=false`.
+The existing bounded storage fallback still applies. `BYTEPLUS_REQUEST_TIMEOUT_MS`
+bounds total stream wall-clock time as well as the per-read timeout.
+Optional stdio `output_path`/`overwrite` uses the existing output-root policy,
+including `OUTPUT_ROOTS` for ordinary background jobs.
+See [Seed TTS 3.0](seed-tts.md) for formats, billing and live-unverified status.
+
 ## Seed Speech ASR (STT)
 
 The `speech_to_text` tool is registered when `BYTEPLUS_SEED_SPEECH_API_KEY` is
-set — the same key that enables Seed Audio (TTS). It submits audio via HTTP,
+set — the same key that enables Seed Audio and Seed TTS. It submits audio via HTTP,
 polls until transcription is complete, and returns the complete
 `TranscriptionResult` through a required background job, submitted through the
 ordinary `ark_job_*` tools or native MCP task augmentation on a task-capable
@@ -226,7 +245,7 @@ URL, Base64, or a local file path (stdio only).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `BYTEPLUS_SEED_SPEECH_API_KEY` | empty | Enables Seed Audio + speech-to-text; sent as `X-Api-Key` header |
+| `BYTEPLUS_SEED_SPEECH_API_KEY` | empty | Enables Seed Audio, Seed TTS and speech-to-text; sent as `X-Api-Key` header |
 | `SEED_SPEECH_ASR_BASE_URL` | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech ASR HTTP host |
 | `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` | `3.0` | Seconds between ASR query polls |
 | `SEED_SPEECH_ASR_POLL_MAX_SECONDS` | `600.0` | Maximum total seconds to wait for ASR result |
@@ -384,7 +403,7 @@ S3-compatible storage.
 | `MCP_INLINE_MEDIA_MAX_BYTES` | `8388608` | Maximum inline MCP media size |
 | `ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` | `120` | Timeout for each attempt to download provider output into artifact storage (filesystem and object-storage backends) |
 | `ARTIFACT_DOWNLOAD_MAX_ATTEMPTS` | `3` | Attempts (1-10) for a retryable output download (timeouts, network errors, 408/429/5xx), with 1s, 2s, 4s, ... backoff. Expired, untrusted, or oversized sources are never retried |
-| `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` | `8388608` (8 MiB) | When inline Base64 output (Seed Audio, Seedream `b64_json`) cannot be stored, return it inline in `ArtifactRef.fallback_data` up to this decoded size; `0` disables |
+| `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` | `8388608` (8 MiB) | When inline output (Seed Audio, Seed TTS, Seedream `b64_json`) cannot be stored, return it as Base64 in `ArtifactRef.fallback_data` up to this decoded size; `0` disables |
 | `PROVIDER_MAX_CONCURRENCY` | `5` | Process-wide slots per provider |
 | `PRINCIPAL_MAX_CONCURRENCY` | `3` | Shared slots across the whole team on authenticated HTTP; skipped in local mode |
 | `DAILY_BUDGET_USD` | `0` | Per-principal UTC daily estimate limit, team-wide on shared-key HTTP; zero records only |

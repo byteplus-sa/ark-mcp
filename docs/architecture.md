@@ -9,14 +9,15 @@ Server as shipped today. For the original design rationale, see
 - **Small, typed tool surface** — a handful of Pydantic-validated tools rather
   than a wide REST API.
 - **Dedicated provider gateways, one domain layer** — Seedance and Seedream
-  share the ModelArk host and Bearer auth; Seed Audio uses a separate host and
-  `X-Api-Key`; VOD AI MediaKit uses its own Bearer-authenticated convenience
+  share the ModelArk host and Bearer auth; Seed Audio and Seed TTS share a
+  separate host and `X-Api-Key`; VOD AI MediaKit uses its own Bearer-authenticated convenience
   endpoint for enhancement, transcoding, and audio separation. The differences
   are hidden behind normalized adapters.
 - **Durable artifacts** — known provider media URLs expire (2h Seed Audio; 24h
   ModelArk image/video and observed MediaKit outputs), so outputs are persisted
   to a local store and re-exposed as stable `seed-media://artifacts/{id}` MCP
-  resources. MediaKit persistence is best-effort.
+  resources. MediaKit persistence is best-effort. Seed TTS instead aggregates
+  HTTP JSONL into complete audio with mandatory persistence and no provider URL.
 - **Safe by default** — local `stdio` requires no auth; remote HTTP requires
   shared-key hash verification, Host/Origin protection, and body limits.
 - **Observable and budget-aware** — structured logs, Prometheus metrics, and a
@@ -45,7 +46,7 @@ src/ark_mcp/
 │   ├── base.py            # BaseHttpGateway: spans, metrics, error normalization
 │   ├── retry.py
 │   ├── modelark.py        # Seedream + Seedance
-│   ├── seed_speech.py     # Seed Audio
+│   ├── seed_speech/       # Seed Audio + Seed TTS
 │   ├── vod_mediakit/      # VOD AI MediaKit (Bearer; enhancement, transcode, subtitles, separation)
 │   └── vision_cv/         # Vision AI (Bearer; OmniHuman 2.0 submit/query/cancel)
 ├── runtime.py             # lifespan-owned services (limiter, budget, ownership)
@@ -65,7 +66,7 @@ flowchart LR
     Server --> Domain["Domain layer\n(tools/ + domain/)"]
     Domain --> Gateway["Provider gateways\n(providers/)"]
     Gateway -->|"Bearer auth"| ModelArk["ModelArk\nSeedream + Seedance"]
-    Gateway -->|"X-Api-Key"| SeedSpeech["Seed Speech\nSeed Audio"]
+    Gateway -->|"X-Api-Key"| SeedSpeech["Seed Speech\nSeed Audio + Seed TTS"]
     Gateway -->|"Bearer auth"| MediaKit["VOD AI MediaKit\nenhancement + transcode + subtitles + separation"]
     Gateway -->|"Bearer auth"| VisionCv["Vision AI\nOmniHuman 2.0"]
     Gateway -->|"AK/SK V4 signing"| OpenApi["ModelArk OpenAPI\nassets + moderation lookup"]
@@ -76,8 +77,12 @@ flowchart LR
 - **ModelArk gateway** (`providers/modelark.py`) — serves Seedream (image)
   and Seedance (video). Uses `Authorization: Bearer` and base URL
   `https://ark.ap-southeast.bytepluses.com/api/v3`.
-- **Seed Speech gateway** (`providers/seed_speech.py`) — serves Seed Audio.
+- **Seed Speech gateway** (`providers/seed_speech/`) — serves Seed Audio and Seed TTS.
   Uses `X-Api-Key` and base URL `https://voice.ap-southeast-1.bytepluses.com`.
+  `seed_tts_generate` reuses the existing key/base URL and
+  `seed:audio:generate` scope. Its required background job aggregates HTTP
+  JSONL into a full persisted artifact; it is not a live MCP audio stream or
+  a provider task polled through `gen_task_get`. See [Seed TTS 3.0](seed-tts.md).
 - **Vision AI gateway** (`providers/vision_cv/`) — serves the `omnihuman_*` tools
   through the common v3 task API (`submit_task_v2`, `get_result_v2`,
   `cancel_task`). It uses Bearer auth (`BYTEPLUS_CV_API_KEY`), defaults to

@@ -158,6 +158,7 @@ class TestToolDiscovery:
                 "ark_job_get",
                 "ark_job_submit",
                 "seed_audio_generate",
+                "seed_tts_generate",
                 "seed_media_export_artifact",
                 "seed_media_get_artifact",
                 "seed_media_persist_url",
@@ -282,8 +283,11 @@ class TestBackgroundJobCompatibility:
 
         targets = {target["tool_name"]: target for target in result.structured_content["targets"]}
         assert targets["seed_understand"]["task_mode"] == "required"
+        assert targets["seed_tts_generate"]["task_mode"] == "required"
+        assert targets["seed_tts_generate"]["required_scope"] == "seed:audio:generate"
         assert targets["gen_task_get"]["task_mode"] == "optional"
         assert "input" in targets["seed_understand"]["input_schema"]["properties"]
+        assert "input" in targets["seed_tts_generate"]["input_schema"]["properties"]
         assert "omnihuman_create_task" not in targets
 
     @pytest.mark.parametrize("tool_name", ["gen_task_list", "ark_job_submit"])

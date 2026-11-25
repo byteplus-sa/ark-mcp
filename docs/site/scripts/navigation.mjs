@@ -10,7 +10,13 @@ const categories = [
       name.startsWith("seedance_") ||
       name.startsWith("gen_task_"),
   ],
-  ["Audio", (name) => ["seed_audio_generate", "speech_to_text"].includes(name)],
+  [
+    "Audio",
+    (name) =>
+      ["seed_audio_generate", "seed_tts_generate", "speech_to_text"].includes(
+        name,
+      ),
+  ],
   [
     "Understanding",
     (name) => ["seed_understand", "seed_audio_understand"].includes(name),

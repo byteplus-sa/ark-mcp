@@ -30,12 +30,13 @@ See [release policy and installation](docs/releases.md) and the
 
 ## What It Does
 
-The catalog contains 37 tools, conditionally exposed across several BytePlus
+The catalog contains 38 tools, conditionally exposed across several BytePlus
 products plus artifact access and an optional media upload helper:
 
 | Product | Tools | Description |
 |---|---|---|
 | **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech. Generate one clip or 1-5 parallel variations. [Artifact storage](docs/artifacts.md) supports inline audio larger than 10 MiB. |
+| **Seed TTS 3.0** | `seed_tts_generate` | Background-task text-to-speech with `dola-seed-tts-3.0`, required `voice_id`, and exactly one `text` or `ssml`; aggregates HTTP JSONL into a complete persisted audio artifact, not a live MCP audio stream. [Guide and verification limits](docs/seed-tts.md) |
 | **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: [Seedream 5.5](https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5) by default, generation/reference and point/box editing, native transparent PNGs, auto backgrounds, standard-only optimization, validated 1K/1.5K/2K or custom sizes, hashed safety IDs, provider image metadata, 1-10 variations and dry runs. Pro retains transparency-preserving edits; batches are Lite/4.x only. Layer decomposition/OCR are not exposed |
 | **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (regular 2.5 and Flash bound by default, 2.0 configurable): regular 2.5 accepts `resolution="4k"` ([provider-contract caveat](docs/models.md#video-capabilities-videocapabilities)); Flash supports 480p/720p, 10 images / 5 videos / 5 audios and no Draft. Regular 2.5 Drafts have a 14-day window (7 for creation before 2026-10-28 10:00 UTC+8). Pick the model from `ark_list_models(kind='video')`, create 1-5 variations, or use `dry_run` for a free request and static cost preview; poll with `gen_task_get` |
 | **Generation tasks** | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | Seedance video task lifecycle: batched status checks (1-50 IDs) with derived queue timing and optionally background output persistence, cursor-paged listing of your own tasks, and guarded cancel/delete |
@@ -59,7 +60,8 @@ Key features:
 - **Model discovery** - `ark_list_models` reports configured models and the
   tools serving them. Understanding modalities describe the named tool:
   `seed_understand` takes images/videos; `seed_audio_understand` takes audio
-  only, with a server-configured model.
+  only, with a server-configured model. Seed TTS is a separate `kind="audio"`
+  entry with `tts` limits and the `seed_tts` service.
 - **Cached account pricing** - with AK/SK configured, discovery includes fresh
   catalog prices without making a provider call. Image and understanding cost
   estimates use recognized catalog rates, with built-in fallbacks.
@@ -75,13 +77,14 @@ Key features:
   [Secret Manager integration](docs/secret-manager.md) adds pinned-version
   provider-key reads and approved, resumable MCP-only configuration sync.
 - **Durable artifacts** — generated media is persisted locally so MCP
-  resources remain usable after known provider URL lifetimes (2h audio, 24h
+  resources remain usable after known provider URL lifetimes (2h Seed Audio, 24h
   ModelArk image/video); VOD MediaKit persistence is best-effort and capped at
-  200 MiB, and completed enhancement URLs have a confirmed 24-hour lifetime
-- **Billed outputs are never dropped** — downloads are retried; if storage
-  still fails, the result returns the provider URL (or inline bytes) with a
-  `persistence_error` instead of an error, recoverable with
-  `seed_media_persist_url`
+  200 MiB, and completed enhancement URLs have a confirmed 24-hour lifetime.
+  Seed TTS always persists the complete output and has no provider download URL
+- **Storage fallbacks** — downloads are retried; if storage still fails,
+  results preserve a provider URL or bounded inline bytes with
+  `persistence_error`. Recover URLs with `seed_media_persist_url`; Seed TTS
+  has no provider URL and fails if its inline fallback exceeds the cap
 - **Local output paths** — on stdio, `output_path` / `output_dir` / `save_to`
   write results straight into the client's MCP roots (or `OUTPUT_ROOTS`) with
   symlink-safe, no-silent-overwrite writes
@@ -174,7 +177,7 @@ flowchart TB
     TR[TRAE IDE]
   end
   subgraph Server["Ark MCP Server (FastMCP)"]
-    Tools["Tools<br/>Seedream · Seedance · Seed Audio · VOD AI MediaKit · Artifacts · Object storage"]
+    Tools["Tools<br/>Seedream · Seedance · Seed Audio · Seed TTS · VOD AI MediaKit · Artifacts · Object storage"]
     Domain["Domain layer<br/>models · capability registry · errors"]
     Runtime["Runtime services<br/>concurrency · budget · ownership · retry"]
     Store["Artifact store<br/>filesystem + .meta.json"]
@@ -202,7 +205,7 @@ flowchart LR
   L1["Transport<br/>stdio · Streamable HTTP"] --> L2["Server<br/>FastMCP tools · resources · routes"]
   L2 --> L3["Domain<br/>typed models · capability registry"]
   L3 --> L4["Provider gateways<br/>ModelArk · Seed Speech"]
-  L4 --> L5["BytePlus<br/>Seedream · Seedance · Seed Audio"]
+  L4 --> L5["BytePlus<br/>Seedream · Seedance · Seed Audio · Seed TTS"]
   L2 -.-> X["Cross-cutting<br/>security · runtime · observability · artifacts"]
 ```
 
@@ -220,9 +223,9 @@ sequenceDiagram
   T->>T: validate inputs + capability registry
   T->>R: reserve budget + acquire provider/principal semaphores
   R-->>T: budget reservation
-  T->>P: call_with_retry(provider request)
+  T->>P: provider request (per-operation retry policy)
   P->>B: HTTPS (Bearer / X-Api-Key)
-  B-->>P: media URL (2h audio / 24h image·video)
+  B-->>P: media URL or bytes (TTS: aggregated JSONL audio)
   P-->>T: provider result
   T->>A: persist artifact (durable copy)
   A-->>T: seed-media://artifacts/{id}
@@ -292,7 +295,10 @@ tools. `seed_media_get_artifact`, `seed_media_export_artifact`, and
 when their credentials are configured, `media_upload` and
 `media_presign` appear
 only when object storage credentials (TOS or S3) are configured, and
-`speech_to_text` appears only when `BYTEPLUS_SEED_SPEECH_API_KEY` is set.
+`seed_audio_generate`, `seed_tts_generate`, and `speech_to_text` appear only
+when `BYTEPLUS_SEED_SPEECH_API_KEY` is set. Seed TTS reuses
+`BYTEPLUS_SEED_AUDIO_BASE_URL` and `seed:audio:generate`; no new environment
+variable is needed.
 `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
 `vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` appear only when
 `BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `omnihuman_create_task`,
@@ -391,6 +397,7 @@ make check-env     # Validate environment configuration
 | [API Reference](docs/api-reference.md) | Complete tool schemas, inputs, outputs, and examples |
 | [Use Cases](docs/use-cases.md) | Common scenarios with example tool calls |
 | [Tools](docs/tools.md) | Tool reference with input/output tables |
+| [Seed TTS 3.0](docs/seed-tts.md) | Voice selection, pronunciation rules, output formats, alignments, persistence and billing |
 | [Private Asset Library](docs/assets.md) | Real-person, virtual portrait and copyright assets for Seedance (AK/SK) |
 | [Moderation Lookup](docs/moderation.md) | Existing blocked-record reasons, local access, eligibility and quota bounds; live success unverified |
 | [Security](docs/security.md) | Consolidated security model (auth, SSRF, body limits) |

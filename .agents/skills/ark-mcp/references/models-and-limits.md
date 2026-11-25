@@ -1,6 +1,6 @@
 # Models and limits
 
-Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
+Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed TTS, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 ## Discovery with `ark_list_models`
 
@@ -13,16 +13,17 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 
 **Call it before any generation or understanding tool.** It is read-only and idempotent, needs no auth scope, and **makes no provider calls**; it reads the server's own configuration.
 
-- **`kind`** (`video`, `image`, `understanding`) filters the list; omit it to get every configured kind.
-- **`models[]`** has one entry per configured model whose service is enabled (empty when ModelArk is not configured). Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, or `understanding`).
+- **`kind`** (`video`, `image`, `audio`, `understanding`) filters the list; omit it to get every configured kind.
+- **`models[]`** has one entry per configured model whose service is enabled (Seed TTS uses the Seed Speech key independently of ModelArk). Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, `tts`, or `understanding`).
 - **`model_id` is the exact value the `model` argument accepts.** Omitting `model` uses the entry with `is_default: true`.
 - **`tool`** names the tool that serves the model. Understanding modalities and media limits describe this route, not every possible use of the underlying model. `seed_audio_understand` advertises only `audio` (up to eight clips); use `seed_understand` for images/videos. Neither handler accepts mixed audio/visual requests.
-- **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seed_audio`, `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
+- **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seed_audio`, `seed_tts`, `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`, `moderation`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
 
 | `kind` | `tool` | Notes on `is_default` |
 |---|---|---|
 | `video` | `seedance_create_task` | One default (`SEEDANCE_DEFAULT_MODEL`) |
 | `image` | `seedream_generate_image` | One default (`SEEDREAM_DEFAULT_MODEL`) |
+| `audio` | `seed_tts_generate` | Literal `dola-seed-tts-3.0`, no new model setting |
 | `understanding` | `seed_understand`, or `seed_audio_understand` for the `SEED_AUDIO_UNDERSTANDING_MODEL` binding | Two defaults: the non-audio default and the audio model |
 
 ### Exact IDs and typos
@@ -124,6 +125,21 @@ before paid 4K use. See the [contract caveat](https://byteplus-sa.github.io/ark-
 - **Safety IDs:** optional `safety_identifier` on 5.5/Pro, 1-64 non-space printable ASCII characters; use a stable hash, not personal data.
 - **5.5 `seed`:** retained as an explicit compatibility field but absent from the current provider parameter docs and OpenAPI schema; omit unless provider acceptance is verified.
 - Discovery reports transparency, named/custom size limits, `background_modes`, `prompt_optimization_modes`, and `supports_safety_identifier`. Source and remaining live-alpha validation: [model capabilities](https://byteplus-sa.github.io/ark-mcp/models/#image-capabilities-imagecapabilities). Layer-decomposition/OCR inputs are rejected.
+
+## Seed TTS (`kind: audio`)
+
+Service `seed_tts` uses `BYTEPLUS_SEED_SPEECH_API_KEY` and the existing
+`BYTEPLUS_SEED_AUDIO_BASE_URL`. The model is literal `dola-seed-tts-3.0`
+and its limits live in `tts`. This is separate from full-scene Seed Audio
+and the `kind="understanding"` entry for `seed_audio_understand`.
+
+`tts` contains only `max_text_characters=10000`, `max_ssml_characters=10000`
+(local SSML safety cap), `output_formats` (`mp3`, `pcm`, `ogg_opus`) and
+`requires_voice_id=true`. Sample rates and voice controls are input-schema
+rules, not discovery fields. Discovery does not verify provider or voice access.
+
+Full controls, result handling and verification details:
+[tool-reference.md](tool-reference.md#seed-tts-30).
 
 ## Understanding (`kind: understanding`)
 

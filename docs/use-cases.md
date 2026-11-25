@@ -115,22 +115,35 @@ Generate variations with different prompts for each.
 }
 ```
 
-## 6. Audio Generation (Text-to-Speech)
+## 6. Text-to-Speech
 
-Generate speech from a text prompt.
+Generate speech from exact text with a selected, authorized voice. This
+example uses Skye from the [Seed TTS 3.0 Voice List](https://docs.byteplus.com/en/docs/byteplusvoice/voicelist-3-0).
 
-**Tool:** `seed_audio_generate`
+**Tool:** `seed_tts_generate`
 
 ```json
 {
-  "text_prompt": "Welcome to the Ark Seed Multimodal MCP Server.",
-  "output": {
-    "format": "wav",
-    "sample_rate": 44100
+  "model": "dola-seed-tts-3.0",
+  "voice_id": "multi_female_skye_v3_uranus_bigtts",
+  "language_code": "en",
+  "text": "Welcome to the Ark Seed Multimodal MCP Server.",
+  "output_format": {
+    "format": "mp3",
+    "sample_rate": 24000,
+    "bit_rate": 64000
   },
-  "persist": true
+  "enable_subtitle": true
 }
 ```
+
+Submit through `ark_job_submit` and read the completed audio artifact and
+word alignments in seconds from `ark_job_get`. The full output is always
+persisted; there is no `persist` switch or live MCP audio stream.
+For SSML, replace `text` with `ssml`, never supply both.
+See [Seed TTS 3.0](seed-tts.md) for formats, voice settings and billing.
+Use `seed_audio_generate` for full-scene audio with ambience, music, effects
+or references, as in the next examples.
 
 ## 7. Voice Cloning with References
 

@@ -1,16 +1,24 @@
 # Durable Artifacts
 
-Provider media URLs expire — 2 hours for audio, 24 hours for image/video —
+Provider media URLs expire — 2 hours for Seed Audio, 24 hours for image/video —
 so the server persists every generated output to a local store and
 re-exposes it as a stable MCP resource `seed-media://artifacts/{artifact_id}`.
 This document describes the artifact store, its lifecycle, and the
 ownership model.
 
+**Seed TTS is different:** `seed_tts_generate` aggregates provider HTTP JSONL
+into complete audio and always persists it. There is no `persist=false`, live
+MCP audio stream, or provider download URL to recover with
+`seed_media_persist_url`. Retain the resolved `output_format`, particularly for
+raw PCM; word alignments use seconds and do not establish full audio duration.
+Use artifact reads/export or optional stdio `output_path`/`overwrite`.
+See [Seed TTS 3.0](seed-tts.md).
+
 ## Two expiry windows — keep them distinct
 
 | Concept | Where | Default | Meaning |
 |---|---|---|---|
-| **Provider URL expiry** (`source_expires_at`) | on `ArtifactRef` | 2h (audio) / 24h (image/video) | how long the original provider URL is valid |
+| **Provider URL expiry** (`source_expires_at`) | on `ArtifactRef` | 2h (Seed Audio) / 24h (image/video); none for Seed TTS | how long the original provider URL is valid |
 | **Local artifact TTL** (`expires_at`) | on `ArtifactRef`, from `ARTIFACT_TTL_SECONDS` | 604800 (7 days), must be `> 0` | how long the persisted copy is kept |
 
 The local TTL is **independent** of the provider URL expiry. Even after the
@@ -130,8 +138,8 @@ idempotent); a final failure surfaces as `storage_failed`.
 
 ## Persistence failures
 
-A billed output is never dropped because storage failed. When persistence
-fails after the retries above, the tool call still succeeds and the returned
+When persistence fails after the retries above and a URL or bounded inline
+fallback is available, the tool call still succeeds and the returned
 `ArtifactRef` carries `persistence_error` (`ArtifactPersistenceIssue`):
 
 | Field | Meaning |
@@ -147,7 +155,7 @@ The reference takes one of two shapes:
 | `id` | Used for | Where the bytes are |
 |---|---|---|
 | `provider-url` | URL outputs (Seedream `url`, Seedance video/last frame) and inline outputs that also came with a provider URL | `uri` is the temporary provider URL, valid until `source_expires_at` |
-| `inline-fallback` | Inline Base64 outputs with no provider URL (Seed Audio, Seedream `b64_json`) | `fallback_data`, up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables) |
+| `inline-fallback` | Inline outputs with no provider URL (Seed Audio, Seed TTS aggregated audio, Seedream `b64_json`) | `fallback_data`, up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables) |
 
 Inline Base64 is retried once against the store before falling back. An inline
 output larger than `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` with no provider URL

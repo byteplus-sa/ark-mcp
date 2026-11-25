@@ -34,7 +34,7 @@ never chat, shell history, Terraform or committed files. Store a JSON object:
 | Service | Bundle field | Used for |
 |---|---|---|
 | ModelArk | `BYTEPLUS_MODELARK_API_KEY` | Image/video generation and multimodal understanding |
-| Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | Seed Audio and speech-to-text |
+| Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | Seed Audio, Seed TTS 3.0 and speech-to-text; no new bundle field |
 | VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | Video processing and audio separation |
 | Vision AI | `BYTEPLUS_CV_API_KEY` | Enabled OmniHuman avatar generation |
 

@@ -5,6 +5,7 @@ import { toolReferenceGroups } from "./navigation.mjs";
 test("audio, understanding and avatars have separate tool sections", () => {
   const names = [
     "seed_audio_generate",
+    "seed_tts_generate",
     "speech_to_text",
     "seed_understand",
     "seed_audio_understand",
@@ -16,7 +17,11 @@ test("audio, understanding and avatars have separate tool sections", () => {
   const entries = Object.fromEntries(
     groups.map((group) => [group.label, group.items.map((item) => item.label)]),
   );
-  assert.deepEqual(entries.Audio, ["seed_audio_generate", "speech_to_text"]);
+  assert.deepEqual(entries.Audio, [
+    "seed_audio_generate",
+    "seed_tts_generate",
+    "speech_to_text",
+  ]);
   assert.deepEqual(entries.Understanding, [
     "seed_understand",
     "seed_audio_understand",
@@ -36,6 +41,18 @@ test("tool routes and exact MCP names remain unchanged", () => {
     {
       label: "seed_audio_understand",
       slug: "tool-reference/seed-audio-understand",
+    },
+  ]);
+});
+
+test("TTS has a stable tool route in the Audio section", () => {
+  const groups = toolReferenceGroups([{ name: "seed_tts_generate" }]);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].label, "Audio");
+  assert.deepEqual(groups[0].items, [
+    {
+      label: "seed_tts_generate",
+      slug: "tool-reference/seed-tts-generate",
     },
   ]);
 });

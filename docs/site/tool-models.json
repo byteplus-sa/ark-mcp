@@ -74,6 +74,17 @@
       }
     ]
   },
+  "seed_tts_generate": {
+    "selection": "The `model` argument accepts only `dola-seed-tts-3.0` and defaults to that ID. Supply exactly one of `text` or `ssml`. The `voice_id` is required. Use a Speaker ID for the target language from the [Seed TTS 3.0 Voice List](https://docs.byteplus.com/en/docs/byteplusvoice/voicelist-3-0) or an authorized cloned ID. Audio is always persisted. Optional `output_path` and `overwrite` control a local export, subject to server output-path policy. See the [official Seed TTS 3.0 HTTP streaming reference](https://docs.byteplus.com/en/docs/byteplusvoice/seed-tts-3-0-http-streaming).",
+    "models": [
+      {
+        "name": "Seed TTS 3.0",
+        "id": "`dola-seed-tts-3.0`",
+        "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` required; same registration gate and `seed:audio:generate` scope as Seed Audio.",
+        "capabilities": "Text or SSML to speech with MP3 (default), PCM, or Ogg Opus output. Supports `voice_settings`, pronunciation and replacement rules in `pronunciation_dictionary.tone`, language, subtitles, `session_id`, text normalization, Markdown filtering, and appended `silence_duration` from 0 to 30000 ms."
+      }
+    ]
+  },
   "seed_understand": {
     "selection": "Pass an exact configured ID as `model`, or omit it for `SEED_UNDERSTANDING_DEFAULT_MODEL`. Custom IDs require an explicit `turbo` or `pro` binding in `SEED_UNDERSTANDING_MODEL_BINDINGS`.",
     "models": [

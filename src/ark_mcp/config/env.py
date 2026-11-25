@@ -141,7 +141,7 @@ class Settings(BaseSettings):
     seed_speech_api_key: str = Field(
         default="",
         validation_alias="BYTEPLUS_SEED_SPEECH_API_KEY",
-        description="Seed Speech API key for both Seed Audio (TTS) and ASR (speech-to-text).",
+        description="Seed Speech API key for Seed Audio, Seed TTS 3 and ASR (speech-to-text).",
     )
     vod_mediakit_api_key: str = Field(
         default="",
@@ -164,6 +164,7 @@ class Settings(BaseSettings):
     seed_audio_base_url: str = Field(
         default="https://voice.ap-southeast-1.bytepluses.com",
         validation_alias="BYTEPLUS_SEED_AUDIO_BASE_URL",
+        description="Seed Speech base URL shared by Seed Audio and Seed TTS 3.",
     )
     vod_mediakit_base_url: str = Field(
         default="https://mediakit.ap-southeast-1.bytepluses.com/api/v1",

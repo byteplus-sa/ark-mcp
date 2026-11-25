@@ -25,6 +25,14 @@ including dry runs. Returned `generations` preserve per-call provenance and
 separate advisory byte inspection from delivery, provider metadata and visual
 acceptance. Inspection does not regenerate paid images.
 
+For Seed TTS, `seed_tts_generate` always persists the complete audio aggregated
+from HTTP JSONL. There is no `persist=false`, provider download URL or live
+MCP audio stream. Read the artifact and resolved `output_format` from the
+terminal job result; optional stdio `output_path`/`overwrite` still needs
+`OUTPUT_ROOTS`, but persistence itself does not. Word alignments use seconds;
+do not infer a full duration from them. See
+[tool-reference.md](tool-reference.md#seed-tts-30).
+
 ## Large results
 
 `ark_job_capabilities` returns about 120k characters, more than a tool result

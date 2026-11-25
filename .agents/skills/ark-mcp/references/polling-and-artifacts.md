@@ -12,6 +12,11 @@ How to poll asynchronous provider tasks, what the persistence layer does with fi
 
 **A provider task ID is not an Ark `job_id`.** The create tool's background result carries the provider ID; `ark_job_get` only reports on the job that submitted it.
 
+**Seed TTS has no provider-task polling phase.** `seed_tts_generate` aggregates
+HTTP JSONL and persists the complete audio within its required background job.
+Read its artifact from `ark_job_get`; do not use `gen_task_get` or resubmit
+to obtain the result. There is no live MCP audio stream.
+
 ## Two-phase polling
 
 ```mermaid
@@ -88,10 +93,13 @@ A mode that does not fit `expected_status` (cancel with `succeeded`, delete with
 ## Artifacts
 
 Persisted outputs are `ArtifactRef`s whose `uri` is a stable `seed-media://artifacts/{artifact_id}`. Keep `persist=true` / `persist_output=true` (the defaults on the creation tools) for anything you need later.
+Seed TTS always persists and accepts no `persist` switch. It has no provider
+download URL or source expiry to invent; keep its resolved `output_format`
+with the artifact, especially for PCM.
 
 ### Retention and access
 
-- **Provider URLs expire fast: 2 h for audio, 24 h for ModelArk image/video, about 1 h for OmniHuman video.** Durable artifacts survive 7 days by default (`ARTIFACT_TTL_SECONDS`; see [environment.md](environment.md)).
+- **Provider URLs expire fast: 2 h for Seed Audio, 24 h for ModelArk image/video, about 1 h for OmniHuman video.** Durable artifacts survive 7 days by default (`ARTIFACT_TTL_SECONDS`; see [environment.md](environment.md)).
 - **Artifacts are owner-checked** against the calling principal. Shared-key members can read one another's team artifacts. The `seed-media://artifacts/{artifact_id}` resource needs a canonical UUID and returns the bytes with the right MIME type; in `api_key` mode it checks the fixed team's `artifacts:read` scope.
 - **`seed_media_get_artifact` returns the whole file as Base64 in context.** Use it only for small files or remote (HTTP) deployments with no shared filesystem; on stdio prefer the export tool or a local `output_path`.
 - **`seed_media_export_artifact` is stdio only.** Without `destination_path` it returns the artifact's path inside the store (`copied=false`), which is only possible when the store is on the local filesystem; with an object-storage backend it errors and asks for a `destination_path`. With `destination_path` (absolute, inside an allowed output root) it writes an atomic copy (`copied=true`). An existing file with different content is replaced only with `overwrite=true`; identical content always succeeds.
@@ -103,7 +111,7 @@ Persisted outputs are `ArtifactRef`s whose `uri` is a stable `seed-media://artif
 - **stdio only.** Over HTTP they are rejected.
 - **Absolute path inside an allowed output root:** the client's MCP roots, else `OUTPUT_ROOTS`. With neither, path writing is disabled.
 - **Validated before any provider call**, so a bad path never costs a billed generation.
-- **Need persistence:** `output_path`/`output_dir` require `persist=true` / `persist_output=true`.
+- **Need persistence:** `output_path`/`output_dir` require `persist=true` / `persist_output=true`; Seed TTS always persists without a switch.
 - **`output_path` ending in `/` is a directory**, files named `<artifact_id>.<ext>`. A directory is required when a call can produce several files: `seedream_generate_image` with `variations > 1` or `max_images > 1`, `seed_audio_generate` with `variations > 1`, and `vod_get_task` for `separate_audio`.
 - **`output_dir`** is the `gen_task_get` equivalent; **`save_to`** (with `overwrite`) writes the answer of `seed_understand` and `seed_audio_understand`.
 - **A failed local write never fails the call.** The durable artifact is kept and the `ArtifactRef` reports `local_path` on success or `export_error` on failure. Always read these fields.
@@ -111,13 +119,13 @@ Persisted outputs are `ArtifactRef`s whose `uri` is a stable `seed-media://artif
 
 ### Persistence fallbacks: never lose a billed output
 
-When durable storage fails after the store's own download retries, the call still **succeeds** and the `ArtifactRef` carries `persistence_error` (`code`, `message`, `retryable`, `artifact_limit_bytes`, `source_url_expires_at`). **Always check `persistence_error`** on results from Seedream, Seed Audio and the task pollers.
+When durable storage fails after the store's own download retries, the call still **succeeds** within the fallback bounds below and the `ArtifactRef` carries `persistence_error` (`code`, `message`, `retryable`, `artifact_limit_bytes`, `source_url_expires_at`). **Always check `persistence_error`** on results from Seedream, Seed Audio, Seed TTS and the task pollers.
 
 | `ArtifactRef.id` | Meaning | Recovery |
 |---|---|---|
 | a UUID | persisted normally | none |
 | `provider-url` | `uri` is the temporary provider URL; not stored | `seed_media_persist_url` before the URL expires |
-| `inline-fallback` | Base64 bytes in `fallback_data` (Seed Audio, Seedream `b64_json`), used when no provider URL exists and the payload is within `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MB, 0 disables) | decode `fallback_data`, or use `output_path` to write it locally; storage has no copy |
+| `inline-fallback` | Base64 bytes in `fallback_data` (Seed Audio, Seed TTS, Seedream `b64_json`), used when no provider URL exists and the payload is within `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MB, 0 disables) | decode `fallback_data`, or use `output_path` to write it locally; storage has no copy |
 
 Above the inline cap a Base64 output that cannot be stored becomes a tool error. Oversized or invalid Base64 is a validation error, not a storage failure. A `provider-url` artifact cannot be written locally (its `export_error` says to persist it first); an `inline-fallback` artifact can.
 

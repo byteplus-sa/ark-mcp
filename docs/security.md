@@ -116,7 +116,7 @@ tool → scope mapping is the `scope` column of the static tool catalog
 
 | Scope | Protects |
 |---|---|
-| `seed:audio:generate` | `seed_audio_generate` (single clip or variations) |
+| `seed:audio:generate` | `seed_audio_generate` (full-scene clip or variations), `seed_tts_generate` (text-to-speech) |
 | `seedream:generate` | `seedream_generate_image` (generation, editing, variations, and dry runs) |
 | `seedance:create` | `seedance_create_task` (every Seedance model, including variations and dry runs) |
 | `gen:read` | `gen_task_get`, `gen_task_list` (Seedance tasks) |
@@ -162,7 +162,7 @@ scope: job tools enforce the target tool's scope at submit time, and
 `ark_list_models` returns only configured model IDs and limits.
 
 The `seed-health://status` resource and the `/health`, `/ready`, `/metrics`
-routes are **not** scope-protected at the FastMCP layer. Seed Audio and
+routes are **not** scope-protected at the FastMCP layer. Seed Audio, Seed TTS and
 speech-to-text tools are registered only when `BYTEPLUS_SEED_SPEECH_API_KEY`
 is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
 `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
@@ -172,6 +172,22 @@ is set; Seedream/Seedance tools only when `BYTEPLUS_MODELARK_API_KEY` is set;
 `TOS_ACCESS_KEY` / `TOS_SECRET_KEY` / `TOS_BUCKET`, or S3:
 `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_BUCKET` with
 `OBJECT_STORAGE_BACKEND=s3`).
+
+Seed TTS reuses the existing Seed Speech key and
+`BYTEPLUS_SEED_AUDIO_BASE_URL`; it does not accept credentials as tool inputs.
+Its required background path enforces `seed:audio:generate` through
+`ark_job_submit` or native tasks. Exactly one `text` or `ssml` is accepted,
+each bounded to 10,000 characters (the SSML bound is local safety).
+Local caps also bound voice/session IDs to 256 characters, language to 64,
+delivery instructions to 16 strings of at most 1000 characters each, and the
+pronunciation dictionary to 100 rules of at most 1000 characters each.
+JSONL events and metadata each have an 8 MiB cap; total wire size derives
+from the audio artifact cap plus metadata. `BYTEPLUS_REQUEST_TIMEOUT_MS`
+also bounds the stream's total wall-clock time, alongside per-read timeouts.
+HTTP JSONL is aggregated into full persisted audio, not exposed as a live MCP
+audio stream. Optional `output_path`/`overwrite` follows the stdio-only
+[local output policy](#local-output-paths); HTTP callers cannot write to a
+chosen server path. See [Seed TTS 3.0](seed-tts.md) for the contract.
 
 ### Asset library credentials (AK/SK)
 
