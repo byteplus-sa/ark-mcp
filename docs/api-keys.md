@@ -7,8 +7,8 @@ server and must not be distributed to shared-server members.
 
 For administrator-managed BytePlus deployments, follow
 [Secret Manager setup and provider-key updates](secret-manager.md).
-That workflow pins one complete four-provider bundle, requires an approved
-sync to update the VM, and preserves the separate shared MCP connection key.
+That workflow pins the complete bundle of supported provider keys. An
+approved sync updates the VM and preserves the separate shared MCP connection key.
 It does not manage IAM or object-storage credentials.
 
 This server calls several BytePlus services. Each uses a distinct credential
@@ -20,7 +20,6 @@ tool set.
 |---|---|---|---|
 | ModelArk | `BYTEPLUS_MODELARK_API_KEY` | `Authorization: Bearer <key>` | Seedream, Seedance, image/video/audio understanding |
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | `X-Api-Key: <key>` | Seed Audio (full-scene audio), Seed TTS 3.0 (text-to-speech), Speech-to-Text (ASR) |
-| VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `Authorization: Bearer <key>` | Enhancement, transcode, subtitle burn-in/removal, audio separation, and poll tools |
 | Vision AI (OmniHuman) | `BYTEPLUS_CV_API_KEY` | `Authorization: Bearer <key>` | `omnihuman_*` tools (also needs `BYTEPLUS_OMNIHUMAN_ENABLED=true`) |
 | ModelArk OpenAPI | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` (+ session token for STS) | AK/SK V4 signing | Asset tools, cached pricing, and opt-in `ark_moderation_get`; account-wide administration is local-only |
 | TOS | `TOS_ACCESS_KEY` + `TOS_SECRET_KEY` + `TOS_BUCKET` | AK/SK signing | `media_upload`, `media_presign` |
@@ -140,34 +139,6 @@ not the credential.
 | `SEED_SPEECH_ASR_BASE_URL` | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech ASR HTTP host |
 | `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` | `3.0` | Seconds between ASR query polls |
 | `SEED_SPEECH_ASR_POLL_MAX_SECONDS` | `600.0` | Maximum total seconds to wait for ASR result |
-
-## BytePlus VOD (AI MediaKit)
-
-BytePlus VOD AI MediaKit is a single Bearer-authenticated convenience surface
-that powers video enhancement, video transcoding, subtitle burn-in/removal, and
-voice + background audio separation. All six `vod_*` tools share the same API key.
-
-**Env vars:**
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | empty | VOD AI MediaKit Bearer key |
-| `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | MediaKit base URL |
-
-**How to get the key:**
-
-1. Sign in to **<https://console.byteplus.com>** and enable BytePlus VOD.
-2. Open the **AI MediaKit** console and navigate to **API key** management.
-3. Create an API key and copy it immediately — it is shown once.
-
-```dotenv
-BYTEPLUS_VOD_MEDIAKIT_API_KEY=your-mediakit-key-here
-```
-
-The key is sent as `Authorization: Bearer <key>` against
-`https://mediakit.ap-southeast-1.bytepluses.com/api/v1`. It is startup
-configuration only and is never logged, returned, or accepted as a tool
-argument.
 
 ## BytePlus Vision AI (OmniHuman)
 
@@ -293,10 +264,6 @@ BYTEPLUS_SEED_AUDIO_BASE_URL=https://voice.ap-southeast-1.bytepluses.com
 SEED_SPEECH_ASR_BASE_URL=https://voice.ap-southeast-1.bytepluses.com
 SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS=3.0
 SEED_SPEECH_ASR_POLL_MAX_SECONDS=600.0
-
-# BytePlus VOD — AI MediaKit (Bearer)
-BYTEPLUS_VOD_MEDIAKIT_API_KEY=
-BYTEPLUS_VOD_MEDIAKIT_BASE_URL=https://mediakit.ap-southeast-1.bytepluses.com/api/v1
 
 # Object storage — TOS (optional, default backend)
 TOS_ACCESS_KEY=

@@ -103,8 +103,8 @@ async def ark_job_submit(
 ) -> BackgroundJobAccepted:
     """Run a long-running tool as a background job and return a job_id immediately.
 
-    Required for tools marked as requiring background execution (e.g. media_upload, vod_*); no MCP
-    task support needed. Poll ark_job_get for the tool's result. Do not auto-retry a timeout or
+    Required for tools marked as requiring background execution (e.g. media_upload); no MCP task
+    support needed. Poll ark_job_get for the tool's result. Do not auto-retry a timeout or
     disconnect: the job may already be queued.
     """
     spec = BACKGROUND_TOOL_SPECS.get(input.tool_name)

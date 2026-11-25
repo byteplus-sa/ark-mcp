@@ -18,7 +18,6 @@ from ark_mcp.domain.errors import NormalizedProviderError, ProviderError
 from ark_mcp.domain.models import VariationResult
 from ark_mcp.providers.modelark.client import ModelArkGateway
 from ark_mcp.providers.retry import RetryPolicy, call_with_retry
-from ark_mcp.providers.vod_mediakit.client import VodMediaKitGateway
 from ark_mcp.runtime import billed_provider_slot, close_runtime_services, create_runtime_services
 from ark_mcp.security.safe_downloader import SafeDownloader, SafeDownloadError
 from ark_mcp.tools._parallel import VariationProgress, run_variation_batch
@@ -59,17 +58,6 @@ def test_read_only_timeout_is_retryable_and_not_ambiguous() -> None:
     assert exc.retryable is True
     assert exc.ambiguous_completion is False
     assert "safe to retry" in exc.message
-
-
-def test_vod_poll_transport_error_is_retryable() -> None:
-    poll = VodMediaKitGateway.normalize_ambiguous_transport_error(
-        "get_task", code="TIMEOUT", message="poll timed out", side_effect=False
-    )
-    submit = VodMediaKitGateway.normalize_ambiguous_transport_error(
-        "submit", code="TIMEOUT", message="submit timed out"
-    )
-    assert (poll.retryable, poll.ambiguous_completion) == (True, False)
-    assert (submit.retryable, submit.ambiguous_completion) == (False, True)
 
 
 async def test_retry_timeouts_false_reraises_timeout_immediately() -> None:

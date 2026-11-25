@@ -14,10 +14,8 @@ from ark_mcp.config.env import Settings, get_settings, resolve_env_file, validat
 def clean_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "sk-test-modelark")
     monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-test-speech")
-    monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-key")
     monkeypatch.setenv("BYTEPLUS_MODELARK_BASE_URL", "https://ark.test.example.com/api/v3")
     monkeypatch.setenv("BYTEPLUS_SEED_AUDIO_BASE_URL", "https://voice.test.example.com")
-    monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_BASE_URL", "https://mediakit.test.example.com/api/v1")
     monkeypatch.setenv("SEED_SPEECH_ASR_BASE_URL", "https://voice.test.example.com")
     monkeypatch.setenv("ARTIFACT_TTL_SECONDS", "3600")
     monkeypatch.setenv("MCP_INLINE_MEDIA_MAX_BYTES", "8388608")
@@ -36,7 +34,6 @@ class TestValidate:
         get_settings.cache_clear()
         monkeypatch.delenv("BYTEPLUS_MODELARK_BASE_URL", raising=False)
         monkeypatch.delenv("BYTEPLUS_SEED_AUDIO_BASE_URL", raising=False)
-        monkeypatch.delenv("BYTEPLUS_VOD_MEDIAKIT_BASE_URL", raising=False)
         monkeypatch.delenv("SEED_SPEECH_ASR_BASE_URL", raising=False)
         validate()
         get_settings.cache_clear()
@@ -63,15 +60,6 @@ class TestValidate:
         get_settings.cache_clear()
         with pytest.raises(ValueError, match="BYTEPLUS_SEED_AUDIO_BASE_URL must use HTTPS"):
             validate()
-        get_settings.cache_clear()
-
-    def test_validate_rejects_non_https_vod_mediakit_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_BASE_URL", "http://mediakit.example.com/api/v1")
-        get_settings.cache_clear()
-        with pytest.raises(ValidationError, match="BYTEPLUS_VOD_MEDIAKIT_BASE_URL must use HTTPS"):
-            Settings(_env_file=None)
         get_settings.cache_clear()
 
     def test_validate_rejects_non_https_asr_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -175,13 +163,6 @@ class TestSettingsFromEnv:
         monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "sk-speech-env")
         settings = Settings(_env_file=None)
         assert settings.seed_speech_api_key == "sk-speech-env"  # pragma: allowlist secret
-
-    def test_vod_mediakit_values_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_API_KEY", "test-mediakit-env")
-        monkeypatch.setenv("BYTEPLUS_VOD_MEDIAKIT_BASE_URL", "https://mediakit.example.com/api/v1")
-        settings = Settings(_env_file=None)
-        assert settings.vod_mediakit_api_key == "test-mediakit-env"  # pragma: allowlist secret
-        assert settings.vod_mediakit_base_url == "https://mediakit.example.com/api/v1"
 
     def test_transport_http_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("MCP_TRANSPORT", "http")
@@ -353,7 +334,6 @@ class TestEnvFileResolution:
         for name in (
             "BYTEPLUS_MODELARK_API_KEY",
             "BYTEPLUS_SEED_SPEECH_API_KEY",
-            "BYTEPLUS_VOD_MEDIAKIT_API_KEY",
         ):
             monkeypatch.delenv(name, raising=False)
 

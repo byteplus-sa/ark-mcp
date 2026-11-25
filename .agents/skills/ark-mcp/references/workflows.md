@@ -15,8 +15,8 @@ they can.
 
 | Mode | Tools |
 |---|---|
-| **Required**: a direct foreground call is rejected before the provider is contacted | `seedance_create_task`, `seedream_generate_image`, `seed_audio_generate`, `seed_tts_generate`, `omnihuman_create_task`, `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `seed_understand`, `seed_audio_understand`, `speech_to_text`, `media_upload` |
-| **Optional**: foreground by default; background for long waits or persistence | `gen_task_get`, `vod_get_task`, `omnihuman_get_task`, `seed_media_persist_url`, `ark_asset_create`, `ark_asset_verification_result` |
+| **Required**: a direct foreground call is rejected before the provider is contacted | `seedance_create_task`, `seedream_generate_image`, `seed_audio_generate`, `seed_tts_generate`, `omnihuman_create_task`, `seed_understand`, `seed_audio_understand`, `speech_to_text`, `media_upload` |
+| **Optional**: foreground by default; background for long waits or persistence | `gen_task_get`, `omnihuman_get_task`, `seed_media_persist_url`, `ark_asset_create`, `ark_asset_verification_result` |
 | **Foreground only** | everything else (`ark_list_models`, `gen_task_list`, `gen_task_cancel_or_delete`, `omnihuman_cancel_task`, `media_presign`, artifact reads, the other `ark_asset_*` tools) |
 
 ### Submit and poll
@@ -30,8 +30,8 @@ they can.
 3. `ark_job_get` no faster than `poll_after_ms` (the worker advertises about
    two seconds) until `status` is `completed`, `failed`, or `cancelled`.
 4. Read the original tool result from `result` (use `result.structured_content`);
-   `result.is_error` marks a target-tool error. Provider task IDs (Seedance,
-   VOD, OmniHuman) are inside that result.
+   `result.is_error` marks a target-tool error. Provider task IDs (Seedance
+   or OmniHuman) are inside that result.
 5. `ark_job_cancel` stops the local worker only. A provider operation already
    accepted by BytePlus keeps running and billing.
 
@@ -73,7 +73,7 @@ terminal `ark_job_get.result` or `tasks/get` response.
 
 ### Resumable async generation
 
-For Seedance, VOD and OmniHuman:
+For Seedance and OmniHuman:
 
 1. Check limits with `ark_list_models`; for Seedance and Seedream also run a
    `dry_run: true` call to confirm the request and `estimated_cost_usd`.
@@ -278,15 +278,12 @@ honoring `Retry-After` (also capped at 4 s). After that the error reaches you.
 
 | Operation | Timeout result | Server retries? | You should |
 |---|---|---|---|
-| Create / generate / cancel / delete / MediaKit submit | `retryable=false`, `ambiguous_completion=true` | No | Reconcile by task or request ID; do not resubmit |
-| Task polls (Seedance, OmniHuman, VOD, ASR query) | `retryable=true`, `ambiguous_completion=false` | Yes | Poll again |
+| Create / generate / cancel / delete | `retryable=false`, `ambiguous_completion=true` | No | Reconcile by task or request ID; do not resubmit |
+| Task polls (Seedance, OmniHuman, ASR query) | `retryable=true`, `ambiguous_completion=false` | Yes | Poll again |
 | `seed_understand`, `seed_audio_understand` | `retryable=true`, `ambiguous_completion=false` | No for timeouts (429/5xx still retried) | Safe to retry, but each attempt is billed |
 
 - Connection and transport failures are retryable on reads; on mutation
   dispatch they are ambiguous.
-- **VOD submits are never retried automatically** (non-idempotent). Reuse the
-  `client_token` to reconcile a subtitle submission after an ambiguous timeout.
-  `vod_get_task` polls are retried.
 - Any `TIMEOUT` commits the budget reservation, since it may have been billed.
 - Output downloads are retried separately (`ARTIFACT_DOWNLOAD_MAX_ATTEMPTS`,
   default 3); expired, untrusted, or oversized sources are not.
@@ -329,12 +326,7 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
 - **Seedance video references are URL-only: upload once, presign per shot.**
   Store each `object_key` from one `media_upload` call (check `failed`) in a
   project reference registry; before each shot call `media_presign` for the
-  keys it needs and submit immediately. Use a long `expires_in_seconds` (for
-  example 3600) for VOD sources, which are fetched asynchronously.
-- **Treat MediaKit persistence separately from the provider result.** Keep
-  `source_url` whenever a task succeeds, do not present `estimated_cost_usd`
-  as available, and prefer `subtitle` removal mode unless the broader `text`
-  mode is intended.
+  keys it needs and submit immediately.
 - **Choose the understanding tool by output:** `seed_understand` for images
   and video (schema-enforced reviews via `response_format`, `json_retry=1`,
   `save_to` with `return_content="none"`), `seed_audio_understand` for audio

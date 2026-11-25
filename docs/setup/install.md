@@ -68,7 +68,6 @@ done. Never paste keys into chat or client configuration.
 | --- | --- |
 | Images, video, image/video/audio understanding | ModelArk |
 | Audio generation and speech-to-text | Seed Speech |
-| Video enhancement, transcoding, subtitles, audio separation | VOD AI MediaKit |
 | Talking avatars | Vision AI, plus OmniHuman access |
 
 See [Provider Keys](../api-keys.md) for where to obtain each key. Optional

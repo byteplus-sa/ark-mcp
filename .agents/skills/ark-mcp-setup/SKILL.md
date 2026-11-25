@@ -90,8 +90,8 @@ and MCP entry until the staged version passes verification.
 Read [credentials.md](references/credentials.md) before handling credentials.
 
 1. Ask which capabilities are needed if unspecified. ModelArk, Seed Speech,
-   VOD MediaKit, and Vision AI use different credentials; never assume one key
-   unlocks everything. Keep whitelist and destructive-operation flags off.
+   and Vision AI each use their own credentials. Keep whitelist and
+   destructive-operation flags off.
 2. Create a minimal blank `.env` in a private directory outside the checkout,
    with owner-only access. Preserve an existing file without reading or
    overwriting its values.

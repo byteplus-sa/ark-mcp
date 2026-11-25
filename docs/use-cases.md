@@ -6,7 +6,7 @@ Here are common scenarios and how to achieve them.
 The JSON blocks below show tool input payloads. Wrap the payload for
 generation, variation, transcription, upload, understanding, and
 provider-submission tools in `ark_job_submit`, or invoke those tools with MCP
-task augmentation on a client that negotiates it. For Seedance and MediaKit
+task augmentation on a client that negotiates it. For Seedance and OmniHuman
 retrieval, poll in the foreground with `persist_output=false`, then use
 `ark_job_submit` or task augmentation with `persist_output=true`
 when downloading a completed output.

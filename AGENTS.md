@@ -60,10 +60,6 @@ separate tools. The flow is discovery → create → poll:
   can use the Files API for oversized audio and video soundtracks (up to
   512 MB); uploaded files are deleted best-effort after processing.
 - **Speech-to-Text** — background audio transcription through Seed Speech ASR.
-- **VOD AI MediaKit** — asynchronous video enhancement, video transcoding,
-  subtitle burn-in and precision subtitle/text erasure, and voice/background
-  audio separation through the BytePlus VOD AI MediaKit; every operation is
-  polled with `vod_get_task`.
 - **Object storage upload** — `media_upload` / `media_presign` take lists and
   return presigned URLs for URL-only media workflows (TOS or S3 backend).
 - **Private asset library** — `ark_asset_*` tools for Dreamina Seedance
@@ -79,7 +75,7 @@ separate tools. The flow is discovery → create → poll:
   not granted to shared-key HTTP. Ten lookups per rolling minute per runtime,
   no automatic retries or result persistence; empty/not-found is not approval.
   Eligibility and live-unverified status: `docs/moderation.md` and
-  `specs/SPEC_MODELARK_MODERATION_CONTRACT.md`. The catalog contains 38 tools;
+  `specs/SPEC_MODELARK_MODERATION_CONTRACT.md`. The catalog contains 32 tools;
   `ark_list_models.services` includes configuration-only `moderation`.
 - **Background jobs** — ordinary `ark_job_*` tools are the default route for
   long-running work through the FastMCP worker, since most clients cannot
@@ -101,11 +97,10 @@ separate tools. The flow is discovery → create → poll:
 Seedance, Seedream, Seed 2.1 Understanding, and Seed Audio
 Understanding share the ModelArk data-plane host and Bearer authentication.
 Seed Audio, Seed TTS and Speech-to-Text are
-hosted by Seed Speech and use `X-Api-Key`. VOD AI MediaKit uses a separate
-Bearer key. The asset library and moderation lookup use BytePlus IAM AK/SK with OpenAPI V4
-signatures. The server uses three provider gateways behind one normalized
-domain layer. See `plans/PLAN_ARK_SEED_MULTIMODAL_MCP.md` for the full
-design.
+hosted by Seed Speech and use `X-Api-Key`. OmniHuman uses a separate Vision AI
+Bearer key. The asset library and moderation lookup use BytePlus IAM AK/SK with
+OpenAPI V4 signatures. The provider gateways share one normalized domain layer.
+See `plans/PLAN_ARK_SEED_MULTIMODAL_MCP.md` for the full design.
 
 ## Repository Layout
 

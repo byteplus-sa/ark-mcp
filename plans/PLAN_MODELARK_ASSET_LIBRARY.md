@@ -16,7 +16,6 @@ source:
 related:
   - "[[PLAN_ARK_SEED_MULTIMODAL_MCP]]"
   - "[[PLAN_SEEDANCE_REFERENCE_ERGONOMICS]]"
-  - "[[SPEC_VOD_OPENAPI_PROVIDER_CONTRACT]]"
 ---
 <!-- markdownlint-disable MD013 MD025 -->
 
@@ -161,11 +160,9 @@ sequenceDiagram
    `ModelArkGateway`.** The two differ in host, auth (HMAC v4 vs Bearer),
    response envelope (`ResponseMetadata` + `Result` vs OpenAI-style) and error
    shape. It subclasses `BaseHttpGateway`, so it keeps the shared timeout,
-   metrics, tracing and retry behaviour. The v4 signer is restored from git
-   history (`git show 9490742^:src/ark_mcp/providers/vod/client.py`), moved
-   into a shared `providers/byteplus_openapi/signing.py`, and parameterised by
-   service and region. Its algorithm is already specified in
-   `specs/SPEC_VOD_OPENAPI_PROVIDER_CONTRACT.md`.
+   metrics, tracing and retry behaviour. Use the shared v4 signer in
+   `providers/byteplus_openapi/signing.py` with service `ark` and the
+   configured region.
 2. **Disabled by default.** `BYTEPLUS_MODELARK_ASSETS_ENABLED=true` and both
    `BYTEPLUS_MODELARK_ACCESS_KEY` and `BYTEPLUS_MODELARK_SECRET_KEY` are
    required to register the management tools. `asset://` passthrough into
@@ -252,7 +249,7 @@ terms.
   coercion): a string or `{"url": "asset://…"}` becomes
   `{"kind": "asset", "asset_id": "…"}`. `validate_url` is **not** changed.
   Keeping `asset://` out of URL validation means the SSRF policy stays strict
-  and `speech_to_text`, VOD and `safe_downloader` keep rejecting it.
+  and `speech_to_text` and `safe_downloader` keep rejecting it.
 - A new helper `asset_uri(asset_id) -> "asset://<id>"` lives in one place.
 
 ### Seedance 2.0 / 2.5 (native)
@@ -436,9 +433,7 @@ in [`PLAN_MODELARK_ASSET_LIBRARY_VALIDATION.md`](PLAN_MODELARK_ASSET_LIBRARY_VAL
 ## Tests
 
 - **Unit**
-  - Signer against a fixed vector, restored from
-    `tests/contract/test_vod_openapi_signing.py` at `a1d1acc` and
-    re-parameterised for `ark`.
+  - Signer against a fixed vector using service `ark`.
   - Asset ID regex.
   - `asset://` coercion for str, `{"url"}` and explicit kinds.
   - Exactly-one-of validation.

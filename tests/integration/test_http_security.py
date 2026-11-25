@@ -34,7 +34,7 @@ def _http_settings(tmp_path: Path) -> Settings:
         MCP_ALLOWED_ORIGINS="https://client.example.com",
         ARTIFACT_DIR=str(tmp_path / "artifacts"),
         BYTEPLUS_MODELARK_API_KEY="test-modelark-key",  # pragma: allowlist secret
-        BYTEPLUS_VOD_MEDIAKIT_API_KEY="test-mediakit-key",  # pragma: allowlist secret
+        BYTEPLUS_SEED_SPEECH_API_KEY="test-speech-key",  # pragma: allowlist secret
     )
 
 
@@ -64,10 +64,10 @@ def _verifier() -> ClaimsTokenVerifier:
                 "scopes": ["artifacts:read"],
                 "claims": {"sub": "reader", "tenant_id": "tenant-a"},
             },
-            "vod-token": {
-                "client_id": "vod-client",
-                "scopes": ["vod:enhance"],
-                "claims": {"sub": "video-user", "tenant_id": "tenant-a"},
+            "audio-token": {
+                "client_id": "audio-client",
+                "scopes": ["seed:audio:generate"],
+                "claims": {"sub": "audio-user", "tenant_id": "tenant-a"},
             },
         }
     )
@@ -170,12 +170,27 @@ async def test_invalid_origin_is_rejected(tmp_path: Path) -> None:
     assert response.status_code in {403, 421}
 
 
-async def test_component_scope_rejects_under_scoped_token(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("token", "tool_name", "tool_input"),
+    [
+        ("read-only-token", "seedream_generate_image", {"prompt": "Must not dispatch"}),
+        ("read-only-token", "seed_audio_generate", {"text_prompt": "Must not dispatch"}),
+        ("audio-token", "seedream_generate_image", {"prompt": "Must not dispatch"}),
+        (
+            "audio-token",
+            "speech_to_text",
+            {"audio": {"audio_url": "https://example.com/audio.wav", "audio_format": "wav"}},
+        ),
+    ],
+)
+async def test_component_scope_rejects_under_scoped_token(
+    tmp_path: Path, token: str, tool_name: str, tool_input: dict[str, object]
+) -> None:
     async with _http_client(tmp_path) as http_client:
         response = await http_client.post(
             "/mcp",
             headers={
-                "Authorization": "Bearer read-only-token",
+                "Authorization": f"Bearer {token}",
                 "Origin": "https://client.example.com",
                 "Accept": "application/json, text/event-stream",
             },
@@ -184,8 +199,8 @@ async def test_component_scope_rejects_under_scoped_token(tmp_path: Path) -> Non
                 "id": 2,
                 "method": "tools/call",
                 "params": {
-                    "name": "seedream_generate_image",
-                    "arguments": {"input": {"prompt": "must not dispatch"}},
+                    "name": tool_name,
+                    "arguments": {"input": tool_input},
                 },
             },
         )
@@ -195,106 +210,45 @@ async def test_component_scope_rejects_under_scoped_token(tmp_path: Path) -> Non
     assert "unknown tool" in payload["result"]["content"][0]["text"].lower()
 
 
-async def test_vod_scope_rejects_under_scoped_token(tmp_path: Path) -> None:
-    async with _http_client(tmp_path) as http_client:
-        response = await http_client.post(
-            "/mcp",
-            headers={
-                "Authorization": "Bearer read-only-token",
-                "Origin": "https://client.example.com",
-                "Accept": "application/json, text/event-stream",
-            },
-            json={
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {
-                    "name": "vod_enhance_video",
-                    "arguments": {
-                        "input": {"video_url": "https://example.com/input.mp4", "persist": False}
-                    },
-                },
-            },
-        )
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["result"]["isError"] is True
-    assert "unknown tool" in payload["result"]["content"][0]["text"].lower()
-
-
-@pytest.mark.parametrize(
-    ("tool_name", "tool_input"),
-    [
-        (
-            "vod_add_subtitles",
-            {
-                "video_url": "https://example.com/input.mp4",
-                "subtitles": [{"subtitle_text": "test", "start_time": 0, "end_time": 1}],
-            },
-        ),
-        ("vod_remove_subtitles", {"video_url": "https://example.com/input.mp4"}),
-    ],
-)
-async def test_vod_subtitle_scopes_reject_enhancement_only_token(
-    tmp_path: Path, tool_name: str, tool_input: dict[str, object]
+async def test_component_scope_allows_background_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async with _http_client(tmp_path) as http_client:
-        response = await http_client.post(
-            "/mcp",
-            headers={
-                "Authorization": "Bearer vod-token",
-                "Origin": "https://client.example.com",
-                "Accept": "application/json, text/event-stream",
-            },
-            json={
-                "jsonrpc": "2.0",
-                "id": 4,
-                "method": "tools/call",
-                "params": {"name": tool_name, "arguments": {"input": tool_input}},
-            },
-        )
+    from ark_mcp.providers.seed_speech.schemas import SeedAudioProviderResponse
+    from ark_mcp.providers.seed_speech.seed_audio import SeedAudioService
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["result"]["isError"] is True
-    assert "unknown tool" in payload["result"]["content"][0]["text"].lower()
+    monkeypatch.setenv("BYTEPLUS_SEED_SPEECH_API_KEY", "test-speech-key")
 
+    async def generate(
+        _self: SeedAudioService, _request: object, *, request_id: str | None = None
+    ) -> tuple[SeedAudioProviderResponse, str]:
+        return SeedAudioProviderResponse(
+            url="https://output.example.com/generated.wav"
+        ), "audio-log-id"
 
-async def test_vod_scope_allows_dispatch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from ark_mcp.providers.vod_mediakit.enhancement import VodMediaKitEnhancementService
-    from ark_mcp.providers.vod_mediakit.schemas import EnhancementSubmission
-
-    async def enhance(
-        _self: VodMediaKitEnhancementService, _request: object
-    ) -> EnhancementSubmission:
-        return EnhancementSubmission(
-            status="succeeded", output_url="https://output.example.com/enhanced.mp4"
-        )
-
-    async def close(_self: VodMediaKitEnhancementService) -> None:
+    async def close(_self: SeedAudioService) -> None:
         return None
 
-    monkeypatch.setattr(VodMediaKitEnhancementService, "enhance", enhance)
-    monkeypatch.setattr(VodMediaKitEnhancementService, "close", close)
+    monkeypatch.setattr(SeedAudioService, "generate", generate)
+    monkeypatch.setattr(SeedAudioService, "close", close)
     async with _http_client(tmp_path) as http_client:
         response = await http_client.post(
             "/mcp",
             headers={
-                "Authorization": "Bearer vod-token",
+                "Authorization": "Bearer audio-token",
                 "Origin": "https://client.example.com",
                 "Accept": "application/json, text/event-stream",
                 "Mcp-Protocol-Version": "2026-07-28",
                 "Mcp-Method": "tools/call",
-                "Mcp-Name": "vod_enhance_video",
+                "Mcp-Name": "seed_audio_generate",
             },
             json={
                 "jsonrpc": "2.0",
                 "id": 4,
                 "method": "tools/call",
                 "params": {
-                    "name": "vod_enhance_video",
+                    "name": "seed_audio_generate",
                     "arguments": {
-                        "input": {"video_url": "https://example.com/input.mp4", "persist": False}
+                        "input": {"text_prompt": "Generate a short tone", "persist": False}
                     },
                     "_meta": {
                         "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -312,7 +266,7 @@ async def test_vod_scope_allows_dispatch(tmp_path: Path, monkeypatch: pytest.Mon
                 polled = await http_client.post(
                     "/mcp",
                     headers={
-                        "Authorization": "Bearer vod-token",
+                        "Authorization": "Bearer audio-token",
                         "Origin": "https://client.example.com",
                         "Accept": "application/json, text/event-stream",
                         "Mcp-Protocol-Version": "2026-07-28",
@@ -341,7 +295,7 @@ async def test_vod_scope_allows_dispatch(tmp_path: Path, monkeypatch: pytest.Mon
         assert payload["result"]["isError"] is False
         assert (
             payload["result"]["structuredContent"]["source_url"]
-            == "https://output.example.com/enhanced.mp4"
+            == "https://output.example.com/generated.wav"
         )
 
 
@@ -633,7 +587,6 @@ async def test_ready_probes_use_resolved_settings_urls(tmp_path: Path) -> None:
     settings = settings.model_copy(
         update={
             "modelark_api_key": "test-modelark-key",
-            "vod_mediakit_api_key": "",
             "seed_speech_api_key": "",
             "modelark_base_url": "https://override.example.com",
         }

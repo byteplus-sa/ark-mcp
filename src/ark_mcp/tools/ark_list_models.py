@@ -336,7 +336,6 @@ def describe_services(settings: Settings) -> list[ServiceStatus]:
         ("seed_audio", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("seed_tts", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("speech_to_text", settings.has_stt, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
-        ("vod_mediakit", settings.has_vod_mediakit, "Set BYTEPLUS_VOD_MEDIAKIT_API_KEY."),
         (
             "omnihuman",
             settings.has_omnihuman,

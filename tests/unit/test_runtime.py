@@ -97,7 +97,7 @@ async def test_task_artifact_persistence_locks_keep_different_tasks_concurrent()
     entered: set[str] = set()
 
     async def worker(task_id: str) -> None:
-        async with locks.acquire("vod-mediakit", task_id):
+        async with locks.acquire("modelark", task_id):
             entered.add(task_id)
             if len(entered) == 2:
                 both_entered.set()
@@ -189,22 +189,20 @@ async def test_task_ownership_and_artifacts_are_provider_scoped(tmp_path: Path) 
     bob = AuthContext(principal_id="bob", tenant_id="tenant-a")
 
     await store.record("modelark", "shared-id", alice)
-    await store.record("vod-mediakit", "shared-id", bob)
+    await store.record("vision-cv", "shared-id", bob)
     await cache.set("modelark", "shared-id", {"video": _make_ref("modelark"), "last_frame": None})
-    await cache.set(
-        "vod-mediakit", "shared-id", {"video": _make_ref("mediakit"), "last_frame": None}
-    )
+    await cache.set("vision-cv", "shared-id", {"video": _make_ref("vision-cv"), "last_frame": None})
 
     await store.require_owner("modelark", "shared-id", alice)
-    await store.require_owner("vod-mediakit", "shared-id", bob)
+    await store.require_owner("vision-cv", "shared-id", bob)
     assert await _owned_ids(store, "modelark", alice) == ["shared-id"]
-    assert await _owned_ids(store, "vod-mediakit", alice) == []
+    assert await _owned_ids(store, "vision-cv", alice) == []
     modelark = await cache.get("modelark", "shared-id")
-    mediakit = await cache.get("vod-mediakit", "shared-id")
+    vision_cv = await cache.get("vision-cv", "shared-id")
     assert modelark is not None and modelark["video"] is not None
-    assert mediakit is not None and mediakit["video"] is not None
+    assert vision_cv is not None and vision_cv["video"] is not None
     assert modelark["video"].id == "modelark"
-    assert mediakit["video"].id == "mediakit"
+    assert vision_cv["video"].id == "vision-cv"
     await cache.close()
     await store.close()
 
@@ -255,7 +253,7 @@ async def test_legacy_runtime_tables_migrate_to_modelark_provider(tmp_path: Path
     migrated = await cache.get("modelark", "legacy-task")
     assert migrated is not None and migrated["video"] is not None
     assert migrated["video"].id == "legacy"
-    assert await cache.get("vod-mediakit", "legacy-task") is None
+    assert await cache.get("vision-cv", "legacy-task") is None
     await cache.close()
     await store.close()
 

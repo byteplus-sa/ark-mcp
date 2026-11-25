@@ -17,13 +17,13 @@ from ark_mcp.providers.vision_cv.schemas import (
     THROTTLE_CODES,
     CvEnvelope,
 )
-from ark_mcp.providers.vod_mediakit.client import sanitize_provider_message
 
 if TYPE_CHECKING:
     import httpx
 
 _ECHOED_BODY_MARKER = ", body:"
 _MESSAGE_MAX_CHARS = 600
+_URL_PATTERN = re.compile(r"https?://\S+", re.IGNORECASE)
 _NESTED_FAILURE = re.compile(r"failed with HTTP (\d{3})")
 _NESTED_CODE = re.compile(r'"code":"([^"]+)"')
 _NESTED_DETAIL = re.compile(r'"message":"(.+?)(?:\. Request id:|","param"|","type"|"\})')
@@ -74,7 +74,7 @@ def clean_provider_message(message: str, fallback: str) -> str:
     if nested is not None and nested.is_rejection and nested.detail:
         message = f"{nested.code or 'Rejected'}: {nested.detail}"
     head = message.split(_ECHOED_BODY_MARKER, 1)[0]
-    cleaned = sanitize_provider_message(head, fallback)
+    cleaned = _URL_PATTERN.sub("[REDACTED_URL]", head).strip() or fallback
     if len(cleaned) > _MESSAGE_MAX_CHARS:
         return f"{cleaned[: _MESSAGE_MAX_CHARS - 3].rstrip()}..."
     return cleaned

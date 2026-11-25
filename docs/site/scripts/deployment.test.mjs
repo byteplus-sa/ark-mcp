@@ -136,7 +136,6 @@ test("Secret Manager setup and rotation instructions preserve unrelated service 
   assert.match(content, /chmod 0600/);
   assert.match(content, /ModelArk.*BYTEPLUS_MODELARK_API_KEY/);
   assert.match(content, /Seed Speech.*BYTEPLUS_SEED_SPEECH_API_KEY/);
-  assert.match(content, /MediaKit.*BYTEPLUS_VOD_MEDIAKIT_API_KEY/);
   assert.match(content, /Vision AI.*BYTEPLUS_CV_API_KEY/);
   assert.match(content, /1\. Create.*replacement.*provider/i);
   assert.match(content, /2\. Create a new.*Generic secret version/);

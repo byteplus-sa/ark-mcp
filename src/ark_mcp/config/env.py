@@ -143,12 +143,6 @@ class Settings(BaseSettings):
         validation_alias="BYTEPLUS_SEED_SPEECH_API_KEY",
         description="Seed Speech API key for Seed Audio, Seed TTS 3 and ASR (speech-to-text).",
     )
-    vod_mediakit_api_key: str = Field(
-        default="",
-        validation_alias="BYTEPLUS_VOD_MEDIAKIT_API_KEY",
-        description="BytePlus VOD AI MediaKit Bearer API key.",
-    )
-
     cv_api_key: str = Field(
         default="",
         validation_alias="BYTEPLUS_CV_API_KEY",
@@ -165,11 +159,6 @@ class Settings(BaseSettings):
         default="https://voice.ap-southeast-1.bytepluses.com",
         validation_alias="BYTEPLUS_SEED_AUDIO_BASE_URL",
         description="Seed Speech base URL shared by Seed Audio and Seed TTS 3.",
-    )
-    vod_mediakit_base_url: str = Field(
-        default="https://mediakit.ap-southeast-1.bytepluses.com/api/v1",
-        validation_alias="BYTEPLUS_VOD_MEDIAKIT_BASE_URL",
-        description="BytePlus VOD AI MediaKit HTTPS API base URL.",
     )
     cv_base_url: str = Field(
         default="https://openapi.cv.bytepluses.com",
@@ -653,11 +642,6 @@ class Settings(BaseSettings):
         return bool(self.seed_speech_api_key)
 
     @property
-    def has_vod_mediakit(self) -> bool:
-        """Whether BytePlus VOD AI MediaKit credentials are configured."""
-        return bool(self.vod_mediakit_api_key)
-
-    @property
     def has_omnihuman(self) -> bool:
         """Whether OmniHuman 2.0 is enabled and a Vision AI API key is configured."""
         return self.omnihuman_enabled and bool(self.cv_api_key)
@@ -734,7 +718,6 @@ class Settings(BaseSettings):
         "modelark_base_url",
         "seed_audio_base_url",
         "seed_speech_asr_base_url",
-        "vod_mediakit_base_url",
         "cv_base_url",
         "modelark_openapi_base_url",
     )
@@ -747,7 +730,6 @@ class Settings(BaseSettings):
                 "modelark_base_url": "BYTEPLUS_MODELARK_BASE_URL",
                 "seed_audio_base_url": "BYTEPLUS_SEED_AUDIO_BASE_URL",
                 "seed_speech_asr_base_url": "SEED_SPEECH_ASR_BASE_URL",
-                "vod_mediakit_base_url": "BYTEPLUS_VOD_MEDIAKIT_BASE_URL",
                 "cv_base_url": "BYTEPLUS_CV_BASE_URL",
             }
             variable = env_var_map.get(info.field_name or "", "BYTEPLUS_PROVIDER_BASE_URL")
@@ -951,8 +933,6 @@ def validate() -> None:
         raise ValueError("BYTEPLUS_MODELARK_BASE_URL must use HTTPS")
     if not settings.seed_audio_base_url.startswith("https://"):
         raise ValueError("BYTEPLUS_SEED_AUDIO_BASE_URL must use HTTPS")
-    if not settings.vod_mediakit_base_url.startswith("https://"):
-        raise ValueError("BYTEPLUS_VOD_MEDIAKIT_BASE_URL must use HTTPS")
     if not settings.modelark_openapi_base_url.startswith("https://"):
         raise ValueError("BYTEPLUS_MODELARK_OPENAPI_BASE_URL must use HTTPS")
     if settings.artifact_ttl_seconds <= 0:

@@ -193,8 +193,8 @@ cannot be resumed from a newly launched stdio process.
 
 An Ark `job_id` is not a provider task ID. After an explicitly approved,
 potentially billable provider-submission operation, read the provider ID
-from `result.structured_content` and poll `gen_task_get`, `vod_get_task`,
-or `omnihuman_get_task` as appropriate. Do not repeat a create call to poll.
+from `result.structured_content` and poll `gen_task_get` or
+`omnihuman_get_task` as appropriate. Do not repeat a create call to poll.
 `ark_job_cancel` is cooperative local cancellation, not a guarantee of
 provider cancellation. Explicit file writes from jobs need `OUTPUT_ROOTS`
 because workers have no client MCP roots.

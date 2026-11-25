@@ -46,7 +46,7 @@ have no close method.
 Two distinct layers, acquired together for every billable call:
 
 - **Provider-level** — one global `asyncio.Semaphore` per provider bucket:
-  `"modelark"`, `"modelark-openapi"`, `"seed-speech"`, `"vod-mediakit"`,
+  `"modelark"`, `"modelark-openapi"`, `"seed-speech"`,
   `"vision-cv"`, `"tos"`, and `"s3"`.
   Each is independently sized to `provider_limit`, so the default cap is five
   concurrent calls per provider rather than five shared across all providers.
@@ -138,8 +138,8 @@ See [moderation.md](moderation.md) for eligibility and live-unverified status.
 `RuntimeServices.task_artifact_locks` is a process-local
 `TaskArtifactPersistenceLocks` registry keyed by `(provider, task_id)`. A lock
 entry exists only while a holder or waiter is active and is removed when its
-user count reaches zero. Enhancement polling uses it to recheck the durable
-task-artifact cache inside the critical section and share a just-created
+user count reaches zero. Seedance and OmniHuman polling use it to recheck the
+durable task-artifact cache inside the critical section and share a just-created
 artifact with concurrent waiters, while different task IDs remain concurrent.
 Cache failures are best-effort: they emit safe warnings but do not erase a
 successful provider result or an artifact that was already created.
@@ -384,14 +384,10 @@ Timeout classification depends on whether the call can create provider state:
 
 | Call | Examples | Timeout result | Auto-retried? |
 |---|---|---|---|
-| Mutation | Seedance create, cancel, delete; Seedream/Seed Audio/Seed TTS generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
-| Read-only poll | Seedance `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
+| Mutation | Seedance create, cancel, delete; Seedream/Seed Audio/Seed TTS generate | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
+| Read-only poll | Seedance `get_task`/`list_tasks`, ASR `query_asr`, OmniHuman task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
 | Chat completion | `seed_understand`, `seed_audio_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
 | Moderation lookup | `ark_moderation_get` | `retryable=True`, `ambiguous_completion=False` | No; one request per admitted lookup |
-
-MediaKit polls apply the same rule to their own transport normalizer:
-poll timeouts and connection failures are retryable and non-ambiguous, while
-submit failures stay ambiguous.
 
 ## Parallel variations (`tools/_parallel.py`)
 

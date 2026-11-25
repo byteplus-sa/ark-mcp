@@ -114,7 +114,7 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 Object storage uses the recorded audio size to bound reads of stored audio.
 
 `copy_from_trusted_url` passes a host-suffix allowlist
-(`.bytepluses.com`, `.byteplus.com`, `.byteplusvod.com`, `.bytedance.com`,
+(`.bytepluses.com`, `.byteplus.com`, `.bytedance.com`,
 `.bytednsdoc.com`, `.volces.com`, `.tos-ap-southeast.bytepluses.com`) as the
 `trusted_hosts` predicate to `SafeDownloader.download`. A caller can extend it for
 one download with `extra_trusted_host_suffixes` (dot-prefixed); `omnihuman_get_task`
@@ -172,8 +172,7 @@ reports `error.phase="persisting"`.
 
 For `gen_task_get`, an unpersisted result is not cached, so the
 next poll with `persist_output=true` tries again while the provider URL is
-still valid. MediaKit get tools keep their per-output persistence status
-(`persisted`, `failed`, ...) alongside the provider `source_url`.
+still valid.
 
 ## Local copies
 

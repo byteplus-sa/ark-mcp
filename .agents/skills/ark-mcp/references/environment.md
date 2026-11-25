@@ -73,9 +73,11 @@ its task and MCP SDK dependencies.
   operator-side pinned generic-secret versions for first deployment and
   `config status`, `config plan`, approved `config apply`, and unsubmitted
   `config discard`. The protected reference binds Johor KMS region, account,
-  project, name and exact version UUID. Only the four provider keys are managed;
-  missing entries disable products. Never retrieve real secret values through
-  an agent merely to inspect configuration; status is local and redacted.
+  project, name and exact version UUID. The bundle supports ModelArk, Seed Speech
+  and Vision AI product keys, and missing entries disable products. If a bundle
+  has a retired field, pin a new version containing only the supported fields
+  before deployment or configuration planning. Never retrieve real secret values
+  through an agent merely to inspect configuration. Status is local and redacted.
   Secret reads use scoped operator IAM, never new VM IAM credentials. Approved
   sync recreates only MCP, preserves shared-key/job/storage configuration and
   resumes staged bytes and accepted IDs. Pause producers and drain jobs before
@@ -93,7 +95,7 @@ its task and MCP SDK dependencies.
 **Do not assume a fixed tool count.** A tool registers only when its gate
 passes; the server degrades to whatever is configured. `ark_list_models.services`
 and `seed-health://status` report what is on.
-The catalog contains 38 tools. The `moderation` service and
+The catalog contains 32 tools. The `moderation` service and
 `Moderation lookup configured` health line report configuration, not provider
 entitlement or shared-key permission.
 
@@ -102,7 +104,6 @@ entitlement or shared-key permission.
 | (always) | `ark_list_models`, `ark_job_*`, `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url`, `seed-health://status` |
 | `BYTEPLUS_MODELARK_API_KEY` | `seedream_generate_image`, `seedance_create_task`, `gen_task_get` / `gen_task_list` / `gen_task_cancel_or_delete`, `seed_understand`, `seed_audio_understand` |
 | `BYTEPLUS_SEED_SPEECH_API_KEY` | `seed_audio_generate`, `seed_tts_generate`, `speech_to_text` (one key, three capabilities) |
-| `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `vod_get_task` |
 | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task`. Separate Vision AI Bearer key; default off. Overrides: `BYTEPLUS_CV_BASE_URL`, `BYTEPLUS_OMNIHUMAN_REQ_KEY` |
 | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result` (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP...` keys) |
 | `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` + AK/SK | Additionally registers the irreversible `ark_asset_delete` (default off) |
@@ -151,7 +152,6 @@ Gotchas that follow from the gates:
 |---|---|---|
 | `BYTEPLUS_MODELARK_BASE_URL` | `https://ark.ap-southeast.bytepluses.com/api/v3` | Key is region-scoped; must match |
 | `BYTEPLUS_SEED_AUDIO_BASE_URL`, `SEED_SPEECH_ASR_BASE_URL` | `https://voice.ap-southeast-1.bytepluses.com` | Seed Audio and Seed TTS share the first; ASR uses the second |
-| `BYTEPLUS_VOD_MEDIAKIT_BASE_URL` | `https://mediakit.ap-southeast-1.bytepluses.com/api/v1` | Must be HTTPS |
 | `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | Assets, moderation and pricing control plane (signed with AK/SK) |
 | `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` / `_MAX_SECONDS` | `3` / `600` | Server-side ASR polling cadence and ceiling |
 | `BYTEPLUS_CONNECT_TIMEOUT_MS` / `BYTEPLUS_REQUEST_TIMEOUT_MS` | `10000` / `600000` | Provider connect and full-request timeouts |
@@ -205,8 +205,6 @@ selected by the client. Provider credentials and feature gates still apply.
 | `seed:asr:transcribe` | `speech_to_text` |
 | `understanding:read` | `seed_understand`, `seed_audio_understand` |
 | `omnihuman:create` / `:read` / `:cancel` | `omnihuman_create_task` / `omnihuman_get_task` / `omnihuman_cancel_task` |
-| `vod:enhance`, `vod:transcode`, `vod:extract`, `vod:subtitle:add`, `vod:subtitle:remove` | The matching `vod_*` submit tool (`vod_separate_audio` is `vod:extract`) |
-| `vod:read` | `vod_get_task` |
 | `media:upload` | `media_upload`, `seed_media_persist_url` |
 | `media:presign` | `media_presign` |
 | `artifacts:read` | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed-media://artifacts/{id}` |
@@ -295,7 +293,6 @@ flowchart LR
     Server --> Domain[Domain layer<br/>validation, budget, ownership, artifacts]
     Domain --> MA[ModelArk<br/>Bearer key]
     Domain --> SS[Seed Speech<br/>X-Api-Key]
-    Domain --> VOD[VOD AI MediaKit<br/>Bearer key]
     Domain -.-> CV[Vision AI<br/>OmniHuman, Bearer CV key]
     Domain -.-> OA[ModelArk OpenAPI<br/>AK/SK V4 signing]
     Domain --> Store[(Artifact store<br/>+ SQLite state)]
@@ -305,7 +302,6 @@ flowchart LR
 |---|---|---|
 | ModelArk data plane | `Authorization: Bearer <BYTEPLUS_MODELARK_API_KEY>` | Seedream, Seedance, Seed 2.1 and audio understanding |
 | Seed Speech | `X-Api-Key: <BYTEPLUS_SEED_SPEECH_API_KEY>` | Seed Audio, Seed TTS 3.0 and Speech-to-Text; same key, separate capabilities |
-| VOD AI MediaKit | `Authorization: Bearer <BYTEPLUS_VOD_MEDIAKIT_API_KEY>` | Enhancement, transcode, subtitles, audio separation |
 | Vision AI (optional) | `Authorization: Bearer <BYTEPLUS_CV_API_KEY>` | OmniHuman 2.0 |
 | ModelArk OpenAPI (optional) | IAM AK/SK, V4 signatures | Private asset library, opt-in moderation lookup and cached pricing |
 

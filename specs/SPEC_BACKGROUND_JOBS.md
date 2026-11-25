@@ -150,8 +150,8 @@ Output `BackgroundJobSnapshot`:
 - **Ownership is checked before the backend is queried.**
 - **`input_required` is unsupported** on this path: the snapshot carries error
   code `-32602` telling the caller to cancel or use a task-capable client.
-- **Job IDs and provider task IDs are distinct.** A Seedance, VOD or
-  OmniHuman provider `task_id` appears only inside `result.structured_content`.
+- **Job IDs and provider task IDs are distinct.** A Seedance or OmniHuman
+  provider `task_id` appears only inside `result.structured_content`.
 
 ### `ark_job_cancel`
 

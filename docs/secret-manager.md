@@ -35,7 +35,6 @@ never chat, shell history, Terraform or committed files. Store a JSON object:
 |---|---|---|
 | ModelArk | `BYTEPLUS_MODELARK_API_KEY` | Image/video generation and multimodal understanding |
 | Seed Speech | `BYTEPLUS_SEED_SPEECH_API_KEY` | Seed Audio, Seed TTS 3.0 and speech-to-text; no new bundle field |
-| VOD AI MediaKit | `BYTEPLUS_VOD_MEDIAKIT_API_KEY` | Video processing and audio separation |
 | Vision AI | `BYTEPLUS_CV_API_KEY` | Enabled OmniHuman avatar generation |
 
 Obtain dedicated deployment keys from the corresponding service, following
@@ -47,17 +46,21 @@ the empty entries below are examples of deliberately disabled services.
 {
   "BYTEPLUS_MODELARK_API_KEY": "ENTER-REAL-KEY-IN-PRIVATE-CONSOLE",
   "BYTEPLUS_SEED_SPEECH_API_KEY": "",
-  "BYTEPLUS_VOD_MEDIAKIT_API_KEY": "",
   "BYTEPLUS_CV_API_KEY": ""
 }
 ```
 
-The bundle is the **complete desired set of provider keys**: omitted or empty
-entries disable those products; at least one key must be nonempty. Only these
-four names are allowed. Duplicate fields, non-string values, oversized values,
-whitespace, non-ASCII and interpolation characters are rejected. Feature flags,
-provider hosts, limits, model bindings, registry credentials and the shared MCP
-key are outside this provider-only integration.
+The bundle is the **complete desired set of provider keys**. At least one key
+must be nonempty, and omitted or empty entries disable those products. Only
+the fields listed above are allowed. Duplicate fields, non-string values,
+oversized values, whitespace, non-ASCII and interpolation characters are
+rejected. Feature flags, provider hosts, limits, model bindings, registry
+credentials and the shared MCP key are outside this provider-only integration.
+
+If an existing bundle contains a retired field, create a new secret version
+using the supported fields and pin its exact version ID in the reference file
+before first deployment or an approved configuration sync. The CLI rejects a
+retired field even when its value is empty.
 
 ## Set Up Private Reference Files
 

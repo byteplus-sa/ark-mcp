@@ -41,7 +41,7 @@ explicit `VersionID`. The returned version must match.
 
 `SecretValue` is a bounded JSON object with only:
 `BYTEPLUS_MODELARK_API_KEY`, `BYTEPLUS_SEED_SPEECH_API_KEY`,
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY`, `BYTEPLUS_CV_API_KEY`.
+`BYTEPLUS_CV_API_KEY`.
 Missing/empty entries intentionally disable products. At least one is
 nonempty. Duplicate fields, other fields, non-string values, non-ASCII,
 whitespace, interpolation/quoting characters and oversized values fail

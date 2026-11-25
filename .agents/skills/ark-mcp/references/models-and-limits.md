@@ -17,7 +17,7 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 - **`models[]`** has one entry per configured model whose service is enabled (Seed TTS uses the Seed Speech key independently of ModelArk). Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, `tts`, or `understanding`).
 - **`model_id` is the exact value the `model` argument accepts.** Omitting `model` uses the entry with `is_default: true`.
 - **`tool`** names the tool that serves the model. Understanding modalities and media limits describe this route, not every possible use of the underlying model. `seed_audio_understand` advertises only `audio` (up to eight clips); use `seed_understand` for images/videos. Neither handler accepts mixed audio/visual requests.
-- **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seed_audio`, `seed_tts`, `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`, `moderation`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
+- **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seed_audio`, `seed_tts`, `speech_to_text`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`, `moderation`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
 
 | `kind` | `tool` | Notes on `is_default` |
 |---|---|---|

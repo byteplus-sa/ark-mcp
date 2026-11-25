@@ -30,7 +30,7 @@ See [release policy and installation](docs/releases.md) and the
 
 ## What It Does
 
-The catalog contains 38 tools, conditionally exposed across several BytePlus
+The catalog contains 32 tools, conditionally exposed across several BytePlus
 products plus artifact access and an optional media upload helper:
 
 | Product | Tools | Description |
@@ -44,11 +44,6 @@ products plus artifact access and an optional media upload helper:
 | **Seed 2.1 Understanding** | `seed_understand` | Background-task video/image understanding and reasoning through ModelArk Chat Completions; always thinks, returns only the final answer, enforces JSON Schemas, and can save the answer to a local file |
 | **Seed Audio Understanding** | `seed_audio_understand` | Background-task audio understanding (transcription, translation, speaker/emotion analysis, summaries, Q&A) through ModelArk Chat Completions `input_audio`; model set by `SEED_AUDIO_UNDERSTANDING_MODEL` (default `seed-2-0-lite-260428`), same thinking, JSON Schema, and `save_to` controls as `seed_understand` |
 | **Speech-to-Text** | `speech_to_text` | Background-task audio transcription through Seed Speech ASR (HTTP) |
-| **VOD AI MediaKit** | `vod_enhance_video` | Submit asynchronous AI video upscaling/enhancement with fast, standard, or professional tiers and target resolutions from 240p to 8K |
-| **VOD AI MediaKit Transcode** | `vod_transcode_video` | Submit async video transcoding (codec, container, resolution, bitrate, frame rate) |
-| **VOD AI MediaKit Subtitles** | `vod_add_subtitles`, `vod_remove_subtitles` | Burn SRT/VTT/ASS or inline cues into video, or remove hardcoded subtitles and recognized on-screen text |
-| **VOD Audio Separation** | `vod_separate_audio` | Submit voice + background (or voice + music + sfx) audio separation via the VOD AI MediaKit (`separate-voice`) |
-| **VOD task polling** | `vod_get_task` | One poller for every `vod_*` task: pass the `task_id` and `operation` the create tool returned; normalized status and outputs with optionally background durable persistence |
 | **Private Asset Library** | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result`, `ark_asset_delete` | Manage Seedance Advanced Creation Rights assets (virtual portraits, verified real people) with BytePlus AK/SK; reference them as `asset://<id>` in Seedance |
 | **Moderation lookup** (optional) | `ark_moderation_get` | Foreground-only block-reason lookup for existing provider records; default-off flag + AK/SK, account-wide trusted local access only, not shared-key HTTP. [Bounds and live-unverified status](docs/moderation.md) |
 | **Artifacts** | `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url` | Retrieve persisted media inline by artifact ID, locate/copy it to a local path without Base64 round-trips, or durably persist a provider URL whose storage failed |
@@ -78,13 +73,12 @@ Key features:
   provider-key reads and approved, resumable MCP-only configuration sync.
 - **Durable artifacts** — generated media is persisted locally so MCP
   resources remain usable after known provider URL lifetimes (2h Seed Audio, 24h
-  ModelArk image/video); VOD MediaKit persistence is best-effort and capped at
-  200 MiB, and completed enhancement URLs have a confirmed 24-hour lifetime.
-  Seed TTS always persists the complete output and has no provider download URL
+  ModelArk image/video, 1h OmniHuman video).
+  Seed TTS always persists the complete output and has no provider download URL.
 - **Storage fallbacks** — downloads are retried; if storage still fails,
   results preserve a provider URL or bounded inline bytes with
-  `persistence_error`. Recover URLs with `seed_media_persist_url`; Seed TTS
-  has no provider URL and fails if its inline fallback exceeds the cap
+  `persistence_error`. Recover URLs with `seed_media_persist_url`. Seed TTS
+  has no provider URL and fails if its inline fallback exceeds the cap.
 - **Local output paths** — on stdio, `output_path` / `output_dir` / `save_to`
   write results straight into the client's MCP roots (or `OUTPUT_ROOTS`) with
   symlink-safe, no-silent-overwrite writes
@@ -177,7 +171,7 @@ flowchart TB
     TR[TRAE IDE]
   end
   subgraph Server["Ark MCP Server (FastMCP)"]
-    Tools["Tools<br/>Seedream · Seedance · Seed Audio · Seed TTS · VOD AI MediaKit · Artifacts · Object storage"]
+    Tools["Tools<br/>Seedream · Seedance · Seed Audio · Seed TTS · OmniHuman · Artifacts · Object storage"]
     Domain["Domain layer<br/>models · capability registry · errors"]
     Runtime["Runtime services<br/>concurrency · budget · ownership · retry"]
     Store["Artifact store<br/>filesystem + .meta.json"]
@@ -187,7 +181,7 @@ flowchart TB
   subgraph Providers["BytePlus"]
     MA["ModelArk gateway<br/>Bearer auth"]
     SS["Seed Speech gateway<br/>X-Api-Key"]
-    VOD["VOD AI MediaKit gateway<br/>Bearer auth"]
+    CV["Vision AI gateway<br/>Bearer auth"]
   end
   Client <-->|"stdio / HTTP"| Tools
   Tools --> Domain
@@ -299,11 +293,9 @@ only when object storage credentials (TOS or S3) are configured, and
 when `BYTEPLUS_SEED_SPEECH_API_KEY` is set. Seed TTS reuses
 `BYTEPLUS_SEED_AUDIO_BASE_URL` and `seed:audio:generate`; no new environment
 variable is needed.
-`vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`,
-`vod_remove_subtitles`, `vod_separate_audio`, and `vod_get_task` appear only when
-`BYTEPLUS_VOD_MEDIAKIT_API_KEY` is set. `omnihuman_create_task`,
-`omnihuman_get_task`, and `omnihuman_cancel_task` appear only when
-`BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY` is set.
+`omnihuman_create_task`, `omnihuman_get_task`, and `omnihuman_cancel_task`
+appear only when `BYTEPLUS_OMNIHUMAN_ENABLED=true` and `BYTEPLUS_CV_API_KEY`
+is set.
 `ark_moderation_get` additionally requires
 `BYTEPLUS_MODELARK_MODERATION_ENABLED=true` and complete ModelArk AK/SK.
 The `ark_list_models.services` entry `moderation` reports configuration, not

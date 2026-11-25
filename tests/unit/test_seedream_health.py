@@ -155,7 +155,6 @@ async def test_health_does_not_probe_providers_or_reveal_secrets(
         tmp_path,
         OUTPUT_ROOTS=str(tmp_path / "private-output"),
         BYTEPLUS_SEED_SPEECH_API_KEY="speech-test-key",  # pragma: allowlist secret
-        BYTEPLUS_VOD_MEDIAKIT_API_KEY="vod-test-key",  # pragma: allowlist secret
         BYTEPLUS_CV_API_KEY="cv-test-key",  # pragma: allowlist secret
         BYTEPLUS_MODELARK_ACCESS_KEY="test-access-key",  # pragma: allowlist secret
         BYTEPLUS_MODELARK_SECRET_KEY="test-secret-key",  # pragma: allowlist secret
@@ -172,7 +171,6 @@ async def test_health_does_not_probe_providers_or_reveal_secrets(
     for value in (
         settings.modelark_api_key,
         settings.seed_speech_api_key,
-        settings.vod_mediakit_api_key,
         settings.cv_api_key,
         settings.modelark_access_key,
         settings.modelark_secret_key,
