@@ -13,7 +13,7 @@ server-side and are separate from the MCP key.
 
 ## Tool Inventory
 
-The catalog contains 37 tools; configuration gates and caller permissions
+The catalog contains 38 tools; configuration gates and caller permissions
 determine the visible inventory.
 
 | # | Tool | Product | Type | Auth |
@@ -55,6 +55,7 @@ determine the visible inventory.
 | 35 | `ark_job_get` | Background jobs | Read-only ordinary tool | Owner only |
 | 36 | `ark_job_cancel` | Background jobs | Destructive ordinary tool | Owner only |
 | 37 | `ark_moderation_get` | Moderation (opt-in) | Foreground-only read | Flag + BytePlus AK/SK; trusted local only |
+| 38 | `seed_tts_generate` | Seed TTS 3.0 | Required background task | Seed Speech |
 
 Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2.md).
 
@@ -62,6 +63,8 @@ Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2
 `BYTEPLUS_MODELARK_API_KEY` is set, it requires `seedream:generate` in `api_key` mode.
 **`seed_audio_generate` covers single and parallel audio** and requires
 `seed:audio:generate`.
+**`seed_tts_generate` is distinct text-to-speech** and uses the same scope,
+Seed Speech key and `BYTEPLUS_SEED_AUDIO_BASE_URL`; no new env setting.
 
 `seedance_create_task` serves every configured
 Seedance model (pick one from `ark_list_models(kind='video')`), is registered
@@ -89,6 +92,7 @@ See [security.md](security.md) for the full scope list.
 |---|---|---|---|---|
 | `ark_list_models` | true | false | true | false |
 | `seed_audio_generate` | false | false | false | true |
+| `seed_tts_generate` | false | false | false | true |
 | `seedream_generate_image` | false | false | false | true |
 | `seedance_create_task` | false | false | false | true |
 | `gen_task_get` | false | false | true | false |
@@ -131,10 +135,11 @@ not read-only because `output_dir`/`output_path` write local files.
 
 ## Background Execution
 
-Generation tools (`seed_audio_generate`, `seedream_generate_image`, including
-their variations and dry runs), `speech_to_text`, `media_upload`,
-`seed_understand`, `seed_audio_understand`, and Seedance and
-MediaKit provider-submission tools declare `execution.taskSupport="required"`. By default, discover them
+Generation tools (`seed_tts_generate`, `seed_audio_generate`,
+`seedream_generate_image`, including supported variations and dry runs),
+`speech_to_text`, `media_upload`, `seed_understand`, `seed_audio_understand`,
+and Seedance and MediaKit submissions declare `execution.taskSupport="required"`.
+By default, discover them
 with `ark_job_capabilities`, submit them through `ark_job_submit`, and poll
 `ark_job_get` at the advertised two-second interval until terminal. A
 task-capable client may instead invoke them with MCP task metadata and read the
@@ -180,7 +185,7 @@ provider task IDs are separate identifiers.
 ## Local Output Paths
 
 On stdio transport, these fields write output straight to a local file:
-`output_path` on `seedream_generate_image`, `seed_audio_generate`, and
+`output_path` on `seedream_generate_image`, `seed_audio_generate`, `seed_tts_generate`, and
 `vod_get_task`; `output_dir` on `gen_task_get`; `save_to` on `seed_understand`
 and `seed_audio_understand`; and `destination_path` on
 `seed_media_export_artifact`. Each comes with an `overwrite` boolean (default
@@ -192,7 +197,7 @@ and `seed_audio_understand`; and `destination_path` on
 | Path form | Absolute. `output_path` names a file, or a directory when it ends with `/` (files named `<artifact_id>.<ext>`) |
 | Allowed roots | Client MCP roots (`roots/list`) first, otherwise `OUTPUT_ROOTS`; with neither, path writing is disabled. Inside `ark_job_submit` there are no MCP roots, so `OUTPUT_ROOTS` is required |
 | Timing | Validated before any provider call |
-| Preconditions | `persist=true` (generation tools) or `persist_output=true` (task pollers); a directory is required for `seedream_generate_image` with `variations > 1` or `max_images > 1`, `seed_audio_generate` with `variations > 1`, and `vod_get_task` with `operation="separate_audio"` |
+| Preconditions | `persist=true` (generation tools) or `persist_output=true` (task pollers); Seed TTS always persists and has no `persist` switch. A directory is required for `seedream_generate_image` with `variations > 1` or `max_images > 1`, `seed_audio_generate` with `variations > 1`, and `vod_get_task` with `operation="separate_audio"` |
 | Existing files | Replaced only with `overwrite=true`; identical content is success |
 | Failure | A failed local write never fails the call; see `ArtifactRef.local_path` / `export_error` |
 
@@ -251,7 +256,7 @@ A durable reference to persisted media.
 | `sha256` | string | SHA-256 hex digest |
 | `created_at` | string | ISO-8601 timestamp |
 | `expires_at` | string | Local artifact expiry |
-| `source_expires_at` | string | Provider URL expiry (2h audio, 24h image/video) |
+| `source_expires_at` | string \| null | Provider URL expiry (2h Seed Audio, 24h image/video); none for Seed TTS |
 | `persistence_error` | ArtifactPersistenceIssue \| null | Set when the output was generated (and billed) but could not be stored durably |
 | `fallback_data` | string \| null | Base64 output bytes, only for `id="inline-fallback"` (up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`) |
 | `local_path` | string \| null | Absolute local path written for `output_path`/`output_dir` |
@@ -320,7 +325,7 @@ no provider calls**.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `kind` | string | No | — | Filter to one model kind: `video`, `image`, or `understanding`. Omit to list every configured kind |
+| `kind` | string | No | — | Filter to one model kind: `video`, `image`, `audio`, or `understanding`. Omit to list every configured kind |
 
 ### Output
 
@@ -336,8 +341,11 @@ no provider calls**.
 model), and one limits object matching the kind: `video` (resolutions,
 `duration_seconds` range, ratios, reference counts, Draft support, task types,
 output formats), `image` (reference count, output formats, batch support,
-sizes, transparent background), or `understanding` (modalities, media-part limit,
-thinking support, reasoning efforts, response formats).
+sizes, transparent background), `tts` for `kind="audio"` (`max_text_characters`,
+`max_ssml_characters`, `output_formats`, `requires_voice_id`), or
+`understanding` (modalities, media-part limit,
+thinking support, reasoning efforts, response formats). The audio entry is
+`dola-seed-tts-3.0`, served by `seed_tts_generate`, enabled by the Seed Speech key.
 
 Each `ModelInfo` also has nullable `pricing` with `catalog_name`, `display_name`,
 `available`, and `charge_items` (`charge_type`, `price`, `list_price`, `unit`).
@@ -353,7 +361,7 @@ images/videos. Neither route supports mixed audio/visual requests.
 
 **ServiceStatus:** `service`, `enabled`, and `reason` (the env var or flag that
 enables a disabled service; never a secret value). Services: `modelark`,
-`seed_audio`, `speech_to_text`,
+`seed_audio`, `seed_tts`, `speech_to_text`,
 `vod_mediakit`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`,
 `moderation`. The last reports flag + AK/SK configuration, not whitelist
 activation, IAM permission, model coverage or shared-key access.
@@ -2561,6 +2569,41 @@ Synthetic input:
 ```json
 {"input":{"id":"synthetic-task-id","type":"task_id"}}
 ```
+
+## 38. seed_tts_generate
+
+Text-to-speech with `dola-seed-tts-3.0`, distinct from full-scene Seed Audio.
+Requires `seed:audio:generate` in `api_key` mode and background execution
+through `ark_job_submit` or native tasks. Uses the existing Seed Speech key
+and base URL. The worker aggregates HTTP JSONL and persists the complete audio;
+it does not expose live audio streaming over MCP.
+
+### Input
+
+Required `voice_id` and exactly one nonblank `text` or `ssml`, each max
+10,000 characters (SSML is a local safety bound). Optional controls cover
+MP3/PCM/Opus `output_format`, `voice_settings`, `pronunciation_dictionary.tone`,
+language, subtitles, session, normalization, Markdown filtering and appended
+silence. Use a Speaker ID for the target language from the
+[Seed TTS 3.0 Voice List](https://docs.byteplus.com/en/docs/byteplusvoice/voicelist-3-0)
+or an authorized cloned voice ID.
+The [input contract](seed-tts.md#inputs) lists every field, default and bound.
+Optional stdio `output_path`/`overwrite` follows the local output policy.
+
+There is no `persist=false` mode; full output persistence is mandatory.
+
+### Output
+
+`provider`, `model`, `artifact`, resolved `output_format`, `session_id`, `alignments` as
+`[{text, words: [{word, start_time, end_time}]}]` with word timestamps in
+**seconds**, `request_id` and optional `provider_log_id`. The artifact uses
+the existing bounded storage fallback on persistence failure. No duration or
+provider URL is fabricated. Retrieve the terminal result through `ark_job_get`,
+not `gen_task_get`.
+
+See [Seed TTS 3.0](seed-tts.md) for a complete job example, published billing
+(USD 20/million characters including SSML/audio tags), source references
+and verification details.
 
 ## Operational HTTP endpoints
 

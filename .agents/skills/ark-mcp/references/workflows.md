@@ -15,7 +15,7 @@ they can.
 
 | Mode | Tools |
 |---|---|
-| **Required**: a direct foreground call is rejected before the provider is contacted | `seedance_create_task`, `seedream_generate_image`, `seed_audio_generate`, `omnihuman_create_task`, `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `seed_understand`, `seed_audio_understand`, `speech_to_text`, `media_upload` |
+| **Required**: a direct foreground call is rejected before the provider is contacted | `seedance_create_task`, `seedream_generate_image`, `seed_audio_generate`, `seed_tts_generate`, `omnihuman_create_task`, `vod_enhance_video`, `vod_transcode_video`, `vod_add_subtitles`, `vod_remove_subtitles`, `vod_separate_audio`, `seed_understand`, `seed_audio_understand`, `speech_to_text`, `media_upload` |
 | **Optional**: foreground by default; background for long waits or persistence | `gen_task_get`, `vod_get_task`, `omnihuman_get_task`, `seed_media_persist_url`, `ark_asset_create`, `ark_asset_verification_result` |
 | **Foreground only** | everything else (`ark_list_models`, `gen_task_list`, `gen_task_cancel_or_delete`, `omnihuman_cancel_task`, `media_presign`, artifact reads, the other `ark_asset_*` tools) |
 
@@ -112,6 +112,27 @@ For Seedance, VOD and OmniHuman:
 5. `gen_task_cancel_or_delete` is destructive and needs `expected_status` to
    match. Deleting makes the outputs unretrievable through `gen_task_get`, so
    persist first.
+
+### Seed TTS: submit and retrieve complete audio
+
+1. Check service `seed_tts` and `ark_list_models(kind="audio")`; select
+   literal `dola-seed-tts-3.0` with an authorized `voice_id`. Pick a Speaker ID
+   for the target language from the [official voice list](https://docs.byteplus.com/en/docs/byteplusvoice/voicelist-3-0).
+2. Submit `seed_tts_generate` through `ark_job_submit` with exactly one
+   `text` or `ssml`. Each has a 10,000-character bound (SSML is local safety).
+   Never pass `persist=false`; persistence is mandatory.
+3. Poll `ark_job_get`, checking `result.is_error` and terminal
+   `result.structured_content`. HTTP JSONL is aggregated in the worker,
+   not streamed live over MCP; there is no `gen_task_get` phase.
+4. Keep the artifact, resolved `output_format`, `session_id`, diagnostic IDs
+   and alignments with word timestamps in seconds. Do not invent duration or
+   a provider URL. Optional stdio `output_path`/`overwrite` needs
+   `OUTPUT_ROOTS` inside ordinary jobs.
+5. Review playback before accepting the result. A timed-out request may
+   have been billed; reconcile the existing job before another submit.
+   The published USD 20/million-character rate includes SSML/audio tags.
+
+See [tool-reference.md](tool-reference.md#seed-tts-30) for controls and limits.
 
 ### Seedream edit flow
 

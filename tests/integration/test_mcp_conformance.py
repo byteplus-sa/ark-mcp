@@ -106,6 +106,7 @@ class TestToolDiscovery:
             "ark_job_submit",
             "ark_list_models",
             "seed_audio_generate",
+            "seed_tts_generate",
             "seed_media_export_artifact",
             "seed_media_get_artifact",
             "seed_media_persist_url",
@@ -133,6 +134,23 @@ class TestToolDiscovery:
             "ark_asset_verification_start",
             "ark_asset_verification_result",
         }
+
+    @pytest.mark.parametrize("speech_key", ["", "sk-test"])
+    @pytest.mark.parametrize("modelark_key", ["", "sk-test"])
+    async def test_seed_tts_uses_seed_audio_registration_gate(
+        self, speech_key: str, modelark_key: str
+    ) -> None:
+        server = create_server(
+            Settings(
+                _env_file=None,
+                BYTEPLUS_MODELARK_API_KEY=modelark_key,
+                BYTEPLUS_SEED_SPEECH_API_KEY=speech_key,
+            )
+        )
+        names = {tool.name for tool in await server.list_tools()}
+
+        assert ("seed_audio_generate" in names) is bool(speech_key)
+        assert ("seed_tts_generate" in names) is bool(speech_key)
 
     async def test_asset_tools_require_openapi_credentials(
         self, monkeypatch: pytest.MonkeyPatch
@@ -194,6 +212,7 @@ class TestToolDiscovery:
         required_task_names = {
             "media_upload",
             "seed_audio_generate",
+            "seed_tts_generate",
             "speech_to_text",
             "seed_understand",
             "seed_audio_understand",
@@ -332,10 +351,11 @@ class TestToolDiscovery:
 class TestToolAnnotations:
     """Verify ToolAnnotations are correctly propagated."""
 
-    async def test_seed_audio_annotations(self, configured_server: None) -> None:
+    @pytest.mark.parametrize("tool_name", ["seed_audio_generate", "seed_tts_generate"])
+    async def test_seed_audio_annotations(self, configured_server: None, tool_name: str) -> None:
         server = configured_server
         tools = await server.mcp.list_tools()
-        tool = next(t for t in tools if t.name == "seed_audio_generate")
+        tool = next(t for t in tools if t.name == tool_name)
         assert tool.annotations is not None
         assert tool.annotations.read_only_hint is False
         assert tool.annotations.destructive_hint is False
@@ -428,6 +448,65 @@ class TestInputSchemas:
         assert "properties" in schema
         assert "text_prompt" in schema["properties"]["input"]["properties"]
         assert "required" not in schema["properties"]["input"]
+
+    async def test_seed_tts_input_schema(self, configured_server: None) -> None:
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seed_tts_generate")
+        schema = tool.parameters
+        input_schema = schema["properties"]["input"]
+        input_props = input_schema["properties"]
+
+        assert set(input_schema["required"]) == {"voice_id"}
+        assert set(input_props) == {
+            "text",
+            "ssml",
+            "voice_id",
+            "model",
+            "output_format",
+            "voice_settings",
+            "language_code",
+            "enable_subtitle",
+            "pronunciation_dictionary",
+            "session_id",
+            "text_normalization",
+            "enable_markdown_filter",
+            "silence_duration",
+            "output_path",
+            "overwrite",
+        }
+        assert input_props["model"]["const"] == "dola-seed-tts-3.0"
+        assert input_props["language_code"]["default"] == "auto"
+        assert input_props["enable_subtitle"]["default"] is False
+        assert input_props["pronunciation_dictionary"]["default"] is None
+        assert input_props["text_normalization"]["default"] is True
+        assert input_props["enable_markdown_filter"]["default"] is False
+        assert input_props["silence_duration"]["minimum"] == 0
+        assert input_props["silence_duration"]["maximum"] == 30_000
+        assert all(field.get("description") for field in input_props.values())
+
+        nested_properties = {}
+        for name, expected in {
+            "output_format": {"format", "sample_rate", "bit_rate"},
+            "voice_settings": {"speed", "volume", "pitch", "instructions", "similarity_boost"},
+            "pronunciation_dictionary": {"tone"},
+        }.items():
+            nested_schema = input_props[name]
+            if "anyOf" in nested_schema:
+                nested_schema = next(
+                    branch for branch in nested_schema["anyOf"] if branch.get("type") != "null"
+                )
+            if reference := nested_schema.get("$ref"):
+                nested_schema = schema["$defs"][reference.rsplit("/", 1)[-1]]
+            nested_properties[name] = nested_schema["properties"]
+            assert set(nested_properties[name]) == expected
+            assert all(field.get("description") for field in nested_properties[name].values())
+
+        audio_format = nested_properties["output_format"]["format"]
+        assert set(audio_format["enum"]) == {"mp3", "pcm", "ogg_opus"}
+        assert audio_format["default"] == "mp3"
+        tone = nested_properties["pronunciation_dictionary"]["tone"]
+        assert tone["maxItems"] == 100
+        assert tone["items"]["maxLength"] == 1000
 
     async def test_seedream_input_schema(self, configured_server: None) -> None:
         tools = await configured_server.mcp.list_tools()
@@ -541,6 +620,16 @@ class TestInputSchemas:
 
 class TestOutputSchemas:
     """Verify outputSchema is auto-generated for each tool."""
+
+    async def test_seed_tts_output_schema(self, configured_server: None) -> None:
+        tools = await configured_server.mcp.list_tools()
+        tool = next(t for t in tools if t.name == "seed_tts_generate")
+        schema = tool.output_schema
+
+        assert schema is not None
+        assert schema["title"] == "SeedTtsGenerateOutput"
+        assert "artifact" in schema["properties"]
+        assert all(field.get("description") for field in schema["properties"].values())
 
     async def test_seedream_output_schema(self, configured_server: None) -> None:
         server = configured_server

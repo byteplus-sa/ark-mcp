@@ -151,6 +151,13 @@ CATALOG: tuple[CatalogEntry, ...] = (
         gate=_seed_audio,
     ),
     _entry(
+        "seed_tts_generate",
+        "SeedTtsGenerateOutput",
+        "seed:audio:generate",
+        background="required",
+        gate=_seed_audio,
+    ),
+    _entry(
         "media_upload",
         "MediaUploadOutput",
         "media:upload",

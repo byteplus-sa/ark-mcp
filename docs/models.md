@@ -171,10 +171,28 @@ request against the selected model's `VideoCapabilities` (including
 `supported_ratios`) and reports every violation in one error that points to
 `ark_list_models(kind='video')`, which exposes these limits to clients.
 
+## Seed TTS 3.0
+
+`ark_list_models(kind="audio")` lists literal model `dola-seed-tts-3.0`,
+served by `seed_tts_generate`, with a `tts` limits object. Service `seed_tts`
+is enabled by the existing `BYTEPLUS_SEED_SPEECH_API_KEY`; no ModelArk key,
+custom endpoint binding or new model environment variable is needed.
+Discovery is configuration-only and does not establish voice or account access.
+
+`tts` contains only `max_text_characters=10000`, `max_ssml_characters=10000`
+(local SSML safety bound), `output_formats` (`mp3`, `pcm`, `ogg_opus`) and
+`requires_voice_id=true`. Sample-rate combinations and voice controls belong
+to the tool input schema, not discovery. See [Seed TTS 3.0](seed-tts.md).
+
+This `kind="audio"` model is separate from `seed_audio_understand`, whose
+model remains `kind="understanding"`, and from full-scene `seed_audio_generate`.
+TTS runs in a required background job, aggregates provider HTTP JSONL and
+persists the complete audio; it does not stream live over MCP.
+
 ## Seed Speech ASR (Speech-to-Text)
 
 Speech-to-text uses the Seed Speech ASR HTTP API. It reuses
-`BYTEPLUS_SEED_SPEECH_API_KEY` — the same key that powers Seed Audio. Audio
+`BYTEPLUS_SEED_SPEECH_API_KEY` — the same key that powers Seed Audio and Seed TTS. Audio
 is submitted via HTTP and polled until transcription is complete; the full
 `TranscriptionResult` is returned in the background result after the client
 submits through the ordinary `ark_job_*` tools, or native MCP task augmentation

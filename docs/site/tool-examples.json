@@ -27,6 +27,15 @@
       "text_prompt": "Gentle rain on a window. Max duration: 5 seconds"
     }
   },
+  "seed_tts_generate": {
+    "input": {
+      "text": "Hello, welcome to BytePlus.",
+      "voice_id": "multi_female_skye_v3_uranus_bigtts",
+      "language_code": "en",
+      "model": "dola-seed-tts-3.0",
+      "output_format": { "format": "mp3" }
+    }
+  },
   "seed_understand": {
     "input": {
       "prompt": "Describe the main objects in this image.",

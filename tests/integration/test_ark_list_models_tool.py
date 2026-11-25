@@ -41,7 +41,12 @@ def _by_id(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 async def test_lists_every_configured_kind(configured: None) -> None:
     models = _by_id(await _list_models({}))
-    assert {model["kind"] for model in models.values()} == {"video", "image", "understanding"}
+    assert {model["kind"] for model in models.values()} == {
+        "video",
+        "image",
+        "audio",
+        "understanding",
+    }
     seedance_2_5 = models["dreamina-seedance-2-5-260628"]
     assert set(seedance_2_5) == {
         "family",
@@ -51,6 +56,7 @@ async def test_lists_every_configured_kind(configured: None) -> None:
         "model_id",
         "pricing",
         "tool",
+        "tts",
         "understanding",
         "video",
     }
@@ -124,6 +130,7 @@ async def test_disabled_services_explain_how_to_enable_them(configured: None) ->
         "object_storage",
         "omnihuman",
         "seed_audio",
+        "seed_tts",
         "speech_to_text",
         "vod_mediakit",
     }
@@ -153,10 +160,25 @@ async def test_no_models_without_modelark_key(monkeypatch: pytest.MonkeyPatch) -
         refresh_capability_registry()
 
 
-@pytest.mark.parametrize("kind", ["3d", "audio"])
+@pytest.mark.parametrize("kind", ["3d", "invalid"])
 async def test_invalid_kind_is_rejected(configured: None, kind: str) -> None:
     async with Client(create_server(get_settings())) as client:
         result = await client.call_tool(
             "ark_list_models", {"input": {"kind": kind}}, raise_on_error=False
         )
     assert result.is_error
+
+
+async def test_tts_discovery_needs_speech_key_not_modelark(
+    test_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "")
+    get_settings.cache_clear()
+    payload = await _list_models({"kind": "audio"})
+    assert len(payload["models"]) == 1
+    model = payload["models"][0]
+    assert model["model_id"] == "dola-seed-tts-3.0"
+    assert model["tool"] == "seed_tts_generate"
+    assert model["tts"]["max_text_characters"] == 10000
+    assert model["tts"]["output_formats"] == ["mp3", "pcm", "ogg_opus"]
+    assert next(item for item in payload["services"] if item["service"] == "seed_tts")["enabled"]

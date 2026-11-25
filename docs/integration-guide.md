@@ -319,7 +319,7 @@ If only some products' tools are registered:
 
 - No ModelArk key → no `seedream_generate_image`, `seedance_create_task`,
   `gen_task_*`, `seed_understand`, or `seed_audio_understand`
-- No Seed Speech key → no `seed_audio_generate` or `speech_to_text`
+- No Seed Speech key → no `seed_audio_generate`, `seed_tts_generate` or `speech_to_text`
 - Optional products (OmniHuman, VOD MediaKit, object storage, asset
   library) also need their own keys or feature flags; see
   [Configuration](configuration.md).
@@ -331,9 +331,9 @@ If only some products' tools are registered:
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `BYTEPLUS_MODELARK_API_KEY` | For image/video | — | ModelArk Bearer auth key |
-| `BYTEPLUS_SEED_SPEECH_API_KEY` | For audio | — | Seed Speech X-Api-Key |
+| `BYTEPLUS_SEED_SPEECH_API_KEY` | For audio | — | Seed Speech X-Api-Key for Seed Audio, Seed TTS and ASR |
 | `BYTEPLUS_MODELARK_BASE_URL` | No | `https://ark.ap-southeast.bytepluses.com/api/v3` | ModelArk region endpoint |
-| `BYTEPLUS_SEED_AUDIO_BASE_URL` | No | `https://voice.ap-southeast-1.bytepluses.com` | Seed Speech endpoint |
+| `BYTEPLUS_SEED_AUDIO_BASE_URL` | No | `https://voice.ap-southeast-1.bytepluses.com` | Shared Seed Audio / Seed TTS endpoint |
 | `SEEDREAM_DEFAULT_MODEL` | No | `dola-seedream-5-5-261028` | Seedream 5.5 model ID; retain an explicit 5.0 Pro default if not authorized |
 | `SEEDANCE_DEFAULT_MODEL` | No | `dreamina-seedance-2-5-260628` | Default Seedance model ID for `seedance_create_task` (Seedance 2.5) |
 | `MCP_TRANSPORT` | No | `stdio` | `stdio` or `http` |

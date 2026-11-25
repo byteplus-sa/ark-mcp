@@ -22,10 +22,18 @@ def test_background_tool_registry_modes_partition_all_targets() -> None:
 
     assert required
     assert optional
-    assert len(required) == 13
+    assert len(required) == 14
     assert len(optional) == 6
     assert required.isdisjoint(optional)
     assert required | optional == BACKGROUND_TOOL_SPECS.keys()
+
+
+def test_seed_tts_requires_background_execution_and_audio_generation_scope() -> None:
+    spec = BACKGROUND_TOOL_SPECS["seed_tts_generate"]
+
+    assert spec.mode == "required"
+    assert spec.required_scope == "seed:audio:generate"
+    assert spec == BACKGROUND_TOOL_SPECS["seed_audio_generate"]
 
 
 def test_fastmcp_task_adapter_contract_matches_pinned_minor() -> None:

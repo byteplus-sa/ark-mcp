@@ -15,11 +15,12 @@ from ark_mcp.config.model_capabilities import (
     get_capability_registry,
 )
 from ark_mcp.domain.pricing import ModelPricing, PricingStatus
+from ark_mcp.domain.tts import TTS_MAX_CHARACTERS, TTS_MODEL
 from ark_mcp.providers.modelark.pricing import get_price_book, live_pricing_enabled
 from ark_mcp.runtime import get_runtime
 from ark_mcp.tools.seed_audio_understand import MAX_AUDIO_INPUTS
 
-ModelKind = Literal["video", "image", "understanding"]
+ModelKind = Literal["video", "image", "audio", "understanding"]
 UnderstandingModality = Literal["image", "video", "audio"]
 
 VIDEO_TOOL = "seedance_create_task"
@@ -33,7 +34,7 @@ class ArkListModelsInput(BaseModel):
 
     kind: ModelKind | None = Field(
         None,
-        description="Filter to one model kind: video, image, or understanding. Omit to list every configured kind.",
+        description="Filter to video, image, audio (TTS), or understanding. Omit to list every configured kind.",
     )
 
 
@@ -116,6 +117,17 @@ class UnderstandingModelLimits(BaseModel):
     response_formats: list[str] = Field(..., description="Accepted response_format types.")
 
 
+class TtsModelLimits(BaseModel):
+    """Seed TTS limits; format combinations are validated by the create tool."""
+
+    max_text_characters: int = Field(..., description="Maximum text characters per request.")
+    max_ssml_characters: int = Field(..., description="Local safety limit for SSML characters.")
+    output_formats: list[str] = Field(..., description="Available audio encodings.")
+    requires_voice_id: bool = Field(
+        True, description="An authorized, compatible voice ID is required."
+    )
+
+
 class ModelInfo(BaseModel):
     """One configured model binding."""
 
@@ -140,6 +152,7 @@ class ModelInfo(BaseModel):
     understanding: UnderstandingModelLimits | None = Field(
         None, description="Limits for understanding models."
     )
+    tts: TtsModelLimits | None = Field(None, description="Limits for speech synthesis models.")
     pricing: ModelPricing | None = Field(
         None, description="Fresh account catalog prices, or null if not cached for this model."
     )
@@ -210,10 +223,26 @@ async def ark_list_models(input: ArkListModelsInput, ctx: Context) -> ArkListMod
 
 def describe_models(settings: Settings) -> list[ModelInfo]:
     """Describe every configured binding whose service is enabled."""
+    models = []
+    if settings.has_seed_audio:
+        models.append(
+            ModelInfo(
+                model_id=TTS_MODEL,
+                family="seed_tts_3",
+                kind="audio",
+                is_default=True,
+                tool="seed_tts_generate",
+                tts=TtsModelLimits(
+                    max_text_characters=TTS_MAX_CHARACTERS,
+                    max_ssml_characters=TTS_MAX_CHARACTERS,
+                    output_formats=["mp3", "pcm", "ogg_opus"],
+                ),
+            )
+        )
     if not settings.has_modelark:
-        return []
+        return models
     image_caps, video_caps, understanding_caps = get_capability_registry().configured_models()
-    models = [_video_info(caps, settings) for caps in video_caps.values()]
+    models += [_video_info(caps, settings) for caps in video_caps.values()]
     models += [_image_info(caps, settings) for caps in image_caps.values()]
     models += [_understanding_info(caps, settings) for caps in understanding_caps.values()]
     return models
@@ -305,6 +334,7 @@ def describe_services(settings: Settings) -> list[ServiceStatus]:
     services = (
         ("modelark", settings.has_modelark, "Set BYTEPLUS_MODELARK_API_KEY."),
         ("seed_audio", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
+        ("seed_tts", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("speech_to_text", settings.has_stt, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("vod_mediakit", settings.has_vod_mediakit, "Set BYTEPLUS_VOD_MEDIAKIT_API_KEY."),
         (

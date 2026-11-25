@@ -8,14 +8,19 @@ request/response, error normalization, and diagnostic ``X-Tt-Logid`` capture.
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ark_mcp.config.env import get_settings
 from ark_mcp.domain.errors import NormalizedProviderError, ProviderError, ProviderName
 from ark_mcp.observability.logger import error as log_error
+from ark_mcp.observability.metrics import PROVIDER_DURATION, PROVIDER_REQUESTS
 from ark_mcp.providers.base import BaseHttpGateway
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     import httpx
 
 
@@ -58,6 +63,31 @@ class SeedSpeechGateway(BaseHttpGateway):
         if request_id:
             headers["X-Api-Request-Id"] = request_id
         return await self._request("POST", path, json=json_body, headers=headers)
+
+    @asynccontextmanager
+    async def stream_tts(
+        self, path: str, body: dict[str, Any], *, request_id: str
+    ) -> AsyncIterator[httpx.Response]:
+        """Open a TTS 3 JSONL response using its distinct correlation header."""
+        client = await self._ensure_client()
+        headers = self._headers()
+        headers.update({"X-Request-Id": request_id, "Accept": "text/plain"})
+        started = perf_counter()
+        status = "exception"
+        try:
+            async with client.stream(
+                "POST", f"{self._base_url}{path}", json=body, headers=headers
+            ) as response:
+                status = "error"
+                yield response
+                status = "success" if response.status_code == 200 else "error"
+        finally:
+            PROVIDER_REQUESTS.labels(
+                provider=self.PROVIDER, operation="synthesize_speech", status=status
+            ).inc()
+            PROVIDER_DURATION.labels(provider=self.PROVIDER, operation="synthesize_speech").observe(
+                perf_counter() - started
+            )
 
     @staticmethod
     def extract_request_id(response: httpx.Response) -> str | None:

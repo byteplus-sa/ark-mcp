@@ -40,7 +40,14 @@ available in Ark MCP.
 | Task | Tool | Credential |
 | --- | --- | --- |
 | Generate full-scene audio | [seed_audio_generate](/ark-mcp/tool-reference/seed-audio-generate/) | Seed Speech key |
+| Generate speech from text or SSML | [seed_tts_generate](tools.md#seed_tts_generate) | Same Seed Speech key; required `voice_id` |
 | Transcribe speech | [speech_to_text](/ark-mcp/tool-reference/speech-to-text/) | Seed Speech key |
+
+Seed TTS 3.0 uses `dola-seed-tts-3.0` and is distinct from full-scene Seed Audio.
+It requires background execution and always persists the full audio aggregated
+from HTTP JSONL; it is not a live MCP audio stream. Discover it through service
+`seed_tts` and `ark_list_models(kind="audio")`. See [Seed TTS 3.0](seed-tts.md)
+for inputs, formats, billing and verification limits.
 
 ## Understanding
 

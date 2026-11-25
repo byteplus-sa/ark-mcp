@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { toolPage } from "./docs.mjs";
+import { EXAMPLES, toolPage } from "./docs.mjs";
 
 const tool = (name) => ({
   name,
@@ -17,6 +17,7 @@ test("model-backed tool pages each show one supported-model table", () => {
     "seedream_generate_image",
     "seedance_create_task",
     "seed_audio_generate",
+    "seed_tts_generate",
     "seed_understand",
     "seed_audio_understand",
     "omnihuman_create_task",
@@ -98,6 +99,63 @@ test("fixed-service tools do not advertise a per-call model selector", () => {
     toolPage(tool("omnihuman_create_task")),
     /realman_avatar_picture_omni20_cv/,
   );
+});
+
+test("TTS documents its fixed model, speech key and persisted output", () => {
+  const page = toolPage({
+    ...tool("seed_tts_generate"),
+    registration_gate: "Requires BYTEPLUS_SEED_SPEECH_API_KEY.",
+    scope: "seed:audio:generate",
+  });
+  assert.match(page, /Seed TTS 3\.0/);
+  assert.match(page, /dola-seed-tts-3\.0/);
+  assert.match(page, /BYTEPLUS_SEED_SPEECH_API_KEY/);
+  assert.match(page, /seed:audio:generate/);
+  assert.match(page, /`model`.*only.*`dola-seed-tts-3\.0`/);
+  assert.match(page, /exactly one of `text` or `ssml`/);
+  assert.match(page, /`voice_id` is required/);
+  assert.match(page, /MP3 \(default\), PCM, or Ogg Opus/);
+  assert.match(page, /always persisted/i);
+  assert.match(page, /`pronunciation_dictionary\.tone`/);
+  assert.match(
+    page,
+    /https:\/\/docs\.byteplus\.com\/en\/docs\/byteplusvoice\/voicelist-3-0/,
+  );
+  assert.match(
+    page,
+    /https:\/\/docs\.byteplus\.com\/en\/docs\/byteplusvoice\/seed-tts-3-0-http-streaming/,
+  );
+  assert.doesNotMatch(page, /no per-call `model` argument/i);
+  assert.doesNotMatch(page, /seed-audio-1\.0|SEEDREAM_MODEL_BINDINGS/);
+});
+
+test("TTS example submits a complete background job with text and a voice ID", () => {
+  const page = toolPage(tool("seed_tts_generate"));
+  const example = page.match(/```json\n([\s\S]*?)\n```/);
+  assert.ok(example);
+  const call = JSON.parse(example[1]);
+  assert.deepEqual(call, {
+    name: "ark_job_submit",
+    arguments: {
+      input: {
+        tool_name: "seed_tts_generate",
+        arguments: EXAMPLES.seed_tts_generate,
+      },
+    },
+  });
+  const input = call.arguments.input.arguments.input;
+  assert.equal(input.model, "dola-seed-tts-3.0");
+  assert.equal(input.voice_id, "multi_female_skye_v3_uranus_bigtts");
+  assert.equal(input.language_code, "en");
+  assert.ok(input.text.length > 0);
+  assert.ok(!("ssml" in input));
+  assert.deepEqual(input.output_format, { format: "mp3" });
+  assert.ok(!("persist" in input));
+  assert.ok(!("dry_run" in input));
+  assert.match(page, /Background required/);
+  assert.match(page, /Poll `ark_job_get`/);
+  assert.match(page, /Do not call this tool in the foreground/);
+  assert.doesNotMatch(page, /An Ark job ID is not a provider task ID/);
 });
 
 test("the ASR model table describes returned timings without promising diarization", () => {

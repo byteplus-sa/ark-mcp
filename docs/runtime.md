@@ -109,6 +109,14 @@ serialization lock. The other bounds:
   file path (stdio) or the presign and direct-upload path; the body limit only
   bounds inlined Base64.
 
+Seed TTS aggregates HTTP JSONL inside its required background job.
+`BYTEPLUS_REQUEST_TIMEOUT_MS` bounds total stream wall-clock time in addition
+to per-read timeouts. Local caps are 8 MiB per event and 8 MiB metadata, with
+total wire size derived from the audio artifact cap plus metadata. No new env
+setting or live MCP audio stream is introduced. Full output always goes
+through persistence with the existing bounded storage fallback; see
+[Seed TTS 3.0](seed-tts.md).
+
 ## Moderation query quota
 
 `RuntimeServices.moderation_query_limiter` admits ten lookups per rolling minute,
@@ -204,6 +212,7 @@ server was constructed with explicit settings instead of environment defaults.
 |---|---|
 | `COST_PER_IMAGE` | `0.03` USD |
 | `COST_PER_AUDIO_SECOND` | `0.0031` USD |
+| `COST_PER_TTS_MILLION_CHARACTERS` | `20.0` USD; includes SSML/audio tags |
 | `COST_PER_VIDEO_TASK` | `0.07` USD (`0.35` for Seedance 2.5) |
 | `COST_PER_STT_SECOND` | `0.0006` USD |
 | `COST_UNDERSTANDING_INPUT_PER_MTOK` / `_OUTPUT_PER_MTOK` | `0.50` / `3.00` USD |
@@ -216,6 +225,7 @@ server was constructed with explicit settings instead of environment defaults.
 | `"image"` | Live: `variations * ToICompletion` price per piece. Built-in: `variations * 0.03`. Rounded to 4 decimals |
 | `"understanding"` | Live: `InferencePrompt` and `InferenceCompletion` per-K-token prices scaled to millions of tokens. Built-in: the per-Mtok constants. Uses `prompt_tokens` and `max_tokens` |
 | `"audio"` | `round(variations * max(duration_seconds, 10) * 0.0031, 2)` — **floor of 10 seconds per variation** |
+| `"tts"` | `round(characters * 20 / 1000000, 6)` for one synthesis; counts the supplied text or complete SSML, not inferred audio duration |
 | `"video"` | `round(variations * 0.07, 2)` (Seedance 2.5 uses `0.35`); live video prices are token-based and not yet used |
 | `"stt"` | Built-in per-second rate with a 10 second floor |
 | (any other) | `0.0` |
@@ -374,7 +384,7 @@ Timeout classification depends on whether the call can create provider state:
 
 | Call | Examples | Timeout result | Auto-retried? |
 |---|---|---|---|
-| Mutation | Seedance create, cancel, delete; Seedream/Seed Audio generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
+| Mutation | Seedance create, cancel, delete; Seedream/Seed Audio/Seed TTS generate; MediaKit submit | `retryable=False`, `ambiguous_completion=True` | No — reconcile by task/request ID |
 | Read-only poll | Seedance `get_task`/`list_tasks`, ASR `query_asr`, MediaKit task polls | `retryable=True`, `ambiguous_completion=False` | Yes |
 | Chat completion | `seed_understand`, `seed_audio_understand` | `retryable=True`, `ambiguous_completion=False` | No (`retry_timeouts=False`) |
 | Moderation lookup | `ark_moderation_get` | `retryable=True`, `ambiguous_completion=False` | No; one request per admitted lookup |

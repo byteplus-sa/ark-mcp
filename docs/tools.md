@@ -1,6 +1,6 @@
 # Tools Reference
 
-The catalog contains 37 tools; the exposed set is conditional. `seed_media_get_artifact`,
+The catalog contains 38 tools; the exposed set is conditional. `seed_media_get_artifact`,
 `seed_media_export_artifact`, and `seed_media_persist_url` are always
 available, provider tools are registered only when their credentials
 are configured, and `media_upload` and `media_presign` are registered when
@@ -56,6 +56,7 @@ interval:
 
 - `media_upload` (1-50 files per call)
 - `seed_audio_generate` (single clip or variations)
+- `seed_tts_generate` (text-to-speech, complete persisted audio)
 - `speech_to_text`
 - `seedream_generate_image` (generation, editing, variations, and dry runs)
 - `seedance_create_task` (every Seedance model, including variations and dry runs)
@@ -103,6 +104,7 @@ straight to a local file, so a client does not need a separate
 |---|---|---|
 | `seedream_generate_image` | `output_path` | Must be a directory (ending with `/`) when `variations > 1` or `max_images > 1`; extra images written to a file path get `-2`, `-3` suffixes |
 | `seed_audio_generate` | `output_path` | Must be a directory (ending with `/`) when `variations > 1` |
+| `seed_tts_generate` | `output_path` | Complete audio artifact; persistence is mandatory, with no `persist` switch |
 | `vod_get_task` | `output_path` | Must be a directory (ending with `/`) for `operation="separate_audio"`, which writes every track |
 | `gen_task_get` | `output_dir` | One file per artifact: every output of each succeeded task |
 | `seed_understand`, `seed_audio_understand` | `save_to` | Writes the final answer, not media |
@@ -123,6 +125,7 @@ everywhere:
   output that cannot be written.
 - **Needs a persisted artifact.** `output_path`/`output_dir` require
   `persist=true` (generation tools) or `persist_output=true` (retrieval tools).
+  Seed TTS always persists; do not pass a `persist` argument.
 - **Exclusive, symlink-safe writes.** An existing file is replaced only with
   `overwrite=true`; a file that already holds identical bytes counts as
   success, so repeated polls stay idempotent.
@@ -143,7 +146,7 @@ needs no scope.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `kind` | `"video"` \| `"image"` \| `"understanding"` | No | Filter to one kind; omit for all |
+| `kind` | `"video"` \| `"image"` \| `"audio"` \| `"understanding"` | No | Filter to one kind; omit for all |
 
 ### Output
 
@@ -155,11 +158,14 @@ needs no scope.
     resolution, audio-only input, `task_types`, `output_formats`.
   - `image`: reference maximum, output formats, batch support, sizes,
     transparent-background support.
+  - `audio`: Seed TTS model `dola-seed-tts-3.0`, served by
+    `seed_tts_generate`; `tts` contains only `max_text_characters`,
+    `max_ssml_characters`, `output_formats` and `requires_voice_id`.
   - `understanding`: modalities accepted by the named `tool`, media-part maximum, thinking,
     reasoning efforts, response formats. Both the default model for requests
     with audio and the default for requests without audio are marked
     `is_default`.
-- **`services`**: `modelark`, `seed_audio`,
+- **`services`**: `modelark`, `seed_audio`, `seed_tts`,
   `speech_to_text`, `vod_mediakit`, `omnihuman`, `object_storage`,
   `asset_library`, `asset_delete`, and `moderation`, each with `enabled` and, when disabled,
   a `reason` naming the setting to change (never a secret value).
@@ -175,11 +181,14 @@ and Flash share the ModelArk service; discovery does not verify account entitlem
 `moderation` reports its flag + AK/SK gate, not model coverage, whitelist
 activation or shared-key permission. See [moderation.md](moderation.md).
 
-The audio-model entry names `seed_audio_understand`, advertises only `audio`
+The audio-understanding entry (`kind="understanding"`) names
+`seed_audio_understand`, advertises only `audio`
 with an eight-clip limit, and uses the server-configured model without a
 `model` argument. This remains true when audio and visual defaults share an
 ID. Image/video requests use `seed_understand`; discovery does not imply
 that the two handlers can accept mixed audio/visual inputs.
+The separate `kind="audio"` TTS entry is enabled by the Seed Speech key, not
+the ModelArk key; listing it does not verify provider access.
 
 ## Background-job tools
 
@@ -691,7 +700,8 @@ coverage and live-unverified status: [moderation.md](moderation.md).
 ## seed_audio_generate
 
 Generate full-scene audio through Seed Speech: one clip, or up to 5
-independent variations in parallel.
+independent variations in parallel. For text-to-speech with a selected
+`voice_id`, use [seed_tts_generate](#seed_tts_generate) instead.
 
 **Execution:** Required background job. Submit it through `ark_job_submit`
 (or native task augmentation) and read the completed generation from the
@@ -752,6 +762,32 @@ Three takes written to a local directory:
   "output_path": "/Users/me/Audio/takes/"
 }
 ```
+
+## seed_tts_generate
+
+Generate speech with literal model `dola-seed-tts-3.0`, required `voice_id`,
+and exactly one `text` or `ssml`. Text is limited to 10,000 characters;
+SSML has a local 10,000-character safety bound.
+
+**Execution:** Required background job through `ark_job_submit` or native
+tasks. Reuses `BYTEPLUS_SEED_SPEECH_API_KEY`, `BYTEPLUS_SEED_AUDIO_BASE_URL`,
+and the `seed:audio:generate` scope; no new environment variable.
+
+The worker aggregates provider HTTP JSONL into one complete audio artifact.
+It is **not a live MCP audio stream**. Persistence is mandatory, with no
+`persist=false` option. Optional `output_path`/`overwrite` follows the
+[stdio output policy](#writing-outputs-to-local-paths).
+
+Output contains `provider`, `model`, `artifact`, resolved `output_format`, `session_id`,
+`alignments` (`text` and `words` with `word`, `start_time`, `end_time` in
+seconds), and available `request_id`/`provider_log_id`. No duration or
+provider download URL is fabricated. Read the result from `ark_job_get`,
+not `gen_task_get`; inspect `artifact.persistence_error` for the existing
+bounded storage fallback.
+
+See [Seed TTS 3.0](seed-tts.md) for voice selection, the optional
+`pronunciation_dictionary.tone` rules, MP3/PCM/Opus defaults, a job example,
+and published billing (USD 20/million characters including SSML/audio tags).
 
 ## seedream_generate_image
 

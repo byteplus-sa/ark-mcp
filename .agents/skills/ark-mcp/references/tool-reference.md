@@ -2,12 +2,13 @@
 
 Per-product behaviour of the create tools that the tool schemas do not spell out: flows, cross-field rules, gotchas, and recovery. Parameters, ranges and output fields are in each tool's schema (also [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)); per-model limits are in [models-and-limits.md](models-and-limits.md); polling, persistence and artifact handling are in [polling-and-artifacts.md](polling-and-artifacts.md); background-job mechanics are in [workflows.md](workflows.md).
 
-**Universal rules for every create tool below:** run it through `ark_job_submit` (or native task augmentation), read the task IDs from the job result, and poll those IDs. **Never resubmit a create tool to poll or to retry an ambiguous failure: every submit is billed and none is idempotent.** Take exact model IDs from `ark_list_models`; `model` accepts exact IDs only.
+**Universal rules for every create tool below:** run it through `ark_job_submit` (or native task augmentation). Poll provider task IDs only when the job result returns them; Seedream, Seed Audio and Seed TTS return completed artifacts instead. **Never resubmit a create tool to poll or to retry an ambiguous failure: every submit is billed and none is idempotent.** Take exact model IDs from `ark_list_models`; `model` accepts exact IDs only.
 
 - [Variations and dry runs](#variations-and-dry-runs)
 - [Seedance](#seedance)
 - [Seedream](#seedream)
 - [Seed Audio](#seed-audio)
+- [Seed TTS 3.0](#seed-tts-30)
 - [OmniHuman](#omnihuman)
 - [VOD AI MediaKit](#vod-ai-mediakit)
 
@@ -185,6 +186,7 @@ The following example selects Pro, which must be bound by the operator:
 ## Seed Audio
 
 Needs `BYTEPLUS_SEED_SPEECH_API_KEY`. `seed_audio_generate` produces a full-scene clip (speech, ambience, music, effects) from a text prompt; **run it through `ark_job_submit`**. The provider URL expires after 2 hours, so keep `persist=true` (default).
+For exact text or SSML with a selected `voice_id`, use Seed TTS below.
 
 - **References: one kind only.** `audio_references` (up to 3: `speaker` ID, `url`, or `base64`) steer voice or scene; `image_reference` gives visual context. **Passing both is rejected.**
 - **Base64 reference audio** is checked against the media limit (30 s by default for WAV) and the audio size cap before submission; prefer a URL for longer material.
@@ -195,6 +197,49 @@ Needs `BYTEPLUS_SEED_SPEECH_API_KEY`. `seed_audio_generate` produces a full-scen
 - **Variations:** no seed exists, so variations differ only by sampling. With `variations > 1`, `artifact`, `duration_seconds`, `billing_duration_seconds` and `subtitle` are **null**; everything is in `summary` (`total`, `succeeded`, `failed`, per-variation `artifact` or `error`). `output_path` must then be a directory ending in `/`.
 - `billing_duration_seconds` can differ from the actual `duration_seconds`.
 
+## Seed TTS 3.0
+
+`seed_tts_generate` is distinct text-to-speech, using the existing Seed Speech
+key and `BYTEPLUS_SEED_AUDIO_BASE_URL`, with scope `seed:audio:generate`.
+No new environment variable. Model is literal `dola-seed-tts-3.0`; discovery
+uses service `seed_tts`, `kind="audio"` and `tts` limits.
+
+- **Required background execution:** `ark_job_submit` or native tasks. HTTP
+  JSONL is aggregated in the worker, not streamed as live MCP audio.
+  Read the completed artifact from the job result, not `gen_task_get`.
+- **Required input:** authorized `voice_id` and exactly one `text` or `ssml`.
+  Each is capped at 10,000 characters; the SSML cap is local safety, not a
+  claimed provider limit. Choose a Speaker ID for the target language from
+  the [official voice list](https://docs.byteplus.com/en/docs/byteplusvoice/voicelist-3-0).
+  Voice/session IDs have a local 256-character cap; language codes have 64.
+- **`output_format`:** `format` is `mp3` (default), `pcm` or `ogg_opus`.
+  `sample_rate` defaults to 24000 Hz; Opus requires 48000 Hz. Compressed
+  `bit_rate` defaults to 64000 bits/second and accepts only 64000/160000.
+  Omit it for PCM; MP3 at 8000 Hz accepts only 64000.
+- **`voice_settings`:** `speed`/`volume` 0.5-2.0, integer `pitch` -12 to 12,
+  `instructions` as up to 16 strings of 1-1000 characters (local caps),
+  and boolean `similarity_boost` (default false).
+  `language_code="auto"`, `enable_subtitle=false`, optional `session_id`,
+  `text_normalization=true`, `enable_markdown_filter=false`, and
+  `silence_duration` 0-30,000 milliseconds are separate input fields.
+- **`pronunciation_dictionary`:** optional `{"tone": [...]}` with rules such
+  as `omg/oh my god` or `北京/(bei3)(jing1)`. Local caps are 100 rules of up to
+  1000 characters each.
+- **Mandatory full-output persistence:** no `persist=false`. Optional stdio
+  `output_path`/`overwrite` follows the existing local-write policy and jobs
+  need `OUTPUT_ROOTS`. Do not pass Seed Audio's `output`, references or variations.
+  Check `artifact.persistence_error` for the existing bounded inline fallback;
+  failed storage above its cap is a tool error, not a provider URL to recover.
+- **Result:** `artifact`, resolved `output_format`, `session_id`,
+  `alignments` as `[{text, words: [{word, start_time, end_time}]}]` with
+  word times in **seconds**, and available `request_id`/`provider_log_id`.
+  Never invent a duration or provider URL; alignment endpoints are not full
+  audio duration, and `session_id` is not an idempotency guarantee.
+- **Billing:** published TTS 3.0 rate is USD 20/million characters,
+  including SSML/audio tags.
+
+See the [Seed TTS 3.0 guide](https://byteplus-sa.github.io/ark-mcp/seed-tts/)
+for a job example, official sources, and verification details.
 
 ## OmniHuman
 

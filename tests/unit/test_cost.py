@@ -123,6 +123,14 @@ class TestEstimateCostUnknown:
         assert cost == 0.0
 
 
+@pytest.mark.parametrize("characters,expected", [(0, 0), (1, 0.00002), (10000, 0.2), (1000000, 20)])
+def test_tts_pricing_uses_character_count_without_cent_rounding(
+    characters: int, expected: float
+) -> None:
+    assert estimate_cost(product="tts", variations=1, characters=characters) == expected
+    assert log_cost_estimate(product="tts", variations=1, characters=characters) == expected
+
+
 class TestCostConstants:
     """Verify cost per unit values are reasonable."""
 

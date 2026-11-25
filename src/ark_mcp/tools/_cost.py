@@ -15,6 +15,7 @@ from ark_mcp.providers.modelark.pricing import get_price_book
 # Provider cost estimates (USD per unit).
 COST_PER_IMAGE = 0.03
 COST_PER_AUDIO_SECOND = 0.0031
+COST_PER_TTS_MILLION_CHARACTERS = 20.0
 COST_PER_VIDEO_TASK = 0.07
 COST_PER_VIDEO_TASK_2_5 = 0.35
 COST_PER_STT_SECOND = 0.0006
@@ -93,6 +94,7 @@ def estimate_cost(
     product: str,
     variations: int,
     duration_seconds: float = 0.0,
+    characters: int = 0,
     prompt_tokens: int | None = None,
     max_tokens: int | None = None,
     model_id: str | None = None,
@@ -101,9 +103,10 @@ def estimate_cost(
     """Estimate the cost of a parallel generation batch.
 
     Args:
-        product: "image", "audio", "video", "stt", or "understanding".
+        product: "image", "audio", "tts", "video", "stt", or "understanding".
         variations: Number of variations.
         duration_seconds: Expected output duration (audio only).
+        characters: TTS input characters, including SSML markup and audio tags.
         prompt_tokens: Estimated input tokens (understanding only).
         max_tokens: Maximum output tokens (understanding only).
         model_id: Model ID for model-specific image, video, and understanding pricing.
@@ -116,6 +119,10 @@ def estimate_cost(
         return image_cost_estimate(model_id, variations)[0]
     if product == "audio":
         return round(variations * max(duration_seconds, 10) * COST_PER_AUDIO_SECOND, 2)
+    if product == "tts":
+        return round(
+            variations * max(characters, 0) * COST_PER_TTS_MILLION_CHARACTERS / 1_000_000, 6
+        )
     if product == "video":
         return round(variations * _video_cost_for_model(model_id, video_family), 2)
     if product == "stt":
@@ -136,6 +143,7 @@ def log_cost_estimate(
     product: str,
     variations: int,
     duration_seconds: float = 0.0,
+    characters: int = 0,
     prompt_tokens: int | None = None,
     max_tokens: int | None = None,
     model_id: str | None = None,
@@ -146,6 +154,7 @@ def log_cost_estimate(
         product=product,
         variations=variations,
         duration_seconds=duration_seconds,
+        characters=characters,
         prompt_tokens=prompt_tokens,
         max_tokens=max_tokens,
         model_id=model_id,

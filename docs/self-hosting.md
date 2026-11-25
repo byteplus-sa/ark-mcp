@@ -220,7 +220,7 @@ still require their server-side credentials and feature flags.
 | `seedream:generate` | Image generation, variations, editing |
 | `seedance:create` | Create video tasks with `seedance_create_task` (all generations) |
 | `gen:read` / `gen:delete` | Poll/list or cancel/delete Seedance tasks |
-| `seed:audio:generate` | Audio generation and variations |
+| `seed:audio:generate` | Seed Audio generation/variations and `seed_tts_generate` text-to-speech |
 | `seed:asr:transcribe` | `speech_to_text` |
 | `understanding:read` | `seed_understand`, `seed_audio_understand` |
 | `omnihuman:create` / `omnihuman:read` / `omnihuman:cancel` | OmniHuman 2.0 image-plus-audio video tasks |
