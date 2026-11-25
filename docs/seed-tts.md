@@ -122,9 +122,11 @@ The published TTS 3.0 rate is **USD 20 per million characters**, including
 **SSML and audio tags**, not just spoken text. This is the published rate, not
 a verified account-specific quote.
 
-No automatic generation retries. After a timeout or ambiguous completion,
-keep the Ark job and diagnostic IDs and reconcile before resubmitting:
-generation may already have been billed.
+The server makes one attempt per job. Connection failures before dispatch
+and definitive HTTP rejections release the budget reservation. The HTTP
+status still determines billing classification if the error body is
+unreadable. If synthesis may have started, retain the Ark job and diagnostic
+IDs and reconcile the request before resubmitting.
 
 ## Sources and Verification
 
@@ -136,7 +138,7 @@ Provider documentation for this contract was checked on **2026-11-25**.
 - [Seed TTS 3.0 errors](https://docs.byteplus.com/en/docs/byteplusvoice/seed-tts-3-0-errors).
 - [TTS billing](https://docs.byteplus.com/en/docs/byteplusvoice/TTS_Billing).
 
-**Live smoke test, 2026-11-25.** A stdio MCP job synthesized MP3 with Skye
-in US English. The returned word alignment included the replacement from
-`pronunciation_dictionary.tone`, and FFmpeg decoded the persisted artifact
-retrieved through MCP. This check covered one voice, language and encoding.
+**Live smoke tests, 2026-11-25.** Stdio MCP jobs synthesized US English MP3
+with the Skye and Megan presets. Word alignment included the replacement from
+`pronunciation_dictionary.tone`, and FFmpeg decoded both persisted artifacts
+retrieved through MCP.

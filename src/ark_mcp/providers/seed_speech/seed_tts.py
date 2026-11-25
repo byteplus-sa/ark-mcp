@@ -155,11 +155,15 @@ class SeedTtsService:
         if max_audio_bytes <= 0:
             raise ValueError("max_audio_bytes must be positive.")
         path = f"/api/v3/text-to-speech/{quote(voice_id, safe='')}/streaming"
+        response_error: ProviderError | None = None
         try:
             async with asyncio.timeout(self._timeout):
                 async with self._gateway.stream_tts(path, body, request_id=request_id) as response:
                     log_id = self._gateway.extract_log_id(response)
                     if response.status_code != 200:
+                        response_error = _provider_error(
+                            {}, response.status_code, request_id, log_id
+                        )
                         error_body = bytearray()
                         async for chunk in response.aiter_bytes(chunk_size=4096):
                             error_body.extend(chunk)
@@ -178,21 +182,23 @@ class SeedTtsService:
                             log_id,
                         )
                     return await self._collect(response, max_audio_bytes, request_id, log_id)
-        except (TimeoutError, httpx.TimeoutException):
-            raise _error(
-                "TIMEOUT",
-                "Seed TTS timed out; synthesis may have been billed. Do not retry blindly.",
-                request_id,
-            ) from None
-        except httpx.ConnectError:
-            raise _error(
-                "CONNECTION_ERROR",
-                "Could not connect to Seed TTS.",
-                request_id,
-                ambiguous=False,
-                retryable=True,
-            ) from None
-        except (httpx.TransportError, httpx.DecodingError):
+        except (TimeoutError, httpx.TransportError, httpx.DecodingError) as exc:
+            if response_error is not None:
+                raise response_error from None
+            if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)):
+                raise _error(
+                    "CONNECTION_ERROR",
+                    "Could not connect to Seed TTS.",
+                    request_id,
+                    ambiguous=False,
+                    retryable=True,
+                ) from None
+            if isinstance(exc, (TimeoutError, httpx.TimeoutException)):
+                raise _error(
+                    "TIMEOUT",
+                    "Seed TTS timed out; synthesis may have been billed. Do not retry blindly.",
+                    request_id,
+                ) from None
             raise _error(
                 "TRANSPORT_ERROR",
                 "Seed TTS disconnected; synthesis may have been billed. Do not retry blindly.",

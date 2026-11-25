@@ -180,6 +180,29 @@ async def test_nested_http_errors_keep_provider_identifiers(
     assert error.value.retryable == retryable
 
 
+@pytest.mark.parametrize("status,ambiguous", [(400, False), (429, False), (503, True)])
+@respx.mock
+async def test_unreadable_error_body_retains_http_status(
+    service: SeedTtsService, status: int, ambiguous: bool
+) -> None:
+    stream = FragmentedStream(b"", httpx.ReadError("error body disconnected"))
+    route = respx.post(BASE + PATH).mock(
+        return_value=httpx.Response(status, stream=stream, headers={"X-Tt-Logid": "log-test"})
+    )
+    with pytest.raises(ProviderError) as error:
+        await service.synthesize(
+            {"text": "Hello"}, voice_id="test-voice", request_id="req-test", max_audio_bytes=10
+        )
+    assert error.value.code == "TTS_PROVIDER_ERROR"
+    assert error.value.http_status == status
+    assert error.value.request_id == "req-test"
+    assert error.value.ambiguous_completion is ambiguous
+    assert error.value.retryable is (status == 429)
+    assert "log-test" in error.value.message
+    assert stream.closed
+    assert route.call_count == 1
+
+
 @pytest.mark.parametrize(
     "failure",
     [

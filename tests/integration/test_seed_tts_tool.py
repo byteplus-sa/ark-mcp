@@ -209,6 +209,9 @@ async def test_incomplete_stream_returns_error_without_persisting(
         ("success", True),
         ("truncated", True),
         ("rejected", False),
+        ("connect_timeout", False),
+        ("pool_timeout", False),
+        ("read_timeout", True),
         ("storage_failure", True),
     ],
 )
@@ -232,7 +235,12 @@ async def test_billing_preserved_for_success_or_ambiguous_completion(
         )
     else:
         provider_response = response()
-    route = respx.post(URL).mock(return_value=provider_response)
+    failure = {
+        "connect_timeout": httpx.ConnectTimeout("connect timed out"),
+        "pool_timeout": httpx.PoolTimeout("pool acquisition timed out"),
+        "read_timeout": httpx.ReadTimeout("read timed out"),
+    }.get(outcome)
+    route = respx.post(URL).mock(return_value=provider_response, side_effect=failure)
     if outcome == "storage_failure":
         monkeypatch.setattr(
             runtime.artifact_store,
@@ -254,6 +262,10 @@ async def test_billing_preserved_for_success_or_ambiguous_completion(
         len("<speak>x</speak>") * 20 / 1_000_000
     )
     assert route.call_count == 1
+    if failure is not None:
+        assert isinstance(result, ToolResult) and result.is_error
+        expected_code = "TIMEOUT" if outcome == "read_timeout" else "CONNECTION_ERROR"
+        assert expected_code in result.content[0].text
     if outcome == "storage_failure":
         assert result.artifact.id == "inline-fallback"
         assert base64.b64decode(result.artifact.fallback_data) == b"synthetic audio"

@@ -231,7 +231,7 @@ The existing bounded storage fallback still applies. `BYTEPLUS_REQUEST_TIMEOUT_M
 bounds total stream wall-clock time as well as the per-read timeout.
 Optional stdio `output_path`/`overwrite` uses the existing output-root policy,
 including `OUTPUT_ROOTS` for ordinary background jobs.
-See [Seed TTS 3.0](seed-tts.md) for formats, billing and live-unverified status.
+See [Seed TTS 3.0](seed-tts.md) for formats, billing and live verification details.
 
 ## Seed Speech ASR (STT)
 
