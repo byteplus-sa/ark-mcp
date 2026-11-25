@@ -4,6 +4,46 @@ Release entries below are historical records, not current setup instructions.
 For the removal of JWT authentication and migration to shared-key HTTP, see
 [breaking-change migration](self-hosting.md#breaking-change-migration).
 
+## [0.4.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.3.0...v0.4.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove VOD and MediaKit support
+* The Hyper3D and Hitem3d tools, model discovery entries, settings, and artifact type have been removed. The generation task tools accept only configured Seedance models.
+
+### Features
+
+* add portable agent-guided MCP setup skill ([ca28509](https://github.com/byteplus-sa/ark-mcp/commit/ca2850965171b8e4f4069d55805993752e883a52))
+* add Seed TTS 3.0 speech synthesis ([7e4c90c](https://github.com/byteplus-sa/ark-mcp/commit/7e4c90cc206d5aa3119e33ea623d0f56a94f80ae))
+* add trusted local moderation block-reason lookup ([d9e14d3](https://github.com/byteplus-sa/ark-mcp/commit/d9e14d3dafd42eb009c90023af7532f0012818e3))
+* add trusted local moderation block-reason lookup ([2814db6](https://github.com/byteplus-sa/ark-mcp/commit/2814db644b92ace4befbf9b6a8a31a13b5f35757))
+* make BytePlus deployment and provider-key maintenance resumable ([9e23392](https://github.com/byteplus-sa/ark-mcp/commit/9e23392c43bad895c8820c49969ae7b0f56e9f5d))
+* remove ModelArk 3D generation ([b4baa04](https://github.com/byteplus-sa/ark-mcp/commit/b4baa04da354bbcf3e9ebd57ea7fce07ae67034e))
+* remove VOD and MediaKit support ([d33ce46](https://github.com/byteplus-sa/ark-mcp/commit/d33ce4668d3dae10b46c5ea8c3b906125a52be36))
+
+
+### Bug Fixes
+
+* align Seedance Flash limits and Draft expiry with GA ([0ea858b](https://github.com/byteplus-sa/ark-mcp/commit/0ea858b66b74c5b664259e1dc4c22c7c001b3d52))
+* align Seedance Flash references and Draft lifetime with GA contracts ([8eb9395](https://github.com/byteplus-sa/ark-mcp/commit/8eb939560471e458dbe139a7f7c646026fb4ab75))
+* persist large inline Seed Audio outputs ([d72cf09](https://github.com/byteplus-sa/ark-mcp/commit/d72cf09bf9e4c2c41fa919f74fa64094597bd0c8))
+* preserve expiry for retired artifact formats ([17a58be](https://github.com/byteplus-sa/ark-mcp/commit/17a58bed5f85b3fa75a06a465db7ceda86277572))
+* preserve Seed TTS billing status on transport failures ([f271158](https://github.com/byteplus-sa/ark-mcp/commit/f271158e285460f2b3da8ef59fd24fc57f4f10f5))
+* retain authenticated Draft ownership through its promotion window ([1a3d693](https://github.com/byteplus-sa/ark-mcp/commit/1a3d693db6bc7029f3f0c0184cab6776640456f7))
+
+
+### Dependencies
+
+* allow uv-build 0.13 releases ([c503fda](https://github.com/byteplus-sa/ark-mcp/commit/c503fdaae943a0cfc689d6a57f04f5571502e27b))
+
+
+### Documentation
+
+* clarify the supported provider key bundle ([b447ef3](https://github.com/byteplus-sa/ark-mcp/commit/b447ef374543de5b6e016db240b3d0c2fe860682))
+* describe the nullable audio artifact size cap ([f5ea3ed](https://github.com/byteplus-sa/ark-mcp/commit/f5ea3eda625aa81f40bbb47614585efafb580c0e))
+* remove remaining references to retired generation tools ([c5b8442](https://github.com/byteplus-sa/ark-mcp/commit/c5b84428b2f3bb201bbb417ecbc6830026e02abf))
+
 ## [0.3.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.2.0...v0.3.0) (2026-11-12)
 
 
