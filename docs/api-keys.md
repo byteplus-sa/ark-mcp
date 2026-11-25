@@ -7,8 +7,8 @@ server and must not be distributed to shared-server members.
 
 For administrator-managed BytePlus deployments, follow
 [Secret Manager setup and provider-key updates](secret-manager.md).
-That workflow pins one complete four-provider bundle, requires an approved
-sync to update the VM, and preserves the separate shared MCP connection key.
+That workflow pins the complete bundle of supported provider keys. An
+approved sync updates the VM and preserves the separate shared MCP connection key.
 It does not manage IAM or object-storage credentials.
 
 This server calls several BytePlus services. Each uses a distinct credential

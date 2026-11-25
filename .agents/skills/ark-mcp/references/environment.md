@@ -73,9 +73,11 @@ its task and MCP SDK dependencies.
   operator-side pinned generic-secret versions for first deployment and
   `config status`, `config plan`, approved `config apply`, and unsubmitted
   `config discard`. The protected reference binds Johor KMS region, account,
-  project, name and exact version UUID. Only the four provider keys are managed;
-  missing entries disable products. Never retrieve real secret values through
-  an agent merely to inspect configuration; status is local and redacted.
+  project, name and exact version UUID. The bundle supports ModelArk, Seed Speech
+  and Vision AI product keys, and missing entries disable products. If a bundle
+  has a retired field, pin a new version containing only the supported fields
+  before deployment or configuration planning. Never retrieve real secret values
+  through an agent merely to inspect configuration. Status is local and redacted.
   Secret reads use scoped operator IAM, never new VM IAM credentials. Approved
   sync recreates only MCP, preserves shared-key/job/storage configuration and
   resumes staged bytes and accepted IDs. Pause producers and drain jobs before
