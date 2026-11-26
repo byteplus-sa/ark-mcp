@@ -24,7 +24,11 @@ _ENV_ALLOWLIST = ("PATH", "SYSTEMROOT", "WINDIR", "TMPDIR", "TEMP", "TMP")
 _REGISTRATION_GATES = {
     "_always": "Always registered; no provider credentials required.",
     "_modelark": "Requires BYTEPLUS_MODELARK_API_KEY.",
-    "_seed_audio": "Requires BYTEPLUS_SEED_SPEECH_API_KEY.",
+    "_seed_speech": "Requires BYTEPLUS_SEED_SPEECH_API_KEY.",
+    "_seed_audio_generate": (
+        "Requires BYTEPLUS_SEED_SPEECH_API_KEY for Seed Audio 1.0 or "
+        "BYTEPLUS_MODELARK_API_KEY for Seed Audio 1.5."
+    ),
     "_stt": "Requires BYTEPLUS_SEED_SPEECH_API_KEY.",
     "_object_storage": (
         "Requires the selected object-storage backend: OBJECT_STORAGE_BACKEND=tos (default) "

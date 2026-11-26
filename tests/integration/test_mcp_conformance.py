@@ -129,7 +129,7 @@ class TestToolDiscovery:
 
     @pytest.mark.parametrize("speech_key", ["", "sk-test"])
     @pytest.mark.parametrize("modelark_key", ["", "sk-test"])
-    async def test_seed_tts_uses_seed_audio_registration_gate(
+    async def test_audio_tool_registration_matches_provider_keys(
         self, speech_key: str, modelark_key: str
     ) -> None:
         server = create_server(
@@ -141,7 +141,7 @@ class TestToolDiscovery:
         )
         names = {tool.name for tool in await server.list_tools()}
 
-        assert ("seed_audio_generate" in names) is bool(speech_key)
+        assert ("seed_audio_generate" in names) is bool(speech_key or modelark_key)
         assert ("seed_tts_generate" in names) is bool(speech_key)
 
     async def test_asset_tools_require_openapi_credentials(

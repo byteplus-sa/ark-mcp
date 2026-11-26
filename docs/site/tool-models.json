@@ -64,13 +64,19 @@
     ]
   },
   "seed_audio_generate": {
-    "selection": "This tool has no per-call `model` argument. The Seed Speech adapter uses the fixed model below; this is not a ModelArk model binding.",
+    "selection": "The default is `seed-audio-1.0`. Pass `model: \"dola-seed-audio-1-5-261128\"` explicitly for 1.5. Discovery reports configured credentials. Preview model access depends on the provider account.",
     "models": [
       {
         "name": "Seed Audio 1.0",
         "id": "`seed-audio-1.0`",
         "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` required.",
-        "capabilities": "Full-scene speech, music and sound generation; text, audio references or image reference; image and audio references are mutually exclusive; 1-5 independent variations."
+        "capabilities": "Full-scene speech, music and sound generation from text, optionally with up to three audio references or one image reference. Supports 1–5 independent variations."
+      },
+      {
+        "name": "Seed Audio 1.5",
+        "id": "`dola-seed-audio-1-5-261128`",
+        "availability": "`BYTEPLUS_MODELARK_API_KEY` and preview model access required.",
+        "capabilities": "Text or reference-guided generation, audio separation, and translated video dubbing. Supports one generation per request and WAV, MP3, PCM, and Ogg Opus output."
       }
     ]
   },
@@ -80,7 +86,7 @@
       {
         "name": "Seed TTS 3.0",
         "id": "`dola-seed-tts-3.0`",
-        "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` required; same registration gate and `seed:audio:generate` scope as Seed Audio.",
+        "availability": "`BYTEPLUS_SEED_SPEECH_API_KEY` and `seed:audio:generate` scope required.",
         "capabilities": "Text or SSML to speech with MP3 (default), PCM, or Ogg Opus output. Supports `voice_settings`, pronunciation and replacement rules in `pronunciation_dictionary.tone`, language, subtitles, `session_id`, text normalization, Markdown filtering, and appended `silence_duration` from 0 to 30000 ms."
       }
     ]

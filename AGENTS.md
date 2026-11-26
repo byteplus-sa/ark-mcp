@@ -13,8 +13,10 @@ separate tools. The flow is discovery → create → poll:
   (`tools/_catalog.py`) and the capability registry. Cached account pricing
   comes from the optional AK/SK-authenticated background catalog refresher;
   discovery itself makes no provider calls.
-- **Seed Audio** — full-scene audio generation through Seed Speech
-  (`seed_audio_generate`, including parallel variations).
+- **Seed Audio** — `seed_audio_generate` serves full-scene audio generation.
+  The default 1.0 model uses Seed Speech. Select Seed Audio 1.5 explicitly
+  for ModelArk generation with media references, stem separation, or video
+  translation and dubbing.
 - **Seed TTS 3.0** — distinct text-to-speech through `seed_tts_generate`,
   literal model `dola-seed-tts-3.0`, required `voice_id` and exactly one
   `text` or `ssml` (10,000-character bounds; SSML bound is local safety).
@@ -82,7 +84,7 @@ separate tools. The flow is discovery → create → poll:
   negotiate MCP task augmentation; native tasks remain supported for clients
   that can.
 - **Durable artifacts** — MCP resources for generated media whose provider URLs
-  expire (2h for Seed Audio, 24h for image/video), plus complete Seed TTS
+  expire (2h for Seed Audio 1.0, 24h for image/video), plus complete Seed TTS
   audio aggregated from HTTP JSONL with mandatory persistence.
 - **Transports** — local `stdio` first, with protected Streamable HTTP as a
   deployable option (both natively supported by FastMCP). Hosted HTTP uses only
@@ -94,9 +96,9 @@ separate tools. The flow is discovery → create → poll:
   tests, with the tenant claim key fixed to `tenant_id`. See
   `docs/self-hosting.md` for generation and rotation.
 
-Seedance, Seedream, Seed 2.1 Understanding, and Seed Audio
-Understanding share the ModelArk data-plane host and Bearer authentication.
-Seed Audio, Seed TTS and Speech-to-Text are
+Seedance, Seedream, Seed 2.1 Understanding, Seed Audio Understanding, and
+Seed Audio 1.5 share the ModelArk data-plane host and Bearer authentication.
+Seed Audio 1.0, Seed TTS and Speech-to-Text are
 hosted by Seed Speech and use `X-Api-Key`. OmniHuman uses a separate Vision AI
 Bearer key. The asset library and moderation lookup use BytePlus IAM AK/SK with
 OpenAPI V4 signatures. The provider gateways share one normalized domain layer.

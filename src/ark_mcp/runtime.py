@@ -93,6 +93,7 @@ class ProviderLimiters:
             "tos": asyncio.Semaphore(provider_limit),
             "s3": asyncio.Semaphore(provider_limit),
         }
+        self.modelark_seed_audio = asyncio.Semaphore(2)
         self._principal_limit = principal_limit
         self._principals: TTLCache[str, asyncio.Semaphore] = TTLCache(
             maxsize=principal_cache_size,

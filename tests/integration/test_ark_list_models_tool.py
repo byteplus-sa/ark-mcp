@@ -9,7 +9,7 @@ import pytest
 from fastmcp import Client
 from jsonschema import Draft202012Validator
 
-from ark_mcp.config.env import get_settings
+from ark_mcp.config.env import Settings, get_settings
 from ark_mcp.config.model_capabilities import refresh_capability_registry
 from ark_mcp.server import create_server
 
@@ -28,8 +28,10 @@ def configured(test_env: None, monkeypatch: pytest.MonkeyPatch) -> Iterator[None
     refresh_capability_registry()
 
 
-async def _list_models(arguments: dict[str, Any]) -> dict[str, Any]:
-    async with Client(create_server(get_settings())) as client:
+async def _list_models(
+    arguments: dict[str, Any], *, settings: Settings | None = None
+) -> dict[str, Any]:
+    async with Client(create_server(settings or get_settings())) as client:
         result = await client.call_tool("ark_list_models", {"input": arguments})
     assert result.structured_content is not None
     return result.structured_content
@@ -49,6 +51,7 @@ async def test_lists_every_configured_kind(configured: None) -> None:
     }
     seedance_2_5 = models["dreamina-seedance-2-5-260628"]
     assert set(seedance_2_5) == {
+        "audio",
         "family",
         "image",
         "is_default",
@@ -145,18 +148,17 @@ async def test_reasons_never_contain_secret_values(configured: None) -> None:
     assert "ak-test-tos" not in rendered
 
 
-async def test_no_models_without_modelark_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    get_settings.cache_clear()
-    refresh_capability_registry()
-    try:
-        payload = await _list_models({})
-        assert payload["models"] == []
-        services = {item["service"]: item for item in payload["services"]}
-        assert services["modelark"]["enabled"] is False
-        assert services["modelark"]["reason"] == "Set BYTEPLUS_MODELARK_API_KEY."
-    finally:
-        get_settings.cache_clear()
-        refresh_capability_registry()
+async def test_no_models_without_provider_keys(test_env: None) -> None:
+    settings = Settings(
+        _env_file=None,
+        BYTEPLUS_MODELARK_API_KEY="",
+        BYTEPLUS_SEED_SPEECH_API_KEY="",
+    )
+    payload = await _list_models({}, settings=settings)
+    assert payload["models"] == []
+    services = {item["service"]: item for item in payload["services"]}
+    assert services["modelark"]["enabled"] is False
+    assert services["modelark"]["reason"] == "Set BYTEPLUS_MODELARK_API_KEY."
 
 
 @pytest.mark.parametrize("kind", ["3d", "invalid"])
@@ -168,16 +170,46 @@ async def test_invalid_kind_is_rejected(configured: None, kind: str) -> None:
     assert result.is_error
 
 
-async def test_tts_discovery_needs_speech_key_not_modelark(
-    test_env: None, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("speech_configured", [False, True])
+@pytest.mark.parametrize("modelark_configured", [False, True])
+async def test_audio_discovery_matches_provider_keys(
+    test_env: None,
+    speech_configured: bool,
+    modelark_configured: bool,
 ) -> None:
-    monkeypatch.setenv("BYTEPLUS_MODELARK_API_KEY", "")
-    get_settings.cache_clear()
-    payload = await _list_models({"kind": "audio"})
-    assert len(payload["models"]) == 1
-    model = payload["models"][0]
-    assert model["model_id"] == "dola-seed-tts-3.0"
-    assert model["tool"] == "seed_tts_generate"
-    assert model["tts"]["max_text_characters"] == 10000
-    assert model["tts"]["output_formats"] == ["mp3", "pcm", "ogg_opus"]
-    assert next(item for item in payload["services"] if item["service"] == "seed_tts")["enabled"]
+    modelark_key = "test-modelark" if modelark_configured else ""
+    speech_key = "test-speech" if speech_configured else ""
+    settings = Settings(
+        _env_file=None,
+        BYTEPLUS_MODELARK_API_KEY=modelark_key,
+        BYTEPLUS_SEED_SPEECH_API_KEY=speech_key,
+    )
+    payload = await _list_models({"kind": "audio"}, settings=settings)
+    models = _by_id(payload)
+    services = {item["service"]: item for item in payload["services"]}
+    assert services["seed_audio"]["enabled"] is (speech_configured or modelark_configured)
+    assert services["seed_tts"]["enabled"] is speech_configured
+    assert ("seed-audio-1.0" in models) is speech_configured
+    assert ("dola-seed-tts-3.0" in models) is speech_configured
+    assert ("dola-seed-audio-1-5-261128" in models) is modelark_configured
+
+    if speech_configured:
+        legacy = models["seed-audio-1.0"]
+        assert legacy["tool"] == "seed_audio_generate"
+        assert legacy["is_default"] is True
+        assert legacy["audio"]["output_formats"] == ["wav", "mp3", "pcm", "ogg"]
+        assert legacy["audio"]["max_variations"] == 5
+        tts = models["dola-seed-tts-3.0"]
+        assert tts["tool"] == "seed_tts_generate"
+        assert tts["tts"]["max_text_characters"] == 10000
+        assert tts["tts"]["output_formats"] == ["mp3", "pcm", "ogg_opus"]
+    if modelark_configured:
+        preview = models["dola-seed-audio-1-5-261128"]
+        assert preview["tool"] == "seed_audio_generate"
+        assert preview["is_default"] is False
+        assert preview["audio"]["output_formats"] == ["wav", "mp3", "pcm", "ogg_opus"]
+        assert preview["audio"]["max_reference_audios"] == 6
+        assert preview["audio"]["max_reference_images"] == 1
+        assert preview["audio"]["max_reference_videos"] == 1
+        assert preview["audio"]["max_variations"] == 1
+        assert preview["audio"]["operations"] == ["generation", "separation", "dubbing"]

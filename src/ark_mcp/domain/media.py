@@ -20,6 +20,7 @@ from ark_mcp.domain.artifacts import MediaType
 from ark_mcp.domain.assets import AssetUriError, is_asset_uri, parse_asset_uri
 from ark_mcp.observability.logger import warning as log_warning
 from ark_mcp.security.media_policy import (
+    MediaLimits,
     check_audio_duration_from_base64,
     check_base64_size,
     get_media_limits,
@@ -77,6 +78,7 @@ class MediaSource(BaseModel):
 
     MEDIA_CATEGORY: ClassVar[MediaType] = MediaType.IMAGE
     ALLOW_ASSET_URI: ClassVar[bool] = False
+    IMAGE_MIME_TYPES: ClassVar[frozenset[str]] = MediaLimits.ALLOWED_IMAGE_MIMES
 
     kind: MediaSourceKind = Field(
         ..., description="Whether the media is referenced by URL or Base64."
@@ -125,7 +127,7 @@ class MediaSource(BaseModel):
         if self.mime_type:
             media_category = type(self).MEDIA_CATEGORY
             if media_category == "image":
-                validate_image_mime(self.mime_type)
+                validate_image_mime(self.mime_type, allowed=type(self).IMAGE_MIME_TYPES)
             elif media_category == "audio":
                 validate_audio_mime(self.mime_type)
             elif media_category == "video":
@@ -199,11 +201,14 @@ class AudioReference(BaseModel):
             )
 
         if self.kind == "base64" and self.data:
-            limits = get_media_limits()
-            check_base64_size(self.data, limits.audio_max_bytes, label="audio")
-            check_audio_duration_from_base64(self.data, limits.audio_max_seconds, label="audio")
+            self._validate_inline_audio(self.data)
 
         if self.mime_type:
             validate_audio_mime(self.mime_type)
 
         return self
+
+    def _validate_inline_audio(self, data: str) -> None:
+        limits = get_media_limits()
+        check_base64_size(data, limits.audio_max_bytes, label="audio")
+        check_audio_duration_from_base64(data, limits.audio_max_seconds, label="audio")

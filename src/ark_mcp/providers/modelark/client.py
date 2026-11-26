@@ -7,7 +7,7 @@ request ID capture.
 
 from __future__ import annotations
 
-import json
+import math
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from ark_mcp.config.env import get_settings
@@ -82,16 +82,19 @@ class ModelArkGateway(BaseHttpGateway):
 
         try:
             body = response.json()
-        except json.JSONDecodeError:
+        except ValueError:
             body = {"error": {"message": response.text}}
 
         error_obj = body.get("error", body) if isinstance(body, dict) else {}
         code = str(error_obj.get("code", "")) if isinstance(error_obj, dict) else ""
         message = error_obj.get("message", str(body)) if isinstance(error_obj, dict) else str(body)
+        if not isinstance(message, str) or not message:
+            message = f"ModelArk returned HTTP {status}."
 
         retryable = status == 429 or status >= 500
         mutation = operation in {
             "generate_image",
+            "generate_audio",
             "create_task",
             "delete_task",
             "chat_completion",
@@ -101,6 +104,10 @@ class ModelArkGateway(BaseHttpGateway):
         try:
             retry_after_seconds = float(retry_after) if retry_after is not None else None
         except ValueError:
+            retry_after_seconds = None
+        if retry_after_seconds is not None and (
+            retry_after_seconds < 0 or not math.isfinite(retry_after_seconds)
+        ):
             retry_after_seconds = None
 
         normalized = NormalizedProviderError(

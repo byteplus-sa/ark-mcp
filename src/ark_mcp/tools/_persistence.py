@@ -38,9 +38,14 @@ def persistence_issue(
     *,
     source_url_expires_at: str | None = None,
     inline: bool = False,
+    max_download_bytes: int | None = None,
 ) -> ArtifactPersistenceIssue:
     """Build a URL-safe persistence issue; ``exc=None`` means an internal storage error."""
-    limit = artifact_base64_limit_bytes(media_type) if inline else artifact_limit_bytes(media_type)
+    limit = max_download_bytes
+    if limit is None:
+        limit = (
+            artifact_base64_limit_bytes(media_type) if inline else artifact_limit_bytes(media_type)
+        )
     if exc is None:
         return ArtifactPersistenceIssue(
             code="storage_failed",
@@ -86,6 +91,7 @@ async def persist_from_url(
     mime_type: str,
     source_expires_at: str | None,
     auth: AuthContext | None,
+    max_download_bytes: int | None = None,
 ) -> ArtifactRef:
     """Persist a provider URL, or return the URL itself with ``persistence_error``.
 
@@ -100,11 +106,22 @@ async def persist_from_url(
             mime_type=mime_type,
             source_expires_at=source_expires_at,
             auth=auth,
+            max_download_bytes=max_download_bytes,
         )
     except ArtifactPersistenceError as exc:
-        issue = persistence_issue(exc, media_type, source_url_expires_at=source_expires_at)
+        issue = persistence_issue(
+            exc,
+            media_type,
+            source_url_expires_at=source_expires_at,
+            max_download_bytes=max_download_bytes,
+        )
     except (OSError, RuntimeError):
-        issue = persistence_issue(None, media_type, source_url_expires_at=source_expires_at)
+        issue = persistence_issue(
+            None,
+            media_type,
+            source_url_expires_at=source_expires_at,
+            max_download_bytes=max_download_bytes,
+        )
     log_warning("artifact_persist_fallback_url", media_type=str(media_type), code=issue.code)
     return provider_url_ref(
         url=url,

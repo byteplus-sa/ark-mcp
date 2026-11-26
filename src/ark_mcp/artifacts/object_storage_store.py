@@ -119,8 +119,12 @@ class ObjectStorageArtifactStore:
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
         extra_trusted_host_suffixes: tuple[str, ...] = (),
+        *,
+        max_download_bytes: int | None = None,
     ) -> ArtifactRef:
-        max_bytes = artifact_limit_bytes(media_type)
+        max_bytes = (
+            artifact_limit_bytes(media_type) if max_download_bytes is None else max_download_bytes
+        )
         trusted_hosts = trusted_host_policy(extra_trusted_host_suffixes)
         try:
             downloaded = await self._downloader.download(

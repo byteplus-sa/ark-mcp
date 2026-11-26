@@ -24,7 +24,9 @@
   },
   "seed_audio_generate": {
     "input": {
-      "text_prompt": "Gentle rain on a window. Max duration: 5 seconds"
+      "model": "dola-seed-audio-1-5-261128",
+      "text_prompt": "In a calm voice, say ‘The rain has stopped.’ Add quiet footsteps on a wet sidewalk.",
+      "output": { "format": "wav", "sample_rate": 44100 }
     }
   },
   "seed_tts_generate": {

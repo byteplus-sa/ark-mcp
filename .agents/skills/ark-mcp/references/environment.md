@@ -102,8 +102,8 @@ entitlement or shared-key permission.
 | Setting | Enables |
 |---|---|
 | (always) | `ark_list_models`, `ark_job_*`, `seed_media_get_artifact`, `seed_media_export_artifact`, `seed_media_persist_url`, `seed-health://status` |
-| `BYTEPLUS_MODELARK_API_KEY` | `seedream_generate_image`, `seedance_create_task`, `gen_task_get` / `gen_task_list` / `gen_task_cancel_or_delete`, `seed_understand`, `seed_audio_understand` |
-| `BYTEPLUS_SEED_SPEECH_API_KEY` | `seed_audio_generate`, `seed_tts_generate`, `speech_to_text` (one key, three capabilities) |
+| `BYTEPLUS_MODELARK_API_KEY` | `seedream_generate_image`, `seedance_create_task`, `gen_task_get` / `gen_task_list` / `gen_task_cancel_or_delete`, `seed_understand`, `seed_audio_understand`, Seed Audio 1.5 on `seed_audio_generate` |
+| `BYTEPLUS_SEED_SPEECH_API_KEY` | Seed Audio 1.0 on `seed_audio_generate`, `seed_tts_generate`, `speech_to_text` |
 | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` | `omnihuman_create_task`, `omnihuman_get_task`, `omnihuman_cancel_task`. Separate Vision AI Bearer key; default off. Overrides: `BYTEPLUS_CV_BASE_URL`, `BYTEPLUS_OMNIHUMAN_REQ_KEY` |
 | `BYTEPLUS_MODELARK_ACCESS_KEY` + `BYTEPLUS_MODELARK_SECRET_KEY` | `ark_asset_group_ensure`, `ark_asset_group_list`, `ark_asset_create`, `ark_asset_list`, `ark_asset_update`, `ark_asset_verification_start`, `ark_asset_verification_result` (plus `BYTEPLUS_MODELARK_SESSION_TOKEN` for STS `AKTP...` keys) |
 | `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true` + AK/SK | Additionally registers the irreversible `ark_asset_delete` (default off) |
@@ -126,7 +126,7 @@ Gotchas that follow from the gates:
 - **The `group_created_empty` cleanup hint** ("delete the empty group") only
   works when `ark_asset_delete` is registered.
 - **`BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE`** (`off` default, `resolve`):
-  Seedream and Seed Audio reject `asset://` references; `resolve` swaps in the
+  Seedream and Seed Audio 1.0 reject `asset://` references; `resolve` swaps in the
   asset's temporary URL (experimental, needs AK/SK).
 - **`BYTEPLUS_MODELARK_ASSET_CREATE_QPM`** (default `3`) is a client-side
   `CreateAsset` pacing limit; match your tier: 3 Entry, 120 Advanced, 300 Premium.
@@ -151,7 +151,7 @@ Gotchas that follow from the gates:
 | Variable | Default | Notes |
 |---|---|---|
 | `BYTEPLUS_MODELARK_BASE_URL` | `https://ark.ap-southeast.bytepluses.com/api/v3` | Key is region-scoped; must match |
-| `BYTEPLUS_SEED_AUDIO_BASE_URL`, `SEED_SPEECH_ASR_BASE_URL` | `https://voice.ap-southeast-1.bytepluses.com` | Seed Audio and Seed TTS share the first; ASR uses the second |
+| `BYTEPLUS_SEED_AUDIO_BASE_URL`, `SEED_SPEECH_ASR_BASE_URL` | `https://voice.ap-southeast-1.bytepluses.com` | Seed Audio 1.0 and Seed TTS share the first. ASR uses the second. |
 | `BYTEPLUS_MODELARK_OPENAPI_BASE_URL` | `https://ark.ap-southeast-1.byteplusapi.com` | Assets, moderation and pricing control plane (signed with AK/SK) |
 | `SEED_SPEECH_ASR_POLL_INTERVAL_SECONDS` / `_MAX_SECONDS` | `3` / `600` | Server-side ASR polling cadence and ceiling |
 | `BYTEPLUS_CONNECT_TIMEOUT_MS` / `BYTEPLUS_REQUEST_TIMEOUT_MS` | `10000` / `600000` | Provider connect and full-request timeouts |
@@ -247,7 +247,7 @@ granted to shared HTTP. Loopback access requires `MCP_AUTH_MODE=local`.
   custom/non-default bindings. Shorter overrides fail at startup; the default
   30 is safe. Flash-only, legacy-only, local, and disabled ModelArk settings
   keep the one-day minimum. Increasing retention cannot restore pruned ownership.
-- **Inline fallback:** if storage fails for inline Base64 output (Seed Audio, Seed TTS,
+- **Inline fallback:** if storage fails for inline Base64 output (Seed Audio 1.0, Seed TTS,
   Seedream `b64_json`), it is returned inline up to
   `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables).
   `MCP_INLINE_MEDIA_MAX_BYTES` (8 MiB) caps inline image/audio content blocks.
@@ -300,8 +300,8 @@ flowchart LR
 
 | Provider | Auth | Products |
 |---|---|---|
-| ModelArk data plane | `Authorization: Bearer <BYTEPLUS_MODELARK_API_KEY>` | Seedream, Seedance, Seed 2.1 and audio understanding |
-| Seed Speech | `X-Api-Key: <BYTEPLUS_SEED_SPEECH_API_KEY>` | Seed Audio, Seed TTS 3.0 and Speech-to-Text; same key, separate capabilities |
+| ModelArk data plane | `Authorization: Bearer <BYTEPLUS_MODELARK_API_KEY>` | Seedream, Seedance, Seed Audio 1.5 and multimodal understanding |
+| Seed Speech | `X-Api-Key: <BYTEPLUS_SEED_SPEECH_API_KEY>` | Seed Audio 1.0, Seed TTS 3.0 and Speech-to-Text |
 | Vision AI (optional) | `Authorization: Bearer <BYTEPLUS_CV_API_KEY>` | OmniHuman 2.0 |
 | ModelArk OpenAPI (optional) | IAM AK/SK, V4 signatures | Private asset library, opt-in moderation lookup and cached pricing |
 

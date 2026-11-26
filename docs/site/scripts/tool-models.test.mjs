@@ -83,14 +83,12 @@ test("image and video tables distinguish defaults, custom IDs and gated models",
 
 test("fixed-service tools do not advertise a per-call model selector", () => {
   for (const name of [
-    "seed_audio_generate",
     "seed_audio_understand",
     "speech_to_text",
     "omnihuman_create_task",
   ]) {
     assert.match(toolPage(tool(name)), /no per-call `model` argument/i);
   }
-  assert.match(toolPage(tool("seed_audio_generate")), /seed-audio-1\.0/);
   assert.match(
     toolPage(tool("seed_audio_understand")),
     /SEED_AUDIO_UNDERSTANDING_MODEL/,
@@ -99,6 +97,15 @@ test("fixed-service tools do not advertise a per-call model selector", () => {
     toolPage(tool("omnihuman_create_task")),
     /realman_avatar_picture_omni20_cv/,
   );
+});
+
+test("Seed Audio describes the legacy default and the explicit ModelArk model", () => {
+  const page = toolPage(tool("seed_audio_generate"));
+  assert.match(page, /default.*`seed-audio-1\.0`/i);
+  assert.match(page, /Seed Audio 1\.0 \|[^\n]*BYTEPLUS_SEED_SPEECH_API_KEY/);
+  assert.match(page, /Seed Audio 1\.5 \|[^\n]*dola-seed-audio-1-5-261128/);
+  assert.match(page, /Seed Audio 1\.5 \|[^\n]*BYTEPLUS_MODELARK_API_KEY/);
+  assert.match(page, /Seed Audio 1\.5 \|[^\n]*separation[^\n]*dubbing/);
 });
 
 test("TTS documents its fixed model, speech key and persisted output", () => {

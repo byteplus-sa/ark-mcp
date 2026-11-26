@@ -19,7 +19,7 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 |---|---|---|---|
 | `seedance_create_task` | 1-5, each a separate billed task | none | `tasks[]` with `task_id` or `error`; `submitted` / `failed` |
 | `seedream_generate_image` | 1-10, one provider call each | base `seed` | `summary` (`VariationSummary`) |
-| `seed_audio_generate` | 1-5 | none (Seed Audio has no seed) | `summary` (`VariationSummary`) |
+| `seed_audio_generate` (1.0) | 1-5 | none (Seed Audio has no seed) | `summary` (`VariationSummary`) |
 
 - **Partial failure is normal.** Each variation is independent; 4 of 5 can succeed and the call still returns 4 results plus 1 error. Read every `error` before concluding.
 - **No per-variation timeout.** Queue wait never counts; one batch deadline bounds the call. A deadline or storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry), `generating` (may have completed, **do not retry blindly**), `persisting` (billed output not stored; the provider URL may still be in the result).
@@ -184,8 +184,17 @@ The following example selects Pro, which must be bound by the operator:
 
 ## Seed Audio
 
-Needs `BYTEPLUS_SEED_SPEECH_API_KEY`. `seed_audio_generate` produces a full-scene clip (speech, ambience, music, effects) from a text prompt; **run it through `ark_job_submit`**. The provider URL expires after 2 hours, so keep `persist=true` (default).
+
+Run `seed_audio_generate` through `ark_job_submit` and read the generated
+media from the completed job. Select `dola-seed-audio-1-5-261128` explicitly
+for ModelArk generation or dubbing with `BYTEPLUS_MODELARK_API_KEY`.
 For exact text or SSML with a selected `voice_id`, use Seed TTS below.
+
+### Seed Audio 1.0
+
+The default model needs `BYTEPLUS_SEED_SPEECH_API_KEY`. It produces a
+full-scene clip (speech, ambience, music, effects) from a text prompt. The
+provider URL expires after 2 hours, so keep `persist=true` (default).
 
 - **References: one kind only.** `audio_references` (up to 3: `speaker` ID, `url`, or `base64`) steer voice or scene; `image_reference` gives visual context. **Passing both is rejected.**
 - **Base64 reference audio** is checked against the media limit (30 s by default for WAV) and the audio size cap before submission; prefer a URL for longer material.
@@ -195,6 +204,29 @@ For exact text or SSML with a selected `voice_id`, use Seed TTS below.
 - **Subtitles** (`output.subtitle`, `subtitle_type` `utterance` or `word`) are returned on the single-call result only.
 - **Variations:** no seed exists, so variations differ only by sampling. With `variations > 1`, `artifact`, `duration_seconds`, `billing_duration_seconds` and `subtitle` are **null**; everything is in `summary` (`total`, `succeeded`, `failed`, per-variation `artifact` or `error`). `output_path` must then be a directory ending in `/`.
 - `billing_duration_seconds` can differ from the actual `duration_seconds`.
+
+### Seed Audio 1.5
+
+- For generation, start with `text_prompt`. Add up to six WAV or MP3
+  `audio_references` and one optional `reference_video`, or a single
+  `image_reference`. Reference audio accepts HTTPS URLs and Base64, with
+  2-30 seconds and up to 15 MiB per clip.
+- For stem separation, describe the requested stems in `text_prompt` and
+  pass one 2-360 second WAV or MP3 in `separate_audio` as an HTTPS URL or a
+  Base64 data URI. Use HTTPS for files near or above the 64 MiB request limit.
+- For translation and dubbing, supply `dubbing_video` and
+  `dubbing_config.target_language`, and omit `text_prompt`. Choose
+  `dubbing_config.glossaries` for translation terms or
+  `dubbing_config.custom_subtitle` to dub from a target-language SRT.
+- Use HTTPS for video URLs. Trusted local mode also accepts authorized
+  `tos://` video URLs.
+- `include` can request video and SRT or JSONL subtitles. Read `audio_tracks`
+  and `video_artifact` for media, and `subtitles` and `subtitles_source` for
+  the temporary subtitle URLs. Keep `persist=true` to store audio and video.
+  Persisted Seed Audio 1.5 tracks can be up to 90 MiB each.
+  For stdio local export, set `output_path` to a directory ending in `/`.
+- Use one generation per job. For `output.format="ogg_opus"`, omit the
+  sample rate or use 48000 Hz.
 
 ## Seed TTS 3.0
 

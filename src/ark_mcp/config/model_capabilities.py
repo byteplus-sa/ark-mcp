@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from difflib import get_close_matches
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -49,6 +49,13 @@ class ModelFamily(StrEnum):
 
 SEEDANCE_RATIOS: tuple[str, ...] = ("16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive")
 SEEDANCE_2_5_TASK_TYPES: tuple[str, ...] = ("auto", "reference", "edit", "extend")
+SEED_AUDIO_1_0_MODEL: Final = "seed-audio-1.0"
+SEED_AUDIO_1_0_MAX_VARIATIONS = 5
+SEED_AUDIO_1_5_MODEL: Final = "dola-seed-audio-1-5-261128"
+SEED_AUDIO_1_5_FORMATS = ("wav", "mp3", "pcm", "ogg_opus")
+SEED_AUDIO_1_5_MAX_REFERENCE_AUDIOS = 6
+SEED_AUDIO_1_5_MAX_REFERENCE_IMAGES = 1
+SEED_AUDIO_1_5_MAX_REFERENCE_VIDEOS = 1
 
 
 @dataclass(frozen=True)

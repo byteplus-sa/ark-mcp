@@ -1,24 +1,31 @@
-"""``seed_audio_generate`` tool — full-scene audio generation through Seed Speech.
-
-Input validation uses a Pydantic model validator to reject image+audio
-mixing, more than three references, invalid MIME types, and out-of-range
-controls. The adapter maps discriminated unions to the provider's ``speaker``,
-``audio_url``, ``audio_data``, ``image_url``, or ``image_data`` fields.
-"""
+"""Seed Audio generation through Seed Speech and ModelArk."""
 
 from __future__ import annotations
 
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from uuid import uuid4
 
 from fastmcp import Context
 from fastmcp.tools import ToolResult
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
 
 from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
+from ark_mcp.config.model_capabilities import (
+    SEED_AUDIO_1_0_MAX_VARIATIONS,
+    SEED_AUDIO_1_0_MODEL,
+    SEED_AUDIO_1_5_MAX_REFERENCE_AUDIOS,
+    SEED_AUDIO_1_5_MODEL,
+)
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.media import AudioReference, ReferenceImageInput
@@ -45,6 +52,14 @@ from ark_mcp.tools._parallel import (
     variation_batch_deadline,
 )
 from ark_mcp.tools._persistence import persist_base64, persistence_variation_error, provider_url_ref
+from ark_mcp.tools._seed_audio_1_5 import (
+    MODELARK_AUDIO_REFERENCES,
+    SeedAudioModelArkImage,
+    SeedAudioModelArkInput,
+    SeedAudioModelArkOutput,
+    generate_modelark,
+    validate_modelark_references,
+)
 from ark_mcp.tools._task_execution import context_log
 
 # ---------------------------------------------------------------------------
@@ -52,17 +67,17 @@ from ark_mcp.tools._task_execution import context_log
 # ---------------------------------------------------------------------------
 
 
-MAX_VARIATIONS = 5
+SeedAudioModel = Literal["seed-audio-1.0", "dola-seed-audio-1-5-261128"]
 
 
 class AudioOutputOptions(BaseModel):
     """Optional output controls for Seed Audio generation."""
 
-    format: Literal["wav", "mp3", "pcm", "ogg"] | None = Field(
-        None, description="Output audio format. Defaults to wav if not specified."
+    format: Literal["wav", "mp3", "pcm", "ogg", "ogg_opus"] | None = Field(
+        None, description="Format (default wav). Ogg is 'ogg' for 1.0 and 'ogg_opus' for 1.5."
     )
     sample_rate: Literal[8000, 16000, 24000, 32000, 44100, 48000] | None = Field(
-        None, description="Output sample rate in Hz. Defaults to provider setting if not specified."
+        None, description="Output sample rate in Hz. For ogg_opus, omit this or use 48000."
     )
     speech_rate: int | None = Field(
         None, ge=-50, le=100, description="Speech speed adjustment. -50 (slowest) to 100 (fastest)."
@@ -77,10 +92,10 @@ class AudioOutputOptions(BaseModel):
         None, ge=-12, le=12, description="Pitch adjustment in semitones. -12 to +12."
     )
     subtitle: bool | None = Field(
-        None, description="Whether to return timestamped subtitles in the response."
+        None, description="Seed Audio 1.0 only. Return timestamped subtitles in the response."
     )
     subtitle_type: Literal["utterance", "word"] | None = Field(
-        None, description="Subtitle granularity: utterance-level or word-level timestamps."
+        None, description="Seed Audio 1.0 only. Utterance-level or word-level timestamps."
     )
 
 
@@ -93,22 +108,30 @@ class AudioWatermarkOptions(BaseModel):
     )
 
 
-class SeedAudioGenerateInput(BaseModel):
+class SeedAudioGenerateInput(SeedAudioModelArkInput):
     """Input model for ``seed_audio_generate``."""
 
+    model: SeedAudioModel = Field(
+        SEED_AUDIO_1_0_MODEL,
+        description="Seed Audio model ID. 1.0 uses Seed Speech. 1.5 uses ModelArk.",
+    )
     text_prompt: str | None = Field(
         None,
         min_length=1,
         max_length=3000,
         description=(
-            "Text describing the audio to generate (up to 3,000 characters). Required unless "
-            "variation_prompts is set."
+            "Text describing the audio or stems (up to 3,000 characters). Required except "
+            "for dubbing_video or 1.0 calls with variation_prompts."
         ),
     )
     audio_references: list[AudioReference] = Field(
         default_factory=list,
-        max_length=3,
-        description="Reference audio for voice cloning or scene control (max 3). Mutually exclusive with image_reference.",
+        max_length=SEED_AUDIO_1_5_MAX_REFERENCE_AUDIOS,
+        description=(
+            "Reference audio for voice timbre or scene control. Up to 3 for 1.0 or up to 6 "
+            "HTTPS or Base64 WAV/MP3 references for 1.5 (2-30 seconds, up to 15 MiB each). "
+            "Mutually exclusive with image_reference."
+        ),
     )
     image_reference: ReferenceImageInput | None = Field(
         None,
@@ -118,56 +141,129 @@ class SeedAudioGenerateInput(BaseModel):
         None, description="Optional output format, sample rate, and rate controls."
     )
     watermark: AudioWatermarkOptions | None = Field(
-        None, description="Optional AIGC watermark settings."
+        None, description="Optional AIGC watermark settings for Seed Audio 1.0."
     )
     variations: int = Field(
         1,
         ge=1,
-        le=MAX_VARIATIONS,
+        le=SEED_AUDIO_1_0_MAX_VARIATIONS,
         description=(
-            "Parallel generations (1-5). Audio has no seed, so results differ by sampling; "
+            "Parallel Seed Audio 1.0 generations (1-5). Audio has no seed, so results differ by sampling; "
             "failures are reported per variation."
         ),
     )
     variation_prompts: list[Annotated[str, Field(min_length=1, max_length=3000)]] | None = Field(
         None,
-        description="One prompt per variation, overriding text_prompt. Must have exactly `variations` entries.",
+        description="Seed Audio 1.0 only. One prompt per variation, overriding text_prompt.",
     )
-    persist: bool = Field(True, description="Persist the audio as a durable MCP resource.")
+    persist: bool = Field(
+        True, description="Persist generated audio and video as durable MCP resources."
+    )
     output_path: str | None = output_path_field(
-        "the generated audio", directory_needed="when variations > 1"
+        "the generated audio and video", directory_needed="for Seed Audio 1.5 or variations > 1"
     )
     overwrite: bool = overwrite_field()
+
+    @field_validator("audio_references", mode="wrap")
+    @classmethod
+    def validate_reference_audios(
+        cls, value: object, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+    ) -> list[AudioReference]:
+        if info.data.get("model") == SEED_AUDIO_1_5_MODEL:
+            return list(MODELARK_AUDIO_REFERENCES.validate_python(value, from_attributes=True))
+        return cast("list[AudioReference]", handler(value))
+
+    @field_validator("image_reference", mode="wrap")
+    @classmethod
+    def validate_reference_image(
+        cls, value: object, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+    ) -> ReferenceImageInput | None:
+        if value is not None and info.data.get("model") == SEED_AUDIO_1_5_MODEL:
+            return SeedAudioModelArkImage.model_validate(value, from_attributes=True)
+        return cast("ReferenceImageInput | None", handler(value))
 
     @model_validator(mode="after")
     def validate_prompts(self) -> SeedAudioGenerateInput:
         """Require a prompt and one variation prompt per variation."""
-        if self.text_prompt is None and not self.variation_prompts:
+        if self.text_prompt is None and not self.variation_prompts and self.dubbing_video is None:
             raise ValueError("Either text_prompt or variation_prompts must be provided.")
         if self.variation_prompts is not None and len(self.variation_prompts) != self.variations:
             raise ValueError(f"variation_prompts must have exactly {self.variations} entries.")
         return self
 
     @model_validator(mode="after")
-    def validate_no_media_mixing(self) -> SeedAudioGenerateInput:
-        """Reject mixing audio and image references."""
-        if self.audio_references and self.image_reference:
+    def validate_model_options(self) -> SeedAudioGenerateInput:
+        if self.image_reference and (self.audio_references or self.reference_video):
             raise ValueError(
-                "Audio references and image reference are mutually exclusive. "
-                "Use one or the other, not both."
+                "Audio or video references and image reference are mutually exclusive."
             )
+        if self.model == SEED_AUDIO_1_0_MODEL:
+            if any(
+                value is not None
+                for value in (
+                    self.reference_video,
+                    self.separate_audio,
+                    self.dubbing_video,
+                    self.dubbing_config,
+                    self.include,
+                )
+            ):
+                raise ValueError(
+                    "Video, separation, dubbing and include options require Seed Audio 1.5."
+                )
+            if len(self.audio_references) > 3:
+                raise ValueError("Seed Audio 1.0 accepts at most 3 audio references.")
+            if self.output and self.output.format == "ogg_opus":
+                raise ValueError("Use ogg for Seed Audio 1.0 or ogg_opus for Seed Audio 1.5.")
+            return self
+
+        if self.variations != 1 or self.variation_prompts is not None:
+            raise ValueError("Seed Audio 1.5 requires variations=1 and no variation_prompts.")
+        if self.watermark is not None or (
+            self.output
+            and (self.output.subtitle is not None or self.output.subtitle_type is not None)
+        ):
+            raise ValueError(
+                "Watermark and inline subtitle settings are available only on Seed Audio 1.0. Use include for 1.5 subtitles."
+            )
+        if self.output:
+            if self.output.format == "ogg":
+                raise ValueError("Seed Audio 1.5 uses ogg_opus for Ogg output.")
+            if self.output.format == "ogg_opus" and self.output.sample_rate not in (None, 48000):
+                raise ValueError(
+                    "ogg_opus requires a sample rate of 48000 Hz or the provider default."
+                )
+
+        references = self.reference_video or self.image_reference or self.audio_references
+        if self.dubbing_video is not None:
+            if self.dubbing_config is None:
+                raise ValueError("dubbing_video requires dubbing_config.")
+            if references or self.text_prompt is not None or self.separate_audio is not None:
+                raise ValueError(
+                    "dubbing_video is mutually exclusive with prompts, references and separate_audio."
+                )
+        elif self.dubbing_config is not None:
+            raise ValueError("dubbing_config requires dubbing_video.")
+        if self.separate_audio is not None and references:
+            raise ValueError(
+                "separate_audio is mutually exclusive with reference audio, image and video inputs."
+            )
+        if (
+            any(item.startswith("subtitles_source.") for item in self.include or ())
+            and self.dubbing_video is None
+        ):
+            raise ValueError("Source-language subtitle outputs require dubbing_video.")
+        validate_modelark_references(self)
         return self
 
 
-class SeedAudioGenerateOutput(BaseModel):
+class SeedAudioGenerateOutput(SeedAudioModelArkOutput):
     """Output model for ``seed_audio_generate``."""
 
-    provider: Literal["byteplus-seed-speech"] = Field(
+    provider: Literal["byteplus-seed-speech", "byteplus-modelark"] = Field(
         "byteplus-seed-speech", description="Provider that generated the audio."
     )
-    model: Literal["seed-audio-1.0"] = Field(
-        "seed-audio-1.0", description="Model used for generation."
-    )
+    model: SeedAudioModel = Field(SEED_AUDIO_1_0_MODEL, description="Model used for generation.")
     duration_seconds: float | None = Field(
         None, description="Actual audio duration in seconds; null when variations > 1."
     )
@@ -180,17 +276,19 @@ class SeedAudioGenerateOutput(BaseModel):
     )
     artifact: ArtifactRef | None = Field(
         None,
-        description="Durable artifact reference for the generated audio; null when variations > 1.",
+        description="Primary artifact for one Seed Audio 1.0 generation. 1.5 uses audio_tracks.",
     )
     subtitle: Subtitle | None = Field(
-        None, description="Timestamped subtitle data, if requested and available."
+        None, description="Seed Audio 1.0 timestamped subtitle data, if requested and available."
     )
-    request_id: str | None = Field(None, description="Client request ID used for this generation.")
+    request_id: str | None = Field(
+        None, description="Client request ID for 1.0 or ModelArk response request ID for 1.5."
+    )
     provider_log_id: str | None = Field(
         None, description="Provider-side log ID for troubleshooting."
     )
     source_url: str | None = Field(
-        None, description="Provider HTTP URL (2-hour expiry) for direct download."
+        None, description="Seed Audio 1.0 provider URL (2-hour expiry) for direct download."
     )
     summary: VariationSummary | None = Field(
         None,
@@ -227,18 +325,31 @@ def _parse_duration_hint(text_prompt: str, *, default: float = 15.0) -> float:
 
 
 @local_export(
-    "artifact", "summary", require_dir=lambda i: i.variations > 1, precondition=_needs_persist
+    "artifact",
+    "summary",
+    "audio_tracks",
+    "video_artifact",
+    require_dir=lambda i: i.variations > 1 or i.model == SEED_AUDIO_1_5_MODEL,
+    precondition=_needs_persist,
 )
 async def seed_audio_generate(
     input: SeedAudioGenerateInput, ctx: Context
 ) -> SeedAudioGenerateOutput | ToolResult:
-    """Generate full-scene audio with Seed Speech (text prompt, optional voice-cloning audio or image reference).
+    """Generate audio, separate stems or dub video. Run through ark_job_submit.
 
-    Returns a durable artifact (provider URLs expire after 2 hours). variations (up to 5)
-    run in parallel and return a summary. Run through ark_job_submit.
+    Seed Audio 1.0 defaults to Seed Speech for text-guided generation and parallel variations.
+    Select dola-seed-audio-1-5-261128 explicitly for ModelArk text and reference-based generation,
+    stem separation, or video translation and dubbing. 1.5 returns all audio tracks with optional
+    video and subtitle outputs.
     """
     await context_log(ctx, "info", "Starting Seed Audio generation")
     await ctx.report_progress(progress=10, total=100)
+
+    if input.model == SEED_AUDIO_1_5_MODEL:
+        result = await generate_modelark(
+            input, ctx, duration_hint=_parse_duration_hint(input.text_prompt or "")
+        )
+        return result if isinstance(result, ToolResult) else SeedAudioGenerateOutput(**result)
 
     settings = get_settings()
     if not settings.has_seed_audio:

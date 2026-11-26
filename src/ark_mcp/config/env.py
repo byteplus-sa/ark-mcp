@@ -628,7 +628,7 @@ class Settings(BaseSettings):
 
     @property
     def has_modelark(self) -> bool:
-        """Whether ModelArk credentials are configured (Seedream + Seedance)."""
+        """Whether a ModelArk data plane API key is configured."""
         return bool(self.modelark_api_key)
 
     @property
@@ -638,8 +638,13 @@ class Settings(BaseSettings):
 
     @property
     def has_seed_audio(self) -> bool:
-        """Whether Seed Audio credentials are configured."""
+        """Whether Seed Speech credentials for Seed Audio 1.0 and Seed TTS are configured."""
         return bool(self.seed_speech_api_key)
+
+    @property
+    def has_seed_audio_generation(self) -> bool:
+        """Whether credentials for either Seed Audio generation model are configured."""
+        return self.has_seed_audio or self.has_modelark
 
     @property
     def has_omnihuman(self) -> bool:

@@ -1,6 +1,6 @@
 # Models and limits
 
-Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed TTS, and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
+Model discovery with `ark_list_models`, how the server binds model IDs to families, and the per-family limits for Seedance, Seedream, Seed Audio, Seed TTS and Seed 2.1 understanding. **This file is the one place per-family numbers live.** For the configured server, **`ark_list_models` is authoritative**: bindings are operator-configured, so a deployment can list fewer, more, or differently named models than the tables below. Tool parameters are in the tool schemas (see [API reference](https://byteplus-sa.github.io/ark-mcp/api-reference/)).
 
 ## Discovery with `ark_list_models`
 
@@ -14,7 +14,7 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 **Call it before any generation or understanding tool.** It is read-only and idempotent, needs no auth scope, and **makes no provider calls**; it reads the server's own configuration.
 
 - **`kind`** (`video`, `image`, `audio`, `understanding`) filters the list; omit it to get every configured kind.
-- **`models[]`** has one entry per configured model whose service is enabled (Seed TTS uses the Seed Speech key independently of ModelArk). Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, `tts`, or `understanding`).
+- **`models[]`** has one entry per configured model whose service is enabled. Each entry carries `model_id`, `family`, `kind`, `is_default`, `tool`, and one limits object (`video`, `image`, `audio`, `tts`, or `understanding`).
 - **`model_id` is the exact value the `model` argument accepts.** Omitting `model` uses the entry with `is_default: true`.
 - **`tool`** names the tool that serves the model. Understanding modalities and media limits describe this route, not every possible use of the underlying model. `seed_audio_understand` advertises only `audio` (up to eight clips); use `seed_understand` for images/videos. Neither handler accepts mixed audio/visual requests.
 - **`services[]`** reports each optional service with `enabled` and, when disabled, a `reason` naming the env var or flag to set (never a secret). Services: `modelark`, `seed_audio`, `seed_tts`, `speech_to_text`, `omnihuman`, `object_storage`, `asset_library`, `asset_delete`, `moderation`. **Use it to decide whether a capability exists; configuration documentation is not evidence that the running server exposes it.**
@@ -23,6 +23,7 @@ Model discovery with `ark_list_models`, how the server binds model IDs to famili
 |---|---|---|
 | `video` | `seedance_create_task` | One default (`SEEDANCE_DEFAULT_MODEL`) |
 | `image` | `seedream_generate_image` | One default (`SEEDREAM_DEFAULT_MODEL`) |
+| `audio` | `seed_audio_generate` | Default `seed-audio-1.0` with the Seed Speech key. Select `dola-seed-audio-1-5-261128` explicitly with the ModelArk key. |
 | `audio` | `seed_tts_generate` | Literal `dola-seed-tts-3.0`, no new model setting |
 | `understanding` | `seed_understand`, or `seed_audio_understand` for the `SEED_AUDIO_UNDERSTANDING_MODEL` binding | Two defaults: the non-audio default and the audio model |
 

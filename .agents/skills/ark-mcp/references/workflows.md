@@ -216,7 +216,7 @@ does not grant asset administration; use existing authorized asset IDs there.
 ### Variations and dry runs
 
 - **No separate variation tools:** set `variations` (Seedance 1-5, each a
-  separately billed task; Seedream 1-10; Seed Audio 1-5) with optional
+  separately billed task, Seedream 1-10, Seed Audio 1.0 1-5) with optional
   `variation_prompts` (exactly `variations` entries).
 - Variations are independent and **partial failures are returned**, not
   raised. `error.phase` tells you what to do: `queued` (`QUEUE_TIMEOUT`) never
@@ -332,7 +332,7 @@ is recorded but never blocked. Wait for the UTC rollover or raise the limit.
   `save_to` with `return_content="none"`), `seed_audio_understand` for audio
   reasoning, `speech_to_text` for word-level timings.
 - **Verify saved media before approval** (see the QA section).
-- **Persist before cleaning up.** Provider URLs expire (2 h Seed Audio, 24 h
+- **Persist before cleaning up.** Provider URLs expire (2 h Seed Audio 1.0, 24 h
   image/video); `gen_task_cancel_or_delete` removes retrievable outputs.
 - **Write straight to the project on stdio** with `output_path`,
   `output_dir`, or `save_to` instead of a follow-up export, and check
