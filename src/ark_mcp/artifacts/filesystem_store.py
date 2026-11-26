@@ -198,6 +198,8 @@ class FilesystemArtifactStore(ArtifactStore):
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
         extra_trusted_host_suffixes: tuple[str, ...] = (),
+        *,
+        max_download_bytes: int | None = None,
     ) -> ArtifactRef:
         """Download media from a trusted provider URL and store it.
 
@@ -206,7 +208,9 @@ class FilesystemArtifactStore(ArtifactStore):
         Validates URL, MIME, and size before storage.
         """
         trusted_hosts = trusted_host_policy(extra_trusted_host_suffixes)
-        max_bytes = artifact_limit_bytes(media_type)
+        max_bytes = (
+            artifact_limit_bytes(media_type) if max_download_bytes is None else max_download_bytes
+        )
         try:
             downloaded = await self._downloader.download(
                 url,

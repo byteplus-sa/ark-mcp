@@ -30,8 +30,12 @@ def _modelark(settings: Settings) -> bool:
     return settings.has_modelark
 
 
-def _seed_audio(settings: Settings) -> bool:
+def _seed_speech(settings: Settings) -> bool:
     return settings.has_seed_audio
+
+
+def _seed_audio_generate(settings: Settings) -> bool:
+    return settings.has_seed_audio_generation
 
 
 def _stt(settings: Settings) -> bool:
@@ -144,14 +148,14 @@ CATALOG: tuple[CatalogEntry, ...] = (
         "SeedAudioGenerateOutput",
         "seed:audio:generate",
         background="required",
-        gate=_seed_audio,
+        gate=_seed_audio_generate,
     ),
     _entry(
         "seed_tts_generate",
         "SeedTtsGenerateOutput",
         "seed:audio:generate",
         background="required",
-        gate=_seed_audio,
+        gate=_seed_speech,
     ),
     _entry(
         "media_upload",

@@ -35,7 +35,7 @@ products plus artifact access and an optional media upload helper:
 
 | Product | Tools | Description |
 |---|---|---|
-| **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation through Seed Speech. Generate one clip or 1-5 parallel variations. [Artifact storage](docs/artifacts.md) supports inline audio larger than 10 MiB. |
+| **Seed Audio** | `seed_audio_generate` | Background-task full-scene audio generation. The default 1.0 uses Seed Speech. Select 1.5 explicitly for ModelArk media-guided generation, stem separation, and video translation or dubbing. [Inputs and examples](docs/tools.md#seed_audio_generate) |
 | **Seed TTS 3.0** | `seed_tts_generate` | Background-task text-to-speech with `dola-seed-tts-3.0`, required `voice_id`, and exactly one `text` or `ssml`; aggregates HTTP JSONL into a complete persisted audio artifact, not a live MCP audio stream. [Guide and verification limits](docs/seed-tts.md) |
 | **Seedream** | `seedream_generate_image` | One background-task image tool through ModelArk: [Seedream 5.5](https://byteplus-sa.github.io/ark-mcp/tool-reference/seedream-generate-image/#seedream-5-5) by default, generation/reference and point/box editing, native transparent PNGs, auto backgrounds, standard-only optimization, validated 1K/1.5K/2K or custom sizes, hashed safety IDs, provider image metadata, 1-10 variations and dry runs. Pro retains transparency-preserving edits; batches are Lite/4.x only. Layer decomposition/OCR are not exposed |
 | **Seedance** | `seedance_create_task` | One background-task video tool for every configured Seedance model (regular 2.5 and Flash bound by default, 2.0 configurable): regular 2.5 accepts `resolution="4k"` ([provider-contract caveat](docs/models.md#video-capabilities-videocapabilities)); Flash supports 480p/720p, 10 images / 5 videos / 5 audios and no Draft. Regular 2.5 Drafts have a 14-day window (7 for creation before 2026-10-28 10:00 UTC+8). Pick the model from `ark_list_models(kind='video')`, create 1-5 variations, or use `dry_run` for a free request and static cost preview; poll with `gen_task_get` |
@@ -72,7 +72,7 @@ Key features:
   [Secret Manager integration](docs/secret-manager.md) adds pinned-version
   provider-key reads and approved, resumable MCP-only configuration sync.
 - **Durable artifacts** — generated media is persisted locally so MCP
-  resources remain usable after known provider URL lifetimes (2h Seed Audio, 24h
+  resources remain usable after known provider URL lifetimes (2h Seed Audio 1.0, 24h
   ModelArk image/video, 1h OmniHuman video).
   Seed TTS always persists the complete output and has no provider download URL.
 - **Storage fallbacks** — downloads are retried; if storage still fails,
@@ -116,9 +116,8 @@ Key features:
 
 ## Supported Input Modalities
 
-All input media is validated through an SSRF-safe URL policy and size-checked
-Base64 before reaching the provider. The table below shows what each tool
-accepts as reference input:
+HTTPS inputs must pass the URL policy, and the server size-checks inline
+Base64 before calling the provider. The table lists the accepted references.
 
 | Tool | Modality | URL | Base64 | Speaker ID | Roles | Max | Constraints |
 |---|---|:---:|:---:|:---:|---|:---:|---|
@@ -132,11 +131,14 @@ accepts as reference input:
 | `seedance_create_task` (2.5 Flash) | Image | ✓ | ✓ | — | `first_frame` · `last_frame` · `reference_image` | 10 | — |
 | `seedance_create_task` (2.5 Flash) | Video | ✓ | — | — | `reference_video` | 5 | URL only |
 | `seedance_create_task` (2.5 Flash) | Audio | ✓ | ✓ | — | `reference_audio` | 5 | May be the sole input |
-| `seed_audio_generate` | Audio | ✓ | ✓ | ✓ | — | 3 | Exclusive w/ image |
-| `seed_audio_generate` | Image | ✓ | ✓ | — | — | 1 | Exclusive w/ audio |
+| `seed_audio_generate` (1.0) | Audio | ✓ | ✓ | ✓ | — | 3 | Exclusive w/ image |
+| `seed_audio_generate` (1.0) | Image | ✓ | ✓ | — | — | 1 | Exclusive w/ audio |
+| `seed_audio_generate` (1.5) | Audio | ✓ | ✓ | — | reference or separation | 6 references or 1 separation source | WAV or MP3; inline separation uses a Base64 data URI |
+| `seed_audio_generate` (1.5) | Image | ✓ | ✓ | — | reference | 1 | Use with text as the sole media reference |
+| `seed_audio_generate` (1.5) | Video | ✓ | — | — | reference or dubbing | 1 | HTTPS. Trusted local mode also accepts authorized TOS URLs. |
 
 > Variations are a field on the base tools (`variations` on
-> `seedream_generate_image`, `seed_audio_generate`, and
+> `seedream_generate_image`, `seed_audio_generate` with 1.0, and
 > `seedance_create_task`), so they accept the same input modalities and limits
 > as a single call.
 
@@ -289,8 +291,9 @@ tools. `seed_media_get_artifact`, `seed_media_export_artifact`, and
 when their credentials are configured, `media_upload` and
 `media_presign` appear
 only when object storage credentials (TOS or S3) are configured, and
-`seed_audio_generate`, `seed_tts_generate`, and `speech_to_text` appear only
-when `BYTEPLUS_SEED_SPEECH_API_KEY` is set. Seed TTS reuses
+`seed_audio_generate` uses `BYTEPLUS_SEED_SPEECH_API_KEY` for Seed Audio 1.0
+and `BYTEPLUS_MODELARK_API_KEY` for Seed Audio 1.5. `seed_tts_generate` and
+`speech_to_text` require `BYTEPLUS_SEED_SPEECH_API_KEY`. Seed TTS reuses
 `BYTEPLUS_SEED_AUDIO_BASE_URL` and `seed:audio:generate`; no new environment
 variable is needed.
 `omnihuman_create_task`, `omnihuman_get_task`, and `omnihuman_cancel_task`

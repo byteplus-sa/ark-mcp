@@ -21,7 +21,8 @@ stdio for administration. Provider keys stay on the server. Setup and rotation:
 |---|---|---|---|
 | **Seedance** video (2.0, regular 2.5 with 4K, and 2.5 Flash) | `seedance_create_task` | `gen_task_get`, `gen_task_list`, `gen_task_cancel_or_delete` | `BYTEPLUS_MODELARK_API_KEY` |
 | **Seedream** images (generate and edit) | `seedream_generate_image` | artifacts in the result | `BYTEPLUS_MODELARK_API_KEY` |
-| **Seed Audio** | `seed_audio_generate` | artifact in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
+| **Seed Audio 1.0** | `seed_audio_generate` | audio artifact in the result | `BYTEPLUS_SEED_SPEECH_API_KEY` |
+| **Seed Audio 1.5** | `seed_audio_generate` | audio tracks, optional video artifact and subtitle links | `BYTEPLUS_MODELARK_API_KEY` |
 | **Seed TTS 3.0** text-to-speech | `seed_tts_generate` | complete persisted audio in the result | Same Seed Speech key and `BYTEPLUS_SEED_AUDIO_BASE_URL` |
 | **OmniHuman 2.0** avatar video | `omnihuman_create_task` | `omnihuman_get_task`, `omnihuman_cancel_task` | `BYTEPLUS_OMNIHUMAN_ENABLED=true` + `BYTEPLUS_CV_API_KEY` |
 | **Understanding** | `seed_understand`, `seed_audio_understand` | answer in the result | `BYTEPLUS_MODELARK_API_KEY` |
@@ -106,12 +107,22 @@ flowchart LR
   explicit binding lists must add it themselves. Discovery does not prove
   account activation; custom Flash endpoints use family `seedance_2_5_flash`.
 - `variations`: Seedance 1-5 (separate billed tasks, `tasks[]`), Seedream 1-10
-  (`summary`), Seed Audio 1-5 (`summary`). Failures are per variation. Seedream
+  (`summary`), Seed Audio 1.0 1-5 (`summary`). Failures are per variation. Seedream
   `seed` is the base seed (`N, N+1, ...`); `max_images` and `variations > 1`
   are mutually exclusive.
 - `dry_run` returns `preview` (request bodies, cost estimate) and bills nothing.
   Video estimates are static and do not account for resolution or duration.
   Flash currently reuses the static 2.5 per-task fallback, not its token price.
+
+### Seed Audio
+
+- Omit `model` for Seed Audio 1.0 through Seed Speech. Select
+  `model="dola-seed-audio-1-5-261128"` for Seed Audio 1.5 through ModelArk.
+- Seed Audio 1.5 supports text or media-guided generation, stem separation,
+  and video translation or dubbing. It accepts one generation per job. Read
+  each returned audio track, video artifact, and subtitle link from the
+  background job result.
+  See [tool-reference.md](references/tool-reference.md#seed-audio).
 
 ### Seed TTS
 
@@ -194,14 +205,14 @@ flowchart LR
   completed outputs.
 - `queued` / `running` / `processing` is not a failure. Wait
   `recommended_poll_after_ms` (default 5000).
-- Provider URLs expire: **2 hours for Seed Audio, 24 hours for ModelArk image and
+- Provider URLs expire: **2 hours for Seed Audio 1.0, 24 hours for ModelArk image and
   video, and 1 hour for OmniHuman**. An artifact with id `provider-url`
   and a `persistence_error` is still usable until then; recover it with
   `seed_media_persist_url`.
 - `output_path`, `output_dir`, `save_to` write to local disk on **stdio only**,
   inside the client's MCP roots (or `OUTPUT_ROOTS`), and need persistence
   (`persist` / `persist_output`). A directory ending in `/` is required when
-  several files are written (variations or `max_images > 1`).
+  requesting multiple variations or images, or any Seed Audio 1.5 export.
   Seed TTS always persists and has no provider URL or `persist` switch.
 
 ### Media upload and assets

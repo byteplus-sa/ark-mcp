@@ -278,7 +278,7 @@ def create_server(
             f"Seedream default family: {_seedream_default_family(resolved_settings)}\n"
             f"Asset library configured: {resolved_settings.has_modelark_openapi}\n"
             f"Moderation lookup configured: {resolved_settings.has_modelark_moderation}\n"
-            f"Seed Audio configured: {resolved_settings.has_seed_audio}\n"
+            f"Seed Audio configured: {resolved_settings.has_seed_audio_generation}\n"
             f"OmniHuman configured: {resolved_settings.has_omnihuman}\n"
             f"TOS configured: {resolved_settings.has_tos}\n"
             f"S3 configured: {resolved_settings.has_s3}\n"
@@ -430,7 +430,7 @@ def create_server(
         transport=resolved_settings.mcp_transport,
         auth_mode=resolved_settings.mcp_auth_mode.value,
         modelark_configured=resolved_settings.has_modelark,
-        seed_audio_configured=resolved_settings.has_seed_audio,
+        seed_audio_configured=resolved_settings.has_seed_audio_generation,
         stt_configured=resolved_settings.has_stt,
         omnihuman_configured=resolved_settings.has_omnihuman,
         object_storage_backend=resolved_settings.object_storage_backend,

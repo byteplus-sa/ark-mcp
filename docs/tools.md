@@ -96,7 +96,7 @@ straight to a local file, so a client does not need a separate
 | Tool | Field | Notes |
 |---|---|---|
 | `seedream_generate_image` | `output_path` | Must be a directory (ending with `/`) when `variations > 1` or `max_images > 1`; extra images written to a file path get `-2`, `-3` suffixes |
-| `seed_audio_generate` | `output_path` | Must be a directory (ending with `/`) when `variations > 1` |
+| `seed_audio_generate` | `output_path` | Must be a directory ending in `/` for Seed Audio 1.5 and for 1.0 with `variations > 1` |
 | `seed_tts_generate` | `output_path` | Complete audio artifact; persistence is mandatory, with no `persist` switch |
 | `gen_task_get` | `output_dir` | One file per artifact: every output of each succeeded task |
 | `seed_understand`, `seed_audio_understand` | `save_to` | Writes the final answer, not media |
@@ -150,9 +150,10 @@ needs no scope.
     resolution, audio-only input, `task_types`, `output_formats`.
   - `image`: reference maximum, output formats, batch support, sizes,
     transparent-background support.
-  - `audio`: Seed TTS model `dola-seed-tts-3.0`, served by
-    `seed_tts_generate`; `tts` contains only `max_text_characters`,
-    `max_ssml_characters`, `output_formats` and `requires_voice_id`.
+  - `audio`: Seed Audio generation models use `audio` for supported
+    operations, formats, reference counts and variations. The Seed TTS model
+    `dola-seed-tts-3.0` uses `tts` for character limits, output formats and the
+    voice ID requirement.
   - `understanding`: modalities accepted by the named `tool`, media-part maximum, thinking,
     reasoning efforts, response formats. Both the default model for requests
     with audio and the default for requests without audio are marked
@@ -179,8 +180,8 @@ with an eight-clip limit, and uses the server-configured model without a
 `model` argument. This remains true when audio and visual defaults share an
 ID. Image/video requests use `seed_understand`; discovery does not imply
 that the two handlers can accept mixed audio/visual inputs.
-The separate `kind="audio"` TTS entry is enabled by the Seed Speech key, not
-the ModelArk key; listing it does not verify provider access.
+Seed Audio 1.0 and Seed TTS require the Seed Speech key. Seed Audio 1.5
+requires the ModelArk key. Discovery reports which models are configured.
 
 ## Background-job tools
 
@@ -288,15 +289,13 @@ already there).
 ## seed_media_persist_url
 
 Persist a temporary provider output URL as a durable artifact. Use it when a
-generation or retrieval result returned an artifact with `id="provider-url"`
-and a `persistence_error`: the output was generated and billed, but could not
-be stored at the time. Call it before the provider URL expires (2 hours for
-audio, 24 hours for images and video). Always registered; uses the
+generation or retrieval result returned an artifact with `id="provider-url"`.
+Call it before the provider URL expires. Always registered, with the
 `media:upload` scope in `api_key` mode.
 
 Only trusted BytePlus provider hosts are accepted. The URL goes through the
 same SSRF-resistant downloader, host allowlist, redirect re-validation, and
-size limits as generation-time persistence; any other URL is rejected.
+media-type size limits. Audio can request a limit up to 90 MiB.
 
 **Execution:** Optional background job. Large videos are safer in the
 background.
@@ -312,6 +311,7 @@ background.
 | `media_type` | "image" \| "audio" \| "video" | Yes | Logical media type of the output |
 | `mime_type` | string | Yes | Expected MIME type (e.g. `video/mp4`); a specific provider `Content-Type` takes precedence |
 | `source_expires_at` | string | No | ISO-8601 expiry of the provider URL, copied from the original `ArtifactRef.source_expires_at` |
+| `max_download_bytes` | integer | No | Audio-only cap up to 94,371,840 bytes (90 MiB). Copy `persistence_error.artifact_limit_bytes` when retrying a large audio track. |
 
 ### Output
 
@@ -400,7 +400,7 @@ Asset calls hold the shared `modelark-openapi` rate-limit slot only around
 each provider request, so processing waits and verification polling never
 block a Seedance asset preflight.
 
-Seedream and Seed Audio reject `asset://` unless
+Seedream and Seed Audio 1.0 reject `asset://` unless
 `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve` (experimental), which sends
 the asset's temporary download URL instead.
 
@@ -430,9 +430,10 @@ coverage and live-unverified status: [moderation.md](moderation.md).
 
 ## seed_audio_generate
 
-Generate full-scene audio through Seed Speech: one clip, or up to 5
-independent variations in parallel. For text-to-speech with a selected
-`voice_id`, use [seed_tts_generate](#seed_tts_generate) instead.
+Generate full-scene audio through Seed Speech with the default Seed Audio 1.0
+model, or select [Seed Audio 1.5](#seed-audio-15) explicitly for ModelArk.
+For text-to-speech with a selected `voice_id`, use
+[seed_tts_generate](#seed_tts_generate).
 
 **Execution:** Required background job. Submit it through `ark_job_submit`
 (or native task augmentation) and read the completed generation from the
@@ -441,7 +442,7 @@ background result.
 **Annotations:** `readOnlyHint=False`, `destructiveHint=False`,
 `idempotentHint=False`, `openWorldHint=True`
 
-### Input
+### Seed Audio 1.0 input
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -458,7 +459,7 @@ background result.
 
 \* Either `text_prompt` or `variation_prompts` must be provided.
 
-### Output
+### Seed Audio 1.0 output
 
 Returns a `SeedAudioGenerateOutput`. For a single clip it carries
 `duration_seconds`, `billing_duration_seconds`, `artifact`, optional
@@ -476,7 +477,7 @@ in `fallback_data` (`id="inline-fallback"`, up to
 `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`). See
 [Artifacts](artifacts.md#persistence-failures).
 
-### Example
+### Seed Audio 1.0 examples
 
 ```json
 {
@@ -491,6 +492,72 @@ Three takes written to a local directory:
   "text_prompt": "A warm narrator says: welcome back to the show.",
   "variations": 3,
   "output_path": "/Users/me/Audio/takes/"
+}
+```
+
+### Seed Audio 1.5
+
+Set `model` to `dola-seed-audio-1-5-261128`. The server uses
+`BYTEPLUS_MODELARK_API_KEY` and `BYTEPLUS_MODELARK_BASE_URL` for one generation
+per background job. Discover the model with `ark_list_models(kind="audio")`.
+The listing reflects server configuration. Provider activation is required.
+Each server runtime allows up to two concurrent Seed Audio 1.5 provider calls.
+Generation is for scenes with speech and optional music or sound effects.
+The daily budget uses the built-in audio estimate, with a 15-second fallback
+when the prompt supplies no duration hint. Provider billing duration is
+reported separately in the result.
+
+| Mode | Inputs |
+|---|---|
+| Generate from text or media | `text_prompt`, with up to six WAV or MP3 `audio_references` and one optional `reference_video`, or with a single `image_reference`. |
+| Separate stems | `text_prompt` describing the tracks to isolate, and `separate_audio` with a WAV or MP3 HTTPS URL or Base64 data URI. |
+| Translate and dub | `dubbing_video` and `dubbing_config.target_language`. Omit the text prompt and other media inputs. Set `source_language` to `zh` or `en` to specify it explicitly. |
+
+Reference audio clips are 2–30 seconds each, up to 15 MiB per clip and 180
+seconds total. For separation, use one WAV or MP3 from 2 to 360 seconds. An
+inline source uses `data:audio/wav;base64,...` or `data:audio/mp3;base64,...`.
+Use HTTPS when the Base64 data and the rest of the request would exceed
+64 MiB. The server checks inline WAV durations when they can be read from
+the header. ModelArk validates durations for URLs and MP3 files.
+
+Use one JPEG, PNG, WebP, BMP, TIFF, GIF, HEIC or HEIF image up to 10 MiB,
+via HTTPS or Base64 with the matching MIME type. ModelArk checks image
+dimensions and aspect ratio. Video inputs are 4–360 second MP4 or MOV clips
+served via HTTPS. Trusted local mode also accepts authorized `tos://`
+video URLs. For dubbing, pass
+`dubbing_config.glossaries` with `source` and `target` pairs to guide
+translation, or `dubbing_config.custom_subtitle` with `format: "srt"` and an
+HTTPS URL to dub from an existing target-language SRT. Custom SRT must be
+UTF-8 with segments up to 15 seconds. `dialogue_enhancement` accepts `off`,
+`low`, `medium`, and `high`.
+
+`output.format` accepts `wav`, `mp3`, `pcm`, or `ogg_opus` and defaults to
+`wav`. For Opus, omit `output.sample_rate` or use `48000`. `output` also
+accepts `speech_rate`, `loudness_rate`, and `pitch_rate`. Use `include` to request
+`video_url`, `subtitles.srt`, or `subtitles.jsonl`. For video translation,
+`subtitles_source.srt` and `subtitles_source.jsonl` request source-language
+subtitles. `watermark`, `output.subtitle`, `output.subtitle_type`, and
+variation controls beyond the default single request apply to 1.0.
+
+Read every item in `audio_tracks` for audio and stem results. The entries
+carry artifact fields plus `track_type` and `description` when supplied.
+The background result identifies `provider` as `byteplus-modelark` and
+includes `generation_id`, provider-reported durations in seconds, and
+`video_artifact` when returned.
+Audio and video use the artifact store by default. The server allows up to
+90 MiB per generated 1.5 audio track. For stdio export, set
+`output_path` to a directory ending in `/`. Outputs beyond the artifact size
+limits remain available through temporary provider URLs. `subtitles` and
+`subtitles_source` list temporary `{format, url}` entries for requested formats.
+
+Pass these tool arguments to translate and dub a video in a background job.
+
+```json
+{
+  "model": "dola-seed-audio-1-5-261128",
+  "dubbing_video": "https://media.example.com/source.mp4",
+  "dubbing_config": {"target_language": "fr"},
+  "include": ["video_url", "subtitles.srt", "subtitles_source.srt"]
 }
 ```
 
@@ -1105,7 +1172,7 @@ A variation stopped by the deadline or by a storage failure reports
 null. Outputs that could not be stored but have a provider URL or fit inline
 are returned as successful variations with `persistence_error` set.
 
-### Seedream and Seed Audio variations
+### Seedream and Seed Audio 1.0 variations
 
 Variations are part of the base tools: set `variations` (and optionally
 `variation_prompts`) on [`seedream_generate_image`](#seedream_generate_image)

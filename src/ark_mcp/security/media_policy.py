@@ -87,14 +87,16 @@ def validate_audio_mime(mime_type: str | None) -> None:
         )
 
 
-def validate_image_mime(mime_type: str | None) -> None:
+def validate_image_mime(
+    mime_type: str | None, *, allowed: frozenset[str] = _ALLOWED_IMAGE_MIMES
+) -> None:
     """Validate that the MIME type is an allowed image format."""
     if mime_type is None:
         return
     normalized = mime_type.lower().split(";")[0].strip()
-    if normalized not in _ALLOWED_IMAGE_MIMES:
+    if normalized not in allowed:
         raise MediaValidationError(
-            f"Image MIME type '{mime_type}' is not allowed. Allowed: {sorted(_ALLOWED_IMAGE_MIMES)}"
+            f"Image MIME type '{mime_type}' is not allowed. Allowed: {sorted(allowed)}"
         )
 
 

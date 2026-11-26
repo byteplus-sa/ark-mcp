@@ -8,11 +8,12 @@ Server as shipped today. For the original design rationale, see
 
 - **Small, typed tool surface** — a handful of Pydantic-validated tools rather
   than a wide REST API.
-- **Dedicated provider gateways, one domain layer** — Seedance and Seedream
-  share the ModelArk host and Bearer auth. Seed Audio and Seed TTS share a
-  Seed Speech host and `X-Api-Key`. OmniHuman uses the Vision AI host and its
-  own Bearer key. Normalized adapters provide a common tool surface.
-- **Durable artifacts** — known provider media URLs expire (2h Seed Audio, 24h
+- **Dedicated provider gateways, one domain layer** — Seedance, Seedream, and
+  Seed Audio 1.5 share the ModelArk host and Bearer auth. Seed Audio 1.0 and
+  Seed TTS share a Seed Speech host and `X-Api-Key`. OmniHuman uses the
+  Vision AI host and its own Bearer key. Normalized adapters provide a common
+  tool surface.
+- **Durable artifacts** — known provider media URLs expire (2h Seed Audio 1.0, 24h
   ModelArk image/video, 1h OmniHuman video). Outputs can be persisted to an
   artifact store and exposed as stable `seed-media://artifacts/{id}` MCP
   resources. Seed TTS aggregates HTTP JSONL into complete audio with mandatory
@@ -44,8 +45,8 @@ src/ark_mcp/
 ├── providers/             # dedicated HTTP gateways + retry policy
 │   ├── base.py            # BaseHttpGateway: spans, metrics, error normalization
 │   ├── retry.py
-│   ├── modelark.py        # Seedream + Seedance
-│   ├── seed_speech/       # Seed Audio + Seed TTS
+│   ├── modelark/          # Seedream, Seedance, Seed Audio 1.5, understanding
+│   ├── seed_speech/       # Seed Audio 1.0 + Seed TTS
 │   └── vision_cv/         # Vision AI (Bearer; OmniHuman 2.0 submit/query/cancel)
 ├── runtime.py             # lifespan-owned services (limiter, budget, ownership)
 ├── artifacts/             # durable artifact store (filesystem backend)
@@ -63,18 +64,18 @@ flowchart LR
     Client["MCP Client\n(stdio / HTTP)"] --> Server["FastMCP server\n(server.py)"]
     Server --> Domain["Domain layer\n(tools/ + domain/)"]
     Domain --> Gateway["Provider gateways\n(providers/)"]
-    Gateway -->|"Bearer auth"| ModelArk["ModelArk\nSeedream + Seedance"]
-    Gateway -->|"X-Api-Key"| SeedSpeech["Seed Speech\nSeed Audio + Seed TTS"]
+    Gateway -->|"Bearer auth"| ModelArk["ModelArk\nSeedream + Seedance + Seed Audio 1.5"]
+    Gateway -->|"X-Api-Key"| SeedSpeech["Seed Speech\nSeed Audio 1.0 + Seed TTS"]
     Gateway -->|"Bearer auth"| VisionCv["Vision AI\nOmniHuman 2.0"]
     Gateway -->|"AK/SK V4 signing"| OpenApi["ModelArk OpenAPI\nassets + moderation lookup"]
     Server -.durable.-> Store["Artifact store\n(filesystem)"]
     Server -.state.-> Runtime["Runtime services\n(runtime.py)"]
 ```
 
-- **ModelArk gateway** (`providers/modelark.py`) — serves Seedream (image)
-  and Seedance (video). Uses `Authorization: Bearer` and base URL
-  `https://ark.ap-southeast.bytepluses.com/api/v3`.
-- **Seed Speech gateway** (`providers/seed_speech/`) — serves Seed Audio and Seed TTS.
+- **ModelArk gateway** (`providers/modelark/`) — serves Seedream, Seedance,
+  Seed Audio 1.5 and multimodal understanding. Uses `Authorization: Bearer`
+  and base URL `https://ark.ap-southeast.bytepluses.com/api/v3`.
+- **Seed Speech gateway** (`providers/seed_speech/`) — serves Seed Audio 1.0 and Seed TTS.
   Uses `X-Api-Key` and base URL `https://voice.ap-southeast-1.bytepluses.com`.
   `seed_tts_generate` reuses the existing key/base URL and
   `seed:audio:generate` scope. Its required background job aggregates HTTP

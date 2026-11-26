@@ -19,7 +19,7 @@ determine the visible inventory.
 | # | Tool | Product | Type | Auth |
 |---|---|---|---|---|
 | 1 | `ark_list_models` | Discovery | Read-only | No extra tool scope |
-| 2 | `seed_audio_generate` | Seed Audio | Required background task | Seed Speech |
+| 2 | `seed_audio_generate` | Seed Audio | Required background task | Seed Speech for 1.0 or ModelArk for 1.5 |
 | 3 | `seedream_generate_image` | Seedream | Required background task | ModelArk |
 | 4 | `seedance_create_task` | Seedance (every configured model; 2.5 supports 4K) | Required background submission | ModelArk |
 | 5 | `seed_understand` | Seed 2.1 (optional) | Required background task | ModelArk |
@@ -57,8 +57,8 @@ Tools removed or merged in 0.2 are listed in the [migration guide](migration-0.2
 `BYTEPLUS_MODELARK_API_KEY` is set, it requires `seedream:generate` in `api_key` mode.
 **`seed_audio_generate` covers single and parallel audio** and requires
 `seed:audio:generate`.
-**`seed_tts_generate` is distinct text-to-speech** and uses the same scope,
-Seed Speech key and `BYTEPLUS_SEED_AUDIO_BASE_URL`; no new env setting.
+**`seed_tts_generate` is distinct text-to-speech** and uses the same scope.
+It shares the Seed Speech key and `BYTEPLUS_SEED_AUDIO_BASE_URL` with Seed Audio 1.0.
 
 `seedance_create_task` serves every configured
 Seedance model (pick one from `ark_list_models(kind='video')`), is registered
@@ -185,7 +185,7 @@ On stdio transport, these fields write output straight to a local file:
 | Path form | Absolute. `output_path` names a file, or a directory when it ends with `/` (files named `<artifact_id>.<ext>`) |
 | Allowed roots | Client MCP roots (`roots/list`) first, otherwise `OUTPUT_ROOTS`; with neither, path writing is disabled. Inside `ark_job_submit` there are no MCP roots, so `OUTPUT_ROOTS` is required |
 | Timing | Validated before any provider call |
-| Preconditions | `persist=true` (generation tools) or `persist_output=true` (task pollers); Seed TTS always persists and has no `persist` switch. A directory is required for `seedream_generate_image` with `variations > 1` or `max_images > 1` or for `seed_audio_generate` with `variations > 1` |
+| Preconditions | `persist=true` for generation tools or `persist_output=true` for task pollers. Seed TTS always persists. A directory is required for Seedream with `variations > 1` or `max_images > 1`, and for Seed Audio 1.5 or 1.0 with `variations > 1`. |
 | Existing files | Replaced only with `overwrite=true`; identical content is success |
 | Failure | A failed local write never fails the call; see `ArtifactRef.local_path` / `export_error` |
 
@@ -194,6 +194,9 @@ last frame) into `output_dir` as `<artifact_id>.<ext>`.
 `seedream_generate_image` and `seed_audio_generate` with `variations > 1` write
 **every** succeeded variation into the `output_path` directory (see
 `summary.variations[].artifact.local_path`).
+Seed Audio 1.5 writes its audio tracks and any returned video to the output
+directory when those artifacts are persisted. Subtitle results are temporary
+provider URLs.
 
 ---
 
@@ -210,10 +213,10 @@ A media reference by URL or Base64.
 | `data` | string | If kind=base64 | Base64-encoded data |
 | `mime_type` | string | No | MIME type |
 
-Seedance image/audio inputs and the Seedream / Seed Audio `images` /
+Seedance image/audio inputs and the Seedream / Seed Audio 1.0 `images` /
 `image_reference` inputs (`ReferenceImageInput`) also accept
 `url: "asset://<asset_id>"` for private asset library assets. Seedance passes
-it through natively; Seedream and Seed Audio require
+it through natively; Seedream and Seed Audio 1.0 require
 `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve`. See [assets.md](assets.md).
 
 ### AudioReference
@@ -242,7 +245,7 @@ A durable reference to persisted media.
 | `sha256` | string | SHA-256 hex digest |
 | `created_at` | string | ISO-8601 timestamp |
 | `expires_at` | string | Local artifact expiry |
-| `source_expires_at` | string \| null | Provider URL expiry (2h Seed Audio, 24h image/video); none for Seed TTS |
+| `source_expires_at` | string \| null | Provider URL expiry (2h Seed Audio 1.0, 24h image/video); none for Seed TTS |
 | `persistence_error` | ArtifactPersistenceIssue \| null | Set when the output was generated (and billed) but could not be stored durably |
 | `fallback_data` | string \| null | Base64 output bytes, only for `id="inline-fallback"` (up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES`) |
 | `local_path` | string \| null | Absolute local path written for `output_path`/`output_dir` |
@@ -324,14 +327,15 @@ no provider calls**.
 
 **ModelInfo:** `model_id` (exact ID to pass as `model`), `family`, `kind`,
 `is_default` (used when `model` is omitted), `tool` (the tool that accepts the
-model), and one limits object matching the kind: `video` (resolutions,
+model), and one limits object. `video` includes resolutions,
 `duration_seconds` range, ratios, reference counts, Draft support, task types,
-output formats), `image` (reference count, output formats, batch support,
-sizes, transparent background), `tts` for `kind="audio"` (`max_text_characters`,
-`max_ssml_characters`, `output_formats`, `requires_voice_id`), or
-`understanding` (modalities, media-part limit,
-thinking support, reasoning efforts, response formats). The audio entry is
-`dola-seed-tts-3.0`, served by `seed_tts_generate`, enabled by the Seed Speech key.
+and output formats. `image` includes reference count, output formats, batch
+support, sizes, and transparent background. For `kind="audio"`, `audio` lists
+the operations, output formats, reference counts, and maximum variations for
+Seed Audio. `tts` lists `max_text_characters`, `max_ssml_characters`,
+`output_formats`, and `requires_voice_id` for Seed TTS. `understanding`
+includes modalities, media-part limit, thinking support, reasoning efforts,
+and response formats.
 
 Each `ModelInfo` also has nullable `pricing` with `catalog_name`, `display_name`,
 `available`, and `charge_items` (`charge_type`, `price`, `list_price`, `unit`).
@@ -362,10 +366,12 @@ activation, IAM permission, model coverage or shared-key access.
 
 ## 2. seed_audio_generate
 
-Generate full-scene audio through Seed Speech: **one clip, or up to five
-independent variations in parallel**. Requires `seed:audio:generate` in `api_key`
-mode. **Required background task**: run it through `ark_job_submit` (or native
-task augmentation).
+Seed Audio uses `seed:audio:generate` in `api_key` mode. Run it through
+`ark_job_submit` or native task augmentation and read the completed output from
+the background result. Select the model explicitly for
+[Seed Audio 1.5](tools.md#seed-audio-15). The tables and examples below describe
+Seed Audio 1.0, which generates one clip or up to five independent variations
+through Seed Speech.
 
 ### Input
 
@@ -1691,8 +1697,8 @@ before the provider URL expires. Always registered; requires `media:upload` in
 `api_key` mode. Optional background task.
 
 Only trusted BytePlus provider hosts are downloaded, through the same
-SSRF-resistant downloader, host allowlist, redirect re-validation, and size
-limits as generation-time persistence.
+SSRF-resistant downloader, host allowlist, and redirect re-validation as
+generation-time persistence. Audio can request a limit up to 90 MiB.
 
 ### Input
 
@@ -1702,6 +1708,7 @@ limits as generation-time persistence.
 | `media_type` | `"image"` \| `"audio"` \| `"video"` | Yes | — |
 | `mime_type` | string | Yes | Expected MIME type; a specific provider `Content-Type` takes precedence |
 | `source_expires_at` | string | No | ISO-8601 URL expiry, copied from the original reference |
+| `max_download_bytes` | integer | No | Audio-only byte cap up to 94,371,840. Copy `persistence_error.artifact_limit_bytes` for a recovery attempt. |
 
 ### Output
 

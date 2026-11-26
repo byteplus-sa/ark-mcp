@@ -181,7 +181,7 @@ Lets Seedance use real people, your own virtual characters, and copyright IP
   `ark_asset_*` tool is registered. **`ark_asset_delete` is the eighth tool and
   exists only with `BYTEPLUS_MODELARK_ASSETS_ALLOW_DELETE=true`.**
 - **`asset://<id>` references are for Seedance only** (`images`, `videos`,
-  `audios`). Seedream and Seed Audio reject them unless the operator set
+  `audios`). Seedream and Seed Audio 1.0 reject them unless the operator set
   `BYTEPLUS_MODELARK_ASSET_REFERENCE_MODE=resolve`, which experimentally swaps in
   the asset's temporary download URL.
 - **Only `Active` assets are usable.** Seedance preflights `asset://` references

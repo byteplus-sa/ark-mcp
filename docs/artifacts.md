@@ -1,6 +1,6 @@
 # Durable Artifacts
 
-Provider media URLs expire — 2 hours for Seed Audio, 24 hours for image/video —
+Provider media URLs expire — 2 hours for Seed Audio 1.0, 24 hours for image/video —
 so the server persists every generated output to a local store and
 re-exposes it as a stable MCP resource `seed-media://artifacts/{artifact_id}`.
 This document describes the artifact store, its lifecycle, and the
@@ -18,8 +18,12 @@ See [Seed TTS 3.0](seed-tts.md).
 
 | Concept | Where | Default | Meaning |
 |---|---|---|---|
-| **Provider URL expiry** (`source_expires_at`) | on `ArtifactRef` | 2h (Seed Audio) / 24h (image/video); none for Seed TTS | how long the original provider URL is valid |
+| **Provider URL expiry** (`source_expires_at`) | on `ArtifactRef` | 2h (Seed Audio 1.0) / 24h (image/video); none for Seed TTS | how long the original provider URL is valid |
 | **Local artifact TTL** (`expires_at`) | on `ArtifactRef`, from `ARTIFACT_TTL_SECONDS` | 604800 (7 days), must be `> 0` | how long the persisted copy is kept |
+
+Seed Audio 1.5 persists returned audio tracks and requested video by default.
+It returns subtitle files as temporary provider URLs. Its result leaves
+`source_expires_at` unset for audio tracks and video.
 
 The local TTL is **independent** of the provider URL expiry. Even after the
 provider URL has expired, the `seed-media://artifacts/{id}` resource remains
@@ -98,10 +102,10 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 
 ### `put_base64` / `copy_from_trusted_url` flow (`_store_bytes`)
 
-1. Apply the source's size policy. Trusted URL downloads cap images and audio
-   at 10 MiB and video at 200 MiB. Inline images and video use the same limits.
-   The store decodes inline generated audio without a file-size cap, so Seed
-   Audio can save WAVs larger than 10 MiB.
+1. Apply the source's size policy. Trusted URL downloads default to 10 MiB for
+   images and audio and 200 MiB for video. Seed Audio 1.5 uses a 90 MiB limit
+   per audio track during generation. Inline images and video use the default
+   limits. The store decodes inline generated audio without a file-size cap.
 2. Validate the MIME via `validate_image_mime` / `validate_audio_mime` /
    `validate_video_mime`.
 3. Resolve `owner = auth or AuthContext()`.
@@ -155,7 +159,7 @@ The reference takes one of two shapes:
 | `id` | Used for | Where the bytes are |
 |---|---|---|
 | `provider-url` | URL outputs (Seedream `url`, Seedance video/last frame) and inline outputs that also came with a provider URL | `uri` is the temporary provider URL, valid until `source_expires_at` |
-| `inline-fallback` | Inline outputs with no provider URL (Seed Audio, Seed TTS aggregated audio, Seedream `b64_json`) | `fallback_data`, up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables) |
+| `inline-fallback` | Inline outputs with no provider URL (Seed Audio 1.0, Seed TTS aggregated audio, Seedream `b64_json`) | `fallback_data`, up to `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MiB; `0` disables) |
 
 Inline Base64 is retried once against the store before falling back. An inline
 output larger than `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` with no provider URL
@@ -164,8 +168,11 @@ persistence failure.
 
 To recover a `provider-url` reference, call `seed_media_persist_url` with its
 `uri`, `media_type`, `mime_type`, and `source_expires_at` before the URL
-expires. The tool downloads only trusted provider hosts, through the same
-downloader and limits, and returns a new durable `ArtifactRef`.
+expires. For audio, copy `persistence_error.artifact_limit_bytes` into
+`max_download_bytes` to preserve the generation-time limit. Use
+`94371840` (90 MiB) for a large Seed Audio 1.5 track returned with
+`persist=false`. The tool downloads only trusted provider hosts and returns
+a new durable `ArtifactRef`.
 
 In variation batches, a variation whose output was generated but not stored
 reports `error.phase="persisting"`.

@@ -49,7 +49,7 @@ the call's other inputs, including reference media.
 | Tool | Product | Uses native batch? | Parallel mechanism |
 |---|---|---|---|
 | `seedream_generate_image` with `variations` 2-10 | Seedream (any model; cannot be combined with `max_images > 1`) | No (always parallel calls) | `run_variation_batch` |
-| `seed_audio_generate` with `variations` 2-5 | Seed Audio | No | `run_variation_batch` |
+| `seed_audio_generate` with `variations` 2-5 | Seed Audio 1.0 | No | `run_variation_batch` |
 | `seedance_create_task` with `variations` 2-5 | Seedance (every configured model) | No | `run_variation_batch` |
 
 ### How it works

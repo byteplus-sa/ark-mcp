@@ -351,7 +351,8 @@ def test_all_registration_gates_name_the_exact_environment_variables(
     expected = {
         "_always": set(),
         "_modelark": {"BYTEPLUS_MODELARK_API_KEY"},
-        "_seed_audio": {"BYTEPLUS_SEED_SPEECH_API_KEY"},
+        "_seed_speech": {"BYTEPLUS_SEED_SPEECH_API_KEY"},
+        "_seed_audio_generate": {"BYTEPLUS_MODELARK_API_KEY", "BYTEPLUS_SEED_SPEECH_API_KEY"},
         "_stt": {"BYTEPLUS_SEED_SPEECH_API_KEY"},
         "_object_storage": {
             "OBJECT_STORAGE_BACKEND",

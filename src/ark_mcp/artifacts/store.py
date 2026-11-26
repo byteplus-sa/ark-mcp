@@ -21,6 +21,8 @@ from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import get_media_limits
 
+MAX_AUDIO_URL_DOWNLOAD_BYTES = 90 * 1024 * 1024
+
 ArtifactPersistenceErrorCode = Literal[
     "untrusted_output_host",
     "output_too_large",
@@ -142,11 +144,13 @@ class ArtifactStore(Protocol):
         source_expires_at: str | None = None,
         auth: AuthContext | None = None,
         extra_trusted_host_suffixes: tuple[str, ...] = (),
+        *,
+        max_download_bytes: int | None = None,
     ) -> ArtifactRef:
         """Download media from a trusted provider URL and store it.
 
         ``extra_trusted_host_suffixes`` (dot-prefixed) extends the host allowlist
-        for this call only.
+        for this call only. ``max_download_bytes`` overrides the media-type cap.
         """
         ...
 

@@ -9,6 +9,13 @@ from pydantic import BaseModel, Field
 
 from ark_mcp.config.env import Settings
 from ark_mcp.config.model_capabilities import (
+    SEED_AUDIO_1_0_MAX_VARIATIONS,
+    SEED_AUDIO_1_0_MODEL,
+    SEED_AUDIO_1_5_FORMATS,
+    SEED_AUDIO_1_5_MAX_REFERENCE_AUDIOS,
+    SEED_AUDIO_1_5_MAX_REFERENCE_IMAGES,
+    SEED_AUDIO_1_5_MAX_REFERENCE_VIDEOS,
+    SEED_AUDIO_1_5_MODEL,
     ImageCapabilities,
     UnderstandingCapabilities,
     VideoCapabilities,
@@ -27,6 +34,7 @@ VIDEO_TOOL = "seedance_create_task"
 IMAGE_TOOL = "seedream_generate_image"
 UNDERSTANDING_TOOL = "seed_understand"
 AUDIO_UNDERSTANDING_TOOL = "seed_audio_understand"
+AUDIO_GENERATION_TOOL = "seed_audio_generate"
 
 
 class ArkListModelsInput(BaseModel):
@@ -34,7 +42,7 @@ class ArkListModelsInput(BaseModel):
 
     kind: ModelKind | None = Field(
         None,
-        description="Filter to video, image, audio (TTS), or understanding. Omit to list every configured kind.",
+        description="Filter to video, image, audio (generation and TTS), or understanding. Omit to list every configured kind.",
     )
 
 
@@ -128,6 +136,19 @@ class TtsModelLimits(BaseModel):
     )
 
 
+class AudioModelLimits(BaseModel):
+    """Seed Audio generation modes and reference limits."""
+
+    operations: list[Literal["generation", "separation", "dubbing"]] = Field(
+        ..., description="Available operations inferred from the supplied inputs."
+    )
+    output_formats: list[str] = Field(..., description="Accepted audio encodings.")
+    max_reference_audios: int = Field(..., description="Maximum audio references per request.")
+    max_reference_images: int = Field(..., description="Maximum image references per request.")
+    max_reference_videos: int = Field(..., description="Maximum video references per request.")
+    max_variations: int = Field(..., description="Maximum independent generations per request.")
+
+
 class ModelInfo(BaseModel):
     """One configured model binding."""
 
@@ -153,6 +174,7 @@ class ModelInfo(BaseModel):
         None, description="Limits for understanding models."
     )
     tts: TtsModelLimits | None = Field(None, description="Limits for speech synthesis models.")
+    audio: AudioModelLimits | None = Field(None, description="Limits for audio generation models.")
     pricing: ModelPricing | None = Field(
         None, description="Fresh account catalog prices, or null if not cached for this model."
     )
@@ -223,24 +245,58 @@ async def ark_list_models(input: ArkListModelsInput, ctx: Context) -> ArkListMod
 
 def describe_models(settings: Settings) -> list[ModelInfo]:
     """Describe every configured binding whose service is enabled."""
-    models = []
+    models: list[ModelInfo] = []
     if settings.has_seed_audio:
-        models.append(
-            ModelInfo(
-                model_id=TTS_MODEL,
-                family="seed_tts_3",
-                kind="audio",
-                is_default=True,
-                tool="seed_tts_generate",
-                tts=TtsModelLimits(
-                    max_text_characters=TTS_MAX_CHARACTERS,
-                    max_ssml_characters=TTS_MAX_CHARACTERS,
-                    output_formats=["mp3", "pcm", "ogg_opus"],
+        models.extend(
+            (
+                ModelInfo(
+                    model_id=SEED_AUDIO_1_0_MODEL,
+                    family="seed_audio_1_0",
+                    kind="audio",
+                    is_default=True,
+                    tool=AUDIO_GENERATION_TOOL,
+                    audio=AudioModelLimits(
+                        operations=["generation"],
+                        output_formats=["wav", "mp3", "pcm", "ogg"],
+                        max_reference_audios=3,
+                        max_reference_images=1,
+                        max_reference_videos=0,
+                        max_variations=SEED_AUDIO_1_0_MAX_VARIATIONS,
+                    ),
+                ),
+                ModelInfo(
+                    model_id=TTS_MODEL,
+                    family="seed_tts_3",
+                    kind="audio",
+                    is_default=True,
+                    tool="seed_tts_generate",
+                    tts=TtsModelLimits(
+                        max_text_characters=TTS_MAX_CHARACTERS,
+                        max_ssml_characters=TTS_MAX_CHARACTERS,
+                        output_formats=["mp3", "pcm", "ogg_opus"],
+                    ),
                 ),
             )
         )
     if not settings.has_modelark:
         return models
+    models.append(
+        ModelInfo(
+            model_id=SEED_AUDIO_1_5_MODEL,
+            family="seed_audio_1_5",
+            kind="audio",
+            is_default=False,
+            tool=AUDIO_GENERATION_TOOL,
+            audio=AudioModelLimits(
+                operations=["generation", "separation", "dubbing"],
+                output_formats=list(SEED_AUDIO_1_5_FORMATS),
+                max_reference_audios=SEED_AUDIO_1_5_MAX_REFERENCE_AUDIOS,
+                max_reference_images=SEED_AUDIO_1_5_MAX_REFERENCE_IMAGES,
+                max_reference_videos=SEED_AUDIO_1_5_MAX_REFERENCE_VIDEOS,
+                max_variations=1,
+            ),
+        )
+    )
     image_caps, video_caps, understanding_caps = get_capability_registry().configured_models()
     models += [_video_info(caps, settings) for caps in video_caps.values()]
     models += [_image_info(caps, settings) for caps in image_caps.values()]
@@ -333,7 +389,11 @@ def describe_services(settings: Settings) -> list[ServiceStatus]:
     )
     services = (
         ("modelark", settings.has_modelark, "Set BYTEPLUS_MODELARK_API_KEY."),
-        ("seed_audio", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
+        (
+            "seed_audio",
+            settings.has_seed_audio_generation,
+            "Set BYTEPLUS_SEED_SPEECH_API_KEY for 1.0 or BYTEPLUS_MODELARK_API_KEY for 1.5.",
+        ),
         ("seed_tts", settings.has_seed_audio, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         ("speech_to_text", settings.has_stt, "Set BYTEPLUS_SEED_SPEECH_API_KEY."),
         (

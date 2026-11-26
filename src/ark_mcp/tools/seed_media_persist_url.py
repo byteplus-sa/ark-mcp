@@ -10,9 +10,9 @@ size limits as generation-time persistence.
 from __future__ import annotations
 
 from fastmcp import Context
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from ark_mcp.artifacts.store import ArtifactPersistenceError
+from ark_mcp.artifacts.store import MAX_AUDIO_URL_DOWNLOAD_BYTES, ArtifactPersistenceError
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.observability.logger import info as log_info
 from ark_mcp.runtime import get_principal, get_runtime
@@ -41,6 +41,18 @@ class SeedMediaPersistUrlInput(BaseModel):
         None,
         description="ISO-8601 URL expiry, from ArtifactRef.source_expires_at; recorded on the new artifact.",
     )
+    max_download_bytes: int | None = Field(
+        None,
+        ge=1,
+        le=MAX_AUDIO_URL_DOWNLOAD_BYTES,
+        description="Audio only. Optional byte cap (up to 90 MiB). Use the artifact's persistence_error.artifact_limit_bytes for a retry.",
+    )
+
+    @model_validator(mode="after")
+    def validate_download_limit(self) -> SeedMediaPersistUrlInput:
+        if self.max_download_bytes is not None and self.media_type != MediaType.AUDIO:
+            raise ValueError("max_download_bytes is supported only for audio.")
+        return self
 
 
 class SeedMediaPersistUrlOutput(BaseModel):
@@ -54,8 +66,8 @@ async def seed_media_persist_url(
 ) -> SeedMediaPersistUrlOutput:
     """Persist a provider output URL as a durable artifact and return its ArtifactRef.
 
-    Use when a generation result has an artifact with id 'provider-url' and a persistence_error,
-    before the URL expires (2h audio, 24h image/video). Non-BytePlus hosts are rejected.
+    Use when a generation result has an artifact with id 'provider-url', before the URL expires.
+    This tool accepts trusted BytePlus provider hosts.
     """
     await context_log(ctx, "info", "Persisting provider output URL")
     runtime = get_runtime(ctx)
@@ -66,6 +78,7 @@ async def seed_media_persist_url(
             mime_type=input.mime_type,
             source_expires_at=input.source_expires_at,
             auth=get_principal(ctx),
+            max_download_bytes=input.max_download_bytes,
         )
     except ArtifactPersistenceError as exc:
         raise ValueError(

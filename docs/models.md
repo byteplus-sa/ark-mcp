@@ -171,6 +171,21 @@ request against the selected model's `VideoCapabilities` (including
 `supported_ratios`) and reports every violation in one error that points to
 `ark_list_models(kind='video')`, which exposes these limits to clients.
 
+## Seed Audio
+
+`ark_list_models(kind="audio")` lists the configured Seed Audio generation
+models under `audio` limits. Both use `seed_audio_generate`.
+
+| Model ID | Availability | Operations | Variations |
+|---|---|---|---|
+| `seed-audio-1.0` | Default with `BYTEPLUS_SEED_SPEECH_API_KEY` | Generation with up to three audio references or one image | 1–5 |
+| `dola-seed-audio-1-5-261128` | Select explicitly with `BYTEPLUS_MODELARK_API_KEY` | Generation with one image or up to one video and six audio references. Also supports stem separation and video dubbing. | 1 |
+
+The `audio` limits describe operations, output formats, reference counts,
+and the number of variations. Service status and discovery reflect configured
+credentials. The provider checks access when the job runs. See the
+[tool inputs and outputs](tools.md#seed-audio-15).
+
 ## Seed TTS 3.0
 
 `ark_list_models(kind="audio")` lists literal model `dola-seed-tts-3.0`,
@@ -192,7 +207,7 @@ persists the complete audio; it does not stream live over MCP.
 ## Seed Speech ASR (Speech-to-Text)
 
 Speech-to-text uses the Seed Speech ASR HTTP API. It reuses
-`BYTEPLUS_SEED_SPEECH_API_KEY` — the same key that powers Seed Audio and Seed TTS. Audio
+`BYTEPLUS_SEED_SPEECH_API_KEY` — the same key that powers Seed Audio 1.0 and Seed TTS. Audio
 is submitted via HTTP and polled until transcription is complete; the full
 `TranscriptionResult` is returned in the background result after the client
 submits through the ordinary `ark_job_*` tools, or native MCP task augmentation

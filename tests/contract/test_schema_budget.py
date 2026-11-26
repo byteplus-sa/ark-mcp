@@ -1,8 +1,10 @@
 """Frozen size budgets for the tool schemas every MCP client loads.
 
-With all services enabled, 32 tools occupy 69,985 model-facing characters and
-119,819 output-schema characters. Lower the budgets when the surface shrinks.
-Raise them only with a deliberate, reviewed reason.
+With all services enabled, the 32 tools occupy 73,590 model-facing characters
+and 129,596 output-schema characters. Seed Audio 1.5 adds mode-specific inputs,
+discovery limits, and schemas for audio tracks, video, and subtitle outputs.
+Audio artifact recovery exposes a bounded download limit.
+Lower the budgets when the surface shrinks and review any increase.
 """
 
 from __future__ import annotations
@@ -13,8 +15,8 @@ from ark_mcp.config.env import get_settings
 from ark_mcp.server import create_server
 
 MAX_TOOLS = 32
-MAX_MODEL_FACING_CHARS = 71_000
-MAX_OUTPUT_SCHEMA_CHARS = 121_000
+MAX_MODEL_FACING_CHARS = 74_500
+MAX_OUTPUT_SCHEMA_CHARS = 131_000
 
 
 async def test_tool_schemas_stay_within_budget(all_services_enabled: None) -> None:

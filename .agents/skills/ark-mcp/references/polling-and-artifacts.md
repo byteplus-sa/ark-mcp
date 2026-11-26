@@ -90,7 +90,7 @@ with the artifact, especially for PCM.
 
 ### Retention and access
 
-- **Provider URLs expire fast: 2 h for Seed Audio, 24 h for ModelArk image/video, about 1 h for OmniHuman video.** Durable artifacts survive 7 days by default (`ARTIFACT_TTL_SECONDS`; see [environment.md](environment.md)).
+- **Provider URLs expire fast: 2 h for Seed Audio 1.0, 24 h for ModelArk image/video, about 1 h for OmniHuman video.** Durable artifacts survive 7 days by default (`ARTIFACT_TTL_SECONDS`; see [environment.md](environment.md)).
 - **Artifacts are owner-checked** against the calling principal. Shared-key members can read one another's team artifacts. The `seed-media://artifacts/{artifact_id}` resource needs a canonical UUID and returns the bytes with the right MIME type; in `api_key` mode it checks the fixed team's `artifacts:read` scope.
 - **`seed_media_get_artifact` returns the whole file as Base64 in context.** Use it only for small files or remote (HTTP) deployments with no shared filesystem; on stdio prefer the export tool or a local `output_path`.
 - **`seed_media_export_artifact` is stdio only.** Without `destination_path` it returns the artifact's path inside the store (`copied=false`), which is only possible when the store is on the local filesystem; with an object-storage backend it errors and asks for a `destination_path`. With `destination_path` (absolute, inside an allowed output root) it writes an atomic copy (`copied=true`). An existing file with different content is replaced only with `overwrite=true`; identical content always succeeds.
@@ -103,7 +103,7 @@ with the artifact, especially for PCM.
 - **Absolute path inside an allowed output root:** the client's MCP roots, else `OUTPUT_ROOTS`. With neither, path writing is disabled.
 - **Validated before any provider call**, so a bad path never costs a billed generation.
 - **Need persistence:** `output_path`/`output_dir` require `persist=true` / `persist_output=true`; Seed TTS always persists without a switch.
-- **`output_path` ending in `/` is a directory**, files named `<artifact_id>.<ext>`. A directory is required when a call can produce several files: `seedream_generate_image` with `variations > 1` or `max_images > 1`, or `seed_audio_generate` with `variations > 1`.
+- **`output_path` ending in `/` is a directory**, with files named `<artifact_id>.<ext>`. Use a directory for Seedream with `variations > 1` or `max_images > 1`, Seed Audio 1.0 with `variations > 1`, and Seed Audio 1.5. Seed Audio 1.5 exports persisted audio and video. It returns temporary provider links for subtitles.
 - **`output_dir`** is the `gen_task_get` equivalent; **`save_to`** (with `overwrite`) writes the answer of `seed_understand` and `seed_audio_understand`.
 - **A failed local write never fails the call.** The durable artifact is kept and the `ArtifactRef` reports `local_path` on success or `export_error` on failure. Always read these fields.
 - Inside `ark_job_submit` there are no MCP roots, so these options need `OUTPUT_ROOTS` on the server and are otherwise rejected before any provider call; see [background-job-output.md](background-job-output.md).
@@ -116,7 +116,7 @@ When durable storage fails after the store's own download retries, the call stil
 |---|---|---|
 | a UUID | persisted normally | none |
 | `provider-url` | `uri` is the temporary provider URL; not stored | `seed_media_persist_url` before the URL expires |
-| `inline-fallback` | Base64 bytes in `fallback_data` (Seed Audio, Seed TTS, Seedream `b64_json`), used when no provider URL exists and the payload is within `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MB, 0 disables) | decode `fallback_data`, or use `output_path` to write it locally; storage has no copy |
+| `inline-fallback` | Base64 bytes in `fallback_data` (Seed Audio 1.0, Seed TTS, Seedream `b64_json`), used when no provider URL exists and the payload is within `ARTIFACT_INLINE_FALLBACK_MAX_BYTES` (default 8 MB, 0 disables) | decode `fallback_data`, or use `output_path` to write it locally; storage has no copy |
 
 Above the inline cap a Base64 output that cannot be stored becomes a tool error. Oversized or invalid Base64 is a validation error, not a storage failure. A `provider-url` artifact cannot be written locally (its `export_error` says to persist it first); an `inline-fallback` artifact can.
 
@@ -130,7 +130,8 @@ because the store has no size cap for that source.
 Persists a temporary provider URL as a durable artifact, for `provider-url` fallbacks and for task outputs whose `persistence` is `failed`.
 
 - **Pass the artifact's own `media_type`, `mime_type` and `source_expires_at`.** For a task output, use its `source_url` and role (video `video/mp4`, `last_frame` image).
-- **Only trusted BytePlus provider hosts are accepted**, through the same downloader, host allowlist, redirect checks and size limits as generation-time persistence. Anything else is rejected, so it cannot be used to fetch arbitrary URLs.
+- **Only trusted BytePlus provider hosts are accepted**, through the same downloader, host allowlist, and redirect checks as generation-time persistence.
+- **For large audio**, pass `persistence_error.artifact_limit_bytes` as `max_download_bytes`. For a large Seed Audio 1.5 track returned with `persist=false`, use the 90 MiB cap (94,371,840 bytes).
 - **Retry before the source expires.** A failure returns an error with the persistence code and `retryable`; a non-retryable code such as a size-limit breach will not succeed on retry (see `artifact_limit_bytes`).
 - In `api_key` mode it checks the fixed team's `media:upload` scope. It is not idempotent: each success creates a new artifact.
 
