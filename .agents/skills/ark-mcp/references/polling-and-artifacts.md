@@ -125,6 +125,9 @@ Base64. The `inline-fallback` size cap applies when storage fails. In that
 case `persistence_error.artifact_limit_bytes` is null for inline audio
 because the store has no size cap for that source.
 
+Generated image artifacts can be persisted up to 32 MiB through URL or
+Base64 output. Reference-image uploads use a separate 10 MiB limit.
+
 ### `seed_media_persist_url`
 
 Persists a temporary provider URL as a durable artifact, for `provider-url` fallbacks and for task outputs whose `persistence` is `failed`.

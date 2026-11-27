@@ -171,8 +171,9 @@ flowchart LR
 - Use `variations`, not provider batches, on 5.5 and 5.0 Pro.
 - Seedream 5.5 does not document the retained `seed` compatibility field;
   omit it unless provider acceptance is verified.
-- 5.5 sizes: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with
-  921600-4624220 pixels and width/height ratio 1/16-16, inclusive. No `auto` size.
+- For 5.5, choose `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT`
+  with 921,600-8,294,400 pixels and width/height ratio 1/16-16, inclusive.
+  Use `size="3840x2160"` for 4K UHD.
 - 5.5 `prompt_optimization` accepts `standard` only (provider default);
   `background` defaults to `auto` (JPEG always opaque). Pro's operator
   optimization setting never applies to 5.5.

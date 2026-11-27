@@ -47,6 +47,8 @@ class ModelFamily(StrEnum):
     SEED_AUDIO_UNDERSTANDING = "seed_audio_understanding"
 
 
+SEEDREAM_5_5_2K_MAX_PIXELS = 4_624_220
+SEEDREAM_5_5_MAX_OUTPUT_PIXELS = 8_294_400
 SEEDANCE_RATIOS: tuple[str, ...] = ("16:9", "4:3", "1:1", "3:4", "9:16", "21:9", "adaptive")
 SEEDANCE_2_5_TASK_TYPES: tuple[str, ...] = ("auto", "reference", "edit", "extend")
 SEED_AUDIO_1_0_MODEL: Final = "seed-audio-1.0"
@@ -56,6 +58,12 @@ SEED_AUDIO_1_5_FORMATS = ("wav", "mp3", "pcm", "ogg_opus")
 SEED_AUDIO_1_5_MAX_REFERENCE_AUDIOS = 6
 SEED_AUDIO_1_5_MAX_REFERENCE_IMAGES = 1
 SEED_AUDIO_1_5_MAX_REFERENCE_VIDEOS = 1
+
+
+def image_size_dimensions(size: str | None) -> tuple[int, int] | None:
+    """Parse explicit positive WIDTHxHEIGHT dimensions."""
+    match = re.fullmatch(r"([1-9][0-9]{0,6})x([1-9][0-9]{0,6})", size or "")
+    return (int(match[1]), int(match[2])) if match is not None else None
 
 
 @dataclass(frozen=True)
@@ -85,11 +93,11 @@ class ImageCapabilities:
         """Check named tiers and optional custom dimensions against this model's limits."""
         if size is None or self.supported_sizes is None or size in self.supported_sizes:
             return []
-        dimensions = re.fullmatch(r"([1-9][0-9]{0,6})x([1-9][0-9]{0,6})", size)
+        dimensions = image_size_dimensions(size)
         if self.custom_size_pixels_range is None or dimensions is None:
             suffix = " or positive WIDTHxHEIGHT dimensions" if self.custom_size_pixels_range else ""
             return [f"size must be one of {list(self.supported_sizes)}{suffix}"]
-        width, height = map(int, dimensions.groups())
+        width, height = dimensions
         minimum, maximum = self.custom_size_pixels_range
         violations = []
         if not minimum <= width * height <= maximum:
@@ -188,7 +196,7 @@ def _seedream_capabilities() -> dict[str, ImageCapabilities]:
                 supports_streaming=False,
                 supported_output_formats=("png", "jpeg"),
                 supported_sizes=("1K", "1.5K", "2K"),
-                custom_size_pixels_range=(921600, 4624220),
+                custom_size_pixels_range=(921600, SEEDREAM_5_5_MAX_OUTPUT_PIXELS),
                 custom_size_aspect_ratio_range=(1 / 16, 16),
                 prompt_optimization_modes=("standard",),
                 supports_transparent_background=True,

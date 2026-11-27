@@ -102,10 +102,11 @@ artifacts **sharded by the first 2 characters of the UUIDv4 id**:
 
 ### `put_base64` / `copy_from_trusted_url` flow (`_store_bytes`)
 
-1. Apply the source's size policy. Trusted URL downloads default to 10 MiB for
-   images and audio and 200 MiB for video. Seed Audio 1.5 uses a 90 MiB limit
-   per audio track during generation. Inline images and video use the default
-   limits. The store decodes inline generated audio without a file-size cap.
+1. Apply the output size policy. Trusted URL downloads default to 32 MiB for
+   images, 10 MiB for audio, and 200 MiB for video. Seed Audio 1.5 uses a 90 MiB
+   limit per audio track during generation. Inline generated images and video
+   use the default output limits. The store decodes inline generated audio
+   without a file-size cap. The provider-bound image upload limit is 10 MiB.
 2. Validate the MIME via `validate_image_mime` / `validate_audio_mime` /
    `validate_video_mime`.
 3. Resolve `owner = auth or AuthContext()`.
@@ -201,7 +202,7 @@ just for inspection and have `inspection=null`. Explicit
 `response_format="b64_json"` requires `persist=true`, including dry runs.
 
 The inspector allows static PNG/JPEG only, verifies and decodes within the image
-byte limit (10 MiB) and a 36-million-pixel cap, and reports decoded dimensions,
+byte limit (32 MiB) and a 36-million-pixel cap, and reports decoded dimensions,
 format and whether any pixel has alpha below 255. An RGBA image with all-opaque
 pixels is not transparent. Inspection runs off the event loop, with a 10-second
 wait bound; cancellation cannot forcibly stop an already-running decoder thread.

@@ -65,7 +65,7 @@ def test_inspection_checks_pixel_bound_before_loading(monkeypatch: pytest.Monkey
 
 
 def test_inspection_checks_byte_bound() -> None:
-    result = inspect_image_bytes(b"x" * (10 * 1024 * 1024 + 1))
+    result = inspect_image_bytes(b"x" * (32 * 1024 * 1024 + 1))
     assert result.status == "invalid"
     assert result.issues == ["byte_limit_exceeded"]
 

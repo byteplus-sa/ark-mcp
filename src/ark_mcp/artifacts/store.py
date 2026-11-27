@@ -22,6 +22,7 @@ from ark_mcp.security.auth_context import AuthContext
 from ark_mcp.security.media_policy import get_media_limits
 
 MAX_AUDIO_URL_DOWNLOAD_BYTES = 90 * 1024 * 1024
+MAX_IMAGE_ARTIFACT_BYTES = 32 * 1024 * 1024
 
 ArtifactPersistenceErrorCode = Literal[
     "untrusted_output_host",
@@ -37,7 +38,7 @@ def artifact_limit_bytes(media_type: MediaType) -> int:
     """Return the byte cap for downloading an artifact from a provider URL."""
     limits = get_media_limits()
     return {
-        MediaType.IMAGE: limits.image_max_bytes,
+        MediaType.IMAGE: MAX_IMAGE_ARTIFACT_BYTES,
         MediaType.AUDIO: limits.audio_max_bytes,
         MediaType.VIDEO: limits.video_max_bytes,
     }[media_type]

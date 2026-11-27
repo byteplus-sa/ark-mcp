@@ -29,6 +29,9 @@ test("Seedream tool reference includes model guidance and a safe image preview",
   assert.equal(job.arguments.input.background, "transparent");
   assert.equal(job.arguments.input.output_format, "png");
   assert.equal(job.arguments.input.dry_run, true);
+  const uhd = examples.find((example) => example.size === "3840x2160");
+  assert.equal(uhd?.model, model);
+  assert.equal(uhd?.dry_run, true);
   assert.match(page, /id="seedream-5-5"/);
   assert.match(page, /## Supported Models/);
   assert.doesNotMatch(page, /^## Seedream 5\.5$/m);
@@ -37,7 +40,7 @@ test("Seedream tool reference includes model guidance and a safe image preview",
   assert.match(page, /account access/i);
   assert.match(page, /may incur charges/i);
   assert.match(page, /has_transparency/);
-  assert.match(page, /921,600-4,624,220/);
+  assert.match(page, /921,600-8,294,400/);
   assert.match(page, /already-transparent PNG/);
 });
 

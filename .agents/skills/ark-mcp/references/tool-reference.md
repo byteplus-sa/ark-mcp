@@ -25,7 +25,7 @@ Per-product behaviour of the create tools that the tool schemas do not spell out
 - **No per-variation timeout.** Queue wait never counts; one batch deadline bounds the call. A deadline or storage failure sets `error.phase`: `queued` (`QUEUE_TIMEOUT`, safe to retry), `generating` (may have completed, **do not retry blindly**), `persisting` (billed output not stored; the provider URL may still be in the result).
 - **`variation_prompts`** must have exactly `variations` entries and replaces `prompt` (and satisfies "prompt required").
 - **Local export:** image and audio variations need an `output_path` directory ending in `/`. Video variations are polled together with **one** `gen_task_get` call over all non-null `task_id`s.
-- **`dry_run: true`** (Seedance and Seedream only) runs all validation and returns `preview` (provider request bodies with media URLs reduced to scheme and host, Base64 reduced to its size) plus `estimated_cost_usd`. **Nothing is submitted or billed**; the cost is an estimate, not billing or a provider quote. Seedream adds `price_source`: `catalog` for a fresh cached image rate, otherwise `builtin`. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run for real.
+- **`dry_run: true`** (Seedance and Seedream only) validates the request and returns a preview with `estimated_cost_usd` without billing. The preview reduces media URLs to scheme and host and Base64 to its size. Seedream reports `price_source="catalog"` for a fresh cached image rate or `price_source="builtin"` for high-resolution list-price estimates and fallback estimates. Dry runs finish on the first `ark_job_get`. Remove `dry_run` to run the generation.
 - **Runtime validation reports everything at once.** Per-model limits are checked from the capability registry before any provider call, and all violations come back in one error ending with `Call ark_list_models(kind=...) for per-model limits.` Fix them together.
 
 ## Seedance
@@ -140,7 +140,10 @@ without alpha. It defaults to PNG even for ordinary generation.
 `background="auto"` is the 5.5 default and follows the prompt; JPEG is always opaque.
 
 Use 5.5 size tiers `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT`
-with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive.
+with 921,600-8,294,400 pixels and width/height ratio 1/16-16, inclusive. For
+4K UHD, use `size="3840x2160"`. Above 4,624,220 requested pixels, preview
+and budget estimates use $0.079 per output plus $0.008 per input reference
+per variation. [ModelArk pricing](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/model-pricing)
 Optional `safety_identifier` on 5.5/Pro must be a stable hashed user ID,
 1-64 non-space printable ASCII characters. Previews and logs redact it.
 `generations` preserves per-call usage, identifier echo, and provider-reported

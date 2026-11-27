@@ -634,7 +634,7 @@ Explicit existing defaults stay unchanged. See the
 | `point` | EditCoordinate | No | Edit mode: `{x, y}` in normalized `0..999` space on the **first** image. Requires `images` |
 | `bbox` | EditBbox | No | Edit mode: `{x1, y1, x2, y2}` in normalized `0..999` space (`x1 <= x2`, `y1 <= y2`) on the **first** image. Requires `images` |
 | `model` | string | No | Exact configured model ID; omit for the default |
-| `size` | string | No | 5.5: `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and width/height ratio 1/16-16, inclusive. `auto` is not a generation size. Older families remain provider-validated |
+| `size` | string | No | Seedream 5.5 accepts `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with 921,600-8,294,400 pixels and width/height ratio 1/16-16, inclusive. For 4K UHD, use `3840x2160`. ModelArk validates sizes for older families |
 | `seed` | integer | No | `-1` to `2147483647`. For a single call it is sent as is. **With `variations > 1` it is the base seed**: omitted lets the provider randomize each variation, `-1` picks a random seed per variation (recorded in `summary`), and `N` uses `N`, `N+1`, `N+2`, ... |
 | `max_images` | integer | No | Images from one provider call (1-15), batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | Defaults to `png` on 5.5 and for transparent output; otherwise provider default |
@@ -673,7 +673,7 @@ Returns `SeedreamGenerateOutput`:
 | `usage` | Single-call usage, including provider-reported `input_images`, `generated_images`, `output_tokens`, and legacy token fields; `null` for variations and dry runs |
 | `summary` | `VariationSummary` when `variations > 1`: `total`, `succeeded`, `failed`, and per-variation `index`, `seed`, artifact or error |
 | `generations` | Completed calls ordered by `variation_index`, with `request_id`, submitted `seed`, final `prompt_sha256` and allowlisted `request_options`; per-call provider usage/identifier echo and `images` with artifact mapping, provider reports and independent `inspection`. Absent provider values stay null; empty for dry runs |
-| `preview` | Dry run only: redacted `requests`, `estimated_cost_usd` and `price_source` (`catalog`: fresh cached account image rate, `builtin`: fallback). Neither billing nor a provider quote; no pricing fetch |
+| `preview` | Dry run only. Includes redacted `requests`, `estimated_cost_usd` and `price_source`. `catalog` indicates a fresh cached account rate. `builtin` indicates a high-resolution list-price estimate or fallback |
 
 Image inspection reports decoded dimensions, format and actual alpha separately
 from provider claims: `verified`, `mismatch`, `invalid` or `unavailable`, or null
@@ -697,6 +697,21 @@ Text-to-image:
 ```json
 {"prompt": "A lighthouse on a cliff at golden hour, watercolor", "size": "2048x2048"}
 ```
+
+Preview a 4K UHD request with Seedream 5.5.
+
+```json
+{
+  "model": "dola-seedream-5-5-261028",
+  "prompt": "A lighthouse on a cliff at golden hour, watercolor",
+  "size": "3840x2160",
+  "dry_run": true
+}
+```
+
+Above 4,624,220 requested pixels, the preview and daily budget use $0.079
+per output plus $0.008 per input reference per variation.
+[ModelArk pricing](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/model-pricing)
 
 Box edit of the first image:
 

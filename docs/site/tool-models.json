@@ -6,7 +6,7 @@
         "name": "Seedream 5.5",
         "id": "`dola-seedream-5-5-261028`",
         "availability": "Built-in default; account authorization required.",
-        "capabilities": "10 references; `1K`, `1.5K`, `2K` (default); PNG (default) or JPEG; text-to-transparent PNG; `auto`, `opaque`, `transparent` backgrounds; `standard` optimization only; independent variations, no provider batch."
+        "capabilities": "10 references; `1K`, `1.5K`, `2K` (default), or explicit dimensions up to 8,294,400 pixels, including `3840x2160` for 4K UHD; PNG (default) or JPEG; text-to-transparent PNG; `auto`, `opaque`, `transparent` backgrounds; `standard` optimization only; independent variations, no provider batch."
       },
       {
         "name": "Seedream 5.0 Pro",

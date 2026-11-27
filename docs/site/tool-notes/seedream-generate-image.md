@@ -24,10 +24,8 @@ model-specific, as shown above. Optional `point` or `bbox` coordinates target
 the first image on a normalized 0-999 scale. Ordinary reference edits and
 region prompts do not enable layer decomposition.
 
-5.5 also accepts a positive custom `WIDTHxHEIGHT`: 921,600-4,624,220 pixels
-inclusive, with width/height ratio 1/16-16. Every family supports 1-10 independent
-`variations`; only batch-capable families accept `max_images > 1`, and batching
-cannot be combined with multiple variations. On 5.5/Pro, optional
+Every family supports 1-10 independent `variations`. Only batch-capable
+families accept `max_images > 1`, which requires one variation. On 5.5/Pro, optional
 `safety_identifier` accepts 1-64 non-space printable ASCII characters; prefer a
 stable hash, not personal data. It is redacted from previews and structured logs.
 
@@ -44,10 +42,34 @@ not provider payload fields. Keep keys in private server configuration.
 Seedream 5.5 does not document the retained `seed` compatibility field in its
 GA parameters or OpenAPI schema; omit it unless provider acceptance is verified.
 
+### High-Resolution Images
+
+Seedream 5.5 accepts `1K`, `1.5K`, and `2K` presets, plus explicit
+`WIDTHxHEIGHT` sizes with 921,600-8,294,400 pixels and a width/height ratio of
+1/16-16, inclusive. Use `3840x2160` for 4K UHD, `2160x3840` for portrait UHD,
+or `2880x2880` for the largest square.
+[ModelArk image generation API](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/image-generation-api)
+
+Preview the UHD request with these `arguments.input` values.
+
+```json
+{
+  "model": "dola-seedream-5-5-261028",
+  "prompt": "A lighthouse on a cliff at golden hour, watercolor",
+  "size": "3840x2160",
+  "dry_run": true
+}
+```
+
+Above 4,624,220 requested pixels, the preview and daily budget use $0.079 per
+output plus $0.008 per input reference per variation.
+[ModelArk pricing](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/model-pricing)
+
 ### Output Checks and Scope
 
 Delivery is not visual acceptance. Inspect `item_errors`, per-variation errors
 and artifact `persistence_error`. Provider URLs expire; retain durable artifacts.
+Generated images can be persisted up to 32 MiB through URL or Base64 output.
 `generations[].images[].inspection` separately reports decoded dimensions,
 format and `has_transparency`. Actual alpha below 255 differs from a PNG file
 extension or a provider claim. Inspection is advisory and never triggers a

@@ -63,10 +63,62 @@ async def test_seedream55_discovery_reports_default_and_transparency(configured:
     assert model["image"]["supports_prompt_optimization"]
     assert model["image"]["prompt_optimization_modes"] == ["standard"]
     assert model["image"]["supported_sizes"] == ["1K", "1.5K", "2K"]
-    assert model["image"]["custom_size_pixels_range"] == [921600, 4624220]
+    assert model["image"]["custom_size_pixels_range"] == [921600, 8294400]
     assert model["image"]["custom_size_aspect_ratio_range"] == [0.0625, 16]
     assert model["image"]["background_modes"] == ["opaque", "transparent", "auto"]
     assert model["image"]["supports_safety_identifier"]
+
+
+@pytest.mark.parametrize(
+    ("size", "cost"),
+    [("2830x1634", 0.06), ("2300x2011", 0.19), ("3840x2160", 0.19)],
+)
+async def test_seedream55_dry_run_prices_high_resolution_variations_and_references(
+    configured: None, size: str, cost: float
+) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        async with Client(create_server(get_settings())) as client:
+            result = await _image_job(
+                client,
+                {
+                    "prompt": "A landscape with a blue sky",
+                    "size": size,
+                    "images": [
+                        {"kind": "url", "url": "https://example.com/sky.jpg"},
+                        {"kind": "url", "url": "https://example.com/land.jpg"},
+                    ],
+                    "variations": 2,
+                    "dry_run": True,
+                },
+            )
+    assert not router.calls
+    assert not result["is_error"]
+    preview = result["structured_content"]["preview"]
+    assert [body["size"] for body in preview["requests"]] == [size, size]
+    assert preview["estimated_cost_usd"] == cost
+    assert preview["price_source"] == "builtin"
+
+
+@pytest.mark.parametrize("variations", [1, 2])
+async def test_seedream55_4k_reserves_high_resolution_budget_before_dispatch(
+    configured: None, monkeypatch: pytest.MonkeyPatch, variations: int
+) -> None:
+    monkeypatch.setenv("DAILY_BUDGET_USD", "0.05")
+    get_settings.cache_clear()
+    with respx.mock(assert_all_called=False) as router:
+        async with Client(create_server(get_settings())) as client:
+            result = await _image_job(
+                client, {"prompt": "A blue square", "size": "3840x2160", "variations": variations}
+            )
+    assert not router.calls
+    if variations == 1:
+        assert result["is_error"]
+        assert "budget" in str(result["content"]).lower()
+    else:
+        assert not result["is_error"]
+        summary = result["structured_content"]["summary"]
+        assert summary["failed"] == variations
+        assert all("budget" in item["error"]["message"].lower() for item in summary["variations"])
 
 
 async def test_seedream55_transparent_dry_run_matches_example(configured: None) -> None:
@@ -103,13 +155,54 @@ async def test_seedream55_transparent_dry_run_matches_example(configured: None) 
     ]
 
 
+@pytest.mark.parametrize("response_format", ["url", "b64_json"])
+async def test_seedream55_persists_and_inspects_large_uhd_png(
+    configured: None, response_format: str
+) -> None:
+    buffer = BytesIO()
+    with Image.new("RGBA", (3840, 2160), (0, 40, 220, 127)) as image:
+        image.save(buffer, format="PNG", compress_level=0)
+    image_bytes = buffer.getvalue()
+    assert len(image_bytes) > 10 * 1024 * 1024
+    item = {"size": "3840x2160", "output_format": "png", "background": "transparent"}
+    with respx.mock:
+        if response_format == "url":
+            item["url"] = "https://output.example.volces.com/uhd.png"
+            respx.get("https://93.184.216.34/uhd.png").respond(
+                200, content=image_bytes, headers={"Content-Type": "image/png"}
+            )
+        else:
+            item["b64_json"] = base64.b64encode(image_bytes).decode()
+        respx.post(f"{ARK_BASE}/images/generations").respond(200, json={"data": [item]})
+        async with Client(create_server(get_settings())) as client:
+            result = await _image_job(
+                client,
+                {
+                    "prompt": "A blue circle with a transparent background",
+                    "size": "3840x2160",
+                    "background": "transparent",
+                    "response_format": response_format,
+                },
+            )
+
+    assert not result["is_error"]
+    output = result["structured_content"]
+    artifact = output["artifacts"][0]
+    assert artifact["uri"].startswith("seed-media://artifacts/")
+    assert artifact["bytes"] == len(image_bytes)
+    inspection = output["generations"][0]["images"][0]["inspection"]
+    assert inspection["status"] == "verified"
+    assert (inspection["width"], inspection["height"]) == (3840, 2160)
+    assert inspection["has_transparency"]
+
+
 @pytest.mark.parametrize("variations", [1, 2])
 @pytest.mark.parametrize("persist", [True, False])
 async def test_seedream55_job_keeps_png_metadata_when_format_is_omitted(
     configured: None, variations: int, persist: bool
 ) -> None:
     buffer = BytesIO()
-    with Image.new("RGBA", (960, 960), (255, 0, 0, 0)) as image:
+    with Image.new("RGBA", (3840, 2160), (255, 0, 0, 0)) as image:
         image.save(buffer, format="PNG")
     image_bytes = buffer.getvalue()
     item = (
@@ -126,7 +219,7 @@ async def test_seedream55_job_keeps_png_metadata_when_format_is_omitted(
                 client,
                 {
                     "prompt": "Embroidered heart sticker",
-                    "size": "2K",
+                    "size": "3840x2160",
                     "background": "transparent",
                     "persist": persist,
                     "variations": variations,
@@ -150,6 +243,7 @@ async def test_seedream55_job_keeps_png_metadata_when_format_is_omitted(
     for call in route.calls:
         body = json.loads(call.request.content)
         assert body["model"] == MODEL
+        assert body["size"] == "3840x2160"
         assert body["output_format"] == "png"
         assert body["background"] == "transparent"
         assert "image" not in body
