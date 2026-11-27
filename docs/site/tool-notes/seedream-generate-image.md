@@ -69,6 +69,7 @@ output plus $0.008 per input reference per variation.
 
 Delivery is not visual acceptance. Inspect `item_errors`, per-variation errors
 and artifact `persistence_error`. Provider URLs expire; retain durable artifacts.
+Generated images can be persisted up to 32 MiB through URL or Base64 output.
 `generations[].images[].inspection` separately reports decoded dimensions,
 format and `has_transparency`. Actual alpha below 255 differs from a PNG file
 extension or a provider claim. Inspection is advisory and never triggers a

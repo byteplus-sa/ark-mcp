@@ -7,15 +7,15 @@ from typing import cast
 
 from PIL import Image, UnidentifiedImageError
 
+from ark_mcp.artifacts.store import MAX_IMAGE_ARTIFACT_BYTES
 from ark_mcp.domain.models import SeedreamImageInspection
-from ark_mcp.security.media_policy import get_media_limits
 
 MAX_IMAGE_PIXELS = 36_000_000
 
 
 def inspect_image_bytes(data: bytes) -> SeedreamImageInspection:
     """Measure valid static image bytes; return safe issues for invalid input."""
-    if len(data) > get_media_limits().image_max_bytes:
+    if len(data) > MAX_IMAGE_ARTIFACT_BYTES:
         return SeedreamImageInspection(status="invalid", issues=["byte_limit_exceeded"])
     if not data.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff")):
         return SeedreamImageInspection(status="invalid", issues=["invalid_image"])

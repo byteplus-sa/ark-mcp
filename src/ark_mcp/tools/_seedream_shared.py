@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.artifacts.image_inspection import inspect_image_bytes
-from ark_mcp.artifacts.store import ArtifactPersistenceError
+from ark_mcp.artifacts.store import MAX_IMAGE_ARTIFACT_BYTES, ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
 from ark_mcp.config.model_capabilities import (
     SEEDREAM_5_5_2K_MAX_PIXELS,
@@ -31,7 +31,7 @@ from ark_mcp.observability.logger import info as log_info
 from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
-from ark_mcp.security.media_policy import decode_base64_safely, get_media_limits
+from ark_mcp.security.media_policy import decode_base64_safely
 from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, image_cost_estimate
 from ark_mcp.tools._parallel import VariationProgress, run_variation_batch, variation_batch_deadline
 from ark_mcp.tools._persistence import (
@@ -211,7 +211,7 @@ async def attach_image_inspection(
         async with asyncio.timeout(10):
             if artifact.fallback_data:
                 raw = decode_base64_safely(
-                    artifact.fallback_data, get_media_limits().image_max_bytes, label="image"
+                    artifact.fallback_data, MAX_IMAGE_ARTIFACT_BYTES, label="image"
                 )
             else:
                 stored = await get_runtime(ctx).artifact_store.get(

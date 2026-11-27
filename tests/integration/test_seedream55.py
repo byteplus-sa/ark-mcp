@@ -155,6 +155,47 @@ async def test_seedream55_transparent_dry_run_matches_example(configured: None) 
     ]
 
 
+@pytest.mark.parametrize("response_format", ["url", "b64_json"])
+async def test_seedream55_persists_and_inspects_large_uhd_png(
+    configured: None, response_format: str
+) -> None:
+    buffer = BytesIO()
+    with Image.new("RGBA", (3840, 2160), (0, 40, 220, 127)) as image:
+        image.save(buffer, format="PNG", compress_level=0)
+    image_bytes = buffer.getvalue()
+    assert len(image_bytes) > 10 * 1024 * 1024
+    item = {"size": "3840x2160", "output_format": "png", "background": "transparent"}
+    with respx.mock:
+        if response_format == "url":
+            item["url"] = "https://output.example.volces.com/uhd.png"
+            respx.get("https://93.184.216.34/uhd.png").respond(
+                200, content=image_bytes, headers={"Content-Type": "image/png"}
+            )
+        else:
+            item["b64_json"] = base64.b64encode(image_bytes).decode()
+        respx.post(f"{ARK_BASE}/images/generations").respond(200, json={"data": [item]})
+        async with Client(create_server(get_settings())) as client:
+            result = await _image_job(
+                client,
+                {
+                    "prompt": "A blue circle with a transparent background",
+                    "size": "3840x2160",
+                    "background": "transparent",
+                    "response_format": response_format,
+                },
+            )
+
+    assert not result["is_error"]
+    output = result["structured_content"]
+    artifact = output["artifacts"][0]
+    assert artifact["uri"].startswith("seed-media://artifacts/")
+    assert artifact["bytes"] == len(image_bytes)
+    inspection = output["generations"][0]["images"][0]["inspection"]
+    assert inspection["status"] == "verified"
+    assert (inspection["width"], inspection["height"]) == (3840, 2160)
+    assert inspection["has_transparency"]
+
+
 @pytest.mark.parametrize("variations", [1, 2])
 @pytest.mark.parametrize("persist", [True, False])
 async def test_seedream55_job_keeps_png_metadata_when_format_is_omitted(
