@@ -4,6 +4,26 @@ Release entries below are historical records, not current setup instructions.
 For the removal of JWT authentication and migration to shared-key HTTP, see
 [breaking-change migration](self-hosting.md#breaking-change-migration).
 
+## [0.5.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.4.0...v0.5.0) (2026-11-27)
+
+
+### Features
+
+* add Seed Audio 1.5 support ([9f48106](https://github.com/byteplus-sa/ark-mcp/commit/9f4810670760a952b3aaad4d3080c8e08c940a8a))
+* add Seed Audio 1.5 support ([ebabd9b](https://github.com/byteplus-sa/ark-mcp/commit/ebabd9b35d659edaf109011780906f744d0a977c))
+* support 4K output in Seedream 5.5 ([25bdcff](https://github.com/byteplus-sa/ark-mcp/commit/25bdcff3e5f0eb0a183b7f57d0cce27b5b538ea2))
+* support 4K output in Seedream 5.5 ([ea9fea1](https://github.com/byteplus-sa/ark-mcp/commit/ea9fea10ed15da37d70a79b1386ae1bf94bea61a))
+
+
+### Bug Fixes
+
+* preserve large 4K Seedream artifacts ([97902dd](https://github.com/byteplus-sa/ark-mcp/commit/97902dd97a5a37116b5a6666b7324fba8eb1e037))
+
+
+### Documentation
+
+* clarify Seedream high-resolution price estimates ([b76ad9b](https://github.com/byteplus-sa/ark-mcp/commit/b76ad9b9f548608643438893384775ce7d1233d2))
+
 ## [0.4.0](https://github.com/byteplus-sa/ark-mcp/compare/v0.3.0...v0.4.0) (2026-11-25)
 
 
