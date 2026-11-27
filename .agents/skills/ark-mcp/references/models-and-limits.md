@@ -119,7 +119,7 @@ before paid 4K use. See the [contract caveat](https://byteplus-sa.github.io/ark-
 | Lite | 14 | Yes | `png`, `jpeg` | Yes; provider default when omitted | No |
 | 4.x | 14 | Yes | `jpeg` only | Yes; provider default when omitted | No |
 
-- **5.5 sizes:** `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with inclusive pixel count 921600-4624220 and width/height ratio 1/16-16. `auto`, `3K`, and `4K` are rejected for generation. Older families keep `supported_sizes=null` (provider validation).
+- **5.5 sizes** include `1K`, `1.5K`, `2K` (default), or positive `WIDTHxHEIGHT` with 921,600-8,294,400 pixels and width/height ratio 1/16-16, inclusive. Use `3840x2160` for 4K UHD, `2160x3840` for portrait UHD, or `2880x2880` for the largest square. ModelArk validates sizes for older families, which report `supported_sizes=null`.
 - **`max_images` vs `variations`.** `max_images` is one provider batch (one request, one usage record) and only works where batch is supported (Lite, 4.x). `variations` (1-10) runs separate calls in parallel and works on every model. **On 5.5 and Pro use `variations`.** Passing both is rejected.
 - **`background="transparent"`** requires `output_format` omitted or `png`. 5.5 supports text-only and reference-based generation without existing alpha. Pro edits exactly one already-transparent PNG; it does not remove an opaque background.
 - **5.5 background:** `auto` (default), `opaque`, `transparent`; JPEG in auto mode is always opaque. Pro accepts only `opaque` and `transparent`.

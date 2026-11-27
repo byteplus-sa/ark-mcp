@@ -5,13 +5,18 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 from ark_mcp.artifacts.image_inspection import inspect_image_bytes
 from ark_mcp.artifacts.store import ArtifactPersistenceError
 from ark_mcp.config.env import get_settings
+from ark_mcp.config.model_capabilities import (
+    SEEDREAM_5_5_2K_MAX_PIXELS,
+    ModelFamily,
+    image_size_dimensions,
+)
 from ark_mcp.domain.artifacts import ArtifactRef, MediaType
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.models import (
@@ -27,7 +32,7 @@ from ark_mcp.providers.modelark.seedream import SeedreamService
 from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot, get_principal, get_runtime
 from ark_mcp.security.media_policy import decode_base64_safely, get_media_limits
-from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, estimate_cost, log_cost_estimate
+from ark_mcp.tools._cost import DEFAULT_MAX_CONCURRENT, image_cost_estimate
 from ark_mcp.tools._parallel import VariationProgress, run_variation_batch, variation_batch_deadline
 from ark_mcp.tools._persistence import (
     persist_base64,
@@ -45,9 +50,12 @@ if TYPE_CHECKING:
         SeedreamProviderRequest,
         SeedreamProviderResponse,
     )
+    from ark_mcp.tools.seedream_generate_image import SeedreamGenerateInput
 
 MAX_PROMPT_CHARACTERS = 4000
 SOURCE_URL_LIFETIME = timedelta(hours=24)
+SEEDREAM_5_5_HIGH_RES_OUTPUT_USD = 0.079
+SEEDREAM_5_5_INPUT_IMAGE_USD = 0.008
 
 
 class EditCoordinate(BaseModel):
@@ -108,6 +116,40 @@ def build_seedream_request(
         background=request.background,
         safety_identifier=request.safety_identifier,
     )
+
+
+def seedream_cost_estimate(
+    request: SeedreamGenerateInput, caps: ImageCapabilities, count: int
+) -> tuple[float, Literal["catalog", "builtin"]]:
+    """Estimate the requested images, including input images at the 5.5 high-resolution rate."""
+    dimensions = image_size_dimensions(request.size)
+    if (
+        caps.family is ModelFamily.SEEDREAM_5_5
+        and dimensions is not None
+        and dimensions[0] * dimensions[1] > SEEDREAM_5_5_2K_MAX_PIXELS
+    ):
+        cost = (
+            SEEDREAM_5_5_HIGH_RES_OUTPUT_USD
+            + len(request.images or ()) * SEEDREAM_5_5_INPUT_IMAGE_USD
+        )
+        return round(count * cost, 4), "builtin"
+    return image_cost_estimate(caps.model_id, count)
+
+
+def log_seedream_cost_estimate(
+    request: SeedreamGenerateInput, caps: ImageCapabilities, *, request_count: int = 1
+) -> float:
+    """Log the whole estimate and return the cost of one provider request."""
+    images_per_request = request.max_images or 1
+    cost_per_request, source = seedream_cost_estimate(request, caps, images_per_request)
+    log_info(
+        "cost_estimate",
+        product="image",
+        variations=images_per_request * request_count,
+        estimated_cost_usd=round(cost_per_request * request_count, 4),
+        price_source="live" if source == "catalog" else source,
+    )
+    return cost_per_request
 
 
 def _source_expiry() -> str:
@@ -258,7 +300,7 @@ async def store_response_images(
 
 
 async def run_seedream_variations(
-    request: Any,
+    request: SeedreamGenerateInput,
     ctx: Context,
     caps: ImageCapabilities,
     images: list[dict[str, Any]] | None,
@@ -267,7 +309,7 @@ async def run_seedream_variations(
 ) -> tuple[VariationSummary, list[SeedreamGenerationMetadata]]:
     """Generate one image per prompt in parallel, capturing failures per variation."""
     settings = get_settings()
-    log_cost_estimate(product="image", variations=len(prompts), model_id=caps.model_id)
+    estimated_cost = log_seedream_cost_estimate(request, caps, request_count=len(prompts))
     store = get_runtime(ctx).artifact_store
     owner = get_principal(ctx)
     service = SeedreamService()
@@ -282,9 +324,7 @@ async def run_seedream_variations(
                 ctx,
                 provider="modelark",
                 product="image",
-                estimated_cost_usd=estimate_cost(
-                    product="image", variations=1, model_id=caps.model_id
-                ),
+                estimated_cost_usd=estimated_cost,
             ):
                 progress.phase = "generating"
                 response, request_id = await call_with_retry(

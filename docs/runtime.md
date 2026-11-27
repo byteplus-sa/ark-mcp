@@ -193,6 +193,12 @@ estimates use fresh, recognized prices from the ModelArk pricing catalog when
 available; unmatched models, unsupported units, and other products use built-in
 rates.
 
+For Seedream 5.5 custom sizes above 4,624,220 requested pixels, the dry-run
+estimate and daily budget use the published high-resolution rate of $0.079
+per output plus $0.008 per input reference. Each variation includes its own
+input references. The dry run reports `price_source="builtin"`.
+[ModelArk pricing](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/model-pricing)
+
 **Live prices.** With AK/SK configured, the server loads the account's prices
 (discounts applied) from `ListModelChargeItems` in the background at startup and refreshes them
 every `BYTEPLUS_MODELARK_PRICING_REFRESH_SECONDS` (default 86400, 24 hours). The snapshot

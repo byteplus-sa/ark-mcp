@@ -41,7 +41,7 @@ The binding enums (`config/env.py`):
 | `supported_output_formats` | `("png", "jpeg")` | `("png", "jpeg")` | `("png", "jpeg")` | `("jpeg",)` |
 | `default_output_format` | `"png"` | `None` | `None` | `None` |
 | `supported_sizes` | `("1K", "1.5K", "2K")` | `None` | `None` | `None` |
-| `custom_size_pixels_range` | `(921600, 4624220)` | `None` | `None` | `None` |
+| `custom_size_pixels_range` | `(921600, 8294400)` | `None` | `None` | `None` |
 | `custom_size_aspect_ratio_range` | `(1/16, 16)` | `None` | `None` | `None` |
 | `supports_watermark` | `True` | `True` | `True` | `True` |
 | `supports_prompt_optimization` | `True` | `True` | `True` | `True` |
@@ -61,10 +61,11 @@ prompt or up to ten references without requiring existing alpha. 5.0 Pro retains
 its requirement for exactly one already-transparent PNG. Transparent output
 uses PNG when `output_format` is omitted; JPEG is rejected locally.
 
-5.5 accepts named tiers `1K`, `1.5K`, `2K` (provider default), or positive
-`WIDTHxHEIGHT` dimensions with inclusive pixel count 921,600-4,624,220 and
-width/height ratio 1/16-16. `auto`, `3K`, and `4K` sizes are rejected for generation.
-Older-family size validation is unchanged and remains provider-side.
+5.5 accepts the presets `1K`, `1.5K`, and `2K` (default), or positive
+`WIDTHxHEIGHT` dimensions with 921,600-8,294,400 pixels and a width/height
+ratio of 1/16-16, inclusive. Request 4K UHD with `size="3840x2160"`,
+portrait UHD with `2160x3840`, or the largest square with `2880x2880`.
+ModelArk validates sizes for older families.
 
 `background` defaults to `auto` on 5.5: the prompt determines transparency,
 except JPEG is always opaque. Explicit `prompt_optimization="standard"` is
@@ -80,7 +81,7 @@ metadata preserves the provider's echo.
 
 The generation controls and size/reference bounds match the GA
 [image API](https://ai.byteplus.com/ark/region:ap-southeast-1/docs/image-generation-api)
-(accessed 2026-11-16). Seedream 5.5 does not document `seed` in either the
+(accessed 2026-11-27). Seedream 5.5 does not document `seed` in either the
 parameter reference or the official OpenAPI schema. The MCP retains it as an
 explicit compatibility field; omit it unless provider acceptance has been
 verified. The schema also lags GA fields such as `background="auto"`, so schema

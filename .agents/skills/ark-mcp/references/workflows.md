@@ -150,8 +150,8 @@ See [tool-reference.md](tool-reference.md#seed-tts-30) for controls and limits.
 - 5.5 defaults to `background="auto"`; use `generations[].images[].background`
   to read the actual returned background, not infer it from the request.
   `prompt_optimization` is omitted or `standard`, never `fast`.
-- 5.5 supports size tiers `1K`, `1.5K`, `2K` and bounded custom dimensions;
-  consult discovery. `auto` size and layer-decomposition/OCR controls are rejected.
+- 5.5 supports size tiers `1K`, `1.5K`, `2K` and bounded custom dimensions.
+  Use `size="3840x2160"` for 4K UHD and inspect the estimate with `dry_run=true`.
 - Use only a stable hashed `safety_identifier` (5.5/Pro, 1-64 non-space ASCII);
   previews/logs redact it, while `generations` preserves the provider echo.
 - To iterate on a generated image, pass its provider URL (valid 24 h) or

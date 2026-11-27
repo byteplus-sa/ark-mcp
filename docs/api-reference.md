@@ -494,7 +494,7 @@ and dry runs. Registered whenever `BYTEPLUS_MODELARK_API_KEY` is set; requires
 | `point` | EditCoordinate | No | — | `x`, `y` in 0-999 (normalized) on the **first** image; requires `images` |
 | `bbox` | EditBbox | No | — | `x1`, `y1`, `x2`, `y2` in 0-999 on the **first** image, `x1 <= x2`, `y1 <= y2`; requires `images` |
 | `model` | string | No | `SEEDREAM_DEFAULT_MODEL` | Exact configured ID from `ark_list_models(kind='image')` |
-| `size` | string | No | `2K` on 5.5 | 5.5: `1K`, `1.5K`, `2K`, or positive `WIDTHxHEIGHT` with 921600-4624220 pixels and ratio 1/16-16, inclusive. No generation `auto`; older families remain provider-validated |
+| `size` | string | No | `2K` on 5.5 | Seedream 5.5 accepts `1K`, `1.5K`, `2K`, or positive `WIDTHxHEIGHT` with 921,600-8,294,400 pixels and width/height ratio 1/16-16, inclusive. Use `3840x2160` for 4K UHD. ModelArk validates sizes for older families |
 | `seed` | integer | No | — | -1 to 2147483647; undocumented compatibility field on 5.5, omit unless verified; the **base seed** when `variations > 1` (see below) |
 | `max_images` | integer | No | — | 1-15 images from **one provider call**; batch-capable models only. **Cannot be combined with `variations > 1`** |
 | `output_format` | `"png"` \| `"jpeg"` | No | `png` on 5.5 and transparent output; provider default otherwise | Model-dependent |
@@ -601,7 +601,7 @@ Variations report missing/undeliverable outputs as explicit errors in `summary`.
 |---|---|---|
 | `requests` | list[object] | Provider request bodies, one per variation. Reference URLs are reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted |
 | `estimated_cost_usd` | number | Cached account rate or built-in fallback estimate; **not actual billing or a provider quote** |
-| `price_source` | `"catalog"` \| `"builtin"` | `catalog`: fresh cached account image rate; `builtin`: missing, stale or unsupported rate fallback. Dry runs never fetch pricing |
+| `price_source` | `"catalog"` \| `"builtin"` | `catalog` indicates a fresh cached account rate. `builtin` indicates a high-resolution list-price estimate or fallback |
 
 ### Examples
 

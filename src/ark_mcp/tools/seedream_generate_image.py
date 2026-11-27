@@ -15,7 +15,11 @@ from fastmcp.tools import ToolResult
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from ark_mcp.config.env import get_settings
-from ark_mcp.config.model_capabilities import ImageCapabilities, get_capability_registry
+from ark_mcp.config.model_capabilities import (
+    SEEDREAM_5_5_MAX_OUTPUT_PIXELS,
+    ImageCapabilities,
+    get_capability_registry,
+)
 from ark_mcp.domain.artifacts import ArtifactRef
 from ark_mcp.domain.errors import ProviderError
 from ark_mcp.domain.media import ReferenceImageInput
@@ -31,7 +35,6 @@ from ark_mcp.providers.retry import call_with_retry
 from ark_mcp.runtime import billed_provider_slot
 from ark_mcp.tools._asset_shared import resolve_asset_references
 from ark_mcp.tools._capability_checks import check_image_request, raise_on_violations
-from ark_mcp.tools._cost import image_cost_estimate, log_cost_estimate
 from ark_mcp.tools._errors import provider_error_result
 from ark_mcp.tools._local_export import local_export, output_path_field, overwrite_field
 from ark_mcp.tools._local_export import needs_persist as _needs_persist
@@ -45,7 +48,9 @@ from ark_mcp.tools._seedream_shared import (
     build_seedream_request,
     edit_prompt,
     generation_metadata,
+    log_seedream_cost_estimate,
     run_seedream_variations,
+    seedream_cost_estimate,
     store_response_images,
 )
 from ark_mcp.tools._task_execution import context_log
@@ -96,7 +101,10 @@ class SeedreamGenerateInput(BaseModel):
     )
     size: str | None = Field(
         None,
-        description="5.5: 1K, 1.5K, 2K (default), or WIDTHxHEIGHT: 921600-4624220 pixels, ratio 1:16-16:1.",
+        description=(
+            f"5.5: 1K, 1.5K, 2K (default), or WIDTHxHEIGHT: 921600-{SEEDREAM_5_5_MAX_OUTPUT_PIXELS} "
+            "pixels, ratio 1:16-16:1. Use 3840x2160 for 4K UHD."
+        ),
     )
     seed: int | None = Field(
         None,
@@ -334,9 +342,7 @@ async def _generate_single(
 ) -> SeedreamGenerateOutput | ToolResult:
     await ctx.report_progress(progress=30, total=100)
     request = build_seedream_request(input, caps, images, prompt=prompt, seed=input.seed)
-    estimated_cost = log_cost_estimate(
-        product="image", variations=input.max_images or 1, model_id=caps.model_id
-    )
+    estimated_cost = log_seedream_cost_estimate(input, caps)
     service = SeedreamService()
     try:
         async with billed_provider_slot(
@@ -403,7 +409,7 @@ def _preview(
         )
         for prompt, seed in zip(prompts, seeds, strict=True)
     ]
-    cost, source = image_cost_estimate(caps.model_id, len(prompts) * (input.max_images or 1))
+    cost, source = seedream_cost_estimate(input, caps, len(prompts) * (input.max_images or 1))
     return SeedreamGenerateOutput(
         model=caps.model_id,
         created_at=datetime.now(UTC).isoformat(),
