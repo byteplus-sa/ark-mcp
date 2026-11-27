@@ -224,10 +224,17 @@ class SeedreamGeneratePreview(BaseModel):
     )
     estimated_cost_usd: float = Field(
         ...,
-        description="Estimated USD using cached account pricing or built-in fallback; not billing.",
+        description=(
+            "Budget estimate in USD using a cached account rate, the Seedream 5.5 "
+            "high-resolution list price, or a built-in fallback."
+        ),
     )
     price_source: Literal["catalog", "builtin"] = Field(
-        "builtin", description="catalog: cached account image rate; builtin: fallback estimate."
+        "builtin",
+        description=(
+            "catalog uses a fresh cached account rate. builtin uses the Seedream 5.5 "
+            "high-resolution list price or a fallback rate."
+        ),
     )
 
 

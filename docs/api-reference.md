@@ -600,7 +600,7 @@ Variations report missing/undeliverable outputs as explicit errors in `summary`.
 | Field | Type | Description |
 |---|---|---|
 | `requests` | list[object] | Provider request bodies, one per variation. Reference URLs are reduced to scheme and host, Base64 to its size, and `safety_identifier` redacted |
-| `estimated_cost_usd` | number | Cached account rate or built-in fallback estimate; **not actual billing or a provider quote** |
+| `estimated_cost_usd` | number | Budget estimate using a cached account rate, the Seedream 5.5 high-resolution list price, or a built-in fallback |
 | `price_source` | `"catalog"` \| `"builtin"` | `catalog` indicates a fresh cached account rate. `builtin` indicates a high-resolution list-price estimate or fallback |
 
 ### Examples
